@@ -1,15 +1,20 @@
 import type { CompiledField, CompiledRecord, CompiledValue } from '@inventarch/language';
 import { MOVES as KERNEL_MOVES } from '@inventarch/language';
+import type { ReadHandle } from '@inventarch/db';
+import { reaches } from '@inventarch/graph';
 import { RUNTIME_CODES, RuntimeError } from './errors.js';
 import type { RuntimeCode } from './errors.js';
+import { freeze } from './types.js';
 
 /**
  * Mandate authority as closed moves (position-and-projection design, items 2c and 13).
  *
  * A `@mandate` may declare an `authority` section: the participant it binds, the moves it allows (closed to the five
  * kernel moves), the workspaces it scopes, and the words and path selections it excludes or covers. This module
- * publishes the CLI mode -> move table and the pure refusal check that the authoring verbs will consume. Nothing here
- * is wired into the CLI yet: the authoring verbs land in a later milestone, and until then no command consults a
+ * publishes the CLI mode -> move table and the pure refusal check that the authoring verbs will consume, and resolves
+ * the authored mandates that govern an actor at a workspace or path, the actor a command acts as when none is named and
+ * the refusal profile those mandates give a mode (plan amendment C1). Nothing here is wired into the CLI or the guard
+ * yet: the authoring verbs and the re-keyed guard land later in the milestone, and until then no command consults a
  * mandate. A mandate adds closed restrictions only; it never grants host permissions, and a mandate without
  * `authority.moves` restricts no move.
  */
@@ -34,7 +39,7 @@ export function isMode(value: unknown): value is Mode {
 }
 
 export type MandateCode = Extract<RuntimeCode, `IA-RUNTIME-MANDATE-${string}`>;
-/** The refusal codes a mandate can return; both are registered in RUNTIME_CODES. */
+/** The refusal codes a mandate, a profile or the default actor can return; each is registered in RUNTIME_CODES. */
 export const MANDATE_CODES: readonly MandateCode[] = Object.freeze(
   RUNTIME_CODES.filter((code): code is MandateCode => code.startsWith('IA-RUNTIME-MANDATE-')),
 );
@@ -92,6 +97,29 @@ function names(record: CompiledRecord, key: string, discriminator: string): read
 function isMove(value: string): value is Move {
   return (MOVES as readonly string[]).includes(value);
 }
+/** Whether `record` states `section.key` at all: a declared empty list is stated, an absent key is not. */
+function states(record: CompiledRecord, section: string, key: string): boolean {
+  return record.sections
+    .filter((candidate) => candidate.name === section)
+    .flatMap((candidate) => candidate.fields)
+    .some((child) => 'key' in child && child.key === key);
+}
+/**
+ * Whether `record` states `section.key` with a value: a declared empty list locates nothing, so a mandate whose
+ * `scope []` or `covers []` is its only location stays located by its participant, and an empty list never lifts a
+ * restriction (a mandate only adds restrictions).
+ */
+function statesValue(record: CompiledRecord, section: string, key: string): boolean {
+  return record.sections
+    .filter((candidate) => candidate.name === section)
+    .flatMap((candidate) => candidate.fields)
+    .some(
+      (child) =>
+        'key' in child &&
+        child.key === key &&
+        !('value' in child && child.value.kind === 'list' && child.value.items.length === 0),
+    );
+}
 
 /** Read the authority a compiled `@mandate` declares; a non-mandate or a malformed field is IA-RUNTIME-REQUEST-INVALID. */
 export function mandateAuthorityOf(record: CompiledRecord): MandateAuthority {
@@ -104,10 +132,7 @@ export function mandateAuthorityOf(record: CompiledRecord): MandateAuthority {
   );
   // Presence is judged by the key: a declared but empty list names no move, which the design's one-or-more refuses
   // rather than reading as a lockout of every mode or as an absent restriction.
-  const hasMoves = record.sections
-    .filter((section) => section.name === 'authority')
-    .flatMap((section) => section.fields)
-    .some((child) => 'key' in child && child.key === 'moves');
+  const hasMoves = states(record, 'authority', 'moves');
   if (hasMoves && moves.length === 0) invalid(`${record.identity}: authority.moves must name at least one kernel move`);
   return Object.freeze({
     identity: record.identity,
@@ -150,4 +175,337 @@ export function mandateRefusal(
       next,
     });
   return undefined;
+}
+
+/**
+ * Mandate resolution (plan amendment C1; operator decision OD1): one answer to "which `@mandate` governs this actor
+ * here" for the CLI's refusal profile and the edit guard. Every read goes through the scope token `within` and none
+ * needs a clean scope: a workspace with admission errors resolves the records admission admitted. Only authored
+ * mandates (band 100) govern, only those of the workspace's closure as position reads it (plan amendment A8), and a
+ * record at runtime placement is never read.
+ */
+
+/** Where governingMandates resolves, `workspace` and `path`, and for whom, `actor`. */
+export interface GoverningOptions {
+  /**
+   * An admitted `@agent` identity: each governing mandate then says whether it `binds` the actor, and the actor's own
+   * mandates that state neither `authority.scope` nor `authority.covers` govern wherever it acts.
+   */
+  readonly actor?: string;
+  /** A workspace-relative path: a mandate whose `authority.covers` selects it governs there (db D02b claimants). */
+  readonly path?: string;
+  /**
+   * An admitted `@workspace` identity: a mandate whose `authority.scope` names it governs there. Its closure is the one
+   * read; without it, that of the workspace position seats `path` in, or with no path the repository's own.
+   */
+  readonly workspace?: string;
+}
+/**
+ * One authored `@mandate` that governs, its authority as mandateAuthorityOf reads it with the references resolved;
+ * `moves`, `covers` and `excludedWords` are present exactly when the record states the key (a declared empty list is
+ * stated), as the position packet renders them.
+ */
+export interface GoverningMandate {
+  readonly identity: string;
+  /** Only authored mandates govern. */
+  readonly band: 100;
+  /** The `@agent` identity `authority.participant` resolves to, or the reference as authored when none answers it. */
+  readonly participant?: string;
+  /**
+   * Present exactly when an `actor` is given: whether the mandate binds it, its participant resolving to the actor or
+   * naming none. One that does not governs here for another participant, and profileRefusal leaves it out.
+   */
+  readonly binds?: boolean;
+  /** `authority.moves`; absent, the mandate restricts no move. */
+  readonly moves?: readonly Move[];
+  /** `authority.scope`: the `@workspace` identity each reference resolves to, or the reference as authored. */
+  readonly scope: readonly string[];
+  /** `authority.covers`, the path selections it claims. */
+  readonly covers?: readonly string[];
+  /** `authority.excluded-words`. */
+  readonly excludedWords?: readonly string[];
+}
+/** OD1: the actor a mandate-gated command acts as when none is named. */
+export interface DefaultActor {
+  /** The `@agent` identity; absent when OD1 names none. */
+  readonly actor?: string;
+  /** What named it: the workspace's `composition.steward`, or the one participant the workspace's mandates name. */
+  readonly by?: 'steward' | 'participant';
+  /**
+   * The authored `@agent` records an authored mandate of the workspace's closure scoped to it names as participant, by
+   * identity: the participants the position packet lists when K0 seats at the workspace (B3).
+   */
+  readonly participants: readonly string[];
+  /** Present exactly when `actor` is absent: why none is named, and the choice that would name one. */
+  readonly reason?: string;
+  /**
+   * Present exactly when several participants leave the choice open: IA-RUNTIME-MANDATE-ACTOR, which a mandate-gated
+   * command returns. With no participant there is none: the command's profile is resolved without an actor, every
+   * mandate that governs there judged, and it runs unrestricted, with profileRefusal's notice, only when none governs.
+   */
+  readonly refusal?: MandateRefusal;
+}
+/**
+ * What profileRefusal judges of one governing mandate; a GoverningMandate and a MandateAuthority are both one. A
+ * mandate whose `binds` is false governs for another participant: it is left out of the judgement, and `participant`
+ * names whom it binds.
+ */
+export type ProfileMandate = Pick<MandateAuthority, 'identity' | 'participant' | 'moves' | 'excludedWords'> & {
+  readonly binds?: boolean;
+};
+/** profileRefusal's verdict: the mode is allowed exactly when it holds no refusal. */
+export interface ProfileVerdict {
+  /**
+   * Present when the governing mandates bind no actor here or several participants, or refuse the mode's move or a
+   * target word.
+   */
+  readonly refusal?: MandateRefusal;
+  /** Present exactly when no mandate governs: nothing is restricted. */
+  readonly notice?: string;
+}
+
+const UNGOVERNED =
+  'no authored @mandate governs here, so no move or word is restricted (a mandate only adds restrictions)';
+const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+/** Design §11's one next command for a mandate refusal, `ia scope` read as `ia position` (decision scope-verb-dispatch). */
+const governance = (seat: string): string => `ia position --seat ${seat} --shape governance`;
+
+/** The records the scope token admits, runtime placement left out, and the reads of them that go through it. */
+function admitted(reader: ReadHandle, within: string) {
+  if (typeof within !== 'string' || within.length === 0) invalid('Runtime reads require an explicit scope token');
+  const read = { within },
+    snapshot = reader.snapshot(read),
+    nodes = new Map(
+      snapshot.records.filter((node) => node.placement.kind !== 'runtime').map((node) => [node.identity, node]),
+    ),
+    rootOf = new Map(snapshot.membership.map((row) => [row.identity, row.root])),
+    roots = reader.roots(read),
+    declared = new Set(roots.map((root) => root.root));
+  const ownOf = (workspace: string | undefined): ReadonlySet<string> =>
+    new Set(roots.filter((root) => root.workspace === workspace).map((root) => root.root));
+  const holds = (own: ReadonlySet<string>, identity: string): boolean => {
+    const band = nodes.get(identity)!.band,
+      root = rootOf.get(identity)!;
+    return band === 10 || band === 90 || (own.size > 0 ? own.has(root) : !declared.has(root));
+  };
+  const repository = (): string | undefined => {
+    const at = reader.resolveSeat('', read).seat;
+    return at !== undefined && nodes.get(at)?.discriminator === 'workspace' ? at : undefined;
+  };
+  return {
+    read,
+    nodes,
+    /** The admitted `@<word>` records the typed field references `identity` states at `field` resolve to. */
+    targets: (identity: string, field: string, word: string): readonly string[] =>
+      reader
+        .directedView(identity, read)
+        .filter(
+          (row) =>
+            row.kind === 'field-ref' &&
+            row.direction === 'out' &&
+            row.field === field &&
+            nodes.get(row.counterpart)?.discriminator === word,
+        )
+        .map((row) => row.counterpart),
+    /** IA-RUNTIME-REQUEST-INVALID unless `identity` is an admitted `@<word>` of the scope. */
+    admit: (identity: string, word: string): void => {
+      if (nodes.get(identity)?.discriminator !== word)
+        invalid(`'${identity}' is not an admitted @${word} in this scope`);
+    },
+    /**
+     * Whether a record is in `workspace`'s closure, as position reads one: the floor and adopted bands, and the members
+     * of the workspace's own declared roots, or, while it declares none (or no workspace holds the read), of the roots
+     * no workspace declares. A record of another workspace's root is never in it.
+     */
+    closure: (workspace: string | undefined) => {
+      const own = ownOf(workspace);
+      return (identity: string): boolean => holds(own, identity);
+    },
+    /**
+     * The workspace position seats a record in (its workspaceOf): the record itself when it is a `@workspace`; else, of
+     * the repository's own `@workspace` and the one whose declared root holds the record's membership root, the first
+     * whose closure holds it; the repository's own for no admitted record.
+     */
+    workspaceOf: (identity: string | undefined): string | undefined => {
+      if (identity === undefined || !nodes.has(identity)) return repository();
+      if (nodes.get(identity)!.discriminator === 'workspace') return identity;
+      const root = rootOf.get(identity);
+      if (root === undefined) return repository();
+      const holder = roots.find((candidate) => reaches(candidate.root, root))?.workspace;
+      return [repository(), holder].find((at) => at !== undefined && holds(ownOf(at), identity));
+    },
+  };
+}
+
+/**
+ * C1: the authored `@mandate` records that govern through the scope token `within`, by identity (each of band 100, so
+ * in C1's band-then-identity order). Only the closure of `workspace` is read, or without it that of the workspace
+ * position seats `path` in, or with neither the repository's own `@workspace`'s: another workspace's mandate never
+ * governs here. Only that closure is position's: for a path alone, the mandates that govern are those that claim it,
+ * not every mandate scoped to the seated workspace that position's location-seat governance also lists. With `workspace` or `path`, a mandate governs when its
+ * `authority.scope` names the workspace or its `authority.covers` selects the path (db D02b claimants), either one
+ * sufficing. One that states neither key with a value (a declared empty list locates nothing) is located by its participant alone and governs wherever that participant
+ * acts: with `actor`, when its participant is the actor; without one, whenever it names a participant. With neither
+ * `workspace` nor `path`, every one governs. `actor` drops no mandate that governs the workspace or path: each states
+ * whether it `binds` the actor, so profileRefusal judges the actor's own and those naming no participant, and refuses an
+ * actor that none of them binds rather than read the location as ungoverned. An `actor` or `workspace` that is not an
+ * admitted record of its word, or a governing mandate whose authority mandateAuthorityOf refuses, is
+ * IA-RUNTIME-REQUEST-INVALID; a mandate that does not govern is never read, however it is authored.
+ */
+export function governingMandates(
+  reader: ReadHandle,
+  within: string,
+  options: GoverningOptions = {},
+): readonly GoverningMandate[] {
+  const { read, nodes, targets, admit, closure, workspaceOf } = admitted(reader, within),
+    { actor, path, workspace } = options;
+  if (actor !== undefined) admit(actor, 'agent');
+  if (workspace !== undefined) admit(workspace, 'workspace');
+  // Without `workspace`, the closure is the one position reads for the path's location seat, or for no seat.
+  const resolution = path === undefined ? undefined : reader.resolveSeat(path, read),
+    inside = closure(workspace ?? workspaceOf(resolution?.seat)),
+    located = workspace !== undefined || path !== undefined;
+  const claiming = new Set(resolution?.claimants.map((claimant) => claimant.identity));
+  const governs = (node: CompiledRecord): boolean => {
+    if (!located) return true;
+    if (statesValue(node, 'authority', 'scope') || statesValue(node, 'authority', 'covers'))
+      return (
+        (workspace !== undefined && targets(node.identity, 'authority.scope', 'workspace').includes(workspace)) ||
+        claiming.has(node.identity)
+      );
+    return actor === undefined
+      ? states(node, 'authority', 'participant')
+      : targets(node.identity, 'authority.participant', 'agent')[0] === actor;
+  };
+  return freeze(
+    [...nodes.values()]
+      .filter((node) => node.discriminator === 'mandate' && node.band === 100 && inside(node.identity) && governs(node))
+      .sort((a, b) => order(a.identity, b.identity))
+      .map((node): GoverningMandate => {
+        const authority = mandateAuthorityOf(node),
+          agent = targets(node.identity, 'authority.participant', 'agent')[0],
+          scoped = targets(node.identity, 'authority.scope', 'workspace');
+        const scope = (authority.scope ?? []).map(
+          (name) => scoped.find((identity) => nodes.get(identity)!.name === name.toLowerCase()) ?? `@workspace ${name}`,
+        );
+        return {
+          identity: node.identity,
+          band: 100,
+          ...(authority.participant === undefined ? {} : { participant: agent ?? `@agent ${authority.participant}` }),
+          ...(actor === undefined ? {} : { binds: authority.participant === undefined || agent === actor }),
+          ...(authority.moves === undefined ? {} : { moves: authority.moves }),
+          scope: [...new Set(scope)],
+          ...(states(node, 'authority', 'covers') ? { covers: authority.covers ?? [] } : {}),
+          ...(states(node, 'authority', 'excluded-words') ? { excludedWords: authority.excludedWords ?? [] } : {}),
+        };
+      }),
+  );
+}
+
+/**
+ * OD1: the actor a mandate-gated command acts as at `workspace` when none is named. It is the `@agent` the workspace's
+ * `composition.steward` resolves to (ia init names its participant there); failing that, the workspace's one
+ * participant, an authored `@agent` that an authored mandate of its closure scoped to it names. With several
+ * participants there is none, and the refusal names the choice; with none, there is no actor and no refusal, and the
+ * reason says whether the workspace states no steward or one that resolves to no admitted `@agent`. A `workspace` that
+ * is not an admitted `@workspace` of the scope is IA-RUNTIME-REQUEST-INVALID.
+ */
+export function defaultActor(reader: ReadHandle, within: string, workspace: string): DefaultActor {
+  const { nodes, targets, admit, closure } = admitted(reader, within);
+  admit(workspace, 'workspace');
+  const inside = closure(workspace);
+  const participants = [
+    ...new Set(
+      [...nodes.values()].flatMap((node) => {
+        if (node.discriminator !== 'mandate' || node.band !== 100 || !inside(node.identity)) return [];
+        if (!targets(node.identity, 'authority.scope', 'workspace').includes(workspace)) return [];
+        const agent = targets(node.identity, 'authority.participant', 'agent')[0];
+        return agent !== undefined && nodes.get(agent)!.band === 100 ? [agent] : [];
+      }),
+    ),
+  ].sort(order);
+  const steward = targets(workspace, 'composition.steward', 'agent')[0];
+  if (steward !== undefined) return freeze<DefaultActor>({ actor: steward, by: 'steward', participants });
+  if (participants.length === 1)
+    return freeze<DefaultActor>({ actor: participants[0]!, by: 'participant', participants });
+  const unnamed = states(nodes.get(workspace)!, 'composition', 'steward')
+    ? `${workspace}'s composition.steward resolves to no admitted @agent`
+    : `${workspace} states no composition.steward`;
+  if (participants.length === 0)
+    return freeze<DefaultActor>({
+      participants,
+      reason: `${unnamed}, and no authored @mandate scoped to it names an authored @agent as its participant`,
+    });
+  const reason = `${unnamed}, and its authored mandates name ${participants.length} participants (${participants.join(', ')}): name one of them as its composition.steward`;
+  return freeze<DefaultActor>({
+    participants,
+    reason,
+    refusal: { code: 'IA-RUNTIME-MANDATE-ACTOR', message: reason, next: governance(workspace) },
+  });
+}
+
+/**
+ * C1: the refusal profile the governing `mandates` give `mode` and its target `words`. A mandate whose `binds` is false
+ * governs for another participant and is left out; when every one is, no mandate here binds the actor, and the mode is
+ * IA-RUNTIME-MANDATE-ACTOR, naming whom each binds. The rest are never pooled across participants: when they name more
+ * than one, as they may without an actor, the mode is IA-RUNTIME-MANDATE-ACTOR too, naming each. Then the move is
+ * judged: the mode is allowed when any mandate grants its move, by listing it or by declaring no moves, else
+ * IA-RUNTIME-MANDATE-MOVE. Then, only when words are given, a word any mandate excludes is IA-RUNTIME-MANDATE-WORD.
+ * Each refusal's `next` is the governance position of the first mandate it names (design §11), a read, which a command
+ * gated on this profile must leave ungated so that the refusal can be followed (an actor no mandate binds is refused
+ * every mode, read included). With no governing mandate nothing is restricted and the verdict holds a notice instead.
+ * An unknown mode, or a declared empty move list on any mandate, is IA-RUNTIME-REQUEST-INVALID.
+ */
+export function profileRefusal(
+  mandates: readonly (ProfileMandate | CompiledRecord)[],
+  mode: Mode,
+  words: readonly string[] = [],
+): ProfileVerdict {
+  if (!isMode(mode)) invalid(`Mode must be one of ${MODES.join(', ')}`);
+  if (mandates.length === 0) return freeze({ notice: UNGOVERNED });
+  const refuse = (code: MandateCode, message: string, seat: string): ProfileVerdict =>
+    freeze({ refusal: { code, message, next: governance(seat) } });
+  const all: readonly ProfileMandate[] = mandates.map((mandate) =>
+    'sections' in mandate ? mandateAuthorityOf(mandate) : mandate,
+  );
+  // Each mandate's own move judgement, words aside; every one is judged, so a malformed move list is never skipped.
+  const judged = all.map((authority) => mandateRefusal(authority, mode));
+  const whom = (authority: ProfileMandate): string =>
+    authority.participant === undefined ? authority.identity : `${authority.identity} binds ${authority.participant}`;
+  // A mandate that binds another participant grants and excludes nothing for the actor (plan amendment C10).
+  const binding = all.flatMap((authority, index) =>
+    authority.binds === false ? [] : [{ authority, refusal: judged[index] }],
+  );
+  if (binding.length === 0)
+    return refuse(
+      'IA-RUNTIME-MANDATE-ACTOR',
+      `no mandate that governs here binds the acting @agent: ${all.map(whom).join('; ')}`,
+      all[0]!.identity,
+    );
+  // Nor are two participants' mandates ever pooled: without an actor to say whom each binds, the choice is open (OD1).
+  const named = binding.flatMap(({ authority }) => (authority.participant === undefined ? [] : [authority]));
+  const participants = new Set(named.map((authority) => authority.participant));
+  if (participants.size > 1)
+    return refuse(
+      'IA-RUNTIME-MANDATE-ACTOR',
+      `the mandates that govern here bind ${participants.size} participants and name no acting @agent: ${named.map(whom).join('; ')}`,
+      named[0]!.identity,
+    );
+  if (binding.every(({ refusal }) => refusal !== undefined))
+    return refuse(
+      'IA-RUNTIME-MANDATE-MOVE',
+      `${binding.map(({ authority }) => `${authority.identity} allows ${authority.moves!.join(', ')}`).join('; ')}; ${mode} needs ${MODE_MOVES[mode]}`,
+      binding[0]!.authority.identity,
+    );
+  const excluding = binding.flatMap(({ authority }) => {
+    const excluded = words.filter((word) => authority.excludedWords?.includes(word));
+    return excluded.length === 0 ? [] : [{ identity: authority.identity, excluded }];
+  });
+  if (excluding.length > 0)
+    return refuse(
+      'IA-RUNTIME-MANDATE-WORD',
+      excluding.map(({ identity, excluded }) => `${identity} excludes ${excluded.join(', ')}`).join('; '),
+      excluding[0]!.identity,
+    );
+  return freeze({});
 }

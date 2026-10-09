@@ -1,0 +1,824 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { expect, it } from 'vitest';
+import type { Handle } from '@inventarch/db';
+import type { Location } from '@inventarch/language';
+import { MODES, defaultActor, governingMandates, position, profileRefusal, renderPacket } from '../src/index.js';
+import type { GoverningMandate, GoverningOptions, Mode } from '../src/index.js';
+import { database, freshInit, packetFixture, put, workspace } from './workspace.js';
+
+// Plan amendment C1 and operator decision OD1 (milestone generation-binding, task mandate-resolution): the authored
+// @mandate records that govern an actor at a workspace or path, the default actor, and the refusal profile their moves
+// and excluded words give a mode. Amendment C2 (OD2): this repository's participant may make all five moves.
+const repository = resolve(import.meta.dirname, '../../..'),
+  demo = 'workspace-system/definition/workspace/demo',
+  participant = 'agent-system/binding/agent/demo',
+  zed = 'agent-system/binding/agent/zed',
+  ops = 'agent-system/binding/agent/ops',
+  mandate = (name: string) => `agent-system/policy/mandate/${name}`,
+  governance = (seat: string) => `ia position --seat ${seat} --shape governance`,
+  ALL = ['Observation', 'Verification', 'Synthesis', 'Delegation', 'Execution'],
+  ALL_MOVES = 'moves [Observation, Verification, Synthesis, Delegation, Execution]',
+  STEWARD = '    steward @agent demo\n',
+  SCOPE = '    scope [@workspace demo]\n',
+  UNGOVERNED = 'no authored @mandate governs here, so no move or word is restricted (a mandate only adds restrictions)';
+const RUNTIME: Location = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' };
+/** The three records a fresh init authors (B13): the demo workspace, its steward participant and its mandate. */
+const records = readFileSync(packetFixture, 'utf8'),
+  /** The fresh init's three records without the mandate, the last of them. */
+  unmandated = records.slice(0, records.indexOf('\n@mandate demo-mandate'));
+/** A fixture @agent and a fixture @mandate in the shape of the fresh init's, `authority` the mandate's fields. */
+const agent = (name: string): string =>
+  `\n@agent ${name}\n  meaning\n    says "Fixture participant ${name}."\n    answers "Who is ${name}?"\n  governance\n    applies []\n`;
+const authorized = (name: string, authority: readonly string[]): string =>
+  `\n@mandate ${name}\n  meaning\n    says "Fixture mandate ${name}."\n    answers "What may its participant do?"\n  governance\n    requires "Claim no host permission or execution from this mandate."\n  authority\n${authority.map((line) => `    ${line}\n`).join('')}`;
+const errors = (db: Handle) => db.report.findings.filter((finding) => finding.severity === 'error');
+const token = (db: Handle): string => db.resolveScope().token;
+/** The profile `mode` meets at the demo workspace for its default actor, resolved as the CLI resolves it. */
+function profileAt(db: Handle, mode: Mode, words?: readonly string[]) {
+  const within = token(db),
+    { actor } = defaultActor(db, within, demo),
+    options: GoverningOptions = { ...(actor === undefined ? {} : { actor }), workspace: demo };
+  return profileRefusal(governingMandates(db, within, options), mode, words);
+}
+const identities = (db: Handle, options: GoverningOptions = {}): readonly string[] =>
+  governingMandates(db, token(db), options).map((entry) => entry.identity);
+/** Each governing mandate with whether it binds `options.actor`. */
+const bound = (db: Handle, options: GoverningOptions): readonly (readonly [string, boolean | undefined])[] =>
+  governingMandates(db, token(db), options).map((entry) => [entry.identity, entry.binds] as const);
+/** Governing mandates in the position packet's mandate shape (B3), which names no band and binds no actor. */
+const asPacket = (entries: readonly GoverningMandate[]) =>
+  entries.map(({ band: _band, binds: _binds, ...entry }) => entry);
+
+it("resolves a fresh init's participant as the default actor, its mandate as governing, and allows every mode", () => {
+  const db = database(freshInit()),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  const actor = defaultActor(db, within, demo);
+  expect(actor).toEqual({ actor: participant, by: 'steward', participants: [participant] });
+  expect(Object.isFrozen(actor)).toBe(true);
+  const governing = governingMandates(db, within, { actor: participant, workspace: demo });
+  expect(governing).toEqual([
+    { identity: mandate('demo-mandate'), band: 100, participant, binds: true, moves: ALL, scope: [demo] },
+  ]);
+  expect(Object.isFrozen(governing)).toBe(true);
+  expect(Object.isFrozen(governing[0]!.scope)).toBe(true);
+  for (const mode of MODES) {
+    const verdict = profileRefusal(governing, mode);
+    expect(verdict, mode).toEqual({});
+    expect(Object.isFrozen(verdict), mode).toBe(true);
+  }
+  // Without an actor, the workspace's mandates are the packet's, as it lists them at K0.
+  const packet = renderPacket(db, within, []).packet;
+  expect(asPacket(governingMandates(db, within, { workspace: demo }))).toEqual(packet.mandates);
+  expect(actor.participants).toEqual(packet.participants.map((entry) => entry.identity));
+  // The installed base is adopted at band 90: its sample-mandate claims docs/** but, not authored, governs nothing.
+  expect(db.resolveSeat('docs/guide.md').claimants.map((claimant) => [claimant.identity, claimant.band])).toEqual([
+    [mandate('sample-mandate'), 90],
+  ]);
+  expect(identities(db, { path: 'docs/guide.md' })).toEqual([]);
+  expect(identities(db)).toEqual([mandate('demo-mandate')]);
+  // Without a steward the workspace's one participant is the default actor, once however many mandates name it.
+  const unstewarded = database(
+    freshInit(
+      `${records.replace(STEWARD, '')}${authorized('second-demo-mandate', ['participant @agent demo', 'moves [Observation]', 'scope [@workspace demo]'])}`,
+    ),
+  );
+  expect(errors(unstewarded)).toEqual([]);
+  expect(defaultActor(unstewarded, token(unstewarded), demo)).toEqual({
+    actor: participant,
+    by: 'participant',
+    participants: [participant],
+  });
+  for (const mode of MODES) expect(profileAt(unstewarded, mode), mode).toEqual({});
+});
+
+it("refuses effect (ia capture) without Execution, naming the mandate's governance position, whose key resolves", () => {
+  const db = database(
+    freshInit(records.replace(ALL_MOVES, 'moves [Observation, Verification, Synthesis, Delegation]')),
+  );
+  expect(errors(db)).toEqual([]);
+  expect(profileAt(db, 'effect')).toEqual({
+    refusal: {
+      code: 'IA-RUNTIME-MANDATE-MOVE',
+      message: `${mandate('demo-mandate')} allows Observation, Verification, Synthesis, Delegation; effect needs Execution`,
+      next: governance(mandate('demo-mandate')),
+    },
+  });
+  for (const mode of MODES.filter((mode) => mode !== 'effect')) expect(profileAt(db, mode), mode).toEqual({});
+  // The next command's key seats at the mandate in the governance shape.
+  expect(position(db, token(db), { seat: mandate('demo-mandate'), shape: 'governance' }).body.seat.identity).toBe(
+    mandate('demo-mandate'),
+  );
+});
+
+it('governs a path through authority.covers, an authored claimant only, and says which mandates bind the actor', () => {
+  const db = database(
+    freshInit(
+      `${records}${agent('zed')}${authorized('docs-mandate', [
+        'participant @agent demo',
+        'moves [Observation, Synthesis]',
+        'covers ["docs/"]',
+      ])}${authorized('zed-mandate', ['participant @agent zed', 'moves [Observation]', 'covers ["docs/guide.md"]'])}`,
+    ),
+  );
+  expect(errors(db)).toEqual([]);
+  // The trailing `/` selects the subtree (graph G06c); the adopted sample-mandate's docs/** claim is left out.
+  expect(identities(db, { path: 'docs/guide.md' })).toEqual([mandate('docs-mandate'), mandate('zed-mandate')]);
+  expect(identities(db, { path: 'docs/other.md' })).toEqual([mandate('docs-mandate')]);
+  expect(identities(db, { path: 'src/index.ts' })).toEqual([]);
+  expect(identities(db, { path: '../outside.md' })).toEqual([]);
+  // An actor drops no mandate that governs the path: each says whether it binds the actor.
+  expect(bound(db, { actor: participant, path: 'docs/guide.md' })).toEqual([
+    [mandate('docs-mandate'), true],
+    [mandate('zed-mandate'), false],
+  ]);
+  expect(bound(db, { actor: zed, path: 'docs/guide.md' })).toEqual([
+    [mandate('docs-mandate'), false],
+    [mandate('zed-mandate'), true],
+  ]);
+  // A workspace and a path: either one suffices. Without the path, a mandate that only covers paths does not govern.
+  expect(bound(db, { actor: participant, workspace: demo, path: 'docs/guide.md' })).toEqual([
+    [mandate('demo-mandate'), true],
+    [mandate('docs-mandate'), true],
+    [mandate('zed-mandate'), false],
+  ]);
+  expect(identities(db, { actor: participant, workspace: demo })).toEqual([mandate('demo-mandate')]);
+  expect(identities(db, { workspace: demo })).toEqual([mandate('demo-mandate')]);
+  expect(bound(db, { actor: zed })).toEqual([
+    [mandate('demo-mandate'), false],
+    [mandate('docs-mandate'), false],
+    [mandate('zed-mandate'), true],
+  ]);
+  expect(identities(db)).toEqual([mandate('demo-mandate'), mandate('docs-mandate'), mandate('zed-mandate')]);
+  const within = token(db);
+  expect(governingMandates(db, within, { path: 'docs/guide.md' })).toEqual([
+    {
+      identity: mandate('docs-mandate'),
+      band: 100,
+      participant,
+      moves: ['Observation', 'Synthesis'],
+      scope: [],
+      covers: ['docs/'],
+    },
+    {
+      identity: mandate('zed-mandate'),
+      band: 100,
+      participant: zed,
+      moves: ['Observation'],
+      scope: [],
+      covers: ['docs/guide.md'],
+    },
+  ]);
+  // Its profile: each actor's own mandates are judged; a move any of them grants is allowed, one none grants refused.
+  const docs = governingMandates(db, within, { actor: participant, path: 'docs/guide.md' });
+  expect(profileRefusal(docs, 'author')).toEqual({});
+  expect(profileRefusal(docs, 'effect').refusal).toEqual({
+    code: 'IA-RUNTIME-MANDATE-MOVE',
+    message: `${mandate('docs-mandate')} allows Observation, Synthesis; effect needs Execution`,
+    next: governance(mandate('docs-mandate')),
+  });
+  // One participant's mandate never grants another a move: zed is held to its own.
+  expect(profileRefusal(governingMandates(db, within, { actor: zed, path: 'docs/guide.md' }), 'author')).toEqual({
+    refusal: {
+      code: 'IA-RUNTIME-MANDATE-MOVE',
+      message: `${mandate('zed-mandate')} allows Observation; author needs Synthesis`,
+      next: governance(mandate('zed-mandate')),
+    },
+  });
+  const both = governingMandates(db, within, { actor: participant, workspace: demo, path: 'docs/guide.md' });
+  for (const mode of MODES) expect(profileRefusal(both, mode), mode).toEqual({});
+  // zed is no participant of the workspace (its mandate scopes none), so the steward stays the default actor.
+  expect(defaultActor(db, within, demo)).toEqual({ actor: participant, by: 'steward', participants: [participant] });
+});
+
+it('refuses an actor that no mandate governing the workspace binds, rather than read it as ungoverned', () => {
+  const db = database(
+      freshInit(
+        `${records.replace(STEWARD, '    steward @agent ops\n').replace(ALL_MOVES, 'moves [Observation]')}${agent('ops')}`,
+      ),
+    ),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  // The steward names the actor, whether or not it is a participant.
+  expect(defaultActor(db, within, demo)).toEqual({ actor: ops, by: 'steward', participants: [participant] });
+  expect(governingMandates(db, within, { actor: ops, workspace: demo })).toEqual([
+    { identity: mandate('demo-mandate'), band: 100, participant, binds: false, moves: ['Observation'], scope: [demo] },
+  ]);
+  for (const mode of MODES)
+    expect(profileAt(db, mode), mode).toEqual({
+      refusal: {
+        code: 'IA-RUNTIME-MANDATE-ACTOR',
+        message: `no mandate that governs here binds the acting @agent: ${mandate('demo-mandate')} binds ${participant}`,
+        next: governance(mandate('demo-mandate')),
+      },
+    });
+  // Without an actor the workspace's mandate is judged; where no mandate claims the path, nothing is restricted.
+  expect(profileRefusal(governingMandates(db, within, { workspace: demo }), 'read')).toEqual({});
+  expect(profileRefusal(governingMandates(db, within, { workspace: demo }), 'author').refusal!.code).toBe(
+    'IA-RUNTIME-MANDATE-MOVE',
+  );
+  expect(profileRefusal(governingMandates(db, within, { actor: ops, path: 'docs/guide.md' }), 'author')).toEqual({
+    notice: UNGOVERNED,
+  });
+});
+
+it('reads only the closure of the workspace, as position does: another root never governs or names a participant', () => {
+  const root = freshInit(records.replace(STEWARD, '').replace(ALL_MOVES, 'moves [Observation]'));
+  put(
+    root,
+    '.ia/src/other/other.ia',
+    `#! ia 1.0\n\n@workspace other\n  meaning\n    says "Another workspace."\n    answers "Which sources make up the other workspace?"\n  composition\n    systems [@system agent-system]\n    sources [".ia/src/other @authored"]\n${agent('zed')}${authorized(
+      'zed-mandate',
+      ['participant @agent zed', 'moves [Observation]', 'scope [@workspace demo]'],
+    )}${authorized('widening-mandate', ['participant @agent demo', 'moves [Execution]', 'scope [@workspace demo]'])}`,
+  );
+  const db = database(root),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  expect(db.snapshot({ within }).membership.find((row) => row.identity === mandate('zed-mandate'))!.root).toBe(
+    '.ia/src/other',
+  );
+  // The governance position the refusals name lists the same mandates.
+  const seated = position(db, within, { seat: demo, shape: 'governance' }).body;
+  expect(seated.mandates.map((pointer) => pointer.identity)).toEqual([mandate('demo-mandate')]);
+  expect(identities(db, { workspace: demo })).toEqual([mandate('demo-mandate')]);
+  expect(defaultActor(db, within, demo)).toEqual({
+    actor: participant,
+    by: 'participant',
+    participants: [participant],
+  });
+  // The other root's mandate naming demo widens nothing, and zed, bound by none of demo's mandates, is refused.
+  expect(profileAt(db, 'effect').refusal).toMatchObject({
+    code: 'IA-RUNTIME-MANDATE-MOVE',
+    next: governance(mandate('demo-mandate')),
+  });
+  expect(profileRefusal(governingMandates(db, within, { actor: zed, workspace: demo }), 'read').refusal!.code).toBe(
+    'IA-RUNTIME-MANDATE-ACTOR',
+  );
+});
+
+it('reads for a path alone the closure of the workspace position seats it in, though the repository has none', () => {
+  const root = freshInit('#! ia 1.0\n');
+  put(
+    root,
+    '.ia/src/demo/workspace.ia',
+    records
+      .replace('sources [".ia/src @authored"]', 'sources [".ia/src/demo @authored"]')
+      .replace(ALL_MOVES, 'moves [Observation]')
+      .replace(SCOPE, `${SCOPE}    covers [".ia/src/"]\n`),
+  );
+  put(
+    root,
+    '.ia/src/other/other.ia',
+    `#! ia 1.0\n\n@workspace other\n  meaning\n    says "Another workspace."\n    answers "Which sources make up the other workspace?"\n  composition\n    systems [@system agent-system]\n    sources [".ia/src/other @authored"]\n${agent('zed')}${authorized(
+      'zed-mandate',
+      ['participant @agent zed', 'moves [Observation]', 'covers [".ia/src/"]'],
+    )}`,
+  );
+  const db = database(root),
+    within = token(db),
+    own = '.ia/src/demo/workspace.ia',
+    other = '.ia/src/other/other.ia';
+  expect(errors(db)).toEqual([]);
+  // Two workspaces declare roots under .ia/src, so neither is the repository's own (db D02b).
+  expect(db.resolveSeat('', { within }).seat).toBeUndefined();
+  // Both mandates claim both paths; each governs only in its own workspace's closure, as position lists them.
+  for (const [path, governing] of [
+    [own, mandate('demo-mandate')],
+    [other, mandate('zed-mandate')],
+  ] as const) {
+    expect(db.resolveSeat(path, { within }).claimants.map((claimant) => claimant.identity)).toEqual([
+      mandate('demo-mandate'),
+      mandate('zed-mandate'),
+    ]);
+    expect(
+      position(db, within, { seat: { path }, shape: 'governance' }).body.mandates.map((pointer) => pointer.identity),
+      path,
+    ).toEqual([governing]);
+    expect(identities(db, { path }), path).toEqual([governing]);
+  }
+  // So the participant's own mandate restricts it at its own path, rather than read the path as ungoverned.
+  expect(profileRefusal(governingMandates(db, within, { actor: participant, path: own }), 'author')).toEqual({
+    refusal: {
+      code: 'IA-RUNTIME-MANDATE-MOVE',
+      message: `${mandate('demo-mandate')} allows Observation; author needs Synthesis`,
+      next: governance(mandate('demo-mandate')),
+    },
+  });
+  expect(bound(db, { actor: zed, path: own })).toEqual([[mandate('demo-mandate'), false]]);
+  expect(identities(db, { path: own, workspace: demo })).toEqual([mandate('demo-mandate')]);
+});
+
+it('governs wherever its participant acts a mandate that states neither scope nor covers, with or without a steward', () => {
+  const located = records.replace(SCOPE, '').replace(ALL_MOVES, 'moves [Observation]'),
+    loose = authorized('loose-mandate', ['moves [Observation]']);
+  const db = database(freshInit(`${located}${agent('zed')}${loose}`)),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  expect(governingMandates(db, within, { actor: participant, workspace: demo })).toEqual([
+    { identity: mandate('demo-mandate'), band: 100, participant, binds: true, moves: ['Observation'], scope: [] },
+  ]);
+  expect(identities(db, { actor: participant, path: 'src/index.ts' })).toEqual([mandate('demo-mandate')]);
+  expect(profileAt(db, 'read')).toEqual({});
+  expect(profileAt(db, 'author').refusal).toEqual({
+    code: 'IA-RUNTIME-MANDATE-MOVE',
+    message: `${mandate('demo-mandate')} allows Observation; author needs Synthesis`,
+    next: governance(mandate('demo-mandate')),
+  });
+  // It locates no other actor, and one that names no participant either governs only where no location is asked.
+  expect(identities(db, { actor: zed, workspace: demo })).toEqual([]);
+  expect(identities(db, { workspace: demo })).toEqual([mandate('demo-mandate')]);
+  expect(identities(db)).toEqual([mandate('demo-mandate'), mandate('loose-mandate')]);
+  // Without a steward it names no participant of the workspace, yet governs the actorless profile alike.
+  const unstewarded = database(freshInit(located.replace(STEWARD, '')));
+  expect(defaultActor(unstewarded, token(unstewarded), demo).actor).toBeUndefined();
+  expect(profileAt(unstewarded, 'author').refusal!.code).toBe('IA-RUNTIME-MANDATE-MOVE');
+});
+
+it('locates nothing by a declared empty scope or covers, so an empty list never lifts a restriction', () => {
+  for (const empty of ['    scope []\n', '    covers []\n']) {
+    const db = database(freshInit(records.replace(SCOPE, empty).replace(ALL_MOVES, 'moves [Observation]'))),
+      within = token(db);
+    expect(errors(db)).toEqual([]);
+    // Located by its participant alone, as when it states neither key: it governs the workspace and a path alike.
+    expect(identities(db, { actor: participant, workspace: demo })).toEqual([mandate('demo-mandate')]);
+    expect(identities(db, { actor: participant, path: 'src/index.ts' })).toEqual([mandate('demo-mandate')]);
+    expect(governingMandates(db, within, { actor: participant, workspace: demo })).toHaveLength(1);
+    expect(profileAt(db, 'author').refusal!.code).toBe('IA-RUNTIME-MANDATE-MOVE');
+  }
+});
+
+it("never pools two participants' mandates without an actor, refusing rather than granting either's moves", () => {
+  const db = database(
+      freshInit(
+        `${records.replace(STEWARD, '').replace(SCOPE, '').replace(ALL_MOVES, 'moves [Observation]')}${agent('zed')}${authorized(
+          'zed-mandate',
+          ['participant @agent zed', 'moves [Synthesis, Execution]'],
+        )}`,
+      ),
+    ),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  // Neither mandate is scoped to the workspace, so it has no participant and no default actor, yet both govern.
+  expect(defaultActor(db, within, demo).actor).toBeUndefined();
+  expect(identities(db, { workspace: demo })).toEqual([mandate('demo-mandate'), mandate('zed-mandate')]);
+  for (const mode of MODES)
+    expect(profileAt(db, mode), mode).toEqual({
+      refusal: {
+        code: 'IA-RUNTIME-MANDATE-ACTOR',
+        message: `the mandates that govern here bind 2 participants and name no acting @agent: ${mandate('demo-mandate')} binds ${participant}; ${mandate('zed-mandate')} binds ${zed}`,
+        next: governance(mandate('demo-mandate')),
+      },
+    });
+  // Named, each actor is held to its own mandate alone.
+  const zeds = governingMandates(db, within, { actor: zed, workspace: demo });
+  expect(zeds.map((entry) => [entry.identity, entry.binds])).toEqual([[mandate('zed-mandate'), true]]);
+  expect(profileRefusal(zeds, 'author')).toEqual({});
+  expect(profileRefusal(zeds, 'read').refusal!.message).toBe(
+    `${mandate('zed-mandate')} allows Synthesis, Execution; read needs Observation`,
+  );
+  expect(
+    profileRefusal(governingMandates(db, within, { actor: participant, workspace: demo }), 'author').refusal!.code,
+  ).toBe('IA-RUNTIME-MANDATE-MOVE');
+});
+
+it('binds whoever acts a mandate that names no participant, and judges it without an actor too', () => {
+  const houseRules = authorized('house-rules', [
+    'moves [Observation]',
+    'scope [@workspace demo]',
+    'excluded-words [hook]',
+  ]);
+  const refused = {
+    code: 'IA-RUNTIME-MANDATE-MOVE',
+    message: `${mandate('house-rules')} allows Observation; author needs Synthesis`,
+    next: governance(mandate('house-rules')),
+  };
+  const stewarded = database(freshInit(`${unmandated}${houseRules}`)),
+    within = token(stewarded);
+  expect(errors(stewarded)).toEqual([]);
+  expect(defaultActor(stewarded, within, demo)).toEqual({ actor: participant, by: 'steward', participants: [] });
+  expect(governingMandates(stewarded, within, { actor: participant, workspace: demo })).toEqual([
+    {
+      identity: mandate('house-rules'),
+      band: 100,
+      binds: true,
+      moves: ['Observation'],
+      scope: [demo],
+      excludedWords: ['hook'],
+    },
+  ]);
+  expect(profileAt(stewarded, 'author').refusal).toEqual(refused);
+  expect(profileAt(stewarded, 'read', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
+  // With no participant and no steward there is no actor and no refusal, but the mandate still governs.
+  for (const participantLine of [[], ['participant @agent ghost']]) {
+    const unstewarded = database(
+      freshInit(
+        `${unmandated.replace(STEWARD, '')}${authorized('house-rules', [...participantLine, 'moves [Observation]', 'scope [@workspace demo]'])}`,
+      ),
+    );
+    expect(errors(unstewarded)).toEqual([]);
+    expect(defaultActor(unstewarded, token(unstewarded), demo)).toEqual({
+      participants: [],
+      reason: `${demo} states no composition.steward, and no authored @mandate scoped to it names an authored @agent as its participant`,
+    });
+    expect(profileAt(unstewarded, 'read')).toEqual({});
+    expect(profileAt(unstewarded, 'author').refusal).toEqual(refused);
+  }
+});
+
+it('names no default actor while several participants and no steward leave the choice open, and refuses with it', () => {
+  const several = `${records.replace(STEWARD, '')}${agent('zed')}${authorized('zed-mandate', [
+    'participant @agent zed',
+    'moves [Observation]',
+    'scope [@workspace demo]',
+  ])}`;
+  const db = database(freshInit(several)),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  const reason = `${demo} states no composition.steward, and its authored mandates name 2 participants (${participant}, ${zed}): name one of them as its composition.steward`;
+  const actor = defaultActor(db, within, demo);
+  expect(actor).toEqual({
+    participants: [participant, zed],
+    reason,
+    refusal: { code: 'IA-RUNTIME-MANDATE-ACTOR', message: reason, next: governance(demo) },
+  });
+  expect(Object.isFrozen(actor.refusal)).toBe(true);
+  // The next command's key seats at the workspace, whose mandates name both participants.
+  const seated = position(db, within, { seat: demo, shape: 'governance' }).body;
+  expect(seated.seat.identity).toBe(demo);
+  expect(seated.mandates.map((pointer) => pointer.identity)).toEqual([mandate('demo-mandate'), mandate('zed-mandate')]);
+  // Without an actor every mandate scoped to the workspace governs; with one, each says whether it binds it.
+  expect(identities(db, { workspace: demo })).toEqual([mandate('demo-mandate'), mandate('zed-mandate')]);
+  expect(bound(db, { actor: zed, workspace: demo })).toEqual([
+    [mandate('demo-mandate'), false],
+    [mandate('zed-mandate'), true],
+  ]);
+  // The steward names the actor among them.
+  const stewarded = database(freshInit(several.replace('    sources [".ia/src @authored"]\n', `$&${STEWARD}`)));
+  expect(defaultActor(stewarded, token(stewarded), demo)).toEqual({
+    actor: participant,
+    by: 'steward',
+    participants: [participant, zed],
+  });
+  // A steward that resolves to no admitted @agent names none; the reason says so rather than that none is stated.
+  const dangling = database(
+    freshInit(several.replace('    sources [".ia/src @authored"]\n', '$&    steward @agent ghost\n')),
+  );
+  expect(errors(dangling)).toEqual([]);
+  expect(defaultActor(dangling, token(dangling), demo).reason).toBe(
+    `${demo}'s composition.steward resolves to no admitted @agent, and its authored mandates name 2 participants (${participant}, ${zed}): name one of them as its composition.steward`,
+  );
+  // With no mandate, no participant and no steward there is no actor and nothing to refuse: the notice.
+  const none = database(freshInit(unmandated.replace(STEWARD, '')));
+  expect(errors(none)).toEqual([]);
+  expect(defaultActor(none, token(none), demo)).toEqual({
+    participants: [],
+    reason: `${demo} states no composition.steward, and no authored @mandate scoped to it names an authored @agent as its participant`,
+  });
+  for (const mode of MODES) expect(profileAt(none, mode), mode).toEqual({ notice: UNGOVERNED });
+});
+
+it('counts only the authored participants of authored mandates', () => {
+  const db = database(
+      freshInit(
+        `${records.replace(STEWARD, '')}${agent('zed')}${authorized('adopted-agent-mandate', [
+          'participant @agent agent-steward',
+          'moves [Observation]',
+          'scope [@workspace demo]',
+        ])}`,
+        {
+          '.ia/src/vendored.ia': `#! ia 1.0\n${authorized('vendored-mandate', ['participant @agent zed', 'moves [Observation]', 'scope [@workspace demo]'])}`,
+        },
+      ),
+    ),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  expect(db.records().find((record) => record.identity === mandate('vendored-mandate'))!.band).toBe(90);
+  // Neither the adopted agent-steward nor zed, named only by an adopted mandate, is a participant of the workspace.
+  expect(defaultActor(db, within, demo)).toEqual({
+    actor: participant,
+    by: 'participant',
+    participants: [participant],
+  });
+  expect(governingMandates(db, within, { actor: participant, workspace: demo })).toEqual([
+    {
+      identity: mandate('adopted-agent-mandate'),
+      band: 100,
+      participant: 'agent-system/binding/agent/agent-steward',
+      binds: false,
+      moves: ['Observation'],
+      scope: [demo],
+    },
+    { identity: mandate('demo-mandate'), band: 100, participant, binds: true, moves: ALL, scope: [demo] },
+  ]);
+  for (const mode of MODES) expect(profileAt(db, mode), mode).toEqual({});
+});
+
+it('restricts nothing and says so when no mandate governs', () => {
+  const db = database(freshInit(unmandated)),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  // The steward is still the default actor; no mandate names it.
+  expect(defaultActor(db, within, demo)).toEqual({ actor: participant, by: 'steward', participants: [] });
+  expect(governingMandates(db, within, { actor: participant, workspace: demo })).toEqual([]);
+  for (const mode of MODES) {
+    expect(profileAt(db, mode), mode).toEqual({ notice: UNGOVERNED });
+    expect(profileAt(db, mode, ['schema']), mode).toEqual({ notice: UNGOVERNED });
+  }
+});
+
+it('resolves what a workspace with admission errors admits', () => {
+  const root = freshInit(
+    `${records.replace(ALL_MOVES, 'moves [Observation, Verification]')}${authorized('ghost-mandate', [
+      'participant @agent ghost',
+      'moves [Observation]',
+      'covers ["docs/"]',
+    ])}`,
+  );
+  put(
+    root,
+    '.ia/src/broken.ia',
+    '#! ia 1.0\n\n@task broken\n  meaning\n    says "A task admission refuses."\n  work\n    title "Broken"\n    status bogus\n',
+  );
+  const db = database(root),
+    within = token(db);
+  expect(errors(db).length).toBeGreaterThan(0);
+  expect(db.refused.map((record) => record.identity)).toContain('work-system/definition/task/broken');
+  expect(defaultActor(db, within, demo)).toEqual({ actor: participant, by: 'steward', participants: [participant] });
+  expect(identities(db, { actor: participant, workspace: demo })).toEqual([mandate('demo-mandate')]);
+  expect(profileAt(db, 'validate')).toEqual({});
+  expect(profileAt(db, 'author').refusal).toMatchObject({
+    code: 'IA-RUNTIME-MANDATE-MOVE',
+    next: governance(mandate('demo-mandate')),
+  });
+  // An admitted mandate whose participant resolves to no admitted @agent keeps the reference as authored.
+  const ghost = governingMandates(db, within, { path: 'docs/guide.md' });
+  expect(ghost.map((entry) => [entry.identity, entry.participant])).toEqual([
+    [mandate('ghost-mandate'), '@agent ghost'],
+  ]);
+});
+
+it('judges excluded words only when words are given, after the move', () => {
+  const db = database(freshInit(records.replace(`    ${ALL_MOVES}\n`, `$&    excluded-words [schema, hook]\n`)));
+  expect(errors(db)).toEqual([]);
+  expect(governingMandates(db, token(db), { workspace: demo })[0]!.excludedWords).toEqual(['schema', 'hook']);
+  expect(profileAt(db, 'author')).toEqual({});
+  expect(profileAt(db, 'author', [])).toEqual({});
+  expect(profileAt(db, 'author', ['task'])).toEqual({});
+  expect(profileAt(db, 'author', ['task', 'hook', 'schema'])).toEqual({
+    refusal: {
+      code: 'IA-RUNTIME-MANDATE-WORD',
+      message: `${mandate('demo-mandate')} excludes hook, schema`,
+      next: governance(mandate('demo-mandate')),
+    },
+  });
+  expect(profileAt(db, 'validate', ['schema']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
+  // A declared empty list is stated, as the packet renders it; each scope reference is resolved once, or kept.
+  const stated = database(
+    freshInit(
+      records.replace(
+        SCOPE,
+        '    scope [@workspace ghost, @workspace demo, @workspace demo]\n    excluded-words []\n    covers []\n',
+      ),
+    ),
+  );
+  expect(errors(stated)).toEqual([]);
+  const governing = governingMandates(stated, token(stated), { workspace: demo });
+  expect(governing).toEqual([
+    {
+      identity: mandate('demo-mandate'),
+      band: 100,
+      participant,
+      moves: ALL,
+      scope: ['@workspace ghost', demo],
+      covers: [],
+      excludedWords: [],
+    },
+  ]);
+  expect(asPacket(governing)).toEqual(renderPacket(stated, token(stated), []).packet.mandates);
+  expect(profileRefusal(governing, 'author', ['hook'])).toEqual({});
+});
+
+it('judges any number of mandates: any one grants a move, any one excludes a word, the first named is next', () => {
+  const a = 'agent-system/policy/mandate/a',
+    b = 'agent-system/policy/mandate/b';
+  // A mandate that declares no moves grants every one.
+  for (const mode of MODES)
+    expect(profileRefusal([{ identity: a, moves: ['Observation'] }, { identity: b }], mode)).toEqual({});
+  expect(
+    profileRefusal(
+      [
+        { identity: a, moves: ['Observation'] },
+        { identity: b, moves: ['Verification', 'Execution'] },
+      ],
+      'author',
+    ),
+  ).toEqual({
+    refusal: {
+      code: 'IA-RUNTIME-MANDATE-MOVE',
+      message: `${a} allows Observation; ${b} allows Verification, Execution; author needs Synthesis`,
+      next: governance(a),
+    },
+  });
+  expect(
+    profileRefusal(
+      [
+        { identity: a, moves: ['Synthesis'] },
+        { identity: b, moves: ['Observation'], excludedWords: ['law', 'hook'] },
+      ],
+      'author',
+      ['hook', 'law'],
+    ),
+  ).toEqual({
+    refusal: { code: 'IA-RUNTIME-MANDATE-WORD', message: `${b} excludes hook, law`, next: governance(b) },
+  });
+  expect(
+    profileRefusal(
+      [
+        { identity: a, excludedWords: ['hook'] },
+        { identity: b, excludedWords: ['law'] },
+      ],
+      'read',
+      ['law', 'hook'],
+    ).refusal,
+  ).toEqual({ code: 'IA-RUNTIME-MANDATE-WORD', message: `${a} excludes hook; ${b} excludes law`, next: governance(a) });
+  // A mandate that binds another participant grants and excludes nothing; when every one does, the actor is refused.
+  expect(
+    profileRefusal(
+      [
+        { identity: a, participant: 'agent/x', binds: false },
+        { identity: b, moves: ['Observation'], binds: true },
+      ],
+      'author',
+    ).refusal!.message,
+  ).toBe(`${b} allows Observation; author needs Synthesis`);
+  expect(
+    profileRefusal(
+      [
+        { identity: a, binds: false, excludedWords: ['hook'] },
+        { identity: b, binds: true },
+      ],
+      'author',
+      ['hook'],
+    ),
+  ).toEqual({});
+  expect(
+    profileRefusal(
+      [
+        { identity: a, participant: 'agent/x', binds: false },
+        { identity: b, binds: false },
+      ],
+      'read',
+    ),
+  ).toEqual({
+    refusal: {
+      code: 'IA-RUNTIME-MANDATE-ACTOR',
+      message: `no mandate that governs here binds the acting @agent: ${a} binds agent/x; ${b}`,
+      next: governance(a),
+    },
+  });
+  // Two participants' mandates are never pooled; one participant's several, and those naming none, are.
+  expect(
+    profileRefusal(
+      [
+        { identity: a, moves: ['Observation'] },
+        { identity: b, participant: 'agent/x', moves: ['Synthesis'] },
+        { identity: 'agent-system/policy/mandate/c', participant: 'agent/y' },
+      ],
+      'author',
+    ),
+  ).toEqual({
+    refusal: {
+      code: 'IA-RUNTIME-MANDATE-ACTOR',
+      message: `the mandates that govern here bind 2 participants and name no acting @agent: ${b} binds agent/x; agent-system/policy/mandate/c binds agent/y`,
+      next: governance(b),
+    },
+  });
+  expect(
+    profileRefusal(
+      [
+        { identity: a, moves: ['Observation'] },
+        { identity: b, participant: 'agent/x', moves: ['Synthesis'] },
+        { identity: 'agent-system/policy/mandate/c', participant: 'agent/x', moves: ['Execution'] },
+      ],
+      'author',
+    ),
+  ).toEqual({});
+  // The move is judged before the words.
+  expect(
+    profileRefusal([{ identity: a, moves: ['Observation'], excludedWords: ['hook'] }], 'author', ['hook']).refusal!
+      .code,
+  ).toBe('IA-RUNTIME-MANDATE-MOVE');
+  // An unknown mode is refused before anything is read, and every declared move list is judged, bound or not.
+  expect(() => profileRefusal([], 'invented' as Mode)).toThrow('IA-RUNTIME-REQUEST-INVALID');
+  expect(() => profileRefusal([{ identity: a }, { identity: b, moves: [], binds: false }], 'read')).toThrow(
+    'authority.moves must name at least one kernel move',
+  );
+  // A compiled @mandate is read through mandateAuthorityOf.
+  const sample = database(workspace())
+    .records()
+    .find((record) => record.discriminator === 'mandate' && record.name === 'sample-mandate')!;
+  expect(profileRefusal([sample], 'author').refusal).toEqual({
+    code: 'IA-RUNTIME-MANDATE-MOVE',
+    message: `${sample.identity} allows Observation, Verification; author needs Synthesis`,
+    next: governance(sample.identity),
+  });
+  expect(profileRefusal([sample], 'read', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
+});
+
+it('reads only through its scope token, never at runtime placement, and refuses what it cannot read', () => {
+  const path = '.ia/src/runtime-mandate.ia',
+    root = freshInit();
+  put(
+    root,
+    path,
+    `#! ia 1.0\n${authorized('runtime-mandate', ['participant @agent demo', 'scope [@workspace demo]'])}`,
+  );
+  const authored = database(root);
+  expect(identities(authored, { actor: participant, workspace: demo })).toEqual([
+    mandate('demo-mandate'),
+    mandate('runtime-mandate'),
+  ]);
+  const placed = database(root, { locations: { [path]: RUNTIME } });
+  expect(placed.records().some((record) => record.identity === mandate('runtime-mandate'))).toBe(true);
+  expect(identities(placed, { actor: participant, workspace: demo })).toEqual([mandate('demo-mandate')]);
+  // A steward at runtime placement is no actor: the participant is the default actor, and the steward no admitted one.
+  const steward = '.ia/src/runtime-agent.ia',
+    rt = 'agent-system/binding/agent/rt',
+    runtimeSteward = freshInit(records.replace(STEWARD, '    steward @agent rt\n'));
+  put(runtimeSteward, steward, `#! ia 1.0\n${agent('rt')}`);
+  const stewardPlaced = database(runtimeSteward, { locations: { [steward]: RUNTIME } }),
+    stewardWithin = token(stewardPlaced);
+  expect(errors(stewardPlaced)).toEqual([]);
+  expect(stewardPlaced.records().find((record) => record.identity === rt)!.band).toBe(0);
+  expect(defaultActor(stewardPlaced, stewardWithin, demo)).toEqual({
+    actor: participant,
+    by: 'participant',
+    participants: [participant],
+  });
+  expect(() => governingMandates(stewardPlaced, stewardWithin, { actor: rt })).toThrow(
+    `'${rt}' is not an admitted @agent`,
+  );
+  // A narrowed scope reads only what it admits.
+  const narrowed = authored.resolveScope({ identities: [demo, participant] }).token;
+  expect(governingMandates(authored, narrowed, { actor: participant, workspace: demo })).toEqual([]);
+  expect(defaultActor(authored, narrowed, demo)).toEqual({ actor: participant, by: 'steward', participants: [] });
+  // A missing token, or an actor or workspace that is not an admitted record of its word, is refused; an unknown
+  // token keeps its database code.
+  expect(() => governingMandates(authored, '')).toThrow('IA-RUNTIME-REQUEST-INVALID');
+  expect(() => defaultActor(authored, '', demo)).toThrow('IA-RUNTIME-REQUEST-INVALID');
+  expect(() => governingMandates(authored, 'forged')).toThrow(
+    expect.objectContaining({ code: 'IA-DB-SCOPE-UNAVAILABLE' }),
+  );
+  expect(() => defaultActor(authored, 'forged', demo)).toThrow(
+    expect.objectContaining({ code: 'IA-DB-SCOPE-UNAVAILABLE' }),
+  );
+  const within = token(authored);
+  expect(() => governingMandates(authored, within, { actor: demo })).toThrow(`'${demo}' is not an admitted @agent`);
+  expect(() => governingMandates(authored, within, { workspace: participant })).toThrow(
+    `'${participant}' is not an admitted @workspace`,
+  );
+  expect(() => defaultActor(authored, within, 'workspace-system/definition/workspace/absent')).toThrow(
+    'IA-RUNTIME-REQUEST-INVALID',
+  );
+  // A governing mandate whose authority mandateAuthorityOf refuses is refused; one that does not govern is never read.
+  const malformed = database(
+    freshInit(
+      `${records}${agent('zed')}${authorized('zed-mandate', ['participant @agent zed', 'moves []', 'covers ["src/"]'])}`,
+    ),
+  );
+  expect(errors(malformed)).toEqual([]);
+  expect(identities(malformed, { actor: participant, workspace: demo })).toEqual([mandate('demo-mandate')]);
+  expect(() => governingMandates(malformed, token(malformed), { path: 'src/index.ts' })).toThrow(
+    'authority.moves must name at least one kernel move',
+  );
+});
+
+it("resolves this repository's participant as its default actor, granted all five moves (amendment C2)", () => {
+  const db = database(repository),
+    within = token(db),
+    language = 'workspace-system/definition/workspace/language-workspace',
+    own = 'agent-system/binding/agent/language-participant';
+  expect(db.resolveSeat('', { within }).seat).toBe(language);
+  // language-workspace states no composition.steward, so its one participant is the default actor.
+  expect(defaultActor(db, within, language)).toEqual({ actor: own, by: 'participant', participants: [own] });
+  const governing = governingMandates(db, within, { actor: own, workspace: language });
+  expect(governing).toEqual([
+    {
+      identity: mandate('language-mandate'),
+      band: 100,
+      participant: own,
+      binds: true,
+      moves: ALL,
+      scope: [language],
+      covers: ['.ia/src/'],
+    },
+  ]);
+  // So ia capture, ia project and pnpm projections:generate (effect, Execution) pass the profile here, as every mode does.
+  for (const mode of MODES) expect(profileRefusal(governing, mode), mode).toEqual({});
+  expect(identities(db, { actor: own, path: '.ia/src/systems/work-system/system.ia' })).toEqual([
+    mandate('language-mandate'),
+  ]);
+  expect(identities(db, { actor: own, path: 'README.md' })).toEqual([]);
+});

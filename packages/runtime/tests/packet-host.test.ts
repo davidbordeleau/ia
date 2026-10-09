@@ -245,7 +245,7 @@ it("renders entryCount(packet) entries in the packet's field order, on a fresh i
     '- `agent-system/binding/agent/language-participant`: The IDE agent operating in the language workspace, any vendor.',
   ]);
   expect(items(own, 'Mandates')).toEqual([
-    '- `agent-system/policy/mandate/language-mandate`: participant `agent-system/binding/agent/language-participant`; moves Observation, Verification, Synthesis; scope `workspace-system/definition/workspace/language-workspace`; covers `.ia/src/`',
+    '- `agent-system/policy/mandate/language-mandate`: participant `agent-system/binding/agent/language-participant`; moves Observation, Verification, Synthesis, Delegation, Execution; scope `workspace-system/definition/workspace/language-workspace`; covers `.ia/src/`',
   ]);
 });
 

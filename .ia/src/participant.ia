@@ -15,6 +15,6 @@
     requires "Claim no host permission or execution from this mandate."
   authority
     participant @agent language-participant
-    moves [Observation, Verification, Synthesis]
+    moves [Observation, Verification, Synthesis, Delegation, Execution]
     scope [@workspace language-workspace]
     covers [".ia/src/"]

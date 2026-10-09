@@ -223,8 +223,13 @@ export class Door {
         }
         case 'records': {
           keys(params, BINDINGS);
-          // Database D02a membership is read through the handle; the version 1 snapshot keeps its four fields.
-          const { membership: _membership, ...snapshot } = this.#handle.snapshot(this.#bindings(params));
+          // Database D02a membership and the authored revision are read through the handle; the version 1 snapshot
+          // keeps its four fields, its revision the full one the scope binds.
+          const {
+            membership: _membership,
+            authoredRevision: _authored,
+            ...snapshot
+          } = this.#handle.snapshot(this.#bindings(params));
           result = { ...snapshot, records: snapshot.records.map(versionOne) };
           break;
         }

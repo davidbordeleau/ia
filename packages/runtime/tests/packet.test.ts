@@ -7,9 +7,9 @@ import { digest } from '@inventarch/graph';
 import type { Node } from '@inventarch/graph';
 import { SHAPE_ROWS } from '@inventarch/language';
 import type { Location } from '@inventarch/language';
-import { entryCount, position, renderPacket } from '../src/index.js';
+import { entryCount, position, renderHost, renderPacket } from '../src/index.js';
 import type { PacketCatalogRow, PacketOutput } from '../src/index.js';
-import { database, declare, freshInit, packetFixture, put, workspace } from './workspace.js';
+import { database, declare, freshInit, law, packetFixture, put, workspace } from './workspace.js';
 
 // R19 (position-and-projection §4 and items 11 and 12; plan amendments B1 to B5 and B8): the position packet. The golden
 // packet is regenerated only by `node packages/runtime/tests/golden/write.mjs`, which sets IA_POSITION_GOLDEN=write for
@@ -384,6 +384,39 @@ it('moves only the host note when a capture is written: the packet and its diges
   expect(after.hostNote).not.toEqual(before.hostNote);
   expect(JSON.stringify(after.packet)).toBe(JSON.stringify(before.packet));
   expect(after.digest).toBe(before.digest);
+});
+
+it('keeps the packet, its digest, every rendered file and a current capture across a runtime-band source', () => {
+  // Plan amendment C13: the packet's revision is body(K0)'s authored revision, so a source at runtime placement (as
+  // evidence an `ia validate` writes will be) moves the handle's revision and nothing the packet or a host file says.
+  const root = freshInit(),
+    lawFile = '.ia/src/runtime-rule.ia',
+    db = database(root, { locations: { [lawFile]: RUNTIME } }),
+    rendered = (output: PacketOutput) =>
+      (['claude', 'codex'] as const).flatMap((host) =>
+        (['repository', 'consumer'] as const).map((target) =>
+          renderHost(host, output.packet, output.digest, output.hostNote, target),
+        ),
+      );
+  writeCapture(
+    root,
+    `${JSON.stringify({ format: CAPTURE_FORMAT, revision: db.revision, authoredRevision: db.authoredRevision, membership: db.snapshot().membership })}\n`,
+  );
+  db.refresh();
+  const revision = db.revision,
+    before = render(db);
+  expect(before.hostNote).toMatchObject({ revision, capturedRevision: revision, freshness: 'current' });
+  put(root, lawFile, law('runtime-rule', 'blocking'));
+  db.refresh();
+  expect(db.records().find((node) => node.identity === 'governance-system/governance/law/runtime-rule')?.band).toBe(0);
+  expect(errors(db)).toEqual([]);
+  expect(db.revision).not.toBe(revision);
+  const after = render(db);
+  expect(after.packet.revision).toBe(db.authoredRevision);
+  expect(JSON.stringify(after.packet)).toBe(JSON.stringify(before.packet));
+  expect(after.digest).toBe(before.digest);
+  expect(after.hostNote).toEqual(before.hostNote);
+  expect(rendered(after)).toEqual(rendered(before));
 });
 
 it('prints a composition.systems reference no admitted record answers as unresolved, and orders the lines by identity', () => {

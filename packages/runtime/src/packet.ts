@@ -137,13 +137,17 @@ export interface PacketPhase {
   readonly changes: string;
 }
 export interface PacketProvenance {
+  /** The packet's revision, body(K0)'s authored one. */
   readonly revision: string;
   /** The seat @workspace's name (decision identity-namespace: the repository slug lives here, not in identities). */
   readonly slug?: string;
 }
 export interface PositionPacket {
   readonly format: 'ia.position-packet.v1';
-  /** The revision of the view the scope reads, position(K0)'s. */
+  /**
+   * The authored revision of the view the scope reads, body(K0)'s (db `Snapshot.authoredRevision`), which no
+   * runtime-band source moves.
+   */
   readonly revision: string;
   /** The digest of body(K0), position(K0)'s `digest`. */
   readonly body: string;

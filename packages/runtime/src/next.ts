@@ -134,7 +134,10 @@ export interface ReviewItem {
 }
 export interface DeliveryView {
   readonly format: 'ia.delivery-view.v1';
-  /** The revision of the view the scope reads. */
+  /**
+   * The authored revision of the view the scope reads (db `Snapshot.authoredRevision`): runtime-band evidence that the
+   * view counts as exit evidence moves its verdicts, never this revision.
+   */
   readonly revision: string;
   readonly plan: string;
   /** In the order their prerequisites are met. */
@@ -1088,7 +1091,7 @@ export function deliveryView(handle: ReadHandle, within: string, seat?: string):
     ok: true,
     view: {
       format: 'ia.delivery-view.v1',
-      revision: snapshot.revision,
+      revision: snapshot.authoredRevision,
       plan,
       milestones: plannedMilestones,
       tasks,

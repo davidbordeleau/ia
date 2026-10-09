@@ -48,7 +48,7 @@ export interface PacketReceipt {
   readonly cli: string | null;
   /** `<adapter id>@<@inventarch/runtime version>`, `ia-claude@…` or `ia-codex@…`, in either target. */
   readonly adapter: string;
-  /** The packet's revision. */
+  /** The packet's revision, the authored revision body(K0) names. */
   readonly revision: string;
   /** The packet's provenance slug, null when it has none (decision identity-namespace: the slug lives here). */
   readonly slug: string | null;
@@ -298,8 +298,9 @@ function sections(packet: PositionPacket): readonly string[] {
  * `.claude/rules/ia-workspace.md` and `.claude/skills/ia-authoring/SKILL.md`, its repository files `CLAUDE.md` and
  * both skills; codex's are `AGENTS.md` and `.agents/skills/ia-authoring/SKILL.md` in either target. The entry file is
  * the marker, the packet's sections, the provenance line `ia-generated <revision> <packet digest> <adapter>` (the
- * adapter's version only in the consumer target) and, in the consumer target alone, the host note. An unknown host or
- * target, or a digest that is not the packet's, is IA-RUNTIME-REQUEST-INVALID.
+ * packet's authored revision; the adapter's version only in the consumer target) and, in the consumer target alone,
+ * the host note. A skill's `Source revision` is the packet's revision too. An unknown host or target, or a digest that
+ * is not the packet's, is IA-RUNTIME-REQUEST-INVALID.
  */
 export function renderHost(
   host: PacketHost,

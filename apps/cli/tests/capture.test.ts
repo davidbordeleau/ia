@@ -99,6 +99,7 @@ interface SnapshotFile {
   readonly language: string;
   readonly kernelDigest: string;
   readonly revision: string;
+  readonly authoredRevision: string;
   readonly records: readonly { readonly identity: string; readonly digest: string }[];
   readonly membership: readonly {
     readonly identity: string;
@@ -241,6 +242,9 @@ it('writes the first capture with per-record digests and membership, and compare
   expect(snapshot.language).toBe('1.0');
   expect(snapshot.kernelDigest).toMatch(/^[0-9a-f]{64}$/);
   expect(snapshot.revision).toBe(first.revision);
+  // The authored revision (db authoredRevision), which the db trusts and rotates the pair by: with no source at
+  // runtime placement, the revision itself. The --json result keeps its 1.x keys.
+  expect(snapshot.authoredRevision).toBe(first.revision);
   expect(Object.keys(snapshot)).toEqual([...Object.keys(snapshot)].sort());
   expect(bytes.toString('utf8').endsWith('}\n')).toBe(true);
   // One membership row per admitted record, both sorted by identity, each carrying the record's own digest.
@@ -452,7 +456,7 @@ it('renders the effect apart from admission in human output', async () => {
   for (const text of ['Capture', SNAPSHOT_FORMAT, 'No prior capture to compare with', CURRENT, 'Admission'])
     expect(first.stdout).toContain(text);
   const report = captureReport(first.stdout);
-  expect(report).toContain('No earlier capture at another revision is retained.');
+  expect(report).toContain('No earlier capture at another authored revision is retained.');
   expect(report).toMatch(
     / \d+ checks had no evaluator, so the snapshot records a not-evaluated result rather than a pass\. /,
   );
@@ -463,10 +467,10 @@ it('renders the effect apart from admission in human output', async () => {
   const third = await run(['capture', '--root', root]);
   expect(third.stdout).toContain('1 changed');
   expect(third.stdout).toContain(PREVIOUS);
-  expect(captureReport(third.stdout)).toContain('moved from current.json because the revision changed');
+  expect(captureReport(third.stdout)).toContain('moved from current.json because the authored revision changed');
   // At an unchanged revision the previous capture is kept, and the report says so.
   const fourth = await run(['capture', '--root', root]);
-  expect(captureReport(fourth.stdout)).toContain('kept because the revision did not change');
+  expect(captureReport(fourth.stdout)).toContain('kept because the authored revision did not change');
 });
 
 it('refuses a snapshot path it does not admit and names the capture to run once it is repaired', async () => {
@@ -916,7 +920,7 @@ it('previews exactly the edited record as changed and writes nothing: both snaps
     'This is a preview. Nothing has been written.',
     `Would capture ${captured.records} records.`,
     `1 changed, ${captured.records - 1} unchanged, 0 new, 0 removed.`,
-    'would move from current.json because the revision changed',
+    'would move from current.json because the authored revision changed',
     'checks had no evaluator, so the snapshot would record a not-evaluated result rather than a pass.',
   ])
     expect(flat(human.stdout)).toContain(text);
@@ -941,7 +945,7 @@ it('previews exactly the edited record as changed and writes nothing: both snaps
   expect(bytesAt(root, PREVIOUS)).toEqual(pair[0]![1]);
   // At an unchanged revision the preview would keep previous.json and names no identity.
   const unchanged = await run(['capture', '--preview', '--root', root]);
-  expect(flat(unchanged.stdout)).toContain('would be kept because the revision did not change');
+  expect(flat(unchanged.stdout)).toContain('would be kept because the authored revision did not change');
   expect(['Changed', 'New', 'Removed'].map((label) => listedUnder(unchanged.stdout, label))).toEqual([
     null,
     null,
@@ -969,7 +973,7 @@ it('previews a workspace never captured: no prior, every record new, and no .ia/
   const human = await run(['capture', '--preview', '--root', root]);
   expect(human.exitCode).toBe(0);
   expect(flat(human.stdout)).toContain('No prior capture to compare with, so every record is new.');
-  expect(flat(human.stdout)).toContain('No earlier capture at another revision would be retained.');
+  expect(flat(human.stdout)).toContain('No earlier capture at another authored revision would be retained.');
   // Every record is named, in full and in order, under the one heading that has any.
   expect(['Changed', 'New', 'Removed'].map((label) => listedUnder(human.stdout, label))).toEqual([
     null,

@@ -27,6 +27,7 @@ it('issues opaque immutable scope bindings, inherits them on reads and intersect
     (parent as { root: string }).root = '';
   }).toThrow();
   expect(Object.keys(db.snapshot({ within: child.token })).sort()).toEqual([
+    'authoredRevision',
     'membership',
     'phase',
     'records',

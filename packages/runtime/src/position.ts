@@ -26,8 +26,9 @@ import { freeze } from './types.js';
  * enters it, and nothing is written. Record bodies are never in it, only the cells delivered; `ia read` fetches a body
  * on demand. A record at runtime placement (band 0) is never entered, listed, tallied or reached through (design §4,
  * excluded; decision evidence-placement: runtime-band evidence is admitted below authored and must not move what agents
- * are given). The revision, the database's seat and root decisions and admission's findings still read every placement
- * (R15, R16).
+ * are given), and the body's revision is the authored revision (db `Snapshot.authoredRevision`; plan amendment C13),
+ * which no runtime-band source moves. The database's seat and root decisions and admission's findings still read every
+ * placement (R15, R16).
  */
 
 /** One way an entry was first reached: a row, a field reference, or one of the composition classes of design §7. */
@@ -188,7 +189,11 @@ export interface PositionWidening {
 }
 export interface PositionBody {
   readonly format: 'ia.position-body.v1';
-  /** The revision of the view the scope reads. */
+  /**
+   * The authored revision of the view the scope reads (db `Snapshot.authoredRevision`): its graph revision without the
+   * sources at runtime placement, so a runtime-band source leaves it unchanged. The format keeps its name; before plan
+   * amendment C13 this was the view's graph revision.
+   */
   readonly revision: string;
   readonly key: ScopeKey;
   readonly seat: ResolvedSeat;
@@ -221,20 +226,23 @@ export interface PositionBody {
   readonly counts: PositionCounts;
   readonly widening: PositionWidening;
 }
-/** The host note's freshness: the capture `ia capture` last wrote against the revision the handle reads. */
+/** The host note's freshness: the capture `ia capture` last wrote against the authored revision the handle reads. */
 export type Freshness = 'current' | 'stale' | 'no-capture';
 /**
  * The host note (design §1): host state printed beside the body, never digested and never claimed identical across
  * hosts or working trees. Installed state is not reported before receipts exist (milestone position-packet).
  */
 export interface HostNote {
-  /** The revision of the handle's root view, which a capture is compared with. */
+  /** The authored revision of the handle's root view (db `authoredRevision`), which a capture is compared with. */
   readonly revision: string;
-  /** The revision of the capture at `.ia/work/snapshot/current.json` (db D08a), when there is one. */
+  /** The authored revision of the capture at `.ia/work/snapshot/current.json` (db D08a), when there is one. */
   readonly capturedRevision?: string;
-  /** The revision of the previous root snapshot the handle retains (db D08), when it retains one. */
+  /** The authored revision of the previous root snapshot the handle retains (db D08), when it retains one. */
   readonly previousRevision?: string;
-  /** `current` when the capture is at `revision`, `stale` when it is at another, `no-capture` when there is none. */
+  /**
+   * `current` when the capture is at `revision`, `stale` when it is at another, `no-capture` when there is none; a
+   * runtime-band source appearing since the capture leaves it as it was, but for the exceptions R16 names.
+   */
   readonly freshness: Freshness;
   /** The key used: the partial key completed by normalizeScopeKey, a location as the caller spelled it. */
   readonly key: ScopeKey;
@@ -287,14 +295,15 @@ interface Subject {
  * R16: the position of the partial key `partial` through the scope token `within`: body(K) for the key normalizeScopeKey
  * completes and resolveScopeKey resolves, its digest, and the host note. The key's parts are closed, so request text or
  * a token in it is refused as an unknown part, and nothing text-driven runs; the body reads no capture, and the note
- * reads the handle's capture pair, so writing a capture moves only the note. Refusals are those of the three steps.
+ * reads the handle's capture pair, so writing a capture moves only the note. The note's revisions are authored ones, as
+ * the body's is, so a runtime-band source moves neither. Refusals are those of the three steps.
  */
 export function position(handle: ReadHandle, within: string, partial: Partial<ScopeKey> = {}): PositionOutput {
   const key = normalizeScopeKey(partial),
     body = positionBody(handle, within, resolveScopeKey(handle, within, key));
-  const revision = handle.revision,
-    captured = handle.capturedRevision,
-    previous = handle.previousRevision;
+  const revision = handle.authoredRevision,
+    captured = handle.capturedAuthoredRevision,
+    previous = handle.previousAuthoredRevision;
   return freeze({
     body,
     digest: digest(body),
@@ -802,7 +811,7 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
     frontierIds = [...frontier];
   const body: PositionBody = {
     format: 'ia.position-body.v1',
-    revision: snapshot.revision,
+    revision: snapshot.authoredRevision,
     key,
     seat,
     loaded: [

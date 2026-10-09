@@ -3,9 +3,10 @@
  *
  * The one verb that records what the workspace admits. It admits the workspace as every workspace verb does and writes
  * the admitted root snapshot to `.ia/work/snapshot/current.json`, an `ia-snapshot-1` document: the language identity,
- * the revision, the admitted records sorted by identity with their graph G13 per-record digests, their db D02a
- * membership rows, the admission findings and their counts. The distribution's `json()` serializer writes it, as it
- * writes `ia.compiled.v1`, so identical sources on one language version capture to identical bytes.
+ * the revision and the authored revision, the admitted records sorted by identity with their graph G13 per-record
+ * digests, their db D02a membership rows, the admission findings and their counts. The distribution's `json()`
+ * serializer writes it, as it writes `ia.compiled.v1`, so identical sources on one language version capture to identical
+ * bytes.
  *
  * The pair is db D08a's, the one retained pair (`writeCapture`): the db writes and rotates it and compares the records
  * with the prior capture by digest, and every db handle seeds its previous snapshot from it, whatever its cache
@@ -74,6 +75,11 @@ export interface SnapshotDocument {
   readonly language: string;
   readonly kernelDigest: string;
   readonly revision: string;
+  /**
+   * The revision without the sources at runtime placement (db `authoredRevision`), which the db trusts and rotates the
+   * pair by (D08a), so runtime-band evidence alone neither stales nor rotates it.
+   */
+  readonly authoredRevision: string;
   readonly records: Snapshot['records'];
   readonly membership: readonly MembershipRow[];
   readonly diagnostics: readonly Finding[];
@@ -124,6 +130,7 @@ export function buildSnapshot(session: Session): Pick<CaptureView, 'snapshot' | 
     language: LANGUAGE_IDENTITY.language,
     kernelDigest: LANGUAGE_IDENTITY.kernelDigest,
     revision: admitted.revision,
+    authoredRevision: admitted.authoredRevision,
     records,
     membership,
     diagnostics,
@@ -308,13 +315,18 @@ export function renderCapture(view: CaptureView | CapturePreview, caps: Capabili
   ];
   const previous: (readonly Token[])[] =
     view.previous === null
-      ? [words(`No earlier capture at another revision ${preview === null ? 'is' : 'would be'} retained.`, 'dim')]
+      ? [
+          words(
+            `No earlier capture at another authored revision ${preview === null ? 'is' : 'would be'} retained.`,
+            'dim',
+          ),
+        ]
       : [
           [atom(PREVIOUS, 'cyan', 0)],
           words(
             preview === null
-              ? `revision ${digest(view.previous)}, ${view.rotated ? 'moved from current.json because the revision changed' : 'kept because the revision did not change'}`
-              : `revision ${digest(view.previous)}, ${view.rotated ? 'would move from current.json because the revision changed' : 'would be kept because the revision did not change'}`,
+              ? `revision ${digest(view.previous)}, ${view.rotated ? 'moved from current.json because the authored revision changed' : 'kept because the authored revision did not change'}`
+              : `revision ${digest(view.previous)}, ${view.rotated ? 'would move from current.json because the authored revision changed' : 'would be kept because the authored revision did not change'}`,
             'dim',
           ),
         ];

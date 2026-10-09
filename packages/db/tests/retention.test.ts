@@ -11,6 +11,7 @@ import {
   writeCapture,
 } from '../src/index.js';
 import type { Snapshot } from '../src/index.js';
+import type { Location } from '@inventarch/language';
 import { EditorDatabase } from '../src/editor/index.js';
 import { methodId, methodPath, put, workspace } from './workspace.js';
 
@@ -52,7 +53,18 @@ const stale = (db: ReturnType<typeof open>, snapshot: Snapshot) =>
   );
 /** The retained part of an `ia-snapshot-1` capture of the handle's root view, as `ia capture` writes it. */
 const captureOf = (db: ReturnType<typeof open>): string =>
-  `${JSON.stringify({ format: CAPTURE_FORMAT, revision: db.revision, membership: db.snapshot().membership })}\n`;
+  `${JSON.stringify({
+    format: CAPTURE_FORMAT,
+    revision: db.revision,
+    authoredRevision: db.authoredRevision,
+    membership: db.snapshot().membership,
+  })}\n`;
+/** A law the tests below place at runtime (band 0) through the locations override, as evidence would be placed. */
+const RUNTIME: Location = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' },
+  runtimePath = '.ia/src/systems/governance-system/records/runtime-rule.ia',
+  runtimeId = 'governance-system/governance/law/runtime-rule',
+  runtimeLaw =
+    '#! ia 1.0\n@law runtime-rule\n  meaning\n    says "A law placed at runtime."\n    answers "What does it require?"\n  governance\n    severity advisory\n';
 /** Every file below `directory` with its text, so a read is shown to write nothing there. */
 const tree = (directory: string): Readonly<Record<string, string>> =>
   existsSync(directory)
@@ -290,6 +302,8 @@ it.each([
   ['broken JSON', () => '{'],
   ['a foreign format', (good: Pair) => JSON.stringify({ ...seeded(good), format: 'ia.compiled.v1' })],
   ['a short revision', (good: Pair) => JSON.stringify({ ...seeded(good), revision: '1'.repeat(63) })],
+  ['a short authored revision', (good: Pair) => JSON.stringify({ ...seeded(good), authoredRevision: '1'.repeat(63) })],
+  ['a null authored revision', (good: Pair) => JSON.stringify({ ...seeded(good), authoredRevision: null })],
   ['a row missing keys', (good: Pair) => JSON.stringify({ ...seeded(good), membership: [{ identity: methodId }] })],
   ['an extra row key', (good: Pair) => JSON.stringify(seeded(good, { extra: true }))],
   ['a non-text root', (good: Pair) => JSON.stringify(seeded(good, { root: 1 }))],
@@ -345,6 +359,164 @@ it('trusts a capture at another revision as written, never one at the fresh revi
   db = open(root, { cache: false });
   expect([db.previousRevision, db.capturedRevision]).toEqual(['1'.repeat(64), undefined]);
   db.close();
+});
+
+it('keys retention on the authored revision, which a runtime-band source leaves while the revision moves', () => {
+  const root = workspace(),
+    text = readFileSync(resolve(root, methodPath), 'utf8'),
+    locations = { [runtimePath]: RUNTIME },
+    db = open(root, { cache: false, locations });
+  try {
+    // With no source at runtime placement the authored revision is the revision, on the handle and in each snapshot.
+    expect(db.authoredRevision).toBe(db.revision);
+    for (const options of [{}, { phase: 'act' as const }, { within: db.resolveScope({ root: 'team' }).token }]) {
+      const snapshot = db.snapshot(options);
+      expect(snapshot.authoredRevision).toBe(snapshot.revision);
+    }
+    const first = { revision: db.revision, authored: db.authoredRevision },
+      before = db.get(methodId)!.digest;
+    writeCapture(root, captureOf(db));
+    // An authored edit moves both revisions, and its capture rotates the first one into previous.json.
+    edit(root, text);
+    db.refresh();
+    const edited = { revision: db.revision, authored: db.authoredRevision };
+    expect(edited.revision).not.toBe(first.revision);
+    expect(edited.authored).not.toBe(first.authored);
+    expect(writeCapture(root, captureOf(db))).toMatchObject({ previous: first.revision, rotated: true });
+    db.refresh();
+    expect([db.capturedAuthoredRevision, db.previousAuthoredRevision]).toEqual([edited.authored, first.authored]);
+    // A runtime-band source appears: the revision moves and the authored revision does not, so nothing rotates. The
+    // previous snapshot is still the first capture: the edit still reads changed, the runtime-band record new.
+    put(root, runtimePath, runtimeLaw);
+    const placed = db.refresh();
+    expect(db.get(runtimeId)?.band).toBe(0);
+    expect(db.report.findings.filter((f) => f.severity === 'error')).toEqual([]);
+    expect(placed.revision).toBe(db.revision);
+    expect(db.revision).not.toBe(edited.revision);
+    expect([db.authoredRevision, placed.authoredRevision]).toEqual([edited.authored, edited.authored]);
+    expect([db.previousRevision, db.previousAuthoredRevision]).toEqual([first.revision, first.authored]);
+    expect(stale(db, placed)).toEqual([
+      [methodId, 'changed'],
+      [runtimeId, 'new'],
+    ]);
+    expect(db.readiness(methodId, before)).toBe('previous');
+    // The capture is still this workspace's, at the handle's authored revision though not at its revision.
+    expect([db.capturedRevision, db.capturedAuthoredRevision]).toEqual([edited.revision, edited.authored]);
+    const later = open(root, { cache: false, locations });
+    try {
+      expect([later.capturedAuthoredRevision, later.previousAuthoredRevision]).toEqual([
+        edited.authored,
+        first.authored,
+      ]);
+      expect(later.staleness(methodId)).toBe('changed');
+    } finally {
+      later.close();
+    }
+    // Capturing the runtime-band change rotates nothing: previous.json keeps the first capture.
+    const unchanged = placed.records.length - 1;
+    expect(planCapture(root, captureOf(db))).toMatchObject({
+      prior: edited.revision,
+      previous: first.revision,
+      rotated: false,
+      added: 1,
+      changed: 0,
+      unchanged,
+    });
+    expect(writeCapture(root, captureOf(db))).toMatchObject({ previous: first.revision, rotated: false, added: 1 });
+    db.refresh();
+    expect([db.capturedRevision, db.capturedAuthoredRevision]).toEqual([db.revision, edited.authored]);
+    expect(db.previousAuthoredRevision).toBe(first.authored);
+    // Undoing the edit moves both again: the authored revision is the first one's, its runtime-band source left out,
+    // the revision is not, and the edited snapshot is previous.
+    put(root, methodPath, text);
+    db.refresh();
+    expect(db.authoredRevision).toBe(first.authored);
+    expect(db.revision).not.toBe(first.revision);
+    expect(db.previousAuthoredRevision).toBe(edited.authored);
+    expect(db.staleness(methodId)).toBe('changed');
+  } finally {
+    db.close();
+  }
+});
+
+it('trusts a capture by its authored revision and the rows of its records not at runtime placement', () => {
+  const root = workspace(),
+    locations = { [runtimePath]: RUNTIME },
+    other = '1'.repeat(64);
+  put(root, runtimePath, runtimeLaw);
+  const probe = open(root, { cache: false, locations }),
+    good = probe.snapshot();
+  probe.close();
+  expect(good.authoredRevision).not.toBe(good.revision);
+  const captured = (capture: Record<string, unknown>) => {
+    put(root, CAPTURE_CURRENT, JSON.stringify({ format: CAPTURE_FORMAT, ...capture }));
+    const db = open(root, { cache: false, locations });
+    try {
+      return [db.capturedRevision, db.capturedAuthoredRevision, db.previousAuthoredRevision];
+    } finally {
+      db.close();
+    }
+  };
+  // Rows that differ from the fresh snapshot's only at runtime placement, at another revision: this workspace's
+  // capture at its authored revision, so it is current and no previous snapshot is seeded.
+  const authored = good.membership.filter((row) => row.identity !== runtimeId);
+  expect(captured({ revision: other, authoredRevision: good.authoredRevision, membership: authored })).toEqual([
+    other,
+    good.authoredRevision,
+    undefined,
+  ]);
+  // Another authored row at that authored revision: not this workspace's capture there, so the pair seeds nothing,
+  // whether its revision is the fresh one or another (the runtime band changed since).
+  const forged = good.membership.map((row) => (row.identity === methodId ? { ...row, digest: '0'.repeat(64) } : row));
+  for (const revision of [good.revision, other])
+    expect(captured({ revision, authoredRevision: good.authoredRevision, membership: forged }), revision).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  // Another root alone, as a runtime-band @workspace declares one, decides nothing: no retained read takes a root.
+  const rerooted = authored.map((row) => (row.identity === methodId ? { ...row, root: '.ia/src/elsewhere' } : row));
+  expect(captured({ revision: other, authoredRevision: good.authoredRevision, membership: rerooted })).toEqual([
+    other,
+    good.authoredRevision,
+    undefined,
+  ]);
+  // A capture written before the authored revision names its revision as its authored one: at another authored
+  // revision than the fresh one, it is trusted as written, stale and previous.
+  expect(captured({ revision: good.revision, membership: good.membership })).toEqual([
+    good.revision,
+    good.revision,
+    good.revision,
+  ]);
+});
+
+it('keeps a capture current across a runtime-band @workspace that roots records not at runtime placement', () => {
+  // D02a roots a record by what every admitted @workspace declares, a runtime-band one included, so one declaring an
+  // authored root moves the roots of authored rows while the authored revision stays: the capture is still trusted.
+  const root = workspace(),
+    path = '.ia/src/systems/workspace-system/records/runtime-workspace.ia',
+    db = open(root, { cache: false, locations: { [path]: RUNTIME } }),
+    rootOf = () => db.snapshot().membership.find((row) => row.identity === methodId)!.root;
+  try {
+    writeCapture(root, captureOf(db));
+    const first = { revision: db.revision, authored: db.authoredRevision, root: rootOf() };
+    put(
+      root,
+      path,
+      '#! ia 1.0\n@workspace runtime-workspace\n  meaning\n    says "A workspace placed at runtime."\n    answers "Which records does it root?"\n  composition\n    systems [@system governance-system]\n    sources [".ia/src/systems/governance-system/records @authored"]\n',
+    );
+    db.refresh();
+    expect(db.get('workspace-system/definition/workspace/runtime-workspace')?.band).toBe(0);
+    expect(db.report.findings.filter((f) => f.severity === 'error')).toEqual([]);
+    expect([db.revision === first.revision, db.authoredRevision]).toEqual([false, first.authored]);
+    expect([first.root, rootOf()]).toEqual([
+      '.ia/src/systems/governance-system',
+      '.ia/src/systems/governance-system/records',
+    ]);
+    expect([db.capturedRevision, db.capturedAuthoredRevision]).toEqual([first.revision, first.authored]);
+  } finally {
+    db.close();
+  }
 });
 
 it('keeps reads usable when the capture pair cannot be read, and never follows a link to it', () => {

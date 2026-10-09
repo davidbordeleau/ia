@@ -56,6 +56,11 @@ export interface Scope {
 }
 export interface Snapshot {
   readonly revision: string;
+  /**
+   * The view's authored revision (graph `authoredRevisionOf`): `revision` without the sources at runtime placement, so
+   * runtime-band evidence leaves it unchanged; it equals `revision` while no source is placed so.
+   */
+  readonly authoredRevision: string;
   readonly root: string;
   readonly phase?: Phase;
   readonly records: readonly Node[];
@@ -78,10 +83,10 @@ interface State {
  * files, and a refresh hands the previous side on unread.
  */
 interface Retention {
-  /** The most recent admitted root snapshot whose revision differs from rootView's. */
+  /** The most recent admitted root snapshot whose authored revision differs from rootView's. */
   readonly previous: () => RetainedSnapshot | undefined;
-  /** D08a: the revision of the capture at `.ia/work/snapshot/current.json`, when that file holds one. */
-  readonly captured: () => string | undefined;
+  /** D08a: the revisions of the capture at `.ia/work/snapshot/current.json`, when that file holds one. */
+  readonly captured: () => Pick<RetainedSnapshot, 'revision' | 'authoredRevision'> | undefined;
 }
 /** D08: what a refresh rotates: the root snapshot a reader holds and its previous side, read on first use. */
 interface Held {
@@ -144,7 +149,11 @@ export function stableState(read: () => InputSnapshot, cache: boolean): State {
   throw new DbError('IA-DB-SOURCE-CHANGED', 'Source inputs changed during three consecutive snapshot attempts');
 }
 const rootSnapshot = (state: State): RetainedSnapshot =>
-  Object.freeze({ revision: state.rootView.graph.revision, membership: state.rootView.membership });
+  Object.freeze({
+    revision: state.rootView.graph.revision,
+    authoredRevision: state.rootView.authoredRevision,
+    membership: state.rootView.membership,
+  });
 /** Shared read engine for disk handles and cache-free editor snapshots. */
 export class Reader {
   readonly root: string;
@@ -284,6 +293,16 @@ export class Reader {
     this.#assertOpen();
     return this.#state.rootView.graph.revision;
   }
+  /**
+   * The root view's authored revision (graph `authoredRevisionOf`): `revision` without the sources at runtime
+   * placement, the derived revision-only input (D03) kept, so a runtime-band source moves `revision` and leaves this
+   * unchanged, while an authored edit moves both. It equals `revision` while no source is placed so. `revision` stays
+   * what read bindings assert (IA-DB-STALE) and scopes bind; retention and the capture pair key on this one (D08, D08a).
+   */
+  get authoredRevision(): string {
+    this.#assertOpen();
+    return this.#state.rootView.authoredRevision;
+  }
   get report(): Report {
     this.#assertOpen();
     return this.#state.rootView.report;
@@ -300,6 +319,7 @@ export class Reader {
     const { view, allowed } = this.#select(options);
     return Object.freeze({
       revision: view.graph.revision,
+      authoredRevision: view.authoredRevision,
       root: view.graph.location,
       ...(view.graph.phase === undefined ? {} : { phase: view.graph.phase }),
       records: Object.freeze(
@@ -329,13 +349,26 @@ export class Reader {
     this.#assertOpen();
     return this.#previous()?.revision;
   }
+  /** D08: the authored revision of the retained previous root snapshot, when one is retained. */
+  get previousAuthoredRevision(): string | undefined {
+    this.#assertOpen();
+    return this.#previous()?.authoredRevision;
+  }
   /**
    * D08a: the revision of the capture `ia capture` last wrote, at `.ia/work/snapshot/current.json`; undefined when there
-   * is none or the file holds no capture this handle trusts. A capture at another revision than `revision` is stale.
+   * is none or the file holds no capture this handle trusts.
    */
   get capturedRevision(): string | undefined {
     this.#assertOpen();
-    return this.#state.retention?.captured();
+    return this.#state.retention?.captured()?.revision;
+  }
+  /**
+   * D08a: the authored revision of that capture, under the same conditions. A capture at another authored revision than
+   * `authoredRevision` is stale; one that differs only in runtime-band sources is not.
+   */
+  get capturedAuthoredRevision(): string | undefined {
+    this.#assertOpen();
+    return this.#state.retention?.captured()?.authoredRevision;
   }
   /**
    * D08: the identity's digest in the view `get` reads under `options` and, when that is also its current root digest
@@ -499,11 +532,12 @@ export class Handle extends Reader {
       next = stableState(() => readInputs(this.root, this.#options), this.#options.cache!),
       root = next.inputs.root,
       current = rootSnapshot(next);
-    // D08 rotation (`rotate`) without reading the pair: a changed revision makes the held root snapshot previous, an
-    // unchanged one keeps the held previous side, still unread until asked, so no refresh lengthens what a handle holds.
-    // The capture pair's current revision is read again when asked, as `ia capture` may have run.
+    // D08 rotation (`rotate`) without reading the pair: a changed authored revision makes the held root snapshot
+    // previous, an unchanged one (a runtime-band change alone among them) keeps the held previous side, still unread
+    // until asked, so no refresh lengthens what a handle holds. The capture pair's current revisions are read again
+    // when asked, as `ia capture` may have run.
     const before = held.current,
-      previous = before.revision === current.revision ? held.previous : (): RetainedSnapshot => before;
+      previous = before.authoredRevision === current.authoredRevision ? held.previous : (): RetainedSnapshot => before;
     this.replaceState({
       ...next,
       retention: { previous, captured: once(() => readCapture(root, current).captured) },

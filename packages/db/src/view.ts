@@ -7,7 +7,7 @@ import {
   requirementCollisions,
 } from '@inventarch/language';
 import type { CompiledRecord, Diagnostic, FrozenRegistry, Phase, Source } from '@inventarch/language';
-import { canonicalRoot, load, reaches, stableSerialize } from '@inventarch/graph';
+import { authoredRevisionOf, canonicalRoot, load, reaches, stableSerialize } from '@inventarch/graph';
 import type { Graph, RevisionSource } from '@inventarch/graph';
 import {
   evaluate,
@@ -35,6 +35,11 @@ export interface RefusedRecord {
 /** Internal view; public reads project allowed nodes, never this candidate registry. */
 export interface View {
   readonly graph: Graph;
+  /**
+   * The authored revision of this view (graph `authoredRevisionOf`): `graph.revision` without the sources at runtime
+   * placement, the derived revision-only input (D03) kept, so it equals `graph.revision` while no source is placed so.
+   */
+  readonly authoredRevision: string;
   readonly report: Report;
   readonly refused: readonly RefusedRecord[];
   readonly admittedSystems: readonly string[];
@@ -112,7 +117,8 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
     }),
     location: { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' },
   };
-  const revisionSources = [...input.sources, metadata];
+  const revisionSources = [...input.sources, metadata],
+    revisionInputs = { sources: revisionSources, languageVersion: LANGUAGE_VERSION, kernelDigest: KERNEL_DIGEST };
   // D02a: the capture declares roots once, by the @workspace records the root view admits, and every view seats its
   // records by them, so a narrower root or phase never re-roots an occurrence. D02b decides the repository's own
   // @workspace at the same moment, for every view's path seats.
@@ -214,9 +220,7 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
     };
     const graphOf = (records: readonly CompiledRecord[]) =>
       load(records, registry, {
-        sources: revisionSources,
-        languageVersion: LANGUAGE_VERSION,
-        kernelDigest: KERNEL_DIGEST,
+        ...revisionInputs,
         location,
         ...(phase === undefined ? {} : { phase }),
       });
@@ -290,6 +294,8 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
     });
     return Object.freeze({
       graph,
+      // Over the inputs and registry the graph's revision hashes, so the two differ only by runtime-placed sources.
+      authoredRevision: authoredRevisionOf(registry, revisionInputs, [metadata.path]),
       report,
       boundary,
       refused: Object.freeze(

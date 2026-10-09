@@ -3,13 +3,14 @@
  * milestone position-packet task replace-renderers it is the position packet's consumer rendering (runtime R19 and
  * R20): the target is initialized from the bundled base, so every system line comes from the base's systems.
  */
+import { cpSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { PACKET_MARKER } from '@inventarch/runtime';
 import { packetCatalog } from '../src/commands.js';
 import { renderProjectionFor } from '../src/host-projection.js';
 import { read } from './host-fixture.js';
-import { cleanup, run, scratch } from './workspace-fixture.js';
+import { cleanup, cli, run, scratch } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 120_000 });
 afterAll(cleanup);
@@ -76,6 +77,25 @@ it('renders a consumer workspace for claude as its position packet, with no agen
   // The milestone's catalog is final (C = 7, task ia-project-verb), so a fresh init renders B1's 26 + N = 37.
   expect(packetCatalog()).toHaveLength(7);
   expect(receipt.entries).toBe(37);
+});
+
+it('admits the composition fixture over the bundled base, and renders no agent for its profile until it is wired', async () => {
+  // Milestone generation-binding plan amendment C7: the fixture is this initialization's starter and descriptor, byte
+  // for byte, with an authored @agent-profile, its @agent, @voice and @capability, and the @operation that capability
+  // names.
+  const root = await initialized(),
+    fixture = resolve(cli, 'tests/fixtures/composition-workspace');
+  for (const path of ['.ia/src/workspace.ia', '.ia/release.json'])
+    expect(read(fixture, path), path).toBe(read(root, path));
+  cpSync(fixture, root, { recursive: true });
+  const validated = await run(['validate', '--root', root, '--json']);
+  expect(validated.exitCode, validated.stdout).toBe(0);
+  expect(JSON.parse(validated.stdout)).toMatchObject({ status: 'admitted', counts: { errors: 0 } });
+  // workspace-runtime's generateAgentProfiles renders the profile; task host-consumes-generated-set applies it.
+  expect(renderProjectionFor(root, 'claude').files.map((file) => file.path)).toEqual([
+    '.claude/rules/ia-workspace.md',
+    '.claude/skills/ia-authoring/SKILL.md',
+  ]);
 });
 
 it('renders codex rows only', async () => {

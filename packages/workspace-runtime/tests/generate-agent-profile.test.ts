@@ -1,0 +1,386 @@
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { afterAll, afterEach, expect, it, vi } from 'vitest';
+import { open } from '@inventarch/db';
+import type { Handle } from '@inventarch/db';
+import { PACKET_MARKER } from '@inventarch/runtime';
+import { adoptWorkspace } from '../src/corpus.js';
+import { generateAgentProfiles } from '../src/generate/index.js';
+import type { GeneratedFile } from '../src/generate/index.js';
+
+// Milestone generation-binding task generation-agent-profile (plan amendments C5, C7 and C12): the authored
+// `@agent-profile` of apps/cli's composition fixture renders one claude agent file. The fixture's `.ia/src` is laid over
+// the conformance corpus adopted at band 90, as an installed base would be, so its records are the authored ones.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
+const repository = resolve(import.meta.dirname, '../../..'),
+  FIXTURE = resolve(repository, 'apps/cli/tests/fixtures/composition-workspace/.ia/src'),
+  NATIVE = resolve(repository, 'examples/conformance/native'),
+  COMPOSITION = readFileSync(resolve(FIXTURE, 'composition.ia'), 'utf8'),
+  PROFILE = 'agent-composition-system/binding/agent-profile/reviewer',
+  temporary = mkdtempSync(join(tmpdir(), 'ia-generate-')),
+  handles: Handle[] = [];
+afterEach(() => {
+  for (const handle of handles.splice(0)) handle.close();
+});
+afterAll(() => rmSync(temporary, { recursive: true, force: true }));
+
+const put = (root: string, path: string, text: string): void => {
+  mkdirSync(dirname(resolve(root, path)), { recursive: true });
+  writeFileSync(resolve(root, path), text);
+};
+/**
+ * The fixture over the adopted conformance corpus: `authored` replaces or adds files under the workspace root, and
+ * `adopted` adds files to the base before it is pinned. Admission must find no error.
+ */
+function fixture(
+  authored: Readonly<Record<string, string | null>> = {},
+  adopted: Readonly<Record<string, string>> = {},
+): { readonly root: string; readonly db: Handle; readonly within: string } {
+  const base = mkdtempSync(join(temporary, 'w-')),
+    root = join(base, 'root'),
+    vendor = join(base, 'vendor');
+  cpSync(NATIVE, join(vendor, '.ia/src'), { recursive: true });
+  for (const [path, text] of Object.entries(adopted)) put(vendor, path, text);
+  cpSync(FIXTURE, join(root, '.ia/src'), { recursive: true });
+  for (const [path, text] of Object.entries(authored))
+    if (text === null) rmSync(resolve(root, path));
+    else put(root, path, text);
+  const db = open(root, { cache: false, adopted: [adoptWorkspace(vendor, 'foundation')] });
+  handles.push(db);
+  expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+  return { root, db, within: db.resolveScope().token };
+}
+/** The fixture's composition records with `edit` applied, which must change them. */
+const composition = (edit: (text: string) => string): string => {
+  const text = edit(COMPOSITION);
+  expect(text).not.toBe(COMPOSITION);
+  return text;
+};
+const claude = (db: Handle, within: string): readonly GeneratedFile[] => generateAgentProfiles(db, within, 'claude');
+
+const AGENT_FILE = `---
+name: "reviewer"
+description: "Reviews the demo workspace's notes and reports what it finds."
+---
+
+${PACKET_MARKER}
+
+# reviewer
+
+Binds the reviewer to a bounded host contract under the demo mandate.
+
+- profile \`${PROFILE}\`
+- agent \`agent-system/binding/agent/reviewer\`
+
+## Mandate
+
+- \`agent-system/policy/mandate/demo-mandate\`
+- participant \`agent-system/binding/agent/demo\`
+- moves Observation, Verification, Synthesis, Delegation, Execution
+- scope \`workspace-system/definition/workspace/demo\`
+
+## Voice
+
+- \`agent-composition-system/definition/voice/reviewer-voice\`
+- tone: Plain and direct.
+- terminology: The workspace's own words, as its records spell them.
+- explanation: Name the record and the field behind each finding.
+- uncertainty: Say what was not checked.
+
+## Tools
+
+- \`agent-composition-system/definition/capability/note-reading\`: operations \`authoring-system/binding/operation/read-note\`; effects read; host tools Read, Glob, Grep
+`;
+
+it("renders the fixture profile as one claude agent file naming its mandate and listing its capability's tools", () => {
+  const { db, within } = fixture(),
+    files = claude(db, within);
+  expect(files).toEqual([
+    { path: '.claude/agents/reviewer.md', text: AGENT_FILE, identity: PROFILE, word: 'agent-profile' },
+  ]);
+  expect(Object.isFrozen(files) && Object.isFrozen(files[0])).toBe(true);
+  // Frontmatter first, describing the profile's agent rather than the profile; the marker next, on its own line.
+  const lines = files[0]!.text.split('\n');
+  expect(lines.slice(0, 4)).toEqual([
+    '---',
+    'name: "reviewer"',
+    `description: ${JSON.stringify("Reviews the demo workspace's notes and reports what it finds.")}`,
+    '---',
+  ]);
+  expect(lines.slice(4, 7)).toEqual(['', PACKET_MARKER, '']);
+  expect(lines.filter((line) => line === PACKET_MARKER)).toHaveLength(1);
+});
+
+it('says in one line that a profile names no mandate', () => {
+  const { db, within } = fixture({
+      '.ia/src/composition.ia': composition((text) => text.replace('    mandate @mandate demo-mandate\n', '')),
+    }),
+    [file, ...rest] = claude(db, within);
+  expect(rest).toEqual([]);
+  expect(file!.text).toContain('\n## Mandate\n\nThis profile names no mandate.\n\n## Voice\n');
+  expect(file!.text).not.toContain('demo-mandate');
+});
+
+it('renders every bound the named mandate states: participant, moves, scope, excluded words, covers and limits', () => {
+  const mandate = [
+    '',
+    '@mandate reviewer-mandate',
+    '  meaning',
+    '    says "The reviewer\'s bounded authority."',
+    '    answers "What may the reviewer do?"',
+    '  governance',
+    '    requires "Claim no host permission or execution from this mandate."',
+    '  execution',
+    '    limit-steps 12',
+    '    limit-model-calls 3',
+    '  authority',
+    '    participant @agent reviewer',
+    '    moves [Observation, Verification]',
+    '    scope [@workspace demo]',
+    '    excluded-words [mandate, workspace]',
+    '    covers ["docs/", "notes/**"]',
+    '',
+  ].join('\n');
+  const { db, within } = fixture({
+      '.ia/src/composition.ia': composition(
+        (text) => text.replace('@mandate demo-mandate', '@mandate reviewer-mandate') + mandate,
+      ),
+    }),
+    [file] = claude(db, within);
+  expect(file!.text).toContain(
+    [
+      '## Mandate',
+      '',
+      '- `agent-system/policy/mandate/reviewer-mandate`',
+      '- participant `agent-system/binding/agent/reviewer`',
+      '- moves Observation, Verification',
+      '- scope `workspace-system/definition/workspace/demo`',
+      '- excluded words mandate, workspace',
+      '- covers `docs/`, `notes/**`',
+      '- limit-steps 12',
+      '- limit-model-calls 3',
+      '',
+      '## Voice',
+    ].join('\n'),
+  );
+});
+
+/** A profile of the fixture's agent with no mandate, no voice and no capability. */
+const bareProfile = (name: string, says: string): string =>
+  [
+    '',
+    `@agent-profile ${name}`,
+    '  meaning',
+    `    says "${says}"`,
+    `    answers "Which profile is ${name}?"`,
+    '  composition',
+    '    agent @agent reviewer',
+    '    capabilities []',
+    '  execution',
+    `    role ${name}`,
+    `    outcomes ${name}-findings-v1`,
+    `    mandate-contract ${name}-v1`,
+    '',
+  ].join('\n');
+
+it('renders one line per delegate in authored order and each authored profile as its own file, by identity', () => {
+  const { db, within } = fixture({
+      '.ia/src/composition.ia': composition(
+        (text) =>
+          text.replace(
+            '    capabilities [@capability note-reading]\n',
+            '    capabilities [@capability note-reading]\n    delegates [@agent-profile scribe, @agent-profile archivist]\n',
+          ) +
+          bareProfile('archivist', 'Files what the reviewer finds.') +
+          bareProfile('scribe', 'Writes up what the reviewer finds.'),
+      ),
+    }),
+    files = claude(db, within);
+  expect(files.map((file) => [file.path, file.identity])).toEqual([
+    ['.claude/agents/archivist.md', 'agent-composition-system/binding/agent-profile/archivist'],
+    ['.claude/agents/reviewer.md', PROFILE],
+    ['.claude/agents/scribe.md', 'agent-composition-system/binding/agent-profile/scribe'],
+  ]);
+  expect(
+    files[1]!.text.endsWith(
+      [
+        '',
+        '## Delegates',
+        '',
+        '- `agent-composition-system/binding/agent-profile/scribe`',
+        '- `agent-composition-system/binding/agent-profile/archivist`',
+        '',
+      ].join('\n'),
+    ),
+  ).toBe(true);
+  // A profile with no mandate, no voice and no capability still renders, its agent describing it.
+  expect(files[0]!.text).toContain(`description: "Reviews the demo workspace's notes and reports what it finds."`);
+  expect(files[0]!.text).toContain(
+    '\n## Mandate\n\nThis profile names no mandate.\n\n## Tools\n\nThis profile composes no capability.\n',
+  );
+  expect(files[0]!.text).not.toContain('## Voice');
+  expect(files[0]!.text).not.toContain('## Delegates');
+});
+
+it('renders one tools line per capability in authored order, an effect no host tool covers naming none', () => {
+  const capabilities = [
+    '',
+    '@capability note-filing',
+    '  meaning',
+    '    says "Files a reviewed note."',
+    '    answers "Which operation files a note?"',
+    '  composition',
+    '    operations [@operation read-note]',
+    '  execution',
+    '    effects [write, network]',
+    '',
+    '@capability note-indexing',
+    '  meaning',
+    '    says "Indexes the notes it reads."',
+    '    answers "Which capability indexes notes?"',
+    '  execution',
+    '    effects [read, write, read]',
+    '',
+  ].join('\n');
+  const { db, within } = fixture({
+      '.ia/src/composition.ia': composition(
+        (text) =>
+          text.replace(
+            '    capabilities [@capability note-reading]\n',
+            '    capabilities [@capability note-reading, @capability note-filing, @capability note-indexing]\n',
+          ) + capabilities,
+      ),
+    }),
+    [file] = claude(db, within);
+  const capability = 'agent-composition-system/definition/capability',
+    operation = '`authoring-system/binding/operation/read-note`';
+  // `read` alone maps host tools, once per line however often it is listed; `write` and `network` map none.
+  expect(
+    file!.text.endsWith(
+      [
+        '',
+        '## Tools',
+        '',
+        `- \`${capability}/note-reading\`: operations ${operation}; effects read; host tools Read, Glob, Grep`,
+        `- \`${capability}/note-filing\`: operations ${operation}; effects write, network; host tools none`,
+        `- \`${capability}/note-indexing\`: operations none; effects read, write, read; host tools Read, Glob, Grep`,
+        '',
+      ].join('\n'),
+    ),
+  ).toBe(true);
+});
+
+it('prints a multi-paragraph value on one line', () => {
+  const { db, within } = fixture({
+      '.ia/src/composition.ia': composition((text) =>
+        text
+          .replace(
+            `    says "Reviews the demo workspace's notes and reports what it finds."`,
+            `    says """\n      Reviews the demo workspace's notes.\n\n      Reports what it finds.\n    """`,
+          )
+          .replace(
+            '    tone "Plain and direct."',
+            '    tone """\n      Plain and direct.\n\n      Never hedge.\n    """',
+          ),
+      ),
+    }),
+    [file] = claude(db, within);
+  expect(file!.text).toContain(`\ndescription: "Reviews the demo workspace's notes. Reports what it finds."\n`);
+  expect(file!.text).toContain('\n- tone: Plain and direct. Never hedge.\n');
+});
+
+it('prints a reference no admitted record answers as authored, saying so where its fields would be read', () => {
+  // Narrowed to the profile alone, the scope admits none of the records it references; the description is the
+  // profile's own.
+  const { db } = fixture(),
+    [file, ...rest] = claude(db, db.resolveScope({ identities: [PROFILE] }).token);
+  expect(rest).toEqual([]);
+  expect(file!.text).toBe(`---
+name: "reviewer"
+description: "Binds the reviewer to a bounded host contract under the demo mandate."
+---
+
+${PACKET_MARKER}
+
+# reviewer
+
+Binds the reviewer to a bounded host contract under the demo mandate.
+
+- profile \`${PROFILE}\`
+- agent \`@agent reviewer\`: not admitted in this scope
+
+## Mandate
+
+- \`@mandate demo-mandate\`: not admitted in this scope
+
+## Voice
+
+- \`@voice reviewer-voice\`: not admitted in this scope
+
+## Tools
+
+- \`@capability note-reading\`: not admitted in this scope
+`);
+  // Under the whole workspace, an agent no record answers says so too, and the rest still resolves.
+  const ghost = fixture({
+      '.ia/src/composition.ia': composition((text) =>
+        text.replace('    agent @agent reviewer\n', '    agent @agent ghost\n'),
+      ),
+    }),
+    [haunted] = claude(ghost.db, ghost.within);
+  expect(haunted!.text).toContain(
+    '\ndescription: "Binds the reviewer to a bounded host contract under the demo mandate."\n',
+  );
+  expect(haunted!.text).toContain('\n- agent `@agent ghost`: not admitted in this scope\n');
+  expect(haunted!.text).toContain('\n## Mandate\n\n- `agent-system/policy/mandate/demo-mandate`\n');
+});
+
+it('renders nothing for an adopted profile', () => {
+  const { db, within } = fixture(
+    { '.ia/src/composition.ia': null },
+    { '.ia/src/composition.ia': COMPOSITION.replace('    mandate @mandate demo-mandate\n', '') },
+  );
+  const adopted = db.get(PROFILE, { within });
+  expect(adopted?.band).toBe(90);
+  expect(claude(db, within)).toEqual([]);
+});
+
+it("renders a public system's profile where the workspace authors that system, as this repository does", () => {
+  // The band filter is the only one: this repository authors the public systems at band 100, so their example profile
+  // renders here, while a consumer's installed base, adopted below band 100, renders nothing (the case above).
+  const db = open(repository, { cache: false });
+  handles.push(db);
+  expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+  expect(claude(db, db.resolveScope().token).map((file) => [file.path, file.identity])).toEqual([
+    ['.claude/agents/example-profile.md', 'agent-composition-system/binding/agent-profile/example-profile'],
+  ]);
+});
+
+it('renders no codex agent, refuses an unknown host, and refuses a forged or stale token for either host', () => {
+  const { root, db, within } = fixture();
+  expect(generateAgentProfiles(db, within, 'codex')).toEqual([]);
+  expect(() => generateAgentProfiles(db, within, 'cursor' as 'claude')).toThrow(
+    expect.objectContaining({ diagnostic: { code: 'IA-PROJECTION-INPUT-INVALID', message: 'Unknown host: cursor' } }),
+  );
+  for (const host of ['claude', 'codex'] as const)
+    expect(() => generateAgentProfiles(db, 'forged', host), host).toThrow('IA-DB-SCOPE-UNAVAILABLE');
+  put(root, '.ia/src/new.ia', '#! ia 1.0\n');
+  db.refresh();
+  for (const host of ['claude', 'codex'] as const)
+    expect(() => generateAgentProfiles(db, within, host), host).toThrow('IA-DB-STALE');
+});
+
+it('writes the same bytes at two roots and names neither root nor scope token', () => {
+  const one = fixture(),
+    two = fixture(),
+    first = claude(one.db, one.within);
+  expect(claude(two.db, two.within)).toEqual(first);
+  expect(claude(one.db, one.db.resolveScope().token)).toEqual(first);
+  for (const { root, within } of [one, two])
+    for (const file of first) {
+      expect(file.text).not.toContain(root);
+      expect(file.text).not.toContain(within);
+    }
+});

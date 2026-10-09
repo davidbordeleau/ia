@@ -87,6 +87,10 @@
       "{workspaceRoot}/.claude/skills/ia-authoring/SKILL.md",
       "{workspaceRoot}/.agents/skills/ia-authoring/SKILL.md"
     ],
+    "composition-fixture": [
+      "workspace-records",
+      "{workspaceRoot}/apps/cli/tests/fixtures/composition-workspace/**/*"
+    ],
     "development-native-build": [
       "workspace-records",
       "{workspaceRoot}/tools/native/language-base.ts",

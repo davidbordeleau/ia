@@ -544,6 +544,7 @@ it(
       'runtime:test',
       'authoring-system:test',
       'language:test',
+      'workspace-runtime:test',
     ];
     const source = `
     const { readFileSync } = require('node:fs');
@@ -601,6 +602,8 @@ it(
     // The runtime's host adapter tests compare the repository target's skills with these committed files.
     await probe('.claude/skills/ia-authoring/SKILL.md', ['runtime:test']);
     await probe('.agents/skills/ia-authoring/SKILL.md', ['runtime:test']);
+    // The workspace-runtime generator tests render the authored records of apps/cli's composition fixture.
+    await probe('apps/cli/tests/fixtures/composition-workspace/.ia/src/composition.ia', ['workspace-runtime:test']);
   },
   20 * 60_000,
 );

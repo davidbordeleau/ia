@@ -137,6 +137,10 @@
       "types": "./dist/corpus.d.ts",
       "default": "./dist/corpus.js"
     },
+    "./internal/generate": {
+      "types": "./dist/generate/index.d.ts",
+      "default": "./dist/generate/index.js"
+    },
     "./internal/index": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
@@ -371,6 +375,10 @@
       "./internal/corpus": {
         "types": "./dist/corpus.d.ts",
         "default": "./dist/corpus.js"
+      },
+      "./internal/generate": {
+        "types": "./dist/generate/index.d.ts",
+        "default": "./dist/generate/index.js"
       },
       "./internal/index": {
         "types": "./dist/index.d.ts",

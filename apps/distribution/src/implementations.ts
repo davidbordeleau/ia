@@ -1,29 +1,72 @@
-import { existsSync } from 'node:fs';
-import { readWorkspaceBytes } from '@inventarch/db';
+import { existsSync, lstatSync } from 'node:fs';
+import { join } from 'node:path';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
-import { acquireHostRegistrationLock, assertHostRegistrationIdle } from './host.js';
-import { contained, fail, json, locate, object, replace, sha256, utf8, workspace } from './files.js';
+import { acquireHostRegistrationLock, assertHostRegistrationIdle, HOST_REGISTRATION, saved } from './host.js';
+import type { WorkspaceHost } from './hosts.js';
+import { asWorkspaceHost } from './hosts.js';
+import {
+  bytes,
+  contained,
+  fail,
+  json,
+  locate,
+  object,
+  portable,
+  replace,
+  sha256,
+  unaliased,
+  utf8,
+  workspace,
+} from './files.js';
 
 /**
- * Plan amendment C16 (design item 9): the installed-implementation catalog a v2 host payload carries at its root. The
- * payload builder (tools/distribution/host-payload.mjs) generates it and lists it in the payload inventory, because
- * `verifyHostCache` refuses any file the inventory does not list, and it describes implementations no host app may
- * import, so this module reads it without importing them.
+ * Plan amendments C16 and C24 (milestone generation-binding; design item 9): the installed-implementation catalog a v2
+ * host payload carries at its root. The payload builder (tools/distribution/host-payload.mjs) generates it and lists it
+ * in the payload inventory, because `verifyHostCache` refuses any file the inventory does not list. It describes
+ * implementations no host app may import, so this module reads data only: it never imports, loads or runs a handler.
+ *
+ * An operation is `available` only when the payload ships its handler: the handler module and every file of the
+ * packages its closure names are in the inventory, the catalog's handler digest is the SHA-256 the inventory pins for
+ * the module, the closure digest is the digest of those inventory rows, and every one of those files is present with
+ * the bytes the inventory pins. A declaration whose bytes are not shipped is `unavailable`, never available; bytes that
+ * differ from their pins are an integrity failure.
  */
 export const INSTALLED_IMPLEMENTATIONS = 'implementations.json';
 export const INSTALLED_IMPLEMENTATIONS_FORMAT = 'ia.installed-implementations.v1';
+/** The implementation id a consumer's join names for the catalog itself. */
+export const INSTALLED_IMPLEMENTATIONS_ID = 'installed-implementations';
 /** Design item 9: the join receipts each consumer records under its own name, beside the host state files. */
 export const JOINS = '.ia/distributions/hosts/joins.json';
 export const JOINS_FORMAT = 'ia.host-joins.v1';
-/** One installed operation implementation as its package reports it; the digest is the package's bare SHA-256. */
-export interface InstalledOperation {
+
+/** An operation implementation whose handler bytes the payload ships. Digests are bare SHA-256 hex. */
+export interface AvailableOperation {
   readonly id: string;
+  readonly status: 'available';
+  /** The installed descriptor's version. */
   readonly version: number;
+  /** The canonical identity of the `@operation` the implementation serves. */
+  readonly operation: string;
   readonly handler: string;
+  /** The input and output validator ids. */
   readonly input: string;
   readonly output: string;
+  /** The payload path of the shipped handler module. */
+  readonly module: string;
+  /** The SHA-256 of the shipped handler module's bytes. */
   readonly digest: string;
+  /** The installed packages whose shipped files are the handler's closure: its own package and its dependencies. */
+  readonly packages: readonly string[];
+  /** `closureDigest` over every payload file of `packages`, as the inventory pins them. */
+  readonly closure: string;
 }
+/** An operation implementation the payload does not ship, with the reason. It binds nothing. */
+export interface UnavailableOperation {
+  readonly id: string;
+  readonly status: 'unavailable';
+  readonly reason: string;
+}
+export type InstalledOperation = AvailableOperation | UnavailableOperation;
 export interface InstalledImplementationsValue {
   readonly format: typeof INSTALLED_IMPLEMENTATIONS_FORMAT;
   /** An `ia-evaluator-catalog/1.x` value as compliance's `createEvaluatorCatalog` takes it: its built-ins are implicit. */
@@ -32,6 +75,7 @@ export interface InstalledImplementationsValue {
 }
 /** The catalog as `readInstalledImplementations` verified it in one materialized payload. */
 export interface InstalledImplementations extends InstalledImplementationsValue {
+  readonly status: 'present';
   /** The payload release whose inventory lists the catalog. */
   readonly release: string;
   /** The payload's version (its inventory's `version`). */
@@ -39,32 +83,173 @@ export interface InstalledImplementations extends InstalledImplementationsValue 
   /** The SHA-256 of the catalog's bytes, as the inventory lists it. */
   readonly digest: string;
 }
-/** One consumer's join: the implementation it joined at the version and digest it read, at its own revision. */
+/** A payload that carries no catalog, such as one built before the catalog existed: unavailable, not damaged. */
+export interface InstalledImplementationsUnavailable {
+  readonly status: 'unavailable';
+  readonly release: string;
+  readonly reason: string;
+}
+export type InstalledCatalog = InstalledImplementations | InstalledImplementationsUnavailable;
+/**
+ * One consumer's join: the catalog it joined (implementation id, payload version, catalog digest and payload release)
+ * at its own revision. A workspace host's consumer revision is the workspace's authored revision when it joined.
+ */
 export interface ImplementationJoin {
-  readonly consumer: string;
+  readonly consumer: WorkspaceHost;
   readonly implementation: string;
   readonly version: string;
   readonly digest: string;
+  readonly release: string;
   readonly consumerRevision: string;
 }
-const ROWS = 1024;
+export type JoinResult =
+  | { readonly status: 'joined'; readonly join: ImplementationJoin }
+  | { readonly status: 'unavailable'; readonly reason: string }
+  | { readonly status: 'unregistered' };
+
+const ROWS = 1024,
+  FILE_BYTES = 64 * 1024 * 1024;
 const TOKEN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/,
   HANDLER = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/,
+  IDENTITY = /^[a-z][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)+$/,
+  PACKAGE = /^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/,
+  MODULE = /\.[cm]?js$/,
   HEX = /^[a-f0-9]{64}$/,
   EVALUATOR_FORMAT = /^ia-evaluator-catalog\/1\.(?:0|[1-9][0-9]*)$/;
-const OPERATION_KEYS = ['id', 'version', 'handler', 'input', 'output', 'digest'] as const,
-  JOIN_KEYS = ['consumer', 'implementation', 'version', 'digest', 'consumerRevision'] as const;
+const AVAILABLE_KEYS = [
+    'id',
+    'status',
+    'version',
+    'operation',
+    'handler',
+    'input',
+    'output',
+    'module',
+    'digest',
+    'packages',
+    'closure',
+  ] as const,
+  UNAVAILABLE_KEYS = ['id', 'status', 'reason'] as const,
+  JOIN_KEYS = ['consumer', 'implementation', 'version', 'digest', 'release', 'consumerRevision'] as const;
+const prose = (value: unknown, limit: number): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= limit && !/[\u0000-\u001f]/.test(value);
 const text = (value: Buffer | null): string | null => (value === null ? null : utf8(value));
-// Descriptor-bound reads avoid allocation before bounds and refuse hard links and path swaps.
-function pinnedBytes(root: string, path: string, limit = 1024 * 1024): Buffer | null {
-  if (!existsSync(contained(root, path))) return null;
-  return Buffer.from(readWorkspaceBytes(root, path, limit));
+/** The payload directory of an installed package, with its trailing slash. */
+const packageDirectory = (name: string): string => `runtime/node_modules/${name}/`;
+type PayloadRead = (path: string, limit?: number) => Buffer | null;
+/**
+ * A reader of the payload at `root` (which `workspace()` already found link-free up to the volume root) that reads as
+ * `verifyHostCache` does: no link or junction at any level below `root`, each directory lstat'd once and remembered,
+ * and each file an unaliased regular file read on the lstat that admitted it, within its bound. Null when the file or a
+ * directory above it is absent. Remembering directories keeps a closure of a thousand files cheap.
+ */
+function payloadReader(root: string): PayloadRead {
+  const directories = new Map<string, boolean>();
+  const present = (relative: string): boolean => {
+    if (relative === '') return true;
+    let known = directories.get(relative);
+    if (known === undefined) {
+      const slash = relative.lastIndexOf('/');
+      known = present(slash < 0 ? '' : relative.slice(0, slash));
+      if (known) {
+        const stat = lstatSync(join(root, ...relative.split('/')), { throwIfNoEntry: false });
+        if (stat?.isSymbolicLink()) fail('PATH-UNSAFE', `Link/junction is not allowed: ${relative}`);
+        if (stat !== undefined && !stat.isDirectory()) fail('PATH-UNSAFE', `Expected a payload directory: ${relative}`);
+        known = stat !== undefined;
+      }
+      directories.set(relative, known);
+    }
+    return known;
+  };
+  return (path, limit = 1024 * 1024) => {
+    portable(path);
+    const slash = path.lastIndexOf('/');
+    if (!present(slash < 0 ? '' : path.slice(0, slash))) return null;
+    const target = join(root, ...path.split('/')),
+      stat = lstatSync(target, { throwIfNoEntry: false });
+    if (stat === undefined) return null;
+    try {
+      return unaliased(target, path, stat, limit);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
+    }
+  };
 }
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
+ * The digest an operation's `closure` pins: the SHA-256 of one `<sha256>  <path>` line per file, sorted by path, as
+ * `sha256sum` prints them. The payload builder computes it from the bytes it ships; a reader recomputes it from the
+ * inventory, so both name exactly the same files and bytes.
+ */
+export function closureDigest(files: readonly { readonly path: string; readonly sha256: string }[]): string {
+  return sha256(
+    [...files]
+      .sort((a, b) => byText(a.path, b.path))
+      .map((file) => `${file.sha256}  ${file.path}\n`)
+      .join(''),
+  );
+}
+
+function operationRow(item: unknown): InstalledOperation {
+  if (item === null || typeof item !== 'object' || Array.isArray(item))
+    fail('INPUT-INVALID', 'Invalid installed operation');
+  const status = (item as { status?: unknown }).status;
+  if (status === 'unavailable') {
+    const row = object(item, UNAVAILABLE_KEYS);
+    if (typeof row['id'] !== 'string' || !TOKEN.test(row['id']) || row['id'].length > 128 || !prose(row['reason'], 512))
+      fail('INPUT-INVALID', 'Invalid unavailable installed operation');
+    return row as unknown as UnavailableOperation;
+  }
+  if (status !== 'available') fail('INPUT-INVALID', 'An installed operation is available or unavailable');
+  const row = object(item, AVAILABLE_KEYS),
+    packages = row['packages'];
+  if (
+    typeof row['id'] !== 'string' ||
+    !TOKEN.test(row['id']) ||
+    row['id'].length > 128 ||
+    !Number.isSafeInteger(row['version']) ||
+    (row['version'] as number) < 1 ||
+    typeof row['operation'] !== 'string' ||
+    !IDENTITY.test(row['operation']) ||
+    row['operation'].length > 256 ||
+    typeof row['handler'] !== 'string' ||
+    !HANDLER.test(row['handler']) ||
+    row['handler'].length > 128 ||
+    typeof row['input'] !== 'string' ||
+    !TOKEN.test(row['input']) ||
+    typeof row['output'] !== 'string' ||
+    !TOKEN.test(row['output']) ||
+    typeof row['digest'] !== 'string' ||
+    !HEX.test(row['digest']) ||
+    typeof row['closure'] !== 'string' ||
+    !HEX.test(row['closure']) ||
+    !Array.isArray(packages) ||
+    packages.length === 0 ||
+    packages.length > 64 ||
+    !packages.every(
+      (name, index) =>
+        typeof name === 'string' &&
+        PACKAGE.test(name) &&
+        name.length <= 214 &&
+        (index === 0 || (packages[index - 1] as string) < name),
+    ) ||
+    typeof row['module'] !== 'string' ||
+    !MODULE.test(row['module'])
+  )
+    fail('INPUT-INVALID', 'Invalid available installed operation');
+  portable(row['module']);
+  // The handler module belongs to one of the packages its closure names, so its bytes are part of what is checked.
+  if (!(packages as string[]).some((name) => (row['module'] as string).startsWith(packageDirectory(name))))
+    fail('INPUT-INVALID', 'An installed handler module lies outside its package closure');
+  return row as unknown as AvailableOperation;
+}
+
+/**
  * The shape of a catalog: the evaluators section's format and entry list (compliance validates each entry when it
- * binds), and one row per operation, sorted by id and unique. The payload builder checks what it writes with it too.
+ * binds), and one row per operation, sorted by id and unique, each `available` with its handler pins or `unavailable`
+ * with a reason. The payload builder checks what it writes with it too.
  */
 export function installedImplementationsValue(value: unknown): InstalledImplementationsValue {
   const row = object(value, ['format', 'evaluators', 'operations']),
@@ -81,83 +266,143 @@ export function installedImplementationsValue(value: unknown): InstalledImplemen
   if (!Array.isArray(row['operations']) || row['operations'].length > ROWS)
     fail('INPUT-INVALID', 'Invalid installed operation list');
   let previous = '';
-  for (const item of row['operations']) {
-    const operation = object(item, OPERATION_KEYS);
-    if (
-      typeof operation['id'] !== 'string' ||
-      !TOKEN.test(operation['id']) ||
-      operation['id'].length > 128 ||
-      operation['id'] <= previous ||
-      !Number.isSafeInteger(operation['version']) ||
-      (operation['version'] as number) < 1 ||
-      typeof operation['handler'] !== 'string' ||
-      !HANDLER.test(operation['handler']) ||
-      operation['handler'].length > 128 ||
-      typeof operation['input'] !== 'string' ||
-      !TOKEN.test(operation['input']) ||
-      typeof operation['output'] !== 'string' ||
-      !TOKEN.test(operation['output']) ||
-      typeof operation['digest'] !== 'string' ||
-      !HEX.test(operation['digest'])
-    )
-      fail('INPUT-INVALID', 'Invalid installed operation');
-    previous = operation['id'];
+  const operations = row['operations'].map((item) => {
+    const operation = operationRow(item);
+    if (operation.id <= previous) fail('INPUT-INVALID', 'Installed operations must be sorted by id and unique');
+    previous = operation.id;
+    return operation;
+  });
+  return {
+    format: INSTALLED_IMPLEMENTATIONS_FORMAT,
+    evaluators: evaluators as unknown as InstalledImplementationsValue['evaluators'],
+    operations,
+  };
+}
+
+interface Listed {
+  readonly bytes: number;
+  readonly sha256: string;
+}
+/**
+ * C24: `operation` as this payload ships it. Every file of its package closure is read from the payload directory and
+ * compared with the inventory, whose digest the release pins: a handler module or closure package the inventory does
+ * not list, or a listed file that is not there, makes the operation unavailable; a file whose bytes differ from the
+ * inventory, or catalog pins that disagree with it, is IA-DIST-INTEGRITY-MISMATCH.
+ */
+function shipped(
+  read: PayloadRead,
+  operation: AvailableOperation,
+  inventory: ReadonlyMap<string, Listed>,
+): InstalledOperation {
+  const unavailable = (reason: string): UnavailableOperation => ({ id: operation.id, status: 'unavailable', reason });
+  const module = inventory.get(operation.module);
+  if (module === undefined)
+    return unavailable(`its handler module ${operation.module} is not in this payload's inventory`);
+  if (module.sha256 !== operation.digest)
+    fail('INTEGRITY-MISMATCH', `The catalog's handler digest for ${operation.id} differs from the payload inventory`);
+  const missing = operation.packages.find((name) => !inventory.has(packageDirectory(name) + 'package.json'));
+  if (missing !== undefined) return unavailable(`its closure package ${missing} is not in this payload`);
+  const files = [...inventory]
+    .filter(([path]) => operation.packages.some((name) => path.startsWith(packageDirectory(name))))
+    .map(([path, listed]) => ({ path, sha256: listed.sha256 }));
+  if (closureDigest(files) !== operation.closure)
+    fail('INTEGRITY-MISMATCH', `The catalog's closure digest for ${operation.id} differs from the payload inventory`);
+  for (const file of files) {
+    const content = read(file.path, FILE_BYTES);
+    if (content === null) return unavailable(`its handler closure file ${file.path} is missing from the payload`);
+    if (sha256(content) !== file.sha256)
+      fail('INTEGRITY-MISMATCH', `Shipped handler bytes differ from the payload inventory: ${file.path}`);
   }
-  return row as unknown as InstalledImplementationsValue;
+  return operation;
 }
 
 /**
- * The catalog of the materialized v2 payload at `directory`, read through the chain its release digest pins: release.json
- * must hash to `release`, inventory.json to the inventory release.json names, and the catalog to the digest the
- * inventory lists, so the bytes returned are the bytes the release pins without verifying every payload file again.
- * A payload whose inventory lists no catalog is ARTIFACT-UNAVAILABLE; changed bytes are INTEGRITY-MISMATCH.
+ * The catalog of the materialized host payload at `directory`, read through the chain its release digest pins:
+ * release.json must hash to `release`, inventory.json to the inventory release.json names, and the catalog to the digest
+ * the inventory lists, so the bytes returned are the bytes the release pins. Each available operation is then checked
+ * against the handler bytes the payload ships (`shipped`). A v1 payload, or a v2 payload whose inventory lists no
+ * catalog (one built before the catalog existed), is `unavailable`, not an integrity failure. A missing release.json is
+ * IA-DIST-ARTIFACT-UNAVAILABLE; changed bytes are IA-DIST-INTEGRITY-MISMATCH; malformed metadata is IA-DIST-INPUT-INVALID.
+ * Nothing is written, imported or executed.
  */
-export function readInstalledImplementations(directory: string, release: string): InstalledImplementations {
-  const root = workspace(directory),
-    releaseText = text(pinnedBytes(root, 'release.json'));
+export function readInstalledImplementations(directory: string, release: string): InstalledCatalog {
   if (!HEX.test(release)) fail('INPUT-INVALID', 'Invalid host release pin');
+  const read = payloadReader(workspace(directory)),
+    releaseText = text(read('release.json'));
   if (releaseText === null) fail('ARTIFACT-UNAVAILABLE', 'Missing host release');
   if (sha256(releaseText) !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
   const pinned = object(decodeDistributionJson(releaseText), ['format', 'inventory', 'launcher']);
-  if (pinned['format'] !== 'ia.host-release.v2')
-    fail('ARTIFACT-UNAVAILABLE', 'Only a v2 host payload carries an installed-implementation catalog');
-  const inventoryText = text(pinnedBytes(root, 'inventory.json', 4 * 1024 * 1024));
+  if (pinned['format'] === 'ia.host-release.v1')
+    return { status: 'unavailable', release, reason: 'a v1 host payload carries no installed-implementation catalog' };
+  if (pinned['format'] !== 'ia.host-release.v2') fail('INPUT-INVALID', 'Unknown host release');
+  const inventoryText = text(read('inventory.json', 4 * 1024 * 1024));
   if (inventoryText === null || sha256(inventoryText) !== pinned['inventory'])
     fail('INTEGRITY-MISMATCH', 'Host release inventory changed');
   const inventory = object(decodeDistributionJson(inventoryText), ['format', 'version', 'packages', 'files']);
-  if (inventory['format'] !== 'ia.host-cache.v2' || typeof inventory['version'] !== 'string')
+  if (
+    inventory['format'] !== 'ia.host-cache.v2' ||
+    typeof inventory['version'] !== 'string' ||
+    inventory['version'].length > 128 ||
+    !Array.isArray(inventory['files']) ||
+    inventory['files'].length > 10000
+  )
     fail('INPUT-INVALID', 'Invalid host cache inventory');
-  const listed = Array.isArray(inventory['files'])
-    ? (inventory['files'] as unknown[]).find(
-        (row) =>
-          row !== null && typeof row === 'object' && (row as { path?: unknown }).path === INSTALLED_IMPLEMENTATIONS,
-      )
-    : undefined;
-  if (listed === undefined) fail('ARTIFACT-UNAVAILABLE', 'The host payload lists no installed-implementation catalog');
-  const content = pinnedBytes(root, INSTALLED_IMPLEMENTATIONS);
-  if (content === null || sha256(content) !== (listed as { sha256?: unknown }).sha256 || content.length !== (listed as { bytes?: unknown }).bytes)
-    fail('INTEGRITY-MISMATCH', 'Installed-implementation catalog changed');
+  const listed = new Map<string, Listed>();
+  for (const item of inventory['files'] as unknown[]) {
+    const file = object(item, ['path', 'bytes', 'sha256']);
+    if (
+      typeof file['path'] !== 'string' ||
+      !Number.isSafeInteger(file['bytes']) ||
+      typeof file['sha256'] !== 'string' ||
+      !HEX.test(file['sha256'])
+    )
+      fail('INPUT-INVALID', 'Invalid host payload file');
+    listed.set(portable(file['path']), { bytes: file['bytes'] as number, sha256: file['sha256'] });
+  }
+  const catalog = listed.get(INSTALLED_IMPLEMENTATIONS);
+  if (catalog === undefined)
+    return {
+      status: 'unavailable',
+      release,
+      reason:
+        'this host payload carries no installed-implementation catalog; payloads built before the catalog existed carry none',
+    };
+  const content = read(INSTALLED_IMPLEMENTATIONS);
+  if (content === null || content.length !== catalog.bytes || sha256(content) !== catalog.sha256)
+    fail('INTEGRITY-MISMATCH', 'Installed-implementation catalog is missing or changed');
+  const value = installedImplementationsValue(decodeDistributionJson(utf8(content)));
   return {
-    ...installedImplementationsValue(decodeDistributionJson(utf8(content))),
+    status: 'present',
+    format: value.format,
+    evaluators: value.evaluators,
+    operations: value.operations.map((operation) =>
+      operation.status === 'available' ? shipped(read, operation, listed) : operation,
+    ),
     release,
     version: inventory['version'],
-    digest: sha256(content),
+    digest: catalog.sha256,
   };
 }
 
 function joinRow(value: unknown): ImplementationJoin {
   const row = object(value, JOIN_KEYS);
-  for (const key of ['consumer', 'implementation', 'version', 'consumerRevision'] as const)
-    if (typeof row[key] !== 'string' || !row[key] || row[key].length > 256 || /[\u0000-\u001f]/.test(row[key]))
-      fail('INPUT-INVALID', 'Invalid join receipt');
-  if (typeof row['digest'] !== 'string' || !HEX.test(row['digest'])) fail('INPUT-INVALID', 'Invalid join digest');
+  asWorkspaceHost(row['consumer']);
+  if (
+    typeof row['implementation'] !== 'string' ||
+    !TOKEN.test(row['implementation']) ||
+    row['implementation'].length > 128 ||
+    !prose(row['version'], 128)
+  )
+    fail('INPUT-INVALID', 'Invalid join receipt');
+  for (const key of ['digest', 'release', 'consumerRevision'] as const)
+    if (typeof row[key] !== 'string' || !HEX.test(row[key])) fail('INPUT-INVALID', 'Invalid join receipt digest');
   return row as unknown as ImplementationJoin;
 }
 /** The joins recorded at `root`, one per consumer, or null when none was ever recorded. Refusals locate at `JOINS`. */
 export function readJoins(rootInput: string): readonly ImplementationJoin[] | null {
   const root = workspace(rootInput);
   return locate(JOINS, () => {
-    const content = text(pinnedBytes(root, JOINS));
+    const content = text(bytes(root, JOINS));
     if (content === null) return null;
     const row = object(decodeDistributionJson(content), ['format', 'joins']);
     if (row['format'] !== JOINS_FORMAT || !Array.isArray(row['joins']) || row['joins'].length > ROWS)
@@ -168,38 +413,73 @@ export function readJoins(rootInput: string): readonly ImplementationJoin[] | nu
     return joins;
   });
 }
-/**
- * Record `join` under the host lock as its consumer's one row, keeping every other consumer's, and return the rows
- * written. A pending host journal refuses it as it refuses every host write, and receipts that cannot be read refuse
- * it, located at `JOINS`, rather than be replaced.
- */
-export function recordJoin(rootInput: string, join: ImplementationJoin): readonly ImplementationJoin[] {
-  const root = workspace(rootInput),
-    row = joinRow({ ...join });
+/** Replace `consumer`'s row with `row` (or drop it for null), keeping every other consumer's; with none left, delete. */
+function writeJoin(root: string, consumer: WorkspaceHost, row: ImplementationJoin | null): void {
+  const current = readJoins(root);
+  const others = (current ?? []).filter((join) => join.consumer !== consumer);
+  const joins = [...others, ...(row === null ? [] : [row])].sort((a, b) => byText(a.consumer, b.consumer));
+  if (current === null && joins.length === 0) return;
+  if (current !== null && json(joins) === json(current)) return;
+  replace(root, JOINS, joins.length === 0 ? null : Buffer.from(json({ format: JOINS_FORMAT, joins })));
+}
+/** Run `work` under the host lock, as every host write runs; a pending host journal refuses it first. */
+function locked<T>(root: string, work: () => T): T {
   assertHostRegistrationIdle(root);
   const unlock = acquireHostRegistrationLock(root);
   try {
-    const joins = [...(readJoins(root) ?? []).filter((other) => other.consumer !== row.consumer), row].sort((a, b) =>
-      byText(a.consumer, b.consumer),
-    );
-    replace(root, JOINS, Buffer.from(json({ format: JOINS_FORMAT, joins })));
-    return joins;
+    return work();
   } finally {
     unlock();
   }
 }
-/** Delete the join receipts under the host lock; with none recorded nothing is written, the host area included. */
-export function removeJoins(rootInput: string, consumer?: string): void {
-  const root = workspace(rootInput);
-  if (!existsSync(contained(root, JOINS))) return;
-  assertHostRegistrationIdle(root);
-  const unlock = acquireHostRegistrationLock(root);
-  try {
-    const joins = readJoins(root)!;
-    const kept = consumer === undefined ? [] : joins.filter((join) => join.consumer !== consumer);
-    if (kept.length === joins.length) return;
-    replace(root, JOINS, kept.length === 0 ? null : Buffer.from(json({ format: JOINS_FORMAT, joins: kept })));
-  } finally {
-    unlock();
-  }
+
+/**
+ * Record `host`'s join (design item 9) from its committed registration, under the host lock: the catalog of the payload
+ * that `<host>-workspace.json` names, read and checked by `readInstalledImplementations` at that state's own cache and
+ * release, at `consumerRevision`. The row is derived from the registration as written, never from what a caller
+ * expected to register, so it cannot name a catalog the registration does not use. With no registration, or a payload
+ * that carries no catalog, the host's row is dropped instead, so a stale join never outlives what it described; every
+ * other consumer's row is kept. Receipts that cannot be read refuse, located at `JOINS`, rather than be replaced.
+ */
+export function joinHost(rootInput: string, hostInput: string, consumerRevision: string): JoinResult {
+  const root = workspace(rootInput),
+    host = asWorkspaceHost(hostInput);
+  if (!HEX.test(consumerRevision)) fail('INPUT-INVALID', 'Invalid consumer revision');
+  return locked(root, () => {
+    const path = `.ia/distributions/hosts/${host}-${HOST_REGISTRATION}.json`;
+    const state = locate(path, () => {
+      const content = bytes(root, path);
+      return saved(content === null ? null : utf8(content), host, HOST_REGISTRATION);
+    });
+    if (state === null) {
+      writeJoin(root, host, null);
+      return { status: 'unregistered' };
+    }
+    const catalog = readInstalledImplementations(state.cache, state.release);
+    if (catalog.status === 'unavailable') {
+      writeJoin(root, host, null);
+      return { status: 'unavailable', reason: catalog.reason };
+    }
+    const join = joinRow({
+      consumer: host,
+      implementation: INSTALLED_IMPLEMENTATIONS_ID,
+      version: catalog.version,
+      digest: catalog.digest,
+      release: catalog.release,
+      consumerRevision,
+    });
+    writeJoin(root, host, join);
+    return { status: 'joined', join };
+  });
+}
+/** Drop `host`'s join under the host lock, keeping every other consumer's; true when a row was removed. */
+export function leaveHost(rootInput: string, hostInput: string): boolean {
+  const root = workspace(rootInput),
+    host = asWorkspaceHost(hostInput);
+  if (!existsSync(contained(root, JOINS))) return false;
+  return locked(root, () => {
+    const present = (readJoins(root) ?? []).some((join) => join.consumer === host);
+    if (present) writeJoin(root, host, null);
+    return present;
+  });
 }

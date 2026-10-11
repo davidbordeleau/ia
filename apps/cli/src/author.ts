@@ -95,9 +95,17 @@ function attributionOf(run: Invocation, profile: Profile): string {
   } at ${run.snapshot.authoredRevision}`;
 }
 
+/**
+ * A failed write's refusal code: the distribution's own (IA-DIST-*) or another IA code as raised, and IA-CLI-FAILED for
+ * anything else, a volume's raw errno (EPERM, EACCES, EROFS) included, which is no refusal code (review C2-N15).
+ */
 const distribution = (error: unknown): { readonly code: string; readonly message: string } => ({
   code:
-    error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+    error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    error.code.startsWith('IA-')
       ? error.code
       : 'IA-CLI-FAILED',
   message: error instanceof Error ? error.message : String(error),
@@ -136,7 +144,7 @@ function write(run: Invocation, candidate: Candidate, text: string, again: strin
         message,
         3,
         { path: target.path },
-        `Once ${target.path} can be written, run "${again}" again.`,
+        `Make ${target.path} writable, or close what holds it open, then run "${again}" for the candidate and the digest to pass; nothing was written.`,
       );
     }
   } else {
@@ -151,7 +159,7 @@ function write(run: Invocation, candidate: Candidate, text: string, again: strin
         message,
         3,
         { path: target.path },
-        `Once ${target.path} can be created, run "${again}" again.`,
+        `Make the directory of ${target.path} writable, then run "${again}" for the candidate and the digest to pass; nothing was written.`,
       );
     }
   }

@@ -28,9 +28,10 @@ afterAll(cleanup);
 
 /**
  * Review C2-N3: every workspace session a command opens, counted at the distribution service the CLI's session module
- * opens it through (that module imports the dispatcher, so it is not mocked itself).
+ * opens it through (that module imports the dispatcher, so it is not mocked itself). Review C2-N15: `replaceError`, when
+ * set, is what the distribution's `replace` throws, as a volume would.
  */
-const sessions = vi.hoisted(() => ({ opened: 0 }));
+const sessions = vi.hoisted(() => ({ opened: 0, replaceError: undefined as Error | undefined }));
 vi.mock('@inventarch/distribution/services', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@inventarch/distribution/services')>();
   return {
@@ -38,6 +39,10 @@ vi.mock('@inventarch/distribution/services', async (importOriginal) => {
     openWorkspaceSession: (...args: Parameters<typeof actual.openWorkspaceSession>) => {
       sessions.opened++;
       return actual.openWorkspaceSession(...args);
+    },
+    replace: (...args: Parameters<typeof actual.replace>) => {
+      if (sessions.replaceError !== undefined) throw sessions.replaceError;
+      return actual.replace(...args);
     },
   };
 });
@@ -347,6 +352,27 @@ describe('ia author refusals, each writing nothing', () => {
     const empty = await previewed(root, draft);
     writeFileSync(resolve(root, '.ia/src/task.ia'), '#! ia 1.0\n');
     await refused(root, ['author', ...draft, '--digest', empty], 'IA-CLI-EDIT-STALE');
+  });
+  it('refuses a write the volume refuses as IA-CLI-FAILED naming the repair, never as a raw errno (review C2-N15)', async () => {
+    const root = workspace();
+    const form = ['--set', '@milestone m1', 'work.owner=Tom'];
+    const digest = await previewed(root, form);
+    sessions.replaceError = Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+    try {
+      const refusal = await refused(root, ['author', ...form, '--digest', digest], 'IA-CLI-FAILED');
+      expect(refusal['message']).toContain('EPERM');
+      expect(refusal['next']).toContain('.ia/src/work.ia writable');
+      expect(nextArgv(refusal['next'] as string)[0]).toBe('preview');
+    } finally {
+      sessions.replaceError = undefined;
+    }
+    // A distribution code is kept as it is.
+    sessions.replaceError = Object.assign(new Error('Unsafe relative path'), { code: 'IA-DIST-PATH-UNSAFE' });
+    try {
+      await refused(root, ['author', ...form, '--digest', digest], 'IA-DIST-PATH-UNSAFE');
+    } finally {
+      sessions.replaceError = undefined;
+    }
   });
   it('refuses a source replaced by a link or junction between the preview and the author', async () => {
     const root = workspace((at) => {

@@ -9,6 +9,7 @@ import {
   rmSync,
   mkdirSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,11 +17,28 @@ import { dirname, join, resolve } from 'node:path';
 import { afterAll, expect, it } from 'vitest';
 import { unpackTree, HOST_TREE_LIMITS } from '../../apps/distribution/src/ustar.js';
 import { verifyHostCache } from '../../apps/distribution/src/host.js';
-import { readInstalledImplementations } from '../../apps/distribution/src/implementations.js';
-import { assertStaticPayloadCode, staticCliManifest, collectPayload, generateHostPayload } from './host-payload.mjs';
+import { closureDigest, readInstalledImplementations } from '../../apps/distribution/src/implementations.js';
+import type { InstalledImplementations } from '../../apps/distribution/src/implementations.js';
+import { importedModules, moduleProblem } from '../dependencies/check.js';
+import {
+  assertStaticPayloadCode,
+  staticCliManifest,
+  collectPayload,
+  generateHostPayload,
+  moduleClosure,
+  packageClosure,
+} from './host-payload.mjs';
 
 const repository = resolve(import.meta.dirname, '../..'),
   made: string[] = [];
+const sha = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
+const HANDLER = 'runtime/node_modules/@inventarch/agent-composition-system/dist/installed-read.js';
+/** The catalog the release pins in an extracted payload, which must be present. */
+function present(root: string, release: string): InstalledImplementations {
+  const catalog = readInstalledImplementations(root, release);
+  if (catalog.status !== 'present') throw Error(`Expected a catalog: ${catalog.reason}`);
+  return catalog;
+}
 afterAll(() => {
   for (const path of made) rmSync(path, { recursive: true, force: true });
 });
@@ -65,17 +83,206 @@ it('produces a deterministic v2 payload that verifies after extraction', async (
   const verified = verifyHostCache(extract(first.archive));
   expect(verified).toMatchObject({ format: 2, host: null, release: first.pin.release });
 });
-it('inventories the installed catalog in the actual payload without an app-to-composition edge', async () => {
+it('ships the installed read handler as a payload root and pins the catalog to the shipped handler bytes', async () => {
   const payload = await generateHostPayload({ repository, write: false });
   const root = extract(payload.archive);
-  const catalog = readInstalledImplementations(root, payload.pin.release);
-  expect(catalog.operations).toEqual(expect.arrayContaining([
-    expect.objectContaining({ id: 'captured-source-read-v1', handler: 'ia.captured-source.read.v1' }),
-  ]));
-  expect(catalog.evaluators).toEqual({ format: 'ia-evaluator-catalog/1.0', entries: [] });
+  expect(verifyHostCache(root).release).toBe(payload.pin.release);
+  const inventory = JSON.parse(readFileSync(resolve(root, 'inventory.json'), 'utf8')) as {
+    packages: { name: string }[];
+    files: { path: string; bytes: number; sha256: string }[];
+  };
+  const listed = (path: string) => inventory.files.find((row) => row.path === path);
+  const bytes = readFileSync(resolve(root, 'implementations.json'));
+  expect(listed('implementations.json')).toEqual({
+    path: 'implementations.json',
+    bytes: bytes.length,
+    sha256: sha(bytes),
+  });
+  const catalog = present(root, payload.pin.release);
+  expect(catalog).toMatchObject({
+    digest: sha(bytes),
+    evaluators: { format: 'ia-evaluator-catalog/1.0', entries: [] },
+  });
+  expect(catalog.operations).toHaveLength(1);
+  const operation = catalog.operations[0]!;
+  if (operation.status !== 'available') throw Error(`Expected the read handler to ship: ${operation.reason}`);
+  expect(operation).toMatchObject({
+    id: 'captured-source-read-v1',
+    operation: 'authoring-system/binding/operation/read-captured-source',
+    handler: 'ia.captured-source.read.v1',
+    input: 'captured-source-read-input-v1',
+    output: 'captured-source-read-output-v1',
+    module: HANDLER,
+  });
+  // The handler bytes are the installed adapter's built module, shipped in the payload and pinned by their SHA-256.
+  const shipped = readFileSync(resolve(root, HANDLER));
+  expect(
+    shipped.equals(
+      readFileSync(resolve(repository, '.ia/src/systems/agent-composition-system/dist/installed-read.js')),
+    ),
+  ).toBe(true);
+  expect(operation.digest).toBe(sha(shipped));
+  expect(listed(HANDLER)!.sha256).toBe(operation.digest);
+  expect(inventory.packages.map((row) => row.name)).toContain('@inventarch/agent-composition-system');
+  // The closure digest pins every shipped file of the handler's package closure, which the handler's imports stay in.
+  expect(operation.packages).toEqual(
+    expect.arrayContaining(['@inventarch/agent-composition-system', '@inventarch/db']),
+  );
+  const closure = inventory.files.filter((row) =>
+    operation.packages.some((name) => row.path.startsWith(`runtime/node_modules/${name}/`)),
+  );
+  expect(operation.closure).toBe(closureDigest(closure));
+  expect(closure.some((row) => row.path.endsWith('/dist/compile.js'))).toBe(true);
+});
+it('never reports the read handler available once its shipped bytes are altered or missing', async () => {
+  const { archive, pin } = await generateHostPayload({ repository, write: false });
+  const altered = extract(archive);
+  writeFileSync(resolve(altered, HANDLER), Buffer.concat([readFileSync(resolve(altered, HANDLER)), Buffer.from('\n')]));
+  expect(() => readInstalledImplementations(altered, pin.release)).toThrow(
+    expect.objectContaining({ code: 'IA-DIST-INTEGRITY-MISMATCH' }),
+  );
+  expect(() => verifyHostCache(altered)).toThrow(expect.objectContaining({ code: 'IA-DIST-INTEGRITY-MISMATCH' }));
+  // A module the handler imports counts as handler bytes too.
+  const dependency = extract(archive),
+    compile = 'runtime/node_modules/@inventarch/agent-composition-system/dist/compile.js';
+  writeFileSync(
+    resolve(dependency, compile),
+    Buffer.concat([readFileSync(resolve(dependency, compile)), Buffer.from(' ')]),
+  );
+  expect(() => readInstalledImplementations(dependency, pin.release)).toThrow(
+    expect.objectContaining({ code: 'IA-DIST-INTEGRITY-MISMATCH' }),
+  );
+  const missing = extract(archive);
+  unlinkSync(resolve(missing, HANDLER));
+  expect(present(missing, pin.release).operations[0]).toMatchObject({
+    id: 'captured-source-read-v1',
+    status: 'unavailable',
+    reason: expect.stringContaining(HANDLER),
+  });
+  expect(() => verifyHostCache(missing)).toThrow(expect.objectContaining({ code: 'IA-DIST-ARTIFACT-UNAVAILABLE' }));
+});
+it('reads the actual payload without its catalog, as a release before the catalog shipped, as unavailable yet verified', async () => {
+  const { archive } = await generateHostPayload({ repository, write: false });
+  const tree = unpackTree(archive, HOST_TREE_LIMITS);
+  const text = (path: string) => tree.get(path)!.toString('utf8');
+  const inventory = JSON.parse(text('inventory.json'));
+  inventory.files = inventory.files.filter((row: { path: string }) => row.path !== 'implementations.json');
+  const inventoryText = JSON.stringify(inventory, null, 2) + '\n',
+    launcher = text('scripts/ia.mjs').replace(sha(text('inventory.json')), sha(inventoryText));
+  const release =
+    JSON.stringify({ format: 'ia.host-release.v2', inventory: sha(inventoryText), launcher: sha(launcher) }, null, 2) +
+    '\n';
+  tree.delete('implementations.json');
+  tree.set('inventory.json', Buffer.from(inventoryText));
+  tree.set('scripts/ia.mjs', Buffer.from(launcher));
+  tree.set('release.json', Buffer.from(release));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'ia-host-payload-old-')));
+  made.push(root);
+  for (const [path, bytes] of tree) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), bytes);
+  }
+  expect(verifyHostCache(root).release).toBe(sha(release));
+  const verify = spawnSync(process.execPath, [join(root, 'scripts/ia.mjs'), 'verify'], {
+    encoding: 'utf8',
+    timeout: 10_000,
+  });
+  expect(verify.status, verify.stderr).toBe(0);
+  expect(readInstalledImplementations(root, sha(release))).toMatchObject({
+    status: 'unavailable',
+    reason: expect.stringContaining('carries no installed-implementation catalog'),
+  });
+});
+it('lists an implementation whose handler module is not built as unavailable, with the reason, and ships nothing for it', async () => {
+  const payload = await generateHostPayload({
+    repository,
+    write: false,
+    implementations: [
+      {
+        id: 'unbuilt-v1',
+        package: '@inventarch/agent-composition-system',
+        module: 'dist/not-built.js',
+        declaration: 'installedReadCatalog',
+      },
+    ],
+  });
+  expect(payload.catalog.operations).toEqual([
+    {
+      id: 'unbuilt-v1',
+      status: 'unavailable',
+      reason: '@inventarch/agent-composition-system has no built dist/not-built.js',
+    },
+  ]);
+  const root = extract(payload.archive);
+  expect(verifyHostCache(root).release).toBe(payload.pin.release);
+  expect(present(root, payload.pin.release).operations).toEqual(payload.catalog.operations);
   const inventory = JSON.parse(readFileSync(resolve(root, 'inventory.json'), 'utf8'));
-  expect(inventory.files.find((row: { path: string }) => row.path === 'implementations.json'))
-    .toMatchObject({ sha256: catalog.digest });
+  expect(inventory.packages.map((row: { name: string }) => row.name)).not.toContain(
+    '@inventarch/agent-composition-system',
+  );
+});
+it('follows a handler module closure through relative imports and released exports, naming what is not shipped', () => {
+  const files = new Map(
+    Object.entries({
+      'runtime/node_modules/@inventarch/a/package.json': JSON.stringify({
+        name: '@inventarch/a',
+        exports: { '.': { types: './dist/index.d.ts', default: './dist/index.js' } },
+        dependencies: { '@inventarch/b': '1', semver: '1', '@inventarch/service-contracts': '1' },
+      }),
+      'runtime/node_modules/@inventarch/a/dist/index.js': [
+        "import { x } from './x.js';",
+        "import { readFileSync } from 'node:fs';",
+        "import { join } from 'path';",
+        "export * from '@inventarch/b/sub';",
+        "import semver from 'semver';",
+        "// import './commented.js';",
+        "export const lazy = () => import('./lazy.js');",
+      ].join('\n'),
+      'runtime/node_modules/@inventarch/a/dist/x.js': 'export const x = 1;\n',
+      'runtime/node_modules/@inventarch/a/dist/lazy.js': 'export {};\n',
+      'runtime/node_modules/@inventarch/b/package.json': JSON.stringify({
+        name: '@inventarch/b',
+        exports: { './sub': { default: './dist/sub.js' } },
+      }),
+      'runtime/node_modules/@inventarch/b/dist/sub.js': "export * from './gone.js';\nimport '@inventarch/c';\n",
+      'runtime/node_modules/semver/package.json': JSON.stringify({ name: 'semver' }),
+    }).map(([path, text]) => [path, Buffer.from(text)]),
+  );
+  expect(moduleClosure(files, 'runtime/node_modules/@inventarch/a/dist/index.js')).toEqual({
+    reached: [
+      'runtime/node_modules/@inventarch/a/dist/index.js',
+      'runtime/node_modules/@inventarch/a/dist/lazy.js',
+      'runtime/node_modules/@inventarch/a/dist/x.js',
+      'runtime/node_modules/@inventarch/b/dist/sub.js',
+    ],
+    packages: ['@inventarch/a', '@inventarch/b', 'semver'],
+    missing: ['runtime/node_modules/@inventarch/b/dist/gone.js', 'runtime/node_modules/@inventarch/c/package.json'],
+  });
+  // The declared package closure skips the private service contracts the payload never carries.
+  expect(packageClosure(files, '@inventarch/a')).toEqual(['@inventarch/a', '@inventarch/b', 'semver']);
+  files.delete('runtime/node_modules/semver/package.json');
+  expect(packageClosure(files, '@inventarch/a')).toBe('its dependency semver is not shipped');
+});
+it('lists the read handler unavailable for a staged candidate whose dependencies lack the installed adapter', async () => {
+  // A candidate staged like the private one below, but with no installed copy of the composition package to ship.
+  const candidate = realpathSync(mkdtempSync(join(tmpdir(), 'ia-host-payload-unshipped-')));
+  made.push(candidate);
+  mkdirSync(join(candidate, 'node_modules'));
+  mkdirSync(join(candidate, 'apps'));
+  for (const app of ['cli', 'distribution', 'mcp-door', 'steward-hook'])
+    symlinkSync(join(repository, 'apps', app), join(candidate, 'apps', app), 'junction');
+  const payload = await generateHostPayload({ repository: candidate, write: false });
+  expect(payload.catalog.operations).toEqual([
+    {
+      id: 'captured-source-read-v1',
+      status: 'unavailable',
+      reason: '@inventarch/agent-composition-system is not installed',
+    },
+  ]);
+  const root = extract(payload.archive);
+  expect(verifyHostCache(root).release).toBe(payload.pin.release);
+  expect(present(root, payload.pin.release).operations[0]).toMatchObject({ status: 'unavailable' });
+  expect(readFileSync(resolve(root, 'inventory.json'), 'utf8')).not.toContain('agent-composition-system');
 });
 it('excludes the private service dependencies and the payload itself', async () => {
   const { files, packages } = await collectPayload(repository);
@@ -189,6 +396,11 @@ it("excludes the private CLI's own embedded payload, so a repeat write does not 
   const first = await generateHostPayload({ repository: candidate, write: true }),
     second = await generateHostPayload({ repository: candidate, write: true });
   expect(second.pin).toEqual(first.pin);
+  // The candidate's installed dependencies hold the composition package, so it ships the read handler (C24).
+  expect(first.catalog.operations).toEqual([
+    expect.objectContaining({ id: 'captured-source-read-v1', status: 'available', module: HANDLER }),
+  ]);
+  expect(present(extract(first.archive), first.pin.release).operations[0]).toMatchObject({ status: 'available' });
   const { files } = await collectPayload(candidate);
   expect([...files.keys()].some((path) => /@ia\/inventarch-cli\/assets\/host(\/|\.json$)/.test(path))).toBe(false);
 });
@@ -237,4 +449,16 @@ it('refuses retained executable coupling to omitted owners', () => {
   ])
     expect(() => assertStaticPayloadCode('dist/retained.js', Buffer.from(code))).toThrow(/omitted/);
   expect(() => assertStaticPayloadCode('dist/retained.js', Buffer.from("import '@inventarch/runtime'"))).not.toThrow();
+});
+it('keeps the catalog producer-only: no host app imports the composition package the payload ships', () => {
+  for (const file of ['apps/distribution/src/implementations.ts', 'apps/cli/src/doctor.ts', 'apps/cli/src/host.ts'])
+    expect(
+      importedModules(readFileSync(resolve(repository, file), 'utf8'), file).filter((specifier) =>
+        specifier?.startsWith('@inventarch/agent-composition-system'),
+      ),
+    ).toEqual([]);
+  for (const name of ['@inventarch/cli', '@inventarch/distribution'])
+    expect(
+      moduleProblem({ name, path: repository, app: true }, 'src/x.ts', '@inventarch/agent-composition-system'),
+    ).toBe(`${name} may not depend on @inventarch/agent-composition-system`);
 });

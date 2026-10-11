@@ -2436,6 +2436,7 @@
       "mode": "source",
       "inputProfile": "workspace-records",
       "dependsOn": [
+        "agent-composition-system:build",
         "language-base:generate",
         "distribution:build",
         "cli:build",
@@ -3224,6 +3225,7 @@
       "mode": "source",
       "inputProfile": "repository-inventory",
       "dependsOn": [
+        "agent-composition-system:build",
         "language-base:generate",
         "cli:build",
         "distribution:build",

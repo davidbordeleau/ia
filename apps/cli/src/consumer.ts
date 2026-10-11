@@ -37,7 +37,7 @@ import { runPack } from './pack.js';
 import { runPosition } from './position.js';
 import { runPreview } from './preview.js';
 import { runAuthor } from './author.js';
-import { gatedNext } from './profile.js';
+import { gatedNext, inertNext } from './profile.js';
 import type { Gate } from './profile.js';
 import { runProject } from './project.js';
 import { runRead } from './read.js';
@@ -54,6 +54,7 @@ import {
   remedyWords,
   resolveCapabilities,
   sectionLabel,
+  terminalText,
   words,
 } from './render.js';
 
@@ -244,14 +245,15 @@ export function renderRefusal(
     };
     return { exitCode: refusal.exit, stdout: JSON.stringify(body) + '\n', stderr: '' };
   }
+  // Review C-N2: a refusal repeats caller and authored text (a path, an identity, a value), so its controls are escaped.
   const block = errorBlock(
     {
-      location,
-      ...(refusal.where?.identity === undefined ? {} : { identity: refusal.where.identity }),
+      location: location === null ? null : terminalText(location),
+      ...(refusal.where?.identity === undefined ? {} : { identity: terminalText(refusal.where.identity) }),
       code: refusal.code,
-      message: refusal.message,
+      message: terminalText(refusal.message),
       // Design row 27: the command it names stays on one line, so it is copied and run as printed.
-      next: remedyWords(next),
+      next: remedyWords(terminalText(next)),
     },
     { depth: 0 },
     caps,
@@ -564,7 +566,8 @@ export async function runCommand(command: CommandSpec, argv: readonly string[], 
       };
     }
     const refused: Refused = { command: command.name, root: args?.value('root') };
-    const raw = gatedNext(refusalOf(error, refused), gate);
+    const gated = gatedNext(refusalOf(error, refused), gate),
+      raw = args === undefined ? gated : inertNext(gated, { command, args });
     const refusal =
       raw.where === null && raw.at === null
         ? new Refusal(raw.code, raw.message, raw.exit, null, raw.next, `ia ${command.name}`)

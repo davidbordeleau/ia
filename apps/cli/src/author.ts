@@ -240,10 +240,10 @@ export function renderAuthor(view: AuthorView, caps: Capabilities): string {
   const located = view.findings.map((finding) =>
     errorBlock(
       {
-        location: finding.path === '' ? null : `${finding.path}:${finding.line}`,
-        ...(finding.identity === undefined ? {} : { identity: finding.identity }),
+        location: finding.path === '' ? null : terminalText(`${finding.path}:${finding.line}`),
+        ...(finding.identity === undefined ? {} : { identity: terminalText(finding.identity) }),
         code: finding.code,
-        message: finding.message,
+        message: terminalText(finding.message),
         severity: finding.severity,
       },
       { depth: 1 },

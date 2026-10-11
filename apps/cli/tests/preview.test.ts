@@ -507,7 +507,8 @@ describe('the mandate profile', () => {
       expect(refusal['message'], actor).toContain(
         `is not an authored participant of ${demo}; its participants are ${participant}`,
       );
-      expect(nextArgv(refusal['next'] as string)).toEqual(['preview', 'task', '--actor', participant, '--root', root]);
+      // The workspace's default actor (its steward) may run it, so the next command drops --actor (review C-N1).
+      expect(nextArgv(refusal['next'] as string)).toEqual(['preview', 'task', '--root', root]);
     }
   });
   it('refuses, rather than fails, under a mandate whose authority the resolver cannot read', async () => {
@@ -562,5 +563,93 @@ describe('the catalog row', () => {
     expect(followed.exitCode).toBe(0);
     expect(followed.stdout).toContain('Word  plan');
     expect(tree(root)).toEqual(before);
+  });
+});
+
+describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
+  const MANDATE = (name: string, authority: readonly string[]) =>
+    `\n@mandate ${name}\n  meaning\n    says "Fixture mandate ${name}."\n    answers "What may its participant do?"\n  governance\n    requires "Claim no host permission or execution from this mandate."\n  authority\n${authority.map((line) => `    ${line}\n`).join('')}`;
+  const AGENT = (name: string) =>
+    `\n@agent ${name}\n  meaning\n    says "Fixture participant ${name}."\n    answers "Who is ${name}?"\n  governance\n    applies []\n`;
+  /** Two participants and no steward: OD1 names no default actor. */
+  const ambiguous = (opsMoves = 'Observation, Verification') =>
+    workspace((at) => {
+      rewrite(at, '.ia/src/workspace.ia', (text) => text.replace('    steward @agent demo\n', ''));
+      writeFileSync(
+        resolve(at, '.ia/src/ops.ia'),
+        `#! ia 1.0\n${AGENT('ops')}${MANDATE('ops-mandate', ['participant @agent ops', `moves [${opsMoves}]`, 'scope [@workspace demo]'])}`,
+      );
+    });
+  /** Every argument of the command a next action names, the --root value aside, is free of shell syntax. */
+  const inert = (next: string): boolean => {
+    const argv = nextArgv(next);
+    return argv.every((arg, index) => argv[index - 1] === '--root' || /^[A-Za-z0-9@+=:,./_~#\- ]*$/.test(arg));
+  };
+  it('keeps the named actor in every next command of an open actor choice', async () => {
+    const root = ambiguous();
+    for (const [argv, code] of [
+      [['--set', '@milestone m1', 'work.foo=x'], 'IA-CLI-EDIT-INVALID'],
+      [['--relate', '@milestone m1', 'requires', '@plan p1'], 'IA-LANG-EDGE-UNCONSENTED'],
+      [['milestones', 'm9'], 'IA-CLI-EDIT-INVALID'],
+    ] as const) {
+      const refusal = await refused(root, [...argv, '--actor', participant], code);
+      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual(
+        expect.arrayContaining(['--actor', participant]),
+      );
+    }
+  });
+  it('repeats no value that holds shell syntax in a printed next command', async () => {
+    const values = ['$(echo INJECTED)', '`echo INJECTED`', '%PATH%', 'a;rm -rf x', 'say "hi"', "it's"];
+    const open = ambiguous();
+    const plain = workspace();
+    for (const value of values) {
+      const checks: (readonly [string, readonly string[]])[] = [
+        [plain, ['task', 't9', `meaning.says=${value}`, '--at', 'docs/t9.ia']],
+        [open, ['task', 't9', `meaning.says=${value}`]],
+      ];
+      for (const [root, argv] of checks) {
+        const refusal = body(await preview(root, argv));
+        expect(refusal['ok'], `${value} ${argv.join(' ')}`).toBe(false);
+        expect(inert(refusal.next!), `${value}: ${refusal.next}`).toBe(true);
+      }
+      const missing = body(
+        await run(['author', '--set', '@milestone m1', `work.owner=${value}`, '--root', plain, '--json']),
+      );
+      expect(inert(missing.next!), `${value}: ${missing.next}`).toBe(true);
+    }
+  });
+  it('names the same command without --actor when a mistyped actor stands in for an allowed default', async () => {
+    const root = workspace();
+    const refusal = await refused(root, ['task', '--actor', '@agent reviewer'], 'IA-RUNTIME-MANDATE-ACTOR');
+    expect(nextArgv(refusal['next'] as string)).toEqual(['preview', 'task', '--root', root]);
+  });
+  it('offers a participant the mandates bind when none binds the steward, and reads no installed steward as default', async () => {
+    const unbound = workspace((at) => {
+      rewrite(at, '.ia/src/workspace.ia', (text) => text.slice(0, text.indexOf('\n@mandate demo-mandate')) + '\n');
+      writeFileSync(
+        resolve(at, '.ia/src/ops.ia'),
+        `#! ia 1.0\n${AGENT('ops')}${MANDATE('ops-mandate', ['participant @agent ops', 'scope [@workspace demo]'])}`,
+      );
+    });
+    const refusal = await refused(unbound, ['task'], 'IA-RUNTIME-MANDATE-ACTOR');
+    expect(nextArgv(refusal['next'] as string)).toEqual(['preview', 'task', '--actor', ops, '--root', unbound]);
+    const installed = workspace((at) =>
+      rewrite(at, '.ia/src/workspace.ia', (text) =>
+        text.replace('    steward @agent demo\n', '    steward @agent public-work-system-steward\n'),
+      ),
+    );
+    expect(body(await preview(installed, ['task']))).toMatchObject({
+      profile: { actor: participant, by: 'participant' },
+    });
+  });
+  it('escapes terminal controls from caller input in human refusals', async () => {
+    const root = workspace();
+    const esc = String.fromCharCode(0x1b),
+      rlo = String.fromCharCode(0x202e);
+    const human = await run(['preview', 'task', '--actor', `evil${esc}[2J${rlo}x`, '--root', root]);
+    expect(human.exitCode).toBe(1);
+    expect(human.stderr).not.toContain(esc);
+    expect(human.stderr).not.toContain(rlo);
+    expect(human.stderr).toContain('\\u001b');
   });
 });

@@ -109,7 +109,7 @@ function namedAgent(reader: ReadHandle, within: string, spelled: string): string
  * participants), and its `composition.steward` when that is an authored `@agent`.
  */
 export function participantsOf(reader: ReadHandle, within: string, workspace: string): readonly string[] {
-  const named = defaultActor(reader, within, workspace),
+  const named = defaultOf(reader, within, workspace),
     steward = named.by === 'steward' ? named.actor : undefined;
   return [
     ...new Set([
@@ -117,6 +117,29 @@ export function participantsOf(reader: ReadHandle, within: string, workspace: st
       ...(steward !== undefined && reader.get(steward, { within })?.band === 100 ? [steward] : []),
     ]),
   ].sort();
+}
+/**
+ * OD1's default actor, with the rule `--actor` follows (review C-N4): the workspace's `composition.steward` counts only
+ * as an authored (band 100) `@agent`; an installed steward leaves the choice to the participants, as if none were named.
+ */
+function defaultOf(reader: ReadHandle, within: string, workspace: string): ReturnType<typeof defaultActor> {
+  const named = defaultActor(reader, within, workspace);
+  if (named.by !== 'steward' || reader.get(named.actor!, { within })?.band === 100) return named;
+  const { participants } = named,
+    unnamed = `${workspace}'s composition.steward ${named.actor} is no authored @agent`;
+  if (participants.length === 1) return { actor: participants[0]!, by: 'participant', participants };
+  if (participants.length === 0)
+    return { participants, reason: `${unnamed}, and no authored @mandate scoped to it names an authored @agent` };
+  const reason = `${unnamed}, and its authored mandates name ${participants.length} participants (${participants.join(', ')})`;
+  return {
+    participants,
+    reason,
+    refusal: {
+      code: 'IA-RUNTIME-MANDATE-ACTOR',
+      message: reason,
+      next: `ia position --seat ${workspace} --shape governance`,
+    },
+  };
 }
 /** The seat a runtime mandate refusal's next command (`ia position --seat <seat> --shape governance`) names. */
 const seatOf = (next: string): string | undefined => /--seat (\S+)/.exec(next)?.[1];
@@ -172,6 +195,21 @@ export function requireProfile(request: ProfileRequest): Profile {
       ? `Run "${respell(context, { options: { actor: [] } })}" without naming an actor; this repository authors no @workspace.`
       : `Run "ia position --seat ${workspace} --shape governance${rooted}" for the workspace's participants and the mandates that bind them; none of them may run this command here.`;
   };
+  /**
+   * The next command after an `--actor` that names no participant (review C-N1): where the workspace's default actor may
+   * run this command, the command without `--actor`; where it may not, the governance position; only where the choice
+   * is open, the first participant allowed (`choose`).
+   */
+  const mistyped = (participants: readonly string[]): string => {
+    const fallback = workspace === undefined ? undefined : defaultOf(reader, within, workspace);
+    if (fallback?.actor !== undefined)
+      return judge(fallback.actor).verdict.refusal === undefined
+        ? `Run "${respell(context, { options: { actor: [] } })}" as the workspace's default actor, ${fallback.actor}.`
+        : `Run "ia position --seat ${workspace} --shape governance${rooted}" for the workspace's participants and the mandates that bind them.`;
+    return participants.length === 0
+      ? `Run "${respell(context, { options: { actor: [] } })}" without naming an actor.`
+      : choose(participants);
+  };
   try {
     const spelled = context.args.value('actor');
     let actor: string | undefined, by: Profile['by'];
@@ -186,14 +224,12 @@ export function requireProfile(request: ProfileRequest): Profile {
           }`,
           1,
           workspace === undefined ? null : { identity: workspace },
-          participants.length === 0
-            ? `Run "${respell(context, { options: { actor: [] } })}" without naming an actor.`
-            : choose(participants),
+          mistyped(participants),
         );
       actor = named;
       by = 'actor';
     } else if (workspace !== undefined) {
-      const fallback = defaultActor(reader, within, workspace);
+      const fallback = defaultOf(reader, within, workspace);
       if (fallback.refusal !== undefined)
         throw new Refusal(
           fallback.refusal.code,
@@ -212,14 +248,17 @@ export function requireProfile(request: ProfileRequest): Profile {
       // The runtime names the governance position of the mandate concerned (design §11); the CLI spells that command
       // itself, with the root this invocation gave.
       const seat = seatOf(verdict.refusal.next) ?? workspace;
+      const unbound = verdict.refusal.code === 'IA-RUNTIME-MANDATE-ACTOR' && by !== 'actor' && workspace !== undefined;
       throw new Refusal(
         verdict.refusal.code,
         verdict.refusal.message,
         1,
         seat === undefined ? null : { identity: seat },
-        seat === undefined
-          ? `Run "ia position${rooted}" for the repository's position and the mandates that govern it.`
-          : `Run "ia position --seat ${seat} --shape governance${rooted}" for the mandates that govern here and what they allow.`,
+        unbound
+          ? choose(participantsOf(reader, within, workspace).filter((participant) => participant !== actor))
+          : seat === undefined
+            ? `Run "ia position${rooted}" for the repository's position and the mandates that govern it.`
+            : `Run "ia position --seat ${seat} --shape governance${rooted}" for the mandates that govern here and what they allow.`,
       );
     }
     const move = MODE_MOVES[mode],
@@ -260,6 +299,55 @@ export function gateMode(context: Context, root: string, mode: Mode): Profile {
   } finally {
     session.close();
   }
+}
+
+/**
+ * Review C-R2: the characters a printed command may repeat from caller or authored input and stay inert pasted into sh,
+ * PowerShell or cmd, inside the double quotes `quote()` adds for a space.
+ */
+const INERT = /^[A-Za-z0-9@+=:,./_~#\- ]*$/;
+/** The word a preview or author form names: a new record's word, or the owned record's `@word` or identity facet. */
+function wordOf(args: Context['args']): string | undefined {
+  const first = args.positionals[0] ?? '';
+  if (!args.flag('relate') && !args.flag('set')) return /^[a-z][a-z0-9-]*$/.test(first) ? first : undefined;
+  const reference = /^@([a-z][a-z0-9-]*)/.exec(first)?.[1],
+    facet = first.split('/')[2];
+  return reference ?? (facet !== undefined && /^[a-z][a-z0-9-]*$/.test(facet) ? facet : undefined);
+}
+/**
+ * Review C-R2: a refusal of `ia preview` or `ia author`, or a mandate refusal of any command, whose next command would
+ * repeat a value holding shell syntax (`$(...)`, a backtick, `%`, a quote, `;` and the like) names an inert command in its
+ * place: the word's preview, keeping an `--actor` the command named, or else the repository's position. The `--root` value
+ * is the invocation's own and is repeated as every command repeats it.
+ */
+export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | 'args'>): Refusal {
+  const verb = context.command.name;
+  if (
+    refusal.next === null ||
+    (verb !== 'preview' && verb !== 'author' && !refusal.code.startsWith('IA-RUNTIME-MANDATE-'))
+  )
+    return refusal;
+  const match = QUOTED.exec(refusal.next);
+  if (match === null) return refusal;
+  const argv = [...match[1]!.matchAll(ARGUMENT)].map((token) =>
+    token[0].startsWith('"') ? (JSON.parse(token[0]) as string) : token[0],
+  );
+  if (argv.every((arg, index) => argv[index - 1] === '--root' || INERT.test(arg))) return refusal;
+  const supplied = context.args.value('root'),
+    rooted = supplied === undefined ? '' : ` --root ${quote(supplied)}`,
+    at = argv.indexOf('--actor'),
+    actor = at !== -1 && INERT.test(argv[at + 1] ?? '-') ? ` --actor ${quote(argv[at + 1]!)}` : '',
+    word = verb === 'preview' || verb === 'author' ? wordOf(context.args) : undefined;
+  return new Refusal(
+    refusal.code,
+    refusal.message,
+    refusal.exit,
+    refusal.where,
+    word === undefined
+      ? `Run "ia position${rooted}" for the repository's position; the command this refusal names would repeat a value that holds shell syntax, so it is not printed.`
+      : `Run "ia preview ${word}${actor}${rooted}" for what a @${word} record holds; the command this refusal names would repeat a value that holds shell syntax, so it is not printed.`,
+    refusal.at,
+  );
 }
 
 const ARGUMENT = /"(?:[^"\\]|\\.)*"|[^\s"]+/g;

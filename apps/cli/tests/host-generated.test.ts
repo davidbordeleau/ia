@@ -1031,3 +1031,22 @@ it('keeps an owned group as registered while disableAllHooks is on, and still re
     removedHooks: [{ identity: HOOK, sha256: hookGroupDigest(owned) }],
   });
 });
+
+it('names the state repair when the hook ownership state cannot be read and the hook record is broken, and it works (A-F3)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  const group = hookGroups(root).get(HOOK);
+  writeFileSync(resolve(root, HOOK_STATE), '{ not json');
+  edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
+  const refused = await guarded(root, group, 'src/app.ts');
+  expect(codeOf(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  expect(refused).toContain(
+    `from a shell, delete ${HOOK_STATE} and every IA hook group in ${SETTINGS} (each runs the guard for one authored @hook) to restore editing, then run "ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`,
+  );
+  // Follow it: the state and the groups go, which restores editing, and the removal it names then succeeds.
+  rmSync(resolve(root, HOOK_STATE));
+  withoutHookGroups(root);
+  const removed = await host(root, env, 'claude', '--remove', '--apply', '--yes');
+  expect(removed.exitCode, removed.stdout).toBe(0);
+  expect(existsSync(resolve(root, SETTINGS)) ? hookGroups(root).size : 0).toBe(0);
+});

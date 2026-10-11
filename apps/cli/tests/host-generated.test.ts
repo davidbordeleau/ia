@@ -5,7 +5,7 @@
  * launcher exactly as Claude Code runs it; and renames and removals of the records take the obsolete agent, skill and
  * group away again, leaving unrelated settings and unmarked files alone.
  */
-import { cpSync, existsSync, realpathSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { PACKET_MARKER } from '@inventarch/runtime';
@@ -15,7 +15,7 @@ import { runBounded } from '@tools/testing/subprocess.js';
 import { ProjectionError } from '@inventarch/workspace-runtime/projections';
 import { renderProjectionFor } from '../src/host-projection.js';
 import { quote } from '../src/render.js';
-import { cleanup, cli, run } from './workspace-fixture.js';
+import { cleanup, cli, nextArgv, run } from './workspace-fixture.js';
 import {
   doctor,
   GUARD_STATE,
@@ -281,15 +281,75 @@ it('reports drift in a generated file and in a hook group, and names the way bac
   expect(missing!.detail).toContain(
     `the remedy removes the registration, and "ia host claude --root ${quote(root)} --apply" then registers`,
   );
-  const refused = await host(root, env, 'claude', '--apply', '--yes');
-  expect(refused.exitCode).not.toBe(0);
-  expect(refused.stdout).toContain('was deleted by hand');
   // The remedy doctor names, then the apply it names, run as given.
-  await apply(root, env, '--remove');
+  await follow(missing!.remedy!, env);
   expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
   await apply(root, env);
   expect([...hookGroups(root).keys()]).toEqual([HOOK]);
   expect((await doctor(root, env)).checks).toContainEqual(noDrift());
+});
+
+/** Run a command a refusal or remedy names, as named, confirmed non-interactively; it must succeed. */
+async function follow(command: string, env: Record<string, string>): Promise<void> {
+  const argv = command.startsWith('ia ') ? command.slice(3).split(' ') : nextArgv(command);
+  const result = await run([...argv, '--yes', '--json'], { env });
+  expect(result.exitCode, `${argv.join(' ')}: ${result.stdout}`).toBe(0);
+}
+const withoutHookGroups = (root: string): void => {
+  const kept = settings(root);
+  writeFileSync(
+    resolve(root, SETTINGS),
+    `${JSON.stringify({ ...kept, hooks: { PreToolUse: (kept.hooks?.PreToolUse ?? []).filter((group) => !group.hooks.some((handler) => handler.args?.includes('--hook'))) } }, null, 2)}
+`,
+  );
+};
+
+it('names the recovery for a hook group deleted or changed by hand, for ia host and ia project, and it works (H-R1, H-N3)', async () => {
+  // Deleted by hand: both verbs refuse naming the removal, which drops the registration; ia host registers again.
+  const { root, env } = await composed();
+  await apply(root, env);
+  withoutHookGroups(root);
+  const removal = `Run "ia host claude --root ${quote(root)} --remove --apply", which drops the registration of the hook group deleted by hand, then register again with ia host.`;
+  for (const verb of [
+    ['host', 'claude'],
+    ['project', 'claude'],
+  ]) {
+    const refused = await run([...verb, '--root', root, '--apply', '--yes', '--json'], { env });
+    expect(refused.exitCode, refused.stdout).toBe(3);
+    expect(JSON.parse(refused.stdout)).toMatchObject({ code: 'IA-DIST-LOCAL-MODIFICATION', next: removal });
+  }
+  await follow(removal, env);
+  await apply(root, env);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+
+  // Changed by hand: the group goes first, then the removal, then ia host.
+  const changed = settings(root);
+  (changed.hooks!.PreToolUse![0]!.hooks[0] as unknown as Record<string, unknown>)['timeout'] = 99;
+  writeFileSync(
+    resolve(root, SETTINGS),
+    `${JSON.stringify(changed, null, 2)}
+`,
+  );
+  const refused = JSON.parse((await host(root, env, 'claude', '--apply', '--yes')).stdout);
+  expect(refused).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    next: `Delete every IA hook group for ${HOOK} in ${SETTINGS}, then run "ia host claude --root ${quote(root)} --remove --apply" and register again with ia host.`,
+  });
+  withoutHookGroups(root);
+  await follow(refused.next, env);
+  await apply(root, env);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+
+  // An unreadable hook ownership state names itself and the groups it owns, then the rerun.
+  writeFileSync(resolve(root, HOOK_STATE), '{ not json');
+  const unreadable = JSON.parse((await host(root, env, 'claude', '--apply', '--yes')).stdout);
+  expect(unreadable.next).toBe(
+    `Delete ${HOOK_STATE} and every IA hook group in ${SETTINGS} (each runs the guard for one authored @hook), then run "ia host claude --root ${quote(root)} --apply".`,
+  );
+  rmSync(resolve(root, HOOK_STATE));
+  withoutHookGroups(root);
+  await follow(unreadable.next, env);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
 });
 
 it('removes the obsolete agent, skill and hook group when their records are renamed or deleted, leaving unrelated settings and unmarked files', async () => {

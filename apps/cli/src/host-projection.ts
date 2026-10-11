@@ -51,6 +51,7 @@ import {
   planGuardRegistration,
   planHookRegistration,
   planHooksFor,
+  observeHookRegistration,
   readHookRegistration,
 } from '@inventarch/distribution/guard-registration';
 import type { HostCacheTarget } from '@inventarch/distribution/host';
@@ -515,10 +516,35 @@ export function planHookStep(root: string, host: HostName, rendered: HostOutput 
       /^IA-/.test(code) &&
       code !== 'IA-DIST-RECOVERY-REQUIRED' &&
       refusedPath(error) === null
-    )
-      throw new DistributionError(code, error.message, SETTINGS);
+    ) {
+      const located = new DistributionError(code, error.message, SETTINGS),
+        repair = code === 'IA-DIST-LOCAL-MODIFICATION' ? hookRepair(root) : undefined;
+      throw repair === undefined ? located : Object.assign(located, { repair });
+    }
     throw error;
   }
+}
+/**
+ * The recovery for an owned hook group the user deleted, changed or duplicated by hand, which apply refuses to put back
+ * on its own (review finding H-R1), as `ia doctor` names it: the removal drops the registration (after the user deletes
+ * a changed or duplicated group, which the removal refuses too), and `ia host` then registers the workspace's hooks
+ * again. Undefined when the refusal is about no owned group (an unmanaged identical one), which the settings repair
+ * covers.
+ */
+function hookRepair(root: string): string | undefined {
+  let drift: ReturnType<typeof observeHookRegistration>;
+  try {
+    drift = observeHookRegistration(root);
+  } catch {
+    return undefined;
+  }
+  const changed = drift.find((row) => row.drift === 'modified'),
+    missing = drift.find((row) => row.drift === 'missing');
+  if (changed !== undefined)
+    return `Delete every IA hook group for ${changed.hook} in ${SETTINGS}, then run "ia host claude --remove --apply" and register again with ia host.`;
+  if (missing !== undefined)
+    return `Run "ia host claude --remove --apply", which drops the registration of the hook group deleted by hand, then register again with ia host.`;
+  return undefined;
 }
 
 const HEX = /^[a-f0-9]{64}$/;

@@ -82,8 +82,11 @@ export interface ProjectView {
 }
 
 /** Design row 27: the repair a conflict needs, worded as `ia host` words it, then this plan, which shows the file. */
-const conflictNext = (view: ProjectView, conflict: Conflict): string =>
-  projectionRepair(view.host, conflict.path, view.invocation, conflict.code);
+const conflictNext = (view: ProjectView, conflict: Conflict): string => {
+  const repair = projectionRepair(view.host, conflict.path, view.invocation, conflict.code, conflict.repair);
+  // A repair that names `ia host` (a hook group changed by hand, H-R1) carries `--root` as typed, as the plan does.
+  return view.given === undefined ? repair : rootedNext(repair, view.host, view.given);
+};
 const conflictRefusal = (view: ProjectView, conflict: Conflict): Refusal =>
   new Refusal(conflict.code, conflict.reason, 3, { path: conflict.path }, conflictNext(view, conflict));
 

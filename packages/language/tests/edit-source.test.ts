@@ -348,6 +348,58 @@ describe('annotateRecord', () => {
   });
 });
 
+describe('the bytes of everything but the edited record (review C-R8)', () => {
+  const crlf = source.replaceAll('\n', '\r\n'),
+    bom = String.fromCharCode(0xfeff);
+  const edits: readonly (readonly [string, (text: string) => string])[] = [
+    ['setField', (text) => editor.setField(text, '@task two', 'work.status', 'closed', schema)],
+    ['addRelationship', (text) => editor.addRelationship(text, '@task one', 'requires', '@task two')],
+    [
+      'appendRecord',
+      (text) =>
+        editor.appendRecord(
+          text,
+          editor.draftSource('task', 'three', schema, { 'meaning/says': 'Third', 'work/status': 'open' }),
+        ),
+    ],
+    [
+      'annotateRecord',
+      (text) => editor.annotateRecord(text, '@task two', '# authored-by @agent demo under @mandate m at abc'),
+    ],
+  ];
+  it('keeps CRLF line endings, the edited record taking them too', () => {
+    for (const [name, edit] of edits) {
+      const out = edit(crlf);
+      expect(out, name).toBe(edit(source).replaceAll('\n', '\r\n'));
+      expect(/[^\r]\n/.test(out), name).toBe(false);
+    }
+  });
+  it('keeps a byte-order mark', () => {
+    for (const [name, edit] of edits) expect(edit(`${bom}${source}`), name).toBe(`${bom}${edit(source)}`);
+  });
+  it("leaves another record's non-canonical spacing as it is, formatting only the edited record", () => {
+    const odd = source
+      .replace('    says "First"', '    says   "First"   ')
+      .replace('  meaning\n    says "Second"', '  meaning   \n    says    "Second"');
+    const out = editor.setField(odd, '@task two', 'work.status', 'closed', schema);
+    const head = odd.slice(0, odd.indexOf('@task two'));
+    expect(out.startsWith(head)).toBe(true);
+    expect(out).toContain('@task two\n  meaning\n    says "Second"\n  work\n    status closed\n');
+    // A record that is not edited keeps its bytes even when the edit appends after it.
+    const appended = edits[2]![1](odd);
+    expect(appended.startsWith(odd)).toBe(true);
+  });
+  it('gives a last line with no ending one before appending, and keeps it absent on an edit at the end', () => {
+    const open = source.replace(/\n$/, '');
+    const appended = edits[2]![1](open);
+    expect(appended.startsWith(`${open}\n\n@task three\n`)).toBe(true);
+    expect(appended.endsWith('\n')).toBe(true);
+    const set = editor.setField(open, '@milestone m1', 'meaning.says', 'Still last', schema);
+    expect(set.endsWith('    says "Still last"')).toBe(true);
+    expect(set.slice(0, set.indexOf('@milestone m1'))).toBe(open.slice(0, open.indexOf('@milestone m1')));
+  });
+});
+
 describe('relationshipConsent', () => {
   const AUTHORED: Location = { placement: { kind: 'authored', band: 100, reach: '' }, provenance: 'workspace' };
   const system = `#! ia 1.0

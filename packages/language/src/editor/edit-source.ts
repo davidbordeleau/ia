@@ -10,13 +10,16 @@ import type { DraftSchema } from './values.js';
 
 /**
  * Schema-aware source edits (milestone generation-binding plan amendment C18). Each takes one whole `.ia` file's text and
- * returns the whole new text, normalized by `format()`, that changes exactly one top-level record of it: a record
- * appended, one relationship row added, or one field set. Every other record keeps its source bytes, comments and blank
- * lines included, so only the edited record's digest can change. Admission is not judged here: the caller compiles the
- * result (db's draft overlay) and reads its findings. A refused edit throws SourceEditError and changes nothing.
+ * returns the whole new text with exactly one top-level record changed: a record appended, one relationship row added,
+ * one field set, or one comment put above it. The edit is spliced into the file as it is: every other line keeps its
+ * bytes, line endings, comments and spacing included, and a byte-order mark stays. Only the edited record is formatted
+ * (`format()`), and its lines take the file's line ending, so only its digest can change. The file must parse; it need
+ * not be formatted. Admission is not judged here: the caller compiles the result (db's draft overlay) and reads its
+ * findings. A refused edit throws SourceEditError and returns no text.
  */
 
 const PATH = 'edit.ia';
+const BOM = '\uFEFF';
 const REFERENCE = /^@([a-z][a-z0-9-]*) ([A-Za-z][A-Za-z0-9-]*)$/;
 const FRAGMENT = '(?:#[A-Za-z0-9][A-Za-z0-9-]*(?:/[A-Za-z0-9][A-Za-z0-9-]*)*)?';
 const TARGETS = [
@@ -24,73 +27,108 @@ const TARGETS = [
   new RegExp(`^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*/[a-z][a-z0-9-]*/[A-Za-z][A-Za-z0-9-]*${FRAGMENT}$`),
 ];
 
-interface Parsed {
-  readonly text: string;
+/** A file as it is: each line's text and its own ending, a byte-order mark, and the parse of its text. */
+interface Raw {
+  readonly bom: boolean;
+  readonly texts: readonly string[];
+  readonly endings: readonly string[];
+  /** The ending new lines take: the file's first, or LF for a file with none. */
+  readonly eol: string;
   readonly ast: FileNode;
-  readonly lines: string[];
 }
-/** The file formatted and parsed again, so every span below is a span of the text the edit splices. */
-function normalized(text: string): Parsed {
-  const formatted = format(text, PATH);
-  if (formatted.text === null)
+function read(text: string): Raw {
+  const bom = text.startsWith(BOM),
+    body = bom ? text.slice(1) : text;
+  const pieces = body.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+  const texts = pieces.map((piece) => piece.replace(/\r?\n$/, '')),
+    endings = pieces.map((piece, index) => piece.slice(texts[index]!.length));
+  const parsed = parse(texts.join('\n'), PATH);
+  if (parsed.diagnostics.length > 0)
     refuse(
       'parse',
-      `The file must parse before it is edited: ${formatted.diagnostics.map((d) => d.message).join('; ')}`,
+      `The file must parse before it is edited: ${parsed.diagnostics.map((diagnostic) => diagnostic.message).join('; ')}`,
     );
-  const out = formatted.text!;
-  return { text: out, ast: parse(out, PATH).ast, lines: out.split('\n') };
+  return { bom, texts, endings, eol: endings.find((ending) => ending !== '') ?? '\n', ast: parsed.ast };
 }
-/** Format a spliced candidate; a splice that does not parse is a defect of the edit, never written. */
-function finish(lines: readonly string[]): string {
-  const formatted = format(lines.join('\n'), PATH);
-  if (formatted.text === null)
-    refuse('parse', `The edit does not parse: ${formatted.diagnostics.map((d) => d.message).join('; ')}`);
-  return formatted.text!;
+/** The file with lines `start`..`end` (0-based, inclusive) replaced by `lines`, each other line's bytes kept. */
+function assemble(raw: Raw, start: number, end: number, lines: readonly string[]): string {
+  // The last new line takes the replaced range's own ending (none at a file's unterminated end); the others the file's.
+  const last = raw.endings[end]!;
+  const middle = lines.map((line, index) => line + (index === lines.length - 1 ? last : raw.eol));
+  const before = raw.texts.slice(0, start).map((line, index) => line + raw.endings[index]!),
+    after = raw.texts.slice(end + 1).map((line, index) => line + raw.endings[end + 1 + index]!);
+  return (raw.bom ? BOM : '') + [...before, ...middle, ...after].join('');
 }
+
+/** One record's lines, formatted on their own, and their parse: spans below are spans of `lines`, the pragma line 1. */
+interface Block {
+  readonly lines: readonly string[];
+  readonly ast: FileNode;
+  readonly record: RecordNode;
+}
+/** Format `lines` (a record, with the file's pragma first) on their own; a splice that does not parse is refused. */
+function formatted(lines: readonly string[], what: string): string[] {
+  const result = format(`${lines.join('\n')}\n`, PATH);
+  if (result.text === null)
+    refuse('parse', `${what}: ${result.diagnostics.map((diagnostic) => diagnostic.message).join('; ')}`);
+  return result.text!.replace(/\n$/, '').split('\n');
+}
+function blockOf(raw: Raw, record: RecordNode): Block {
+  const pragma = `#! ia ${raw.ast.version}`;
+  const lines = formatted([pragma, ...raw.texts.slice(record.span.line - 1, record.span.endLine)], 'The record');
+  const ast = parse(`${lines.join('\n')}\n`, PATH).ast;
+  return { lines, ast, record: ast.records[0]! };
+}
+/** The file with the record replaced by `lines`, its block formatted again (pragma first, dropped from the result). */
+function replaced(raw: Raw, record: RecordNode, lines: readonly string[]): string {
+  const result = formatted(lines, 'The edit does not parse');
+  return assemble(raw, record.span.line - 1, record.span.endLine - 1, result.slice(1));
+}
+
 const nestedIn = (record: RecordNode): readonly RecordNode[] =>
   record.nested.flatMap((child) => [child, ...nestedIn(child)]);
 /** The one top-level record `@word name` names, case-insensitively by name as identity is. */
-function recordAt(file: Parsed, identity: string): RecordNode {
+function recordAt(ast: FileNode, identity: string): RecordNode {
   const reference = REFERENCE.exec(identity);
   if (reference === null)
     return refuse('identity', `Expected a record as @<word> <name>; got ${JSON.stringify(identity)}`);
   const [, word, name] = reference;
   const matches = (record: RecordNode) =>
     record.discriminator === word && record.name.toLowerCase() === name!.toLowerCase();
-  const top = file.ast.records.filter(matches);
+  const top = ast.records.filter(matches);
   if (top.length > 1) refuse('repeated', `${identity} is declared ${top.length} times in this file`);
   if (top.length === 0)
-    return file.ast.records.flatMap(nestedIn).some(matches)
+    return ast.records.flatMap(nestedIn).some(matches)
       ? refuse('nested', `${identity} is nested in another record; edit it in its source`)
       : refuse('identity', `No top-level record ${identity} in this file`);
   return top[0]!;
 }
-const indentOf = (line: string): string => /^ */.exec(line)![0];
 const sectionsNamed = (record: RecordNode, name: string): readonly SectionNode[] => {
   const found = record.sections.filter((section) => section.name === name);
   if (found.length > 1)
     refuse('repeated', `@${record.discriminator} ${record.name} states ${name} ${found.length} times`);
   return found;
 };
-/** Insert `row` as the last child of the record's `section` block, opening the block at the record's end if absent. */
-function insert(file: Parsed, record: RecordNode, section: string, row: string): string {
-  const lines = [...file.lines],
-    indent = indentOf(lines[record.span.line - 1]!);
+/** The block's lines with `row` the last child of the record's `section`, the section opened at its end if absent. */
+function inserted(block: Block, section: string, row: string): string[] {
+  const lines = [...block.lines],
+    { record } = block;
   if (section === 'head') {
     const last = record.head.at(-1);
-    lines.splice(last === undefined ? record.span.line : last.span.endLine, 0, `${indent}  ${row}`);
-    return finish(lines);
+    lines.splice(last === undefined ? record.span.line : last.span.endLine, 0, `  ${row}`);
+    return lines;
   }
-  const block = sectionsNamed(record, section)[0];
-  if (block !== undefined) lines.splice(block.span.endLine, 0, `${indent}    ${row}`);
-  else lines.splice(record.span.endLine, 0, `${indent}  ${section}`, `${indent}    ${row}`);
-  return finish(lines);
+  const found = sectionsNamed(record, section)[0];
+  if (found !== undefined) lines.splice(found.span.endLine, 0, `    ${row}`);
+  else lines.splice(record.span.endLine, 0, `  ${section}`, `    ${row}`);
+  return lines;
 }
 const rowText = (line: string): string => line.trim().replace(/\s+/g, ' ');
 
 /**
- * Append one record to a file: `draft` is a complete standalone draft (`draftSource`'s), whose pragma is dropped. An
- * empty file becomes a new file with the draft's pragma. A record the file already declares, nested or not, is refused.
+ * Append one record to a file: `draft` is a complete standalone draft (`draftSource`'s), whose pragma is dropped. It
+ * follows the file's last line after one blank line, in the file's line ending; an empty file becomes a new file with the
+ * draft's pragma. A record the file already declares, nested or not, is refused.
  */
 export function appendRecord(text: string, draft: string): string {
   const parsed = parse(draft, PATH);
@@ -98,33 +136,42 @@ export function appendRecord(text: string, draft: string): string {
   if (parsed.diagnostics.length > 0 || parsed.ast.records.length !== 1 || record === undefined)
     refuse('parse', 'Expected one standalone record draft');
   const pragma = /^\uFEFF?(#! ia [^\r\n]+)\r?\n/.exec(draft);
-  if (text.trim() === '')
-    return finish([
-      `${pragma?.[1] ?? '#! ia 1.0'}`,
-      '',
+  const body = formatted(
+    [
+      pragma?.[1] ?? '#! ia 1.0',
       ...draft
         .slice(pragma?.[0].length ?? 0)
         .trim()
+        .replace(/\r\n/g, '\n')
         .split('\n'),
-      '',
-    ]);
-  const file = normalized(text);
+    ],
+    'The draft',
+  ).slice(1);
+  if (text.replace(BOM, '').trim() === '') {
+    const eol = /\r\n/.test(text) ? '\r\n' : '\n';
+    return `${text.startsWith(BOM) ? BOM : ''}${[pragma?.[1] ?? '#! ia 1.0', '', ...body].join(eol)}${eol}`;
+  }
+  const raw = read(text);
   if (
-    [...file.ast.records, ...file.ast.records.flatMap(nestedIn)].some(
+    [...raw.ast.records, ...raw.ast.records.flatMap(nestedIn)].some(
       (existing) =>
         existing.discriminator === record!.discriminator && existing.name.toLowerCase() === record!.name.toLowerCase(),
     )
   )
     refuse('duplicate', `This file already declares @${record!.discriminator} ${record!.name}`);
-  const body = draft.slice(pragma?.[0].length ?? 0).trim();
-  return finish([...file.text.trimEnd().split('\n'), '', ...body.split('\n'), '']);
+  const end = raw.texts.length - 1;
+  // The last line keeps its bytes and gains the file's ending if it had none; one blank line separates the record.
+  const separated = raw.texts[end]!.trim() === '' ? [raw.texts[end]!] : [raw.texts[end]!, ''];
+  const out = assemble(raw, end, end, [...separated, ...body]);
+  return raw.endings[end] === '' ? `${out}${raw.eol}` : out;
 }
 
 /**
  * Add one relationship row `<spelling> <target>` to the record `identity` (`@word name`): the last row of its
  * `relationships` section, or a new section at the record's end. The spelling must be a kernel verb, active, inverse or
  * present; the target a canonical identity or `@word name`, either with an optional fragment, and nothing else, so no
- * condition or comment rides along. A row the section already holds is refused. Consent is the caller's to judge
+ * condition or comment rides along. A row the section already holds, word for word, is refused; a row that differs only
+ * in spelling (a canonical identity for a reference, say) is left to admission. Consent is the caller's to judge
  * (`relationshipConsent`), as is whether the target is admitted.
  */
 export function addRelationship(text: string, identity: string, spelling: string, target: string): string {
@@ -132,16 +179,17 @@ export function addRelationship(text: string, identity: string, spelling: string
     refuse('spelling', `${JSON.stringify(spelling)} is not a relationship verb`);
   if (typeof target !== 'string' || !TARGETS.some((pattern) => pattern.test(target)))
     refuse('target', `Expected a canonical identity or @<word> <name> target; got ${JSON.stringify(target)}`);
-  const file = normalized(text),
-    record = recordAt(file, identity),
+  const raw = read(text),
+    record = recordAt(raw.ast, identity),
+    block = blockOf(raw, record),
     row = `${spelling} ${target}`;
-  const block = sectionsNamed(record, 'relationships')[0];
+  const found = sectionsNamed(block.record, 'relationships')[0];
   if (
-    block !== undefined &&
-    file.lines.slice(block.span.line, block.span.endLine).some((line) => rowText(line) === row)
+    found !== undefined &&
+    block.lines.slice(found.span.line, found.span.endLine).some((line) => rowText(line) === row)
   )
     refuse('duplicate', `${identity} already states ${row}`);
-  return insert(file, record, 'relationships', row);
+  return replaced(raw, record, inserted(block, 'relationships', row));
 }
 
 /**
@@ -164,9 +212,11 @@ export function setField(
   if (append && !field.type.startsWith('list of '))
     refuse('value', `${path} is ${field.type}, not a list; set it with =`);
   let encoded = encodeValue(field, value, append);
-  const file = normalized(text),
-    record = recordAt(file, identity);
-  const children = field.section === 'head' ? record.head : (sectionsNamed(record, field.section)[0]?.children ?? []);
+  const raw = read(text),
+    record = recordAt(raw.ast, identity),
+    block = blockOf(raw, record),
+    target = block.record;
+  const children = field.section === 'head' ? target.head : (sectionsNamed(target, field.section)[0]?.children ?? []);
   const fields = children.filter((child): child is FieldNode => child.kind === 'field' && child.key === field.key);
   if (fields.length > 1) refuse('repeated', `${identity} states ${path} ${fields.length} times`);
   const previous = fields[0];
@@ -180,8 +230,8 @@ export function setField(
     encoded = `[${[...items, encoded].join(', ')}]`;
   }
   const row = `${field.key} ${encoded}`;
-  if (previous === undefined) return insert(file, record, field.section, row);
-  const comments = file.ast.trivia.filter(
+  if (previous === undefined) return replaced(raw, record, inserted(block, field.section, row));
+  const comments = block.ast.trivia.filter(
     (trivia) => trivia.kind === 'comment' && trivia.line >= previous.span.line && trivia.line <= previous.span.endLine,
   );
   const kept =
@@ -190,13 +240,14 @@ export function setField(
       : undefined;
   if (comments.length > 0 && kept === undefined)
     refuse('structure', `${identity} carries a comment inside ${path}; edit it in its source`);
-  const lines = [...file.lines];
+  const lines = [...block.lines],
+    indent = /^ */.exec(lines[previous.span.line - 1]!)![0];
   lines.splice(
     previous.span.line - 1,
     previous.span.endLine - previous.span.line + 1,
-    `${indentOf(lines[previous.span.line - 1]!)}${row}${kept === undefined ? '' : ` ${kept}`}`,
+    `${indent}${row}${kept === undefined ? '' : ` ${kept}`}`,
   );
-  return finish(lines);
+  return replaced(raw, record, lines);
 }
 
 /**
@@ -209,21 +260,19 @@ export function annotateRecord(text: string, identity: string, comment: string):
   if (
     typeof comment !== 'string' ||
     !/^# \S[^\r\n\u2028\u2029]*$/.test(comment) ||
-    /[\u0000-\u0008\u000b-\u001f\u007f]/.test(comment)
+    /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‪-‮⁦-⁩]/.test(comment)
   )
     refuse('value', `Expected one comment line # <text>; got ${JSON.stringify(comment)}`);
-  const file = normalized(text),
-    record = recordAt(file, identity),
-    lines = [...file.lines],
+  const raw = read(text),
+    record = recordAt(raw.ast, identity),
     header = record.span.line - 1,
     first = comment.split(' ')[1]!;
-  const above = file.ast.trivia.find(
+  const above = raw.ast.trivia.find(
     (trivia) => trivia.kind === 'comment' && trivia.line === record.span.line - 1 && !trivia.trailing,
   );
   if (above !== undefined && (above as { readonly text: string }).text.split(' ')[1] === first)
-    lines.splice(header - 1, 1, `${indentOf(lines[header]!)}${comment}`);
-  else lines.splice(header, 0, `${indentOf(lines[header]!)}${comment}`);
-  return finish(lines);
+    return assemble(raw, header - 1, header - 1, [comment]);
+  return assemble(raw, header, header, [comment, raw.texts[header]!]);
 }
 
 /** What `relationshipConsent` finds for one relationship row. */

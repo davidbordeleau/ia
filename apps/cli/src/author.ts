@@ -31,7 +31,7 @@ import type { Context, Result } from './consumer.js';
 import { Refusal, requireRoot, respell } from './consumer.js';
 import { candidateOf, invocationOf, previewRequest, sha256 } from './preview.js';
 import type { Candidate, Invocation, PreviewView } from './preview.js';
-import { judgedNext } from './profile.js';
+import { DIGEST, judgedNext } from './profile.js';
 import type { Profile } from './profile.js';
 import type { Capabilities } from './render.js';
 import {
@@ -49,7 +49,6 @@ import {
 } from './render.js';
 import { openEditor } from './session.js';
 
-const DIGEST = /^[0-9a-f]{64}$/;
 /** The bytes a source may hold for its opened-handle read before the write. */
 const SOURCE_LIMIT = 16 * 1024 * 1024;
 

@@ -143,10 +143,12 @@ function unreadable(
   );
 }
 
+/** An `ia author` form's `--digest`: the target file's sha256 as 64 lowercase hex digits. */
+export const DIGEST = /^[0-9a-f]{64}$/;
 /** Whether an `ia author` form's `--digest` can be checked: 64 lowercase hex digits, or absent for a starter system. */
 function usableDigest(args: Context['args']): boolean {
   const digest = args.value('digest');
-  if (digest !== undefined) return /^[0-9a-f]{64}$/.test(digest);
+  if (digest !== undefined) return DIGEST.test(digest);
   return !args.flag('relate') && !args.flag('set') && args.positionals[0] === 'system';
 }
 /** The profile `request.mode` meets for its actor, or the refusal it gives (exit 1, IA-RUNTIME-MANDATE-*). */
@@ -302,13 +304,14 @@ export const sessionGate =
 
 /**
  * Review C-R2: the characters a printed command may repeat from caller or authored input and stay inert pasted into sh,
- * PowerShell or cmd, inside the double quotes `quote()` adds for a space.
+ * PowerShell or cmd, inside the double quotes `quote()` adds for a space. A token opening with `~` is not one: pwsh expands
+ * it even double-quoted when the command runs through an npm-style .ps1 shim, so it is never repeated (review F4).
  */
-const INERT = /^[A-Za-z0-9@+=:,./_~#\- ]*$/;
+const INERT = /^(?!~)[A-Za-z0-9@+=:,./_~#\- ]*$/;
 /**
- * Review C2-R8: a token as a printed command spells it. One with a space, or one opening a comment (`#`), a PowerShell
- * splat (`@`) or a tilde expansion (`~`), is double-quoted, which keeps those literal in sh, PowerShell and cmd; so is one
- * holding a comma (a PowerShell array) or a tilde anywhere (an expansion after `=` or `:` in some shells; review C3-N1).
+ * Review C2-R8: a token as a printed command spells it. One with a space, or one opening a comment (`#`) or a PowerShell
+ * splat (`@`), is double-quoted, which keeps those literal in sh, PowerShell and cmd; so is one holding a comma (a
+ * PowerShell array) or a tilde anywhere past its start (an expansion after `=` or `:` in some shells; review C3-N1).
  * INERT has already kept every character double quotes leave live out of it. The quotes are JSON's, as `quote()` spells
  * every printed argument, so the command parses as design row 27's other commands do.
  */
@@ -326,7 +329,7 @@ function wordOf(args: Context['args']): string | undefined {
  * repeat a value holding shell syntax (`$(...)`, a backtick, `%`, a quote, `;` and the like) names an inert command in its
  * place: the word's preview, keeping an `--actor` the command named, or else the repository's position. The `--root` value
  * is the invocation's own and is repeated as every command repeats it: only that value, as the option before any `--`, is
- * exempt (review C2-R8). Every token the command keeps is spelled by `spelled`, so a bare `#`, `@` or `~` token is quoted.
+ * exempt (review C2-R8). Every token the command keeps is spelled by `spelled`, so a bare `#` or `@` token is quoted; one opening with `~` is never repeated.
  */
 export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | 'args'>): Refusal {
   const verb = context.command.name;

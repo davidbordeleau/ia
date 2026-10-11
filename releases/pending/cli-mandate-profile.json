@@ -1,0 +1,30 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "major",
+  "title": "Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated",
+  "summary": "Breaking: @inventarch/cli now judges `ia read` and `ia next` (move Observation), `ia validate` and `ia preview` (Verification), `ia author` (Synthesis), and `ia capture`, its `ia compile` alias and `ia project` (Execution) by the acting participant's mandate profile (runtime governingMandates, defaultActor and profileRefusal) before they read or write anything; a capture or project plan is judged as the effect it plans. Where 2.0.0 ran these commands unconditionally, a workspace whose authored mandates do not grant the move, that names several participants and no `composition.steward`, or that holds a governing mandate the runtime cannot read (such as `authority.moves []`, which admission accepts) now refuses them at exit 1: IA-RUNTIME-MANDATE-MOVE, -WORD (preview and author only, for the word they write), -ACTOR, or IA-RUNTIME-REQUEST-INVALID. A workspace `ia init` creates grants all five moves to its one participant, so its commands run as before, and a workspace with no governing mandate restricts nothing. `ia position` and every command outside those modes are not gated, so the governance position every refusal names always runs. Each gated command accepts --actor <agent> (a canonical identity, `@agent <name>` or a bare name), which must be an authored participant of the repository's `@workspace`: an authored `@agent` a mandate scoped to it names, or its `composition.steward` when that is an authored `@agent`; an installed steward is no default actor. Naming an actor is a local declaration, not authentication: it resolves an open choice, and then that participant's own mandates are judged, which may be looser or stricter than the default actor's; it never lifts a move or excluded word those mandates state. Every refusal names one command that runs for the same actor in the same state: the governance position of the mandate concerned; under an open choice, or for a default actor no governing mandate binds, the same command with --actor naming the first participant whose mandates allow it; for an --actor that names no participant, the same command without it where the default actor may run it. Once a command's profile allows it, a refusal it raises later is held to the same rule: a next command of a gated mode the profile refuses becomes the governance position, and one it allows carries the named --actor. The machine routes, every `ia scope` form, MACHINE_PROTOCOL versions 1 and 2 and the runtime's own refusals are unchanged. Limits: actor selection is not host authentication; the edit guard re-keyed to `@mandate` is separate work.",
+  "packages": [
+    "@inventarch/cli"
+  ],
+  "paths": [
+    ".agents/",
+    ".claude/",
+    ".github/",
+    ".gitignore",
+    ".ia/authoring.resources.json",
+    ".ia/src/floor/taxonomy.system.ia",
+    ".ia/src/participant.ia",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "apps/cli/",
+    "apps/vscode/LANGUAGE.md",
+    "distributions/",
+    "docs/",
+    "examples/",
+    "nx.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "tools/"
+  ]
+}

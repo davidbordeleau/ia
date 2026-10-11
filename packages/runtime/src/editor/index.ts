@@ -9,6 +9,7 @@ export {
   annotateRecord,
   appendRecord,
   draftSource,
+  draftValue,
   encodeValue,
   relationshipConsent,
   setField,

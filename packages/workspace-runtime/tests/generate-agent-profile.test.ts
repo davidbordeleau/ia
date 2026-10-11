@@ -84,6 +84,7 @@ Binds the reviewer to a bounded host contract under the demo mandate.
   - participant \`agent-system/binding/agent/demo\`
   - moves Observation, Verification, Synthesis, Delegation, Execution
   - scope \`workspace-system/definition/workspace/demo\`
+  - binds \`agent-system/binding/agent/demo\`, not this profile's agent \`agent-system/binding/agent/reviewer\`: the edit guard and the CLI's mandate profile judge the agent by the mandates that bind it
 
 ## Voice
 
@@ -127,7 +128,7 @@ const unmandated = (extra = ''): string =>
 /** The Mandate section of an agent file, up to the next section. */
 const mandateSection = (text: string): string => text.split('\n## Mandate\n\n')[1]!.split('\n\n## ')[0]!;
 const FALLBACK =
-  "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these.";
+  "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.";
 
 it("falls back to the authored mandates that bind the profile's agent, as the guard judges a subagent (A-R8)", () => {
   // The reviewer subagent acts as the reviewer @agent (OD4): reviewer-docs binds it; demo-mandate and docs-mandate bind
@@ -148,8 +149,11 @@ it("falls back to the authored mandates that bind the profile's agent, as the gu
 });
 
 it('includes a participant-less mandate in the fallback, one group per mandate, and says when none binds (A-R8)', () => {
+  // A participant-less mandate with neither scope nor covers locates nowhere, so it governs no path the agent edits and
+  // is left out (A-RC4).
   const wide =
-    '\n@mandate workspace-wide\n  meaning\n    says "Everyone here."\n    answers "Who?"\n  governance\n    requires "None."\n  authority\n    scope [@workspace demo]\n    excluded-words [hook]\n';
+    '\n@mandate workspace-wide\n  meaning\n    says "Everyone here."\n    answers "Who?"\n  governance\n    requires "None."\n  authority\n    scope [@workspace demo]\n    excluded-words [hook]\n' +
+    '\n@mandate nowhere\n  meaning\n    says "Nowhere."\n    answers "Where?"\n  governance\n    requires "None."\n  authority\n    excluded-words [hook]\n';
   const { db, within } = fixture({ '.ia/src/composition.ia': unmandated(wide) });
   expect(mandateSection(claude(db, within)[0]!.text)).toBe(
     [
@@ -636,39 +640,66 @@ it('never writes authored text as a marker line or an open HTML comment, and kee
   expect(file!.text).toContain('\n- tone: &lt;!-- everything after this is hidden\n');
 });
 
-it("follows capability includes, once each and through a cycle, for the agent's tools (A-R9)", () => {
-  // note-reading includes note-indexing, which includes note-reading again: the cycle ends there. Only note-indexing
-  // allows read, so the profile's tools come through the include.
-  const included = [
-    '',
-    '@capability note-indexing',
-    '  meaning',
-    '    says "Indexes the notes it reads."',
-    '    answers "Which capability indexes notes?"',
-    '  composition',
-    '    includes [@capability note-reading]',
-    '  execution',
-    '    effects [read]',
-    '',
-  ].join('\n');
-  const { db, within } = fixture({
-      '.ia/src/composition.ia': composition(
-        (text) =>
-          text
-            .replace(
-              '    playbooks [@playbook note-review]\n',
-              '    playbooks [@playbook note-review]\n    includes [@capability note-indexing]\n',
-            )
-            .replace('  execution\n    effects [read]\n', '  execution\n    effects [write]\n') + included,
-      ),
-    }),
-    [file] = claude(db, within);
+it("takes the tools from the profile's capabilities, and reports a closure the composition compiler refuses (A-R9, A-RC5)", () => {
+  // note-reading (read) includes note-indexing (read): the compiler holds each capability's own effects as the ceiling of
+  // what it includes, so the profile's tools are its capabilities' own; the Tools section lists the whole closure.
+  const indexing = (effects: string, includes = '') =>
+    [
+      '',
+      '@capability note-indexing',
+      '  meaning',
+      '    says "Indexes the notes it reads."',
+      '    answers "Which capability indexes notes?"',
+      ...(includes === '' ? [] : ['  composition', `    includes [${includes}]`]),
+      '  execution',
+      `    effects [${effects}]`,
+      '',
+    ].join('\n');
+  const including = (text: string) =>
+    text.replace(
+      '    playbooks [@playbook note-review]\n',
+      '    playbooks [@playbook note-review]\n    includes [@capability note-indexing]\n',
+    );
+  const valid = fixture({ '.ia/src/composition.ia': composition((text) => including(text) + indexing('read')) }),
+    [file] = claude(valid.db, valid.within);
   expect(file!.text.split('\n').filter((line) => line.startsWith('tools: '))).toEqual(['tools: "Read, Glob, Grep"']);
   expect(file!.text.split('\n## Tools\n\n')[1]).toBe(
     [
-      `- \`${CAPABILITY}\`: operations \`authoring-system/binding/operation/read-note\`; effects write; host tools none`,
+      `- \`${CAPABILITY}\`: operations \`authoring-system/binding/operation/read-note\`; effects read; host tools Read, Glob, Grep`,
       '- `agent-composition-system/definition/capability/note-indexing`: operations none; effects read; host tools Read, Glob, Grep',
       '',
     ].join('\n'),
   );
+  // An inclusion cycle, and an included capability whose effects its includer does not declare, are refused by the
+  // compiler: the profile is reported, not rendered with tools the compiler would never give it.
+  for (const [extra, reason] of [
+    [indexing('read', '@capability note-reading'), 'its capabilities include one another in a cycle at'],
+    [indexing('read, write'), 'has effects (write) its includer'],
+  ] as const) {
+    const refused = fixture({ '.ia/src/composition.ia': composition((text) => including(text) + extra) });
+    const set = rendered(refused.db, refused.within);
+    expect(set.files, reason).toEqual([]);
+    expect(set.unsupported, reason).toEqual([
+      expect.objectContaining({ identity: PROFILE, word: 'agent-profile', reason: expect.stringContaining(reason) }),
+    ]);
+    expect(set.unsupported[0]!.reason).toContain('which the composition compiler refuses');
+  }
+});
+
+it('reports a value by its own text, and renders a ! before a span it opens, and a leading <, inertly (A-RC2, A-RC3)', () => {
+  const SAYS = 'says "Binds the reviewer to a bounded host contract under the demo mandate."';
+  const said = (says: string) =>
+    fixture({ '.ia/src/composition.ia': composition((text) => text.replace(SAYS, `says "${says}"`)) });
+  // A ! the rendering puts before an IA word's code span, and a leading < that would open an HTML block, are escaped.
+  const shout = said('Stop! @mandate first.'),
+    [loud] = claude(shout.db, shout.within);
+  expect(loud!.text.split('\n')).toContain('Stop&#33; `@mandate` first.');
+  const angle = said('<?php review the notes'),
+    [opened] = claude(angle.db, angle.within);
+  expect(opened!.text.split('\n')).toContain('&lt;?php review the notes');
+  // A lone backtick is the authored value's own unbalanced code span, reported as such.
+  const lone = said('Use ` alone.');
+  expect(rendered(lone.db, lone.within).unsupported).toEqual([
+    expect.objectContaining({ identity: PROFILE, reason: 'Use balanced single-line code spans or fenced code blocks' }),
+  ]);
 });

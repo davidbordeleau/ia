@@ -357,7 +357,6 @@ it('selects the skills of included capabilities, and only what its own profiles 
     '    answers "Which inner?"',
     '  composition',
     '    playbooks [@playbook included-review]',
-    '    includes [@capability outer]',
     '  execution',
     '    effects [read]',
     '',
@@ -396,7 +395,7 @@ it('selects the skills of included capabilities, and only what its own profiles 
   ].join('\n');
   const { db, within } = fixture({ '.ia/src/extra.ia': extra });
   const scribe = 'agent-composition-system/binding/agent-profile/scribe';
-  // outer includes inner (and inner outer, a cycle): the scribe selects inner's playbook through outer, and neither the
+  // outer includes inner: the scribe selects inner's playbook through outer, and neither the
   // fixture's reviewer, its playbook and hook, nor the unrelated playbook.
   expect(
     harnesses(generateDefinitions(db, within, 'claude')).find((row) => row.definition.name === 'scribe-only')!
@@ -419,6 +418,19 @@ it('selects the skills of included capabilities, and only what its own profiles 
       hooks: [],
     },
   });
+  // With inner including outer, a cycle the composition compiler refuses, the scribe renders no agent and selects no
+  // skill (A-RC5).
+  const cycle = fixture({
+    '.ia/src/extra.ia': extra.replace(
+      '    playbooks [@playbook included-review]\n',
+      '    playbooks [@playbook included-review]\n    includes [@capability outer]\n',
+    ),
+  });
+  expect(
+    harnesses(generateDefinitions(cycle.db, cycle.within, 'claude')).find(
+      (row) => row.definition.name === 'scribe-only',
+    )!.definition.registrations,
+  ).toEqual({ agents: [], skills: [], hooks: [] });
   // The fixture's own harness selects as before.
   expect(
     harnesses(generateDefinitions(db, within, 'claude')).find((row) => row.identity === HARNESS)!.definition

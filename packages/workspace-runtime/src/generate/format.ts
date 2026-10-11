@@ -96,7 +96,7 @@ export function perRecord(
 /**
  * A profile's capabilities and every capability they include, through `composition.includes`, each once, in first-reached
  * order; a reference no admitted `@capability` answers is left out, and a cycle ends where it meets a capability already
- * reached. The composition compiler reads the same closure.
+ * reached (`closureRefusal` says whether the composition compiler would refuse it).
  */
 export function capabilityClosure(
   roots: readonly CompiledValue[],
@@ -111,6 +111,43 @@ export function capabilityClosure(
   };
   for (const root of roots) visit(root);
   return [...reached.values()];
+}
+/**
+ * Why the composition compiler refuses a profile's capability closure, or undefined when it does not (review finding
+ * A-RC5): an inclusion cycle, or an included capability whose effects its includer does not declare (the compiler holds
+ * each capability to its own `execution.effects` as a ceiling over what it includes).
+ */
+export function closureRefusal(
+  roots: readonly CompiledValue[],
+  target: (value: CompiledValue) => Node | undefined,
+): string | undefined {
+  const done = new Set<string>(),
+    open = new Set<string>();
+  const visit = (node: Node): string | undefined => {
+    if (done.has(node.identity)) return undefined;
+    if (open.has(node.identity)) return `its capabilities include one another in a cycle at ${node.identity}`;
+    open.add(node.identity);
+    const own = new Set(textsAt(node, 'execution.effects'));
+    for (const value of valuesAt(node, 'composition.includes')) {
+      const child = target(value);
+      if (child === undefined || child.discriminator !== 'capability') continue;
+      const refused = visit(child);
+      if (refused !== undefined) return refused;
+      const exceeding = textsAt(child, 'execution.effects').filter((effect) => !own.has(effect));
+      if (exceeding.length > 0)
+        return `${child.identity} has effects (${exceeding.join(', ')}) its includer ${node.identity} does not declare`;
+    }
+    open.delete(node.identity);
+    done.add(node.identity);
+    return undefined;
+  };
+  for (const root of roots) {
+    const node = target(root);
+    if (node === undefined || node.discriminator !== 'capability') continue;
+    const refused = visit(node);
+    if (refused !== undefined) return refused;
+  }
+  return undefined;
 }
 
 // The field readers are runtime's (packet.ts on `./internal/packet`): one copy for the packet and the generators.
@@ -135,15 +172,30 @@ const CONTROLS = new RegExp(
  */
 const plain = (text: string): string => text.replace(CONTROLS, ' ');
 /** `text` on one line, as the packet writes an entry (runtime's `inline`), its controls made spaces. */
-export const inline = (text: string): string => packetInline(plain(text));
+export const inline = (text: string): string => packetInline(plain(authored(text)));
 /** `text` as one code span, as the packet writes one (runtime's `code`). */
 export const code = (text: string): string => packetCode(plain(text));
 /**
- * Authored free text for a Markdown body: on one line, each bare IA word token a code span as the packet writes it
- * (runtime's `prose`, review finding N1), and every `<!--` written `&lt;!--`, so no authored value opens an HTML comment
- * that hides what follows, or reads as a marker line (review findings N3 and N4).
+ * An authored value must itself be inert prose (projection-host's `inert`: no executable dynamic context such as
+ * `!\`cmd\``, no active HTML, no unbalanced code span or fence), so a record is reported for what its own text holds
+ * rather than for what rendering made of it (review finding A-RC2). IA-PROJECTION-FEATURE-UNAVAILABLE otherwise.
  */
-export const prose = (text: string): string => packetProse(plain(text)).replaceAll('<!--', '&lt;!--');
+function authored(text: string): string {
+  inert(text);
+  return text;
+}
+/**
+ * Authored free text for a Markdown body: on one line, each bare IA word token a code span as the packet writes it
+ * (runtime's `prose`, review finding N1); a `!` that a code span the rendering opened would follow is written `&#33;`,
+ * so no rendered span reads as dynamic context (A-RC2); every `<!--` is written `&lt;!--`, so no authored value opens an
+ * HTML comment that hides what follows or reads as a marker line (N3, N4); and a leading `<` is written `&lt;`, so no
+ * value opens an HTML block (A-RC3).
+ */
+export const prose = (text: string): string =>
+  packetProse(plain(authored(text)))
+    .replace(/!(\s*)`/g, '&#33;$1`')
+    .replaceAll('<!--', '&lt;!--')
+    .replace(/^</, '&lt;');
 /** A list's items, comma-separated, or `none`. */
 export const list = (items: readonly string[]): string => (items.length === 0 ? 'none' : items.join(', '));
 export const section = (heading: string, lines: readonly string[]): readonly string[] => [

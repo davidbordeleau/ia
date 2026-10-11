@@ -9,6 +9,7 @@ import { frozen } from '../resource-format.js';
 import {
   authoredOf,
   capabilityClosure,
+  closureRefusal,
   code,
   fieldsOf,
   inline,
@@ -29,12 +30,15 @@ import type { GeneratedSet } from './format.js';
  * generation-agent-profile; plan amendments C1, C5, C6 and C12). Each band-100 profile in the scope renders one claude
  * agent file, `.claude/agents/<profile name>.md`: YAML frontmatter naming the profile, describing it and listing the host
  * tools its capabilities allow, the packet's marker on its own line, then the profile's mandate bounds, voice, tools and
- * delegates, read from the records the profile's own fields reference. The capabilities are the profile's and every one
- * they include (`composition.includes`).
+ * delegates, read from the records the profile's own fields reference. The Tools section lists the profile's capabilities
+ * and every one they include (`composition.includes`); the frontmatter's tools are the profile's own capabilities'
+ * effects, which the composition compiler holds as the ceiling of what each includes (review finding A-RC5).
  *
  * A profile is not rendered, and is reported as an unsupported row naming it and the reason, when its name is not a
  * portable host name, when its capabilities allow no host tool (claude reads an agent with no tool list as one given every
- * tool, so only a file left unwritten grants nothing), or when its text is not inert prose. Codex renders none and reports
+ * tool, so only a file left unwritten grants nothing), when the compiler would refuse its capability closure (an
+ * inclusion cycle, or an included capability with effects its includer does not declare), or when its text, an authored
+ * value's own or as rendered, is not inert prose. Codex renders none and reports
  * each: a codex agent needs an entry in `.codex/config.toml`, which holds the owned MCP block (C12). A profile below band
  * 100, an installed or adopted base, renders nothing, and no system steward does, a steward being an `@agent` (design
  * §4); a workspace that authors public systems, as this repository does, renders their profiles. The bytes are a function
@@ -42,8 +46,10 @@ import type { GeneratedSet } from './format.js';
  *
  * The mandate bounds are the profile's own `composition.mandate`. A profile that names none falls back to the authored
  * mandates C1 says bind its `composition.agent` (review finding A-R8): the agent a subagent acts as for the edit guard and
- * the CLI's mandate profile (OD4), so the file states what they enforce. The fallback is resolved only for a rendered
- * profile that needs it, and a mandate C1 cannot read makes it unavailable, which the file says, never failing the render.
+ * the CLI's mandate profile (OD4), so the file states what they enforce; a participant-less mandate that states neither
+ * scope nor covers locates nowhere and is left out (A-RC4). The fallback is resolved only for a rendered profile that
+ * needs it, and a mandate C1 cannot read makes it unavailable, which the file says, never failing the render. A profile's
+ * own mandate that names another participant is rendered with a line saying the guard does not judge this agent by it.
  *
  * Nothing applies these files yet: milestone generation-binding task host-consumes-generated-set hands them to the one
  * projection writer.
@@ -100,15 +106,19 @@ export function generateAgentProfiles(reader: ReadHandle, within: string, host: 
     if (agent?.discriminator !== 'agent')
       return [`${intro} Fallback unavailable: its composition.agent is not an admitted @agent in this scope.`];
     try {
+      // A mandate that names no participant and neither scope nor covers locates nowhere, so it governs no path the
+      // agent edits: it is left out (review finding A-RC4).
       const binding = governingMandates(reader, within, { actor: agent.identity }).filter(
-        (mandate) => mandate.binds !== false,
+        (mandate) =>
+          mandate.binds !== false &&
+          (mandate.participant !== undefined || mandate.scope.length > 0 || (mandate.covers ?? []).length > 0),
       );
       if (binding.length === 0)
         return [
           `${intro} Fallback: no authored mandate binds its agent ${code(agent.identity)}; wherever a mandate governs, the edit guard and the CLI's mandate profile refuse it.`,
         ];
       return [
-        `${intro} Fallback: the authored mandates that bind its agent ${code(agent.identity)}, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these.`,
+        `${intro} Fallback: the authored mandates that bind its agent ${code(agent.identity)}, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.`,
         '',
         ...binding.flatMap((mandate) => mandateLines(nodes.get(mandate.identity)!, named)),
       ];
@@ -121,7 +131,17 @@ export function generateAgentProfiles(reader: ReadHandle, within: string, host: 
     const path = `.claude/agents/${safeName(profile.name)}.md`,
       roots = valuesAt(profile, 'composition.capabilities'),
       capabilities = capabilityClosure(roots, target),
-      tools = hostTools(capabilities.flatMap((capability) => textsAt(capability, 'execution.effects')));
+      refused = closureRefusal(roots, target);
+    // A closure the composition compiler refuses is reported; otherwise each capability's own effects are the ceiling of
+    // what it includes, so the profile's capabilities' own effects are its tools (review finding A-RC5).
+    if (refused !== undefined)
+      inputFailure(`${profile.identity} renders no agent: ${refused}, which the composition compiler refuses`);
+    const tools = hostTools(
+      roots.flatMap((capability) => {
+        const node = target(capability);
+        return node?.discriminator === 'capability' ? textsAt(node, 'execution.effects') : [];
+      }),
+    );
     if (tools.length === 0)
       inputFailure(
         `${profile.identity} renders no agent: its capabilities allow no host tool, and claude gives an agent with no tool list every tool`,
@@ -183,7 +203,7 @@ function agentFile(
         ? fallback(agentNode)
         : mandateNode === undefined
           ? [`- ${named(mandate)}: not admitted in this scope`]
-          : mandateLines(mandateNode, named),
+          : [...mandateLines(mandateNode, named), ...otherParticipant(mandateNode, agentNode, target)],
     ),
   );
 
@@ -244,4 +264,22 @@ function mandateLines(mandate: Node, named: (value: CompiledValue) => string): r
   for (const field of fieldsOf(mandate, 'execution'))
     if (field.key.startsWith('limit-')) fields.push(`${field.key} ${prose(nativeValue(field.value))}`);
   return [`- ${code(mandate.identity)}`, ...fields.map((line) => `  - ${line}`)];
+}
+
+/**
+ * The profile's own mandate names another participant than the profile's agent: its bounds are rendered as the plan says,
+ * and a nested line says the edit guard and the CLI's mandate profile do not judge this agent by it (review finding
+ * A-RC4).
+ */
+function otherParticipant(
+  mandate: Node,
+  agent: Node | undefined,
+  target: (value: CompiledValue) => Node | undefined,
+): readonly string[] {
+  const participant = valuesAt(mandate, 'authority.participant')[0],
+    bound = participant === undefined ? undefined : target(participant);
+  if (bound === undefined || agent === undefined || bound.identity === agent.identity) return [];
+  return [
+    `  - binds ${code(bound.identity)}, not this profile's agent ${code(agent.identity)}: the edit guard and the CLI's mandate profile judge the agent by the mandates that bind it`,
+  ];
 }

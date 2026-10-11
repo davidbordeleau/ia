@@ -9,7 +9,7 @@ import type {
   PacketHost,
 } from '@inventarch/runtime';
 import { frozen } from '../resource-format.js';
-import { authoredOf, capabilityClosure, knownHost, textsAt, valuesAt } from './format.js';
+import { authoredOf, capabilityClosure, closureRefusal, knownHost, textsAt, valuesAt } from './format.js';
 import type { GeneratedFile, UnsupportedRecord } from './format.js';
 import { generateAgentProfiles } from './agent-profile.js';
 import { generatePlaybookSkills } from './playbook.js';
@@ -105,7 +105,10 @@ function definitionsOf(
     for (const id of profiles) {
       const profile = nodes.get(id);
       if (profile === undefined) continue;
-      for (const capability of capabilityClosure(valuesAt(profile, 'composition.capabilities'), target))
+      // A closure the composition compiler refuses selects nothing (review finding A-RC5).
+      const roots = valuesAt(profile, 'composition.capabilities');
+      if (closureRefusal(roots, target) !== undefined) continue;
+      for (const capability of capabilityClosure(roots, target))
         for (const playbook of targets(capability, 'composition.playbooks')) selected.add(playbook);
     }
     for (const id of bindings) {

@@ -58,6 +58,7 @@ const PROFILE = 'agent-composition-system/binding/agent-profile/reviewer',
   PLAYBOOK = 'governance-system/definition/procedure/note-review',
   HOOK = 'hook-authoring-system/binding/hook/note-edits',
   RENAMED = 'hook-authoring-system/binding/hook/doc-edits';
+const RECEIPT_PATH = '.ia/distributions/hosts/claude-receipt.json';
 const SETTINGS = '.claude/settings.local.json',
   HOOK_STATE = '.ia/distributions/hosts/claude-hooks-workspace.json',
   PROJECTION = '.ia/distributions/hosts/claude-projection.json',
@@ -272,10 +273,17 @@ it('reports drift in a generated file and in a hook group, and names the way bac
   await apply(root, env);
   const original = read(root, SKILL);
   writeFileSync(resolve(root, SKILL), `${original}Edited by hand.\n`);
+  // The hand-edited skill is the one drift row, a fail naming its repair (H-N5).
   const drifted = await doctor(root, env);
-  expect(
-    drifted.checks.filter((check) => check.id.startsWith('projection-claude') && check.status !== 'ok'),
-  ).not.toEqual([]);
+  expect(drifted.checks.filter((check) => check.id.startsWith('projection-claude') && check.status !== 'ok')).toEqual([
+    {
+      id: `projection-claude:${SKILL}`,
+      title: 'Projection claude',
+      status: 'fail',
+      detail: `${SKILL} changed since the projection apply wrote it; move or delete it, then run the remedy`,
+      remedy: `ia host claude --root ${quote(root)} --apply`,
+    },
+  ]);
   writeFileSync(resolve(root, SKILL), original);
   expect((await doctor(root, env)).checks).toContainEqual(noDrift());
 
@@ -545,6 +553,8 @@ it("falls back to the mandates that bind the fixture profile's agent when the pr
   );
 });
 
+// Kept with its seam (review finding H-N5): generation reports every record it cannot render as an unsupported row, so
+// no workspace's records make generateHostSet itself refuse; the seam is the only way to pin the refusal's mapping.
 it('reports a generation refusal with its own code, naming ia validate, and writes nothing', async () => {
   const { root, env } = await composed();
   seams.refuse = new ProjectionError({ code: 'IA-PROJECTION-INPUT-INVALID', message: 'forced generation refusal' });
@@ -840,4 +850,60 @@ it('applies the host without registering hooks where disableAllHooks turns them 
       `Not registered: hooks are disabled by disableAllHooks in ${file}`,
     ]);
   }
+});
+
+it('reports a changed and a foreign hook group, an unregistered hook and a receipt from before generation (H-N4, H-N5)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  const row = async (id: string) => (await doctor(root, env)).checks.find((check) => check.id === id);
+  // A group changed by hand: a fail naming the removal, after the group itself is deleted.
+  const kept = settings(root),
+    changed = structuredClone(kept);
+  (changed.hooks!.PreToolUse![0]!.hooks[0] as unknown as Record<string, unknown>)['timeout'] = 99;
+  writeFileSync(resolve(root, SETTINGS), `${JSON.stringify(changed, null, 2)}\n`);
+  expect(await row(`projection-claude-hook:${HOOK}`)).toMatchObject({
+    status: 'fail',
+    detail: expect.stringContaining('changed since it was registered, or appears twice; delete only that group'),
+    remedy: `ia host claude --root ${quote(root)} --remove --apply`,
+  });
+  // A group naming another hook for this root, which no registration owns: a warning, left in place.
+  const foreign = structuredClone(kept),
+    other = 'hook-authoring-system/binding/hook/other-edits',
+    copy = structuredClone(foreign.hooks!.PreToolUse![0]!);
+  (copy.hooks[0] as unknown as { args: string[] }).args = [...copy.hooks[0]!.args.slice(0, -1), other];
+  foreign.hooks!.PreToolUse!.push(copy);
+  writeFileSync(resolve(root, SETTINGS), `${JSON.stringify(foreign, null, 2)}\n`);
+  expect(await row(`projection-claude-hook:${other}`)).toMatchObject({
+    status: 'warn',
+    detail: expect.stringContaining("which this workspace's registration does not own; it is left in place"),
+  });
+  writeFileSync(resolve(root, SETTINGS), `${JSON.stringify(kept, null, 2)}\n`);
+  // A receipt from before authored generation: outdated, never an error.
+  const written = JSON.parse(read(root, RECEIPT_PATH)) as Record<string, unknown>;
+  delete written['generated'];
+  writeFileSync(resolve(root, RECEIPT_PATH), `${JSON.stringify(written)}\n`);
+  expect(await row('projection-claude-generated')).toMatchObject({
+    status: 'warn',
+    detail: 'outdated: the receipt predates authored generation, and the records render 2 generated files',
+  });
+  await apply(root, env);
+  expect((await doctor(root, env)).checks).toContainEqual(noDrift());
+
+  // An authored hook ia project could not register: a warning whose remedy, run as named, registers it.
+  const unregistered = await composed();
+  const projected = await run(['project', 'claude', '--root', unregistered.root, '--apply', '--yes', '--json'], {
+    env: unregistered.env,
+  });
+  expect(projected.exitCode, projected.stdout).toBe(0);
+  const warning = (await doctor(unregistered.root, unregistered.env)).checks.find(
+    (check) => check.id === `projection-claude-hook:${HOOK}`,
+  );
+  expect(warning).toMatchObject({
+    status: 'warn',
+    detail: expect.stringContaining(`the authored @hook ${HOOK} guards nothing: Not registered`),
+    remedy: `ia host claude --root ${quote(unregistered.root)} --apply`,
+  });
+  await follow(warning!.remedy!, unregistered.env);
+  expect([...hookGroups(unregistered.root).keys()]).toEqual([HOOK]);
+  expect((await doctor(unregistered.root, unregistered.env)).checks).toContainEqual(noDrift());
 });

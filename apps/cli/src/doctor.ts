@@ -594,6 +594,19 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
             reregister,
           ),
     );
+  // An authored @hook the last apply could not register guards nothing (review finding H-N4): `ia host` registers it, or,
+  // where disableAllHooks turned hooks off, nothing does until that setting changes.
+  for (const row of receipt.unsupported ?? [])
+    if (row.word === 'hook')
+      checks.push(
+        installation(
+          `projection-${host}-hook:${row.identity}`,
+          title,
+          'warn',
+          commands.prose(host, `the authored @hook ${row.identity} guards nothing: ${row.reason}`),
+          row.reason.includes('disableAllHooks') ? null : commands.apply(host, `ia host ${host} --apply`),
+        ),
+      );
   try {
     const rendered = renderProjectionFor(root, host),
       current = rendered.receipt.packetDigest;

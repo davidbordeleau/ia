@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { isBuiltin } from 'node:module';
-import { basename, dirname, join, posix, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { isEntry } from '../entry/is-entry.mjs';
@@ -99,12 +99,22 @@ export function assertStaticPayloadCode(path, bytes) {
   if (/\.[cm]?js$/.test(path) && omittedTarget(bytes.toString('utf8')))
     throw Error('Static payload code reaches the omitted development capability: ' + path);
 }
+/** Whether `child` is `parent` or under it, compared as the platform's volumes compare names. */
+const under = (parent, child) => {
+  const key = (path) => (process.platform === 'win32' || process.platform === 'darwin' ? path.toLowerCase() : path);
+  const rest = relative(key(parent), key(child));
+  return rest === '' || (!rest.startsWith('..') && !isAbsolute(rest));
+};
 /**
  * Node's node_modules walk from the dependent's own directory. pnpm links every declared dependency, workspace or
  * store, into the dependent's node_modules (store packages see their dependencies as siblings), so no exports map
- * is consulted: some packages expose neither "." nor "./package.json".
+ * is consulted: some packages expose neither "." nor "./package.json". With a `ceiling` (review finding B-RC2, for an
+ * implementation's closure) the walk stays inside it: a dependency found only above the repository's own install is
+ * unavailable rather than shipped and imported from wherever an enclosing directory holds one.
  */
-function manifestDir(name, from) {
+function manifestDir(name, from, ceiling = null) {
+  if (ceiling !== null && !under(ceiling, from))
+    throw Error('Installed package outside the repository install: ' + name);
   for (let candidate = from; ; candidate = dirname(candidate)) {
     if (basename(candidate) !== 'node_modules') {
       // Resolve the dependency directory before its relative package links. Windows fixtures may
@@ -118,7 +128,8 @@ function manifestDir(name, from) {
         return dir;
       }
     }
-    if (dirname(candidate) === candidate) throw Error('Installed package manifest unavailable: ' + name);
+    if (dirname(candidate) === candidate || (ceiling !== null && !under(ceiling, dirname(candidate))))
+      throw Error('Installed package manifest unavailable: ' + name);
   }
 }
 /**
@@ -144,7 +155,7 @@ function repositoryPackageDir(name, repository) {
 export async function collectPayload(repository, implementations = IMPLEMENTATIONS) {
   const files = new Map(),
     packages = new Map();
-  const bundle = (dir) => {
+  const bundle = (dir, ceiling = null) => {
     const original = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')),
       metadata = staticCliManifest(original),
       name = metadata.name;
@@ -227,7 +238,7 @@ export async function collectPayload(repository, implementations = IMPLEMENTATIO
     };
     visit();
     for (const dependency of Object.keys(metadata.dependencies ?? {}).sort())
-      if (!EXCLUDED.has(dependency)) bundle(manifestDir(dependency, dir));
+      if (!EXCLUDED.has(dependency)) bundle(manifestDir(dependency, dir, ceiling), ceiling);
   };
   for (const root of ROOTS) bundle(resolve(repository, root));
   const located = implementations.map((implementation) => {
@@ -236,7 +247,8 @@ export async function collectPayload(repository, implementations = IMPLEMENTATIO
       return { ...implementation, dir, reason: `${implementation.package} is not installed in this repository` };
     if (statSync(join(dir, implementation.module), { throwIfNoEntry: false })?.isFile() !== true)
       return { ...implementation, dir, reason: `${implementation.package} has no built ${implementation.module}` };
-    bundle(dir);
+    // B-RC2: the closure resolves inside the repository install that holds the implementation package, never above it.
+    bundle(dir, dirname(realpathSync(join(repository, 'node_modules'))));
     return { ...implementation, dir, reason: null };
   });
   return {

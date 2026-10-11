@@ -519,6 +519,30 @@ it('never ships, or imports at build time, an implementation package found above
   expect(readFileSync(resolve(extract(archive), 'inventory.json'), 'utf8')).not.toContain('@acme/impl');
   expect(pin.files).toBeGreaterThan(0);
 });
+it('resolves an implementation closure inside the repository install, never from an enclosing node_modules (B-RC2)', async () => {
+  // The implementation is installed in the repository, but the package it depends on only in the enclosing directory.
+  const outer = realpathSync(mkdtempSync(join(tmpdir(), 'ia-host-payload-ceiling-'))),
+    candidate = join(outer, 'repo');
+  made.push(outer);
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(join(outer, path)), { recursive: true });
+    writeFileSync(join(outer, path), text);
+  };
+  mkdirSync(join(candidate, 'apps'), { recursive: true });
+  for (const app of ['cli', 'distribution', 'mcp-door', 'steward-hook'])
+    symlinkSync(join(repository, 'apps', app), join(candidate, 'apps', app), 'junction');
+  put(
+    'repo/node_modules/@acme/impl/package.json',
+    JSON.stringify({ name: '@acme/impl', version: '1.0.0', type: 'module', dependencies: { '@acme/outside': '1' } }),
+  );
+  put('repo/node_modules/@acme/impl/dist/read.js', 'export const catalog = () => ({ operations: {} });\n');
+  put('node_modules/@acme/outside/package.json', JSON.stringify({ name: '@acme/outside', version: '1.0.0' }));
+  await expect(
+    collectPayload(candidate, [
+      { id: 'acme-read-v1', package: '@acme/impl', module: 'dist/read.js', declaration: 'catalog' },
+    ]),
+  ).rejects.toThrow('Installed package manifest unavailable: @acme/outside');
+});
 it('lists an implementation unavailable when its module closure is incomplete or leaves its package closure, and refuses one that declares nothing (B-N2)', async () => {
   const files = (handler: string, extra: Record<string, string> = {}) =>
     new Map(

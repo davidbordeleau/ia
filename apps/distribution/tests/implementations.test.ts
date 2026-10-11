@@ -365,18 +365,36 @@ it('carries a catalog-declared revocation distinctly from an implementation that
   ).toThrow(code('IA-DIST-INPUT-INVALID'));
 });
 
+/**
+ * `payload()` materialized where an installation keeps it, `<home>/hosts/<release>`, with the trust that installation
+ * holds (review finding B2-R2): its IA home and the release it pins.
+ */
+function installed(options: Parameters<typeof payload>[0] = {}, home = temp()) {
+  const built = payload(options),
+    root = resolve(home, 'hosts', built.release);
+  // Copied, not renamed: a directory rename on Windows can be refused while the indexer still holds the new tree.
+  cpSync(built.root, root, { recursive: true });
+  return { ...built, root, home, trust: { home, release: built.release } };
+}
+/** Whether any payload verification since the last clear opened `directory` or anything under it. */
+const opened = (directory: string) =>
+  vi
+    .mocked(verifyHostCache)
+    .mock.calls.some(([path]) => resolve(path).toLowerCase().startsWith(resolve(directory).toLowerCase()));
+const RERUN = 'run "ia host claude --apply"';
+
 it('finds the catalog a host joined for binding, and says why there is none', () => {
   const root = temp(),
-    current = payload(),
-    old = payload({ catalog: false });
+    current = installed(),
+    old = installed({ catalog: false }, current.home);
   // No join receipt: an ia project-only workspace, or one registered before joins existed.
-  expect(joinedCatalog(root)).toEqual({
+  expect(joinedCatalog(root, current.trust)).toEqual({
     status: 'unavailable',
     reason: expect.stringContaining('no host has joined an installed-implementation catalog'),
   });
   registered(root, 'claude', current.root, current.release);
   joinHost(root, 'claude', REVISION);
-  const joined = joinedCatalog(root);
+  const joined = joinedCatalog(root, current.trust);
   expect(joined).toMatchObject({
     status: 'joined',
     consumer: 'claude',
@@ -388,23 +406,23 @@ it('finds the catalog a host joined for binding, and says why there is none', ()
     id: 'read-v1',
     status: 'available',
   });
-  // The registration moved to another payload without a new join: drifted, so nothing binds through it.
+  // The registration moved to another payload without a new join: not this installation's, so nothing binds through it.
   registered(root, 'claude', old.root, old.release);
-  expect(joinedCatalog(root)).toEqual({
+  expect(joinedCatalog(root, current.trust)).toEqual({
     status: 'unavailable',
-    reason: expect.stringContaining("host claude's join names release"),
+    reason: expect.stringContaining(`host claude is registered for release ${old.release.slice(0, 12)}`),
   });
   // Another current join is used instead, in consumer order.
   registered(root, 'codex', current.root, current.release);
   joinHost(root, 'codex', REVISION);
-  expect(joinedCatalog(root)).toMatchObject({ status: 'joined', consumer: 'codex' });
+  expect(joinedCatalog(root, current.trust)).toMatchObject({ status: 'joined', consumer: 'codex' });
   rmSync(resolve(root, '.ia/distributions/hosts/codex-workspace.json'));
-  expect(joinedCatalog(root)).toEqual({
+  expect(joinedCatalog(root, current.trust)).toEqual({
     status: 'unavailable',
     reason: expect.stringContaining('host codex joined a catalog but is no longer registered'),
   });
   put(root, JOINS, '{broken');
-  expect(joinedCatalog(root)).toEqual({
+  expect(joinedCatalog(root, current.trust)).toEqual({
     status: 'unavailable',
     reason: `${JOINS} cannot be read (IA-DB-SOURCE-UNAVAILABLE)`,
   });
@@ -412,21 +430,132 @@ it('finds the catalog a host joined for binding, and says why there is none', ()
 
 it('reports a joined payload whose handler bytes no longer match their pins as damaged, and a missing one as unavailable', () => {
   const root = temp(),
-    { root: cache, release } = payload();
+    { root: cache, release, trust } = installed();
   registered(root, 'claude', cache, release);
   joinHost(root, 'claude', REVISION);
   writeFileSync(resolve(cache, MODULE), readFileSync(resolve(cache, MODULE), 'utf8') + '// altered\n');
-  expect(joinedCatalog(root)).toEqual({
+  expect(joinedCatalog(root, trust)).toEqual({
     status: 'damaged',
     consumer: 'claude',
     release,
-    reason: expect.stringContaining('IA-DIST-INTEGRITY-MISMATCH'),
+    reason: 'IA-DIST-INTEGRITY-MISMATCH: Unexpected host payload',
   });
   rmSync(cache, { recursive: true });
-  expect(joinedCatalog(root)).toEqual({
+  expect(joinedCatalog(root, trust)).toEqual({
     status: 'unavailable',
-    reason: expect.stringContaining("host claude's payload catalog cannot be read"),
+    reason: expect.stringContaining(
+      `this installation's payload for host claude is not materialized in ${trust.home}; ${RERUN}`,
+    ),
   });
+});
+
+it('binds only through the payload this installation pins in its own IA home, and opens no other (B2-R2)', (context) => {
+  const genuine = installed();
+  // A self-consistent forged payload (another catalog, every pin recomputed) outside the IA home, registered and joined
+  // at its own release: never trusted, and never opened.
+  const forgedRoot = temp(),
+    forged = payload({ mutate: (row) => ({ ...row, handler: 'acme.forged.v1' }) });
+  registered(forgedRoot, 'claude', forged.root, forged.release);
+  joinHost(forgedRoot, 'claude', REVISION);
+  vi.mocked(verifyHostCache).mockClear();
+  expect(joinedCatalog(forgedRoot, genuine.trust)).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining(
+      `host claude is registered for release ${forged.release.slice(0, 12)}, not this installation's ${genuine.release.slice(0, 12)}; ${RERUN}`,
+    ),
+  });
+  expect(opened(forged.root)).toBe(false);
+  // The genuine release, but a copy of its payload inside the workspace: the registration names a path outside the IA
+  // home, so nothing is read from it.
+  const inRepo = temp(),
+    copy = resolve(inRepo, '.ia/work/payload');
+  cpSync(genuine.root, copy, { recursive: true });
+  registered(inRepo, 'claude', copy, genuine.release);
+  joinHost(inRepo, 'claude', REVISION);
+  vi.mocked(verifyHostCache).mockClear();
+  expect(joinedCatalog(inRepo, genuine.trust)).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining(
+      `host claude's registration names a payload outside this installation's IA home; ${RERUN}`,
+    ),
+  });
+  expect(opened(copy)).toBe(false);
+  // A stale registration: an earlier release materialized in the same IA home, which ia doctor reports as stale.
+  const stale = temp(),
+    earlier = installed({ mutate: (row) => ({ ...row, version: 2 }) }, genuine.home);
+  registered(stale, 'claude', earlier.root, earlier.release);
+  joinHost(stale, 'claude', REVISION);
+  vi.mocked(verifyHostCache).mockClear();
+  expect(joinedCatalog(stale, genuine.trust)).toMatchObject({
+    status: 'unavailable',
+    reason: expect.stringContaining(`registered for release ${earlier.release.slice(0, 12)}`),
+  });
+  expect(opened(earlier.root)).toBe(false);
+  // An installation that pins no payload trusts no join at all.
+  const own = temp();
+  registered(own, 'claude', genuine.root, genuine.release);
+  joinHost(own, 'claude', REVISION);
+  expect(joinedCatalog(own, genuine.trust)).toMatchObject({ status: 'joined', consumer: 'claude' });
+  expect(joinedCatalog(own, null)).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining('carries no host payload of its own'),
+  });
+  expect(() => joinedCatalog(own, { home: 'relative', release: genuine.release })).toThrow(
+    code('IA-DIST-INPUT-INVALID'),
+  );
+  // The genuine payload through a network path (the same directory on this machine): a path the workspace names is
+  // compared, never opened. Only where the administrative share answers.
+  const unc = `\\\\localhost\\${genuine.root.slice(0, 1)}$${genuine.root.slice(2)}`;
+  if (process.platform !== 'win32' || !existsSync(unc)) return context.skip();
+  registered(own, 'claude', unc, genuine.release);
+  vi.mocked(verifyHostCache).mockClear();
+  expect(joinedCatalog(own, genuine.trust)).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining('names a payload outside this installation'),
+  });
+  expect(vi.mocked(verifyHostCache).mock.calls.some(([path]) => path.startsWith('\\\\'))).toBe(false);
+});
+
+it('reports the trusted payload damaged whichever host joined it, in either consumer order (B2-N1)', () => {
+  for (const [trusted, other] of [
+    ['claude', 'codex'],
+    ['codex', 'claude'],
+  ] as const) {
+    const root = temp(),
+      genuine = installed(),
+      elsewhere = payload();
+    registered(root, trusted, genuine.root, genuine.release);
+    joinHost(root, trusted, REVISION);
+    registered(root, other, elsewhere.root, elsewhere.release);
+    joinHost(root, other, REVISION);
+    writeFileSync(resolve(genuine.root, MODULE), readFileSync(resolve(genuine.root, MODULE), 'utf8') + '// altered\n');
+    expect(joinedCatalog(root, genuine.trust), trusted).toEqual({
+      status: 'damaged',
+      consumer: trusted,
+      release: genuine.release,
+      reason: expect.stringContaining('IA-DIST-INTEGRITY-MISMATCH'),
+    });
+  }
+});
+
+it('reports a release.json that no longer hashes to its pin as damaged, parseable or not, naming the code once (B2-N2)', () => {
+  for (const change of [() => '{broken', (text: string) => `${text}\n`]) {
+    const root = temp(),
+      genuine = installed(),
+      path = resolve(genuine.root, 'release.json');
+    registered(root, 'claude', genuine.root, genuine.release);
+    joinHost(root, 'claude', REVISION);
+    writeFileSync(path, change(readFileSync(path, 'utf8')));
+    expect(() => readInstalledImplementations(genuine.root, genuine.release)).toThrow(
+      code('IA-DIST-INTEGRITY-MISMATCH'),
+    );
+    expect(joinedCatalog(root, genuine.trust)).toEqual({
+      status: 'damaged',
+      consumer: 'claude',
+      release: genuine.release,
+      reason: 'IA-DIST-INTEGRITY-MISMATCH: Host release differs from its pin',
+    });
+  }
 });
 
 it('records no join while another holder has the host lock, and checks for a pending journal under it (B-N4)', () => {

@@ -15,10 +15,16 @@
  * `ia-distribution validate` reports (`WorkspaceSession.bindings`). A revoked binding is an error and fails the run;
  * an unavailable one is never a pass. Computing them writes nothing and executes nothing (C23; milestone 7 runs
  * operations). With no `@execution-binding` record the human report is unchanged.
+ *
+ * Review finding B2-R2: a join binds only through this installation's own payload (`validationTrust`), the one its
+ * bundled pin names in the IA home it materializes payloads in; a registration of any other payload is unavailable.
  */
+import { readHostPin } from '@inventarch/distribution/host-home';
+import { installationTrust } from '@inventarch/distribution/implementations';
+import type { HostTrust } from '@inventarch/distribution/implementations';
 import type { ValidationBindings } from '@inventarch/distribution/services';
-import type { Context, Result } from './consumer.js';
-import { requireRoot } from './consumer.js';
+import type { Context, Host, Result } from './consumer.js';
+import { iaHomeOf, requireRoot } from './consumer.js';
 import type { Capabilities, ErrorElements, Field, SymbolName, Token } from './render.js';
 import {
   atom,
@@ -121,8 +127,24 @@ const bindingCounts = (bindings: ValidationBindings) => ({
 export const validationExit = (view: ValidationView): 0 | 1 =>
   countsOf(view.findings).errors === 0 && bindingCounts(view.bindings).revoked === 0 ? 0 : 1;
 
+/**
+ * The installation a validation trusts a join through (review finding B2-R2): the release this package's bundled host
+ * payload pin names, materialized in the IA home `env` resolves. Run from inside a host payload, whose copy of this
+ * package carries no pin, it is that payload (`installationTrust`). Null, so nothing binds, when there is neither or
+ * the IA home cannot be resolved.
+ */
+export function validationTrust(host: Pick<Host, 'env' | 'packageRoot'>): HostTrust | null {
+  let release: string;
+  try {
+    release = readHostPin(host.packageRoot).pin.release;
+  } catch {
+    return installationTrust();
+  }
+  const home = iaHomeOf(host.env);
+  return home === undefined ? null : { home, release };
+}
 /** Opens the workspace, reads its admission and closes it. The only part of this verb that touches a workspace. */
-export function collectValidation(root: string): ValidationView {
+export function collectValidation(root: string, trust: HostTrust | null): ValidationView {
   const session: Session = openSession(root);
   try {
     // The distribution's one validation service, which `ia-distribution validate` reports as well: admission's findings
@@ -136,7 +158,7 @@ export function collectValidation(root: string): ValidationView {
       records: admission.records,
       findings: admission.findings,
       checks: checkNames(session.reader.report.verdicts),
-      bindings: session.bindings(),
+      bindings: session.bindings(trust),
     };
   } finally {
     session.close();
@@ -359,7 +381,7 @@ export function renderValidation(view: ValidationView, options: ValidationOption
 
 export function runValidate(context: Context): Result {
   const { args, caps, json } = context;
-  const view = collectValidation(requireRoot(context));
+  const view = collectValidation(requireRoot(context), validationTrust(context.host));
   const options: ValidationOptions = {
     filters: args.positionals,
     severity: (args.value('severity') ?? 'warning') as Severity,

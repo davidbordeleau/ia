@@ -10,6 +10,7 @@ import {
 } from '@inventarch/workspace-runtime/projections';
 import { bytes, fail, portable, utf8, workspace } from './files.js';
 import { formatSource, openWorkspaceSession, writeWorkOutput } from './services.js';
+import { installationTrust } from './implementations.js';
 import { checkProjection, publishProjection, recoverProjection, removeProjection } from './publication.js';
 
 export const HELP = `ia-distribution <command> --root <absolute workspace>
@@ -83,7 +84,7 @@ export function run(argv: readonly string[]): { exitCode: number; result: unknow
       // The finding set `ia validate --json` reports, from the one service behind both (inert declarations included),
       // and the execution bindings it reports (C24): a revoked binding is an error, so it fails the run as a refusal does.
       const validation = session.validation(),
-        bindings = session.bindings();
+        bindings = session.bindings(installationTrust());
       return {
         exitCode:
           validation.status === 'refused' || bindings.results.some((binding) => binding.status === 'revoked') ? 1 : 0,

@@ -38,6 +38,7 @@ import { bytes, contained, createFile, fail, locate, object, portable, utf8, wor
 import { observeHosts } from './host-observe.js';
 import type { HostObservation, HostVerifier } from './host-observe.js';
 import { joinedCatalog } from './implementations.js';
+import type { HostTrust } from './implementations.js';
 
 export { createFile, json, replace, sha256, DistributionError } from './files.js';
 export { acquireArtifact } from './acquire.js';
@@ -414,9 +415,11 @@ export interface WorkspaceSession {
   /**
    * The execution bindings as a validation reports them (`ValidationBindings`). `ia validate` and `ia-distribution
    * validate` both report this one result. It reads the records, the join receipts, the host registration and the
-   * materialized payload, and writes nothing (C23); no implementation is loaded or executed.
+   * materialized payload, and writes nothing (C23); no implementation is loaded or executed. `trust` is the validating
+   * installation's IA home and pinned release (review finding B2-R2): only a join registered to exactly that payload
+   * binds, and with null nothing does.
    */
-  bindings(): ValidationBindings;
+  bindings(trust: HostTrust | null): ValidationBindings;
   close(): void;
 }
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -476,10 +479,10 @@ export function openWorkspaceSession(options: { readonly root: string }): Worksp
         ),
       };
     },
-    bindings: (): ValidationBindings => {
+    bindings: (trust: HostTrust | null): ValidationBindings => {
       const bindings = executionBindings(reader);
       if (bindings.length === 0) return { catalog: null, results: [] };
-      const joined = joinedCatalog(root);
+      const joined = joinedCatalog(root, trust);
       const catalog: BindingCatalog =
         joined.status === 'joined'
           ? { status: 'present', operations: joined.catalog.operations }

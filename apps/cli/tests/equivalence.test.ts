@@ -288,17 +288,25 @@ it('refuses the same bad input with the same service code on both entrypoints', 
   expect(existsSync(resolve(empty, '.ia/distributions'))).toBe(false);
 });
 
-/** Every entry under `roots`, with each file's size, modification time and digest: a write anywhere changes it. */
+/**
+ * Every entry under `roots` and each root itself, with each directory's modification time and each file's size,
+ * modification time and digest: a write anywhere changes it, and so does creating a root that was absent (review
+ * finding B2-N4: an IA home created empty, or a file created and removed again, still shows).
+ */
 function tree(...roots: string[]): Record<string, string> {
   const entries: Record<string, string> = {};
-  for (const top of roots)
-    for (const entry of readdirSync(top, { recursive: true, encoding: 'utf8' })) {
-      const path = resolve(top, entry),
-        stat = statSync(path);
-      entries[path] = stat.isDirectory()
-        ? 'directory'
-        : `${stat.size} ${stat.mtimeMs} ${createHash('sha256').update(readFileSync(path)).digest('hex')}`;
-    }
+  const describe = (path: string): string => {
+    const stat = statSync(path);
+    return stat.isDirectory()
+      ? `directory ${stat.mtimeMs}`
+      : `${stat.size} ${stat.mtimeMs} ${createHash('sha256').update(readFileSync(path)).digest('hex')}`;
+  };
+  for (const top of roots) {
+    entries[top] = existsSync(top) ? describe(top) : 'absent';
+    if (existsSync(top))
+      for (const entry of readdirSync(top, { recursive: true, encoding: 'utf8' }))
+        entries[resolve(top, entry)] = describe(resolve(top, entry));
+  }
   return entries;
 }
 /** Two authored execution bindings: one names the installed captured read, one an implementation no host ships. */
@@ -331,17 +339,21 @@ it('reports one Bindings section through ia validate --json and ia-distribution 
     env = { ...process.env, IA_HOME: home };
   expect((await spawned(MAIN, ['init', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
   writeFileSync(resolve(root, '.ia/src/bindings.ia'), BINDINGS);
+  // Review finding B2-R2: each validation trusts a join only through its own installation's payload. ia's is the one its
+  // bundled pin names in IA_HOME; ia-distribution's is the payload it runs from, as the payload's launcher runs it.
+  // Before any payload is materialized, the repository's own ia-distribution reports the same unjoined workspace.
+  let machineBinary = DISTRIBUTION;
   const both = async (exitCode: number, label: string) => {
-    const before = tree(root, ...(existsSync(home) ? [home] : []));
+    const before = tree(root, home);
     const consumer = result(
       await spawned(MAIN, ['validate', '--root', root, '--json'], env),
       'stdout',
       exitCode,
       label,
     );
-    const machine = result(await spawned(DISTRIBUTION, ['validate', '--root', root], env), 'stdout', exitCode, label);
+    const machine = result(await spawned(machineBinary, ['validate', '--root', root], env), 'stdout', exitCode, label);
     // Computing and reporting bindings writes nothing anywhere: not in the workspace, not in the IA home.
-    expect(tree(root, ...(existsSync(home) ? [home] : [])), label).toEqual(before);
+    expect(tree(root, home), label).toEqual(before);
     expect(consumer['bindings'], label).toEqual(machine['bindings']);
     const bindings = machine['bindings'] as { catalog: Record<string, unknown>; results: BindingRow[] };
     return {
@@ -355,6 +367,9 @@ it('reports one Bindings section through ia validate --json and ia-distribution 
     status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'unavailable' },
   });
   expect((await spawned(MAIN, ['host', 'claude', '--root', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  const state = resolve(root, '.ia/distributions/hosts/claude-workspace.json'),
+    registration = JSON.parse(readFileSync(state, 'utf8')) as { cache: string; release: string };
+  machineBinary = resolve(registration.cache, 'runtime/node_modules/@inventarch/distribution/dist/cli.js');
   // The host's payload ships the read handler, so its binding is bound; the missing implementation stays unavailable.
   const joined = await both(0, 'joined');
   expect(joined).toEqual({
@@ -381,5 +396,24 @@ it('reports one Bindings section through ia validate --json and ia-distribution 
     });
   } finally {
     writeFileSync(handler, original);
+  }
+  // A registration naming a copy of the payload inside the workspace, at the genuine release: neither validation
+  // trusts or opens it, so nothing binds (B2-R2).
+  const copy = resolve(root, '.ia/work/payload');
+  cpSync(registration.cache, copy, { recursive: true });
+  const genuine = readFileSync(state);
+  writeFileSync(state, JSON.stringify({ ...JSON.parse(genuine.toString('utf8')), cache: copy }));
+  try {
+    expect(await both(0, 'in-workspace payload')).toEqual({
+      catalog: {
+        status: 'unavailable',
+        reason: expect.stringContaining(
+          "host claude's registration names a payload outside this installation's IA home",
+        ),
+      },
+      status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'unavailable' },
+    });
+  } finally {
+    writeFileSync(state, genuine);
   }
 });

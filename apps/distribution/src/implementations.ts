@@ -1,4 +1,7 @@
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { pathKey } from '@inventarch/db';
 import { checkInstalledImplementations, decodeDistributionJson } from '@inventarch/db/distribution';
 import type {
   AvailableOperation,
@@ -13,6 +16,7 @@ import {
   saved,
   verifyHostCache,
 } from './host.js';
+import { hostPayloadPath } from './host-home.js';
 import type { WorkspaceHost } from './hosts.js';
 import { asWorkspaceHost } from './hosts.js';
 import { bytes, contained, fail, json, locate, object, replace, sha256, utf8, workspace } from './files.js';
@@ -144,9 +148,13 @@ export function readInstalledImplementations(
   verify: (directory: string) => ReturnType<typeof verifyHostCache> = verifyHostCache,
 ): InstalledCatalog {
   if (!HEX.test(release)) fail('INPUT-INVALID', 'Invalid host release pin');
+  // Review finding B2-N2: a release.json that does not hash to the pin is changed bytes, whether or not it still parses.
+  const root = workspace(directory),
+    pinned = bytes(root, 'release.json');
+  if (pinned !== null && sha256(pinned) !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
   // B-R1: never read a catalog from a payload that fails verification; an uninventoried module could be loaded in place
   // of a shipped one, inside a closure package or outside every one.
-  const verified = verify(workspace(directory));
+  const verified = verify(root);
   if (verified.release !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
   if (verified.format === 1)
     return { status: 'unavailable', release, reason: 'a v1 host payload carries no installed-implementation catalog' };
@@ -296,11 +304,37 @@ export type JoinedCatalog =
   | { readonly status: 'damaged'; readonly consumer: WorkspaceHost; readonly release: string; readonly reason: string };
 const failure = (error: unknown): { readonly code: string; readonly text: string } => {
   const code =
-    error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-      ? error.code
-      : 'unreadable';
-  return { code, text: `${code}: ${error instanceof Error ? error.message : String(error)}` };
+      error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+        ? error.code
+        : 'unreadable',
+    message = error instanceof Error ? error.message : String(error);
+  // A message that already opens with its code is not prefixed again.
+  return { code, text: message.startsWith(code) ? message : `${code}: ${message}` };
 };
+/**
+ * Review finding B2-R2: what a validating installation trusts, the IA home it materializes payloads in and the payload
+ * release it pins. A join binds only through a registration of exactly that payload, `<home>/hosts/<release>`; nothing a
+ * workspace names outside it is ever opened. Null when the running installation pins no payload, and then nothing binds.
+ */
+export interface HostTrust {
+  readonly home: string;
+  readonly release: string;
+}
+/**
+ * The trust of this distribution module's own installation: when it runs from inside a materialized host payload, as the
+ * payload's launcher runs `ia-distribution` (and `ia` itself, whose payload copy carries no bundled pin), the release
+ * that payload's directory is named for and the IA home holding it. Run from a package install or a checkout, it pins no
+ * payload: null. Nothing is verified here; `joinedCatalog` verifies the payload, release.json against this name first,
+ * before it reads a catalog from it.
+ */
+export function installationTrust(): HostTrust | null {
+  // <home>/hosts/<release>/runtime/node_modules/@inventarch/distribution/dist/implementations.js
+  const payload = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..'),
+    release = basename(payload);
+  return HEX.test(release) && basename(dirname(payload)) === 'hosts' && existsSync(resolve(payload, 'release.json'))
+    ? { home: dirname(dirname(payload)), release }
+    : null;
+}
 /**
  * Verification refusals that mean the payload holds other bytes, entries or paths than its pins vouch for: changed or
  * unlisted files, a link or junction, or more entries than a payload may hold. A missing file or payload is not damage.
@@ -308,16 +342,24 @@ const failure = (error: unknown): { readonly code: string; readonly text: string
 const DAMAGE = new Set(['IA-DIST-INTEGRITY-MISMATCH', 'IA-DIST-PATH-UNSAFE', 'IA-DIST-LIMIT-EXCEEDED']);
 
 /**
- * The catalog the workspace at `root` joined. Each join receipt is tried in consumer order: the consumer's registration
- * (`<host>-workspace.json`) must still name the joined release, and the catalog of the payload it names must read, with
- * its handler bytes checked (`readInstalledImplementations`), at the joined digest; the first join that holds is the
- * source. A payload that fails verification with changed or unlisted files, a link or exceeded limits is `damaged`, which binders report as revoked. With no
- * receipt, or none that still holds (an `ia project`-only workspace, a host registered by an earlier release, a drifted
- * join, a payload without a catalog or no longer materialized), the catalog is `unavailable`, with the reasons, so
- * nothing binds. Reads only: nothing is written, imported or executed.
+ * The catalog the workspace at `root` joined, as `trust` (the validating installation's IA home and pinned release)
+ * allows it. Only one payload is ever opened: `<home>/hosts/<release>`, the one this installation materializes; a join
+ * counts only when its consumer's registration (`<host>-workspace.json`) and the join itself name that release and the
+ * registration names that payload directory. A registration of another release, or of a payload anywhere else (another
+ * IA home, a directory inside the workspace, a network path), is not trusted and never opened: re-applying
+ * `ia host <host>` registers the installation's own payload. The payload is then read once, verified as
+ * `readInstalledImplementations` verifies it, and the first trusted join, in consumer order, whose catalog digest it
+ * carries is the source. A payload that fails verification with changed or unlisted files, a link or exceeded limits is
+ * `damaged`, which binders report as revoked, whichever trusted join names it (review finding B2-N1: every trusted join
+ * names the same payload, so the order of joins cannot decide it). With no trust, no receipt, or no trusted join that
+ * holds (an `ia project`-only workspace, a host registered by another release, a drifted join, a payload without a
+ * catalog or not materialized), the catalog is `unavailable`, with the reasons, so nothing binds. Reads only: nothing is
+ * written, imported or executed.
  */
-export function joinedCatalog(rootInput: string): JoinedCatalog {
+export function joinedCatalog(rootInput: string, trust: HostTrust | null): JoinedCatalog {
   const root = workspace(rootInput);
+  if (trust !== null && (!HEX.test(trust.release) || !isAbsolute(trust.home)))
+    fail('INPUT-INVALID', 'Invalid host trust');
   let joins: readonly ImplementationJoin[] | null;
   try {
     joins = readJoins(root);
@@ -330,10 +372,29 @@ export function joinedCatalog(rootInput: string): JoinedCatalog {
       reason:
         'no host has joined an installed-implementation catalog in this workspace; "ia host <host> --apply" records a join',
     };
+  if (trust === null)
+    return {
+      status: 'unavailable',
+      reason:
+        'this installation carries no host payload of its own (or cannot resolve its IA home), so it trusts no join; run the ia that registered the host',
+    };
+  // The one payload this installation trusts, opened only in its IA home; a workspace's own paths are never followed.
+  // `ia host` records the payload as verification resolved it, so its real path is one more spelling of the same entry.
+  const expected = hostPayloadPath(trust.home, trust.release),
+    materialized = existsSync(expected),
+    spellings = new Set([pathKey(resolve(expected))]);
+  if (materialized)
+    try {
+      spellings.add(pathKey(realpathSync(expected)));
+    } catch {
+      // The reader below refuses it with its own code.
+    }
+  let catalog: InstalledCatalog | { readonly status: 'damaged'; readonly reason: string } | undefined;
   const reasons: string[] = [];
   for (const join of joins) {
     const host = join.consumer,
-      path = `.ia/distributions/hosts/${host}-${HOST_REGISTRATION}.json`;
+      path = `.ia/distributions/hosts/${host}-${HOST_REGISTRATION}.json`,
+      rerun = `run "ia host ${host} --apply"`;
     let state: ReturnType<typeof saved>;
     try {
       state = locate(path, () => {
@@ -348,22 +409,35 @@ export function joinedCatalog(rootInput: string): JoinedCatalog {
       reasons.push(`host ${host} joined a catalog but is no longer registered`);
       continue;
     }
-    if (state.release !== join.release) {
+    if (state.release !== trust.release || join.release !== trust.release) {
       reasons.push(
-        `host ${host}'s join names release ${join.release.slice(0, 12)}, but its registration names ${state.release.slice(0, 12)}`,
+        `host ${host} is registered for release ${state.release.slice(0, 12)}, not this installation's ${trust.release.slice(0, 12)}; ${rerun}`,
       );
       continue;
     }
-    let catalog: InstalledCatalog;
-    try {
-      catalog = readInstalledImplementations(state.cache, state.release);
-    } catch (error) {
-      const read = failure(error);
-      if (DAMAGE.has(read.code))
-        return { status: 'damaged', consumer: host, release: state.release, reason: read.text };
-      reasons.push(`host ${host}'s payload catalog cannot be read (${read.text})`);
+    if (!materialized) {
+      reasons.push(`this installation's payload for host ${host} is not materialized in ${trust.home}; ${rerun}`);
       continue;
     }
+    if (!spellings.has(pathKey(resolve(state.cache)))) {
+      reasons.push(`host ${host}'s registration names a payload outside this installation's IA home; ${rerun}`);
+      continue;
+    }
+    if (catalog === undefined)
+      try {
+        catalog = readInstalledImplementations(expected, trust.release);
+      } catch (error) {
+        const read = failure(error);
+        catalog = DAMAGE.has(read.code)
+          ? { status: 'damaged', reason: read.text }
+          : {
+              status: 'unavailable',
+              release: trust.release,
+              reason: `its payload catalog cannot be read (${read.text})`,
+            };
+      }
+    if (catalog.status === 'damaged')
+      return { status: 'damaged', consumer: host, release: trust.release, reason: catalog.reason };
     if (catalog.status === 'unavailable') {
       reasons.push(`host ${host}'s payload carries no catalog: ${catalog.reason}`);
       continue;

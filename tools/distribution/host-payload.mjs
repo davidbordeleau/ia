@@ -24,7 +24,7 @@ export const EXCLUDED = new Set(['@modelcontextprotocol/client', '@inventarch/se
  * Plan amendments C16 and C24 (milestone generation-binding): the first-party installed operation implementations
  * whose executable handler bytes the payload ships, each a payload root beside ROOTS. Each names its implementation
  * id, the installed package that holds the handler, the handler's built module inside it and the module export that
- * declares it. The package is resolved from the repository's own dependencies and bundled with its declared
+ * declares it. The package is resolved from the repository's own node_modules, never an enclosing directory's, and bundled with its declared
  * dependency closure; the declaration is imported here, by the producer, and never by a host app
  * (tools/dependencies/check.ts). An implementation whose package or module is not there is listed as unavailable.
  */
@@ -102,10 +102,9 @@ export function assertStaticPayloadCode(path, bytes) {
 /**
  * Node's node_modules walk from the dependent's own directory. pnpm links every declared dependency, workspace or
  * store, into the dependent's node_modules (store packages see their dependencies as siblings), so no exports map
- * is consulted: some packages expose neither "." nor "./package.json". With `optional`, a package that is not
- * installed is null rather than an error.
+ * is consulted: some packages expose neither "." nor "./package.json".
  */
-function manifestDir(name, from, optional = false) {
+function manifestDir(name, from) {
   for (let candidate = from; ; candidate = dirname(candidate)) {
     if (basename(candidate) !== 'node_modules') {
       // Resolve the dependency directory before its relative package links. Windows fixtures may
@@ -119,11 +118,23 @@ function manifestDir(name, from, optional = false) {
         return dir;
       }
     }
-    if (dirname(candidate) === candidate) {
-      if (optional) return null;
-      throw Error('Installed package manifest unavailable: ' + name);
-    }
+    if (dirname(candidate) === candidate) throw Error('Installed package manifest unavailable: ' + name);
   }
+}
+/**
+ * Review finding B-N3: an implementation package as the repository itself installs it, in `<repository>/node_modules`
+ * and nowhere above, or null. Walking up as `manifestDir` does would ship, and import at build time, whatever package of
+ * that name an enclosing directory happens to hold.
+ */
+function repositoryPackageDir(name, repository) {
+  const modules = join(repository, 'node_modules');
+  if (!existsSync(modules)) return null;
+  const path = join(realpathSync(modules), name, 'package.json');
+  if (!existsSync(path)) return null;
+  const dir = realpathSync(dirname(path));
+  if (JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name !== name)
+    throw Error('Installed package manifest names another package: ' + name);
+  return dir;
 }
 /**
  * The assembler's copy filter (tools/distribution/assemble-host.mjs:79) plus the payload's self-exclusion. Each of
@@ -220,8 +231,9 @@ export async function collectPayload(repository, implementations = IMPLEMENTATIO
   };
   for (const root of ROOTS) bundle(resolve(repository, root));
   const located = implementations.map((implementation) => {
-    const dir = manifestDir(implementation.package, repository, true);
-    if (dir === null) return { ...implementation, dir, reason: `${implementation.package} is not installed` };
+    const dir = repositoryPackageDir(implementation.package, repository);
+    if (dir === null)
+      return { ...implementation, dir, reason: `${implementation.package} is not installed in this repository` };
     if (statSync(join(dir, implementation.module), { throwIfNoEntry: false })?.isFile() !== true)
       return { ...implementation, dir, reason: `${implementation.package} has no built ${implementation.module}` };
     bundle(dir);

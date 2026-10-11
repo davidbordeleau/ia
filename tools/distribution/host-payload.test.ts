@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   cpSync,
+  existsSync,
   readFileSync,
   mkdtempSync,
   realpathSync,
@@ -296,7 +297,7 @@ it('lists the read handler unavailable for a staged candidate whose dependencies
     {
       id: 'captured-source-read-v1',
       status: 'unavailable',
-      reason: '@inventarch/agent-composition-system is not installed',
+      reason: '@inventarch/agent-composition-system is not installed in this repository',
     },
   ]);
   const root = extract(payload.archive);
@@ -481,4 +482,39 @@ it('keeps the catalog producer-only: no host app imports the composition package
     expect(
       moduleProblem({ name, path: repository, app: true }, 'src/x.ts', '@inventarch/agent-composition-system'),
     ).toBe(`${name} may not depend on @inventarch/agent-composition-system`);
+});
+it('never ships, or imports at build time, an implementation package found above the repository (B-N3)', async () => {
+  // A repository whose own node_modules lacks the implementation package, inside a directory whose node_modules has it.
+  const outer = realpathSync(mkdtempSync(join(tmpdir(), 'ia-host-payload-outer-'))),
+    fake = join(outer, 'repo'),
+    marker = join(outer, 'imported-at-build.txt');
+  made.push(outer);
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, text);
+  };
+  for (const name of ['cli', 'mcp-door', 'steward-hook'])
+    put(join(fake, 'apps', name, 'package.json'), JSON.stringify({ name: `fake-${name}`, version: '0.0.0' }));
+  // The real distribution app, as the staged private candidate links it, so its built modules resolve their own imports.
+  symlinkSync(join(repository, 'apps/distribution'), join(fake, 'apps/distribution'), 'junction');
+  // Its own node_modules is the workspace's, which holds no @acme/impl; only the enclosing directory's does.
+  symlinkSync(join(repository, 'node_modules'), join(fake, 'node_modules'), 'junction');
+  put(
+    join(outer, 'node_modules/@acme/impl/package.json'),
+    JSON.stringify({ name: '@acme/impl', version: '1.0.0', type: 'module' }),
+  );
+  put(
+    join(outer, 'node_modules/@acme/impl/dist/read.js'),
+    `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'imported');\nexport const catalog = () => ({ operations: {} });\n`,
+  );
+  const implementations = [
+    { id: 'acme-read-v1', package: '@acme/impl', module: 'dist/read.js', declaration: 'catalog' },
+  ];
+  const { catalog, archive, pin } = await generateHostPayload({ repository: fake, write: false, implementations });
+  expect(catalog.operations).toEqual([
+    { id: 'acme-read-v1', status: 'unavailable', reason: '@acme/impl is not installed in this repository' },
+  ]);
+  expect(existsSync(marker)).toBe(false);
+  expect(readFileSync(resolve(extract(archive), 'inventory.json'), 'utf8')).not.toContain('@acme/impl');
+  expect(pin.files).toBeGreaterThan(0);
 });

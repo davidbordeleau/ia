@@ -16,9 +16,10 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { json, sha256 } from '../src/files.js';
 import { acquireHostRegistrationLock, verifyHostCache } from '../src/host.js';
+import { hostVerifier, observeHosts } from '../src/host-observe.js';
 import {
   installedImplementationsValue,
   joinedCatalog,
@@ -28,6 +29,9 @@ import {
   readInstalledImplementations,
   readJoins,
 } from '../src/implementations.js';
+
+// Spies that keep the real behaviour, so a test can count how often a payload is verified.
+vi.mock('../src/host.js', { spy: true });
 
 const roots: string[] = [];
 const temp = () => {
@@ -447,4 +451,24 @@ it('records no join while another holder has the host lock, and checks for a pen
     held();
   }
   expect(readFileSync(resolve(root, JOINS), 'utf8')).toBe(before);
+});
+
+it('verifies a payload once for every read of one report that shares a verifier (B-N7)', () => {
+  const root = temp(),
+    { root: cache, release } = payload();
+  registered(root, 'claude', cache, release);
+  const verify = hostVerifier();
+  vi.mocked(verifyHostCache).mockClear();
+  // The host row's observation, the catalog row and a join row, as ia doctor reads them.
+  expect(observeHosts(root, release, verify)).toHaveLength(1);
+  expect(readInstalledImplementations(cache, release, verify).status).toBe('present');
+  expect(readInstalledImplementations(cache, release, verify).status).toBe('present');
+  expect(vi.mocked(verifyHostCache)).toHaveBeenCalledTimes(1);
+  // A failure is kept too: a damaged payload is scanned once, and every read of it refuses.
+  writeFileSync(resolve(cache, MODULE), readFileSync(resolve(cache, MODULE), 'utf8') + '// altered\n');
+  const again = hostVerifier();
+  vi.mocked(verifyHostCache).mockClear();
+  for (let read = 0; read < 2; read++)
+    expect(() => readInstalledImplementations(cache, release, again)).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
+  expect(vi.mocked(verifyHostCache)).toHaveBeenCalledTimes(1);
 });

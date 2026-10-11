@@ -36,7 +36,7 @@ import type { PackedDistribution } from './snapshot.js';
 import type { ReleaseCandidate } from './resolve.js';
 import { bytes, contained, createFile, fail, locate, object, portable, utf8, workspace } from './files.js';
 import { observeHosts } from './host-observe.js';
-import type { HostObservation } from './host-observe.js';
+import type { HostObservation, HostVerifier } from './host-observe.js';
 import { joinedCatalog } from './implementations.js';
 
 export { createFile, json, replace, sha256, DistributionError } from './files.js';
@@ -132,10 +132,13 @@ export function readInstalledState(options: {
   readonly root: string;
   readonly hosts?: boolean;
   readonly hostRelease?: string | null;
+  /** The verification the caller shares across its report (`hostVerifier`); a fresh memo by default. */
+  readonly verify?: HostVerifier;
 }): InstalledState {
   const root = workspace(options.root),
     installed = readInstalledGeneration(root);
-  const hosts = options.hosts === true ? { hosts: observeHosts(root, options.hostRelease ?? null) } : {};
+  const hosts =
+    options.hosts === true ? { hosts: observeHosts(root, options.hostRelease ?? null, options.verify) } : {};
   return installed
     ? { status: 'installed', pointer: installed.pointer, lock: installed.lock, inputs: installed.inputs, ...hosts }
     : { status: 'uninstalled', ...hosts };

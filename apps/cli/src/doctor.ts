@@ -55,7 +55,6 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathKey, within } from '@inventarch/db';
 import { decodeDistributionJson, INSTALL_PATHS } from '@inventarch/db/distribution';
 import type { DistributionLock } from '@inventarch/db/distribution';
-import { verifyHostCache } from '@inventarch/distribution/host';
 import { hostPayloadPath, legacyHostHome } from '@inventarch/distribution/host-home';
 import { resolveIaHome } from '@inventarch/distribution/ia-home';
 import type {
@@ -69,6 +68,8 @@ import {
   readInstalledImplementations,
   readJoins,
 } from '@inventarch/distribution/implementations';
+import { hostVerifier } from '@inventarch/distribution/host-observe';
+import type { HostVerifier } from '@inventarch/distribution/host-observe';
 import { observeProjection } from '@inventarch/distribution/projection';
 import { registryChooser, registryLocation } from '@inventarch/distribution/registry';
 import type { HostObservation } from '@inventarch/distribution/services';
@@ -389,10 +390,10 @@ function parses(root: string, path: string): boolean {
  * `launcher-unverified` covers two different facts, told apart here by verifying once more: a payload that fails
  * verification, and one that verifies as another release than the state recorded. Only a stale row pays for it.
  */
-function unverified(cache: string | null, recorded: string | null): string {
+function unverified(cache: string | null, recorded: string | null, verify: HostVerifier): string {
   if (cache === null) return 'the payload fails verification';
   try {
-    const found = verifyHostCache(cache).release;
+    const found = verify(cache).release;
     return found === recorded
       ? `the payload at ${cache} did not verify when observed`
       : `the payload at ${cache} verifies, but as release ${short(found)} rather than the recorded ${short(recorded)}`;
@@ -447,7 +448,7 @@ function repairOf(root: string, observed: HostObservation): string {
 }
 
 /** A stale host: each reason as a fact, then the repair that works first, where the remedy alone would refuse. */
-function staleDetail(root: string, observed: HostObservation, pinned: Pinned): string {
+function staleDetail(root: string, observed: HostObservation, pinned: Pinned, verify: HostVerifier): string {
   const facts = observed.reasons.map((reason): string => {
     switch (reason) {
       case 'release':
@@ -455,7 +456,7 @@ function staleDetail(root: string, observed: HostObservation, pinned: Pinned): s
       case 'launcher-missing':
         return `launcher ${observed.launcher} is missing`;
       case 'launcher-unverified':
-        return unverified(observed.cache, observed.release);
+        return unverified(observed.cache, observed.release, verify);
       case 'mcp-modified':
         return `${MCP_PATH[observed.host]} does not hold the ia-workspace entry ia host writes for this registration`;
       case 'guard-modified':
@@ -476,7 +477,13 @@ function staleDetail(root: string, observed: HostObservation, pinned: Pinned): s
   return `stale (${observed.reasons.join(', ')}): ${facts.join('; ')}.${repair === '' ? '' : ` ${repair}`}`;
 }
 
-function hostRow(root: string, observed: HostObservation, pinned: Pinned, commands: Commands): Check {
+function hostRow(
+  root: string,
+  observed: HostObservation,
+  pinned: Pinned,
+  commands: Commands,
+  verify: HostVerifier,
+): Check {
   const host = observed.host;
   // Written is all doctor can know: it never starts a server, so it never says one answered (spec §7).
   if (observed.status === 'registered')
@@ -487,7 +494,7 @@ function hostRow(root: string, observed: HostObservation, pinned: Pinned, comman
       `registered (${observed.elements.join(', ')}); written; not observed answering; cache ${observed.cache}`,
       null,
     );
-  const detail = commands.prose(host, staleDetail(root, observed, pinned));
+  const detail = commands.prose(host, staleDetail(root, observed, pinned, verify));
   return installation(`host-${host}`, `Host ${host}`, 'fail', detail, commands.apply(host));
 }
 
@@ -641,6 +648,7 @@ function hostRows(
   observed: readonly HostObservation[],
   pinned: Pinned,
   commands: Commands,
+  verify: HostVerifier,
 ): readonly Check[] {
   const projected = projectedHosts(root)
     .filter((host) => !observed.some((row) => row.host === host))
@@ -654,7 +662,7 @@ function hostRows(
   }
   return [
     ...observed.flatMap((host) => [
-      hostRow(root, host, pinned, commands),
+      hostRow(root, host, pinned, commands, verify),
       ...(host.elements.includes('projection') ? projectionRows(root, host.host, commands) : []),
     ]),
     ...projected,
@@ -696,15 +704,18 @@ function movedRows(request: DoctorRequest, observed: readonly HostObservation[],
 type CatalogRead =
   | { readonly ok: true; readonly value: InstalledCatalog }
   | { readonly ok: false; readonly error: unknown };
-/** Reads each payload's catalog once per report: the catalog row and a join row usually name the same payload. */
-function catalogReader(): (directory: string, release: string) => CatalogRead {
+/**
+ * Reads each payload's catalog once per report: the catalog row and a join row usually name the same payload, and the
+ * payload is verified through `verify`, the one verification the host rows share (review finding B-N7).
+ */
+function catalogReader(verify: HostVerifier): (directory: string, release: string) => CatalogRead {
   const seen = new Map<string, CatalogRead>();
   return (directory, release) => {
     const key = `${release}\u0000${directory}`;
     let read = seen.get(key);
     if (read === undefined) {
       try {
-        read = { ok: true, value: readInstalledImplementations(directory, release) };
+        read = { ok: true, value: readInstalledImplementations(directory, release, verify) };
       } catch (error) {
         read = { ok: false, error };
       }
@@ -972,6 +983,8 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
   });
   const pending = usable && existsSync(resolve(root, INSTALL_PATHS.pending));
   const pinned = pinnedRelease(request.packageRoot);
+  // One verification per payload directory for the whole report: host, catalog and join rows share it (B-N7).
+  const verify = hostVerifier();
   // The observed hosts, or the code that kept the installed state from being read; undefined until it is read.
   let observed: readonly HostObservation[] | string | undefined;
   const unchecked = (id: string, section: Section, title: string, why: string): Check => ({
@@ -1024,7 +1037,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
     else {
       try {
         // Spec §7: hosts are observed against this installation's pin; without one, the release comparison is skipped.
-        const installed = readInstalledState({ root, hosts: true, hostRelease: pinned.release });
+        const installed = readInstalledState({ root, hosts: true, hostRelease: pinned.release, verify });
         observed = installed.hosts ?? [];
         checks.push({
           id: 'generation',
@@ -1087,12 +1100,12 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
   else if (observed === undefined || typeof observed === 'string')
     checks.push(unchecked('host', 'Installation', 'Host', observed ?? 'the installed state was not read'));
   else {
-    const read = catalogReader();
+    const read = catalogReader(verify);
     checks.push(
       payloadRow(request, pinned),
       catalogRow(request, pinned, read, observed, commandsFor(supplied)),
       ...hostTransactionRows(root),
-      ...hostRows(root, observed, pinned, commandsFor(supplied)),
+      ...hostRows(root, observed, pinned, commandsFor(supplied), verify),
       ...joinRows(root, observed, read, commandsFor(supplied)),
       ...movedRows(request, observed, commandsFor(supplied)),
     );

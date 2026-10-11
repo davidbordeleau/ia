@@ -138,11 +138,15 @@ function shipped(operation: AvailableOperation, inventory: ReadonlyMap<string, L
  * IA-DIST-INTEGRITY-MISMATCH; a link is IA-DIST-PATH-UNSAFE; malformed metadata is IA-DIST-INPUT-INVALID. Nothing is
  * written, imported or executed.
  */
-export function readInstalledImplementations(directory: string, release: string): InstalledCatalog {
+export function readInstalledImplementations(
+  directory: string,
+  release: string,
+  verify: (directory: string) => ReturnType<typeof verifyHostCache> = verifyHostCache,
+): InstalledCatalog {
   if (!HEX.test(release)) fail('INPUT-INVALID', 'Invalid host release pin');
   // B-R1: never read a catalog from a payload that fails verification; an uninventoried module could be loaded in place
   // of a shipped one, inside a closure package or outside every one.
-  const verified = verifyHostCache(workspace(directory));
+  const verified = verify(workspace(directory));
   if (verified.release !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
   if (verified.format === 1)
     return { status: 'unavailable', release, reason: 'a v1 host payload carries no installed-implementation catalog' };

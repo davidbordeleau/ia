@@ -269,6 +269,13 @@ export function gateMode(context: Context, root: string, mode: Mode): Profile {
  * PowerShell or cmd, inside the double quotes `quote()` adds for a space.
  */
 const INERT = /^[A-Za-z0-9@+=:,./_~#\- ]*$/;
+/**
+ * Review C2-R8: a token as a printed command spells it. One with a space, or one opening a comment (`#`), a PowerShell
+ * splat (`@`) or a tilde expansion (`~`), is double-quoted, which keeps those literal in sh, PowerShell and cmd; INERT has
+ * already kept every character double quotes leave live out of it. The quotes are JSON's, as `quote()` spells every
+ * printed argument, so the command parses as design row 27's other commands do.
+ */
+const spelled = (token: string): string => (/^[#@~]/.test(token) ? JSON.stringify(token) : quote(token));
 /** The word a preview or author form names: a new record's word, or the owned record's `@word` or identity facet. */
 function wordOf(args: Context['args']): string | undefined {
   const first = args.positionals[0] ?? '';
@@ -281,7 +288,8 @@ function wordOf(args: Context['args']): string | undefined {
  * Review C-R2: a refusal of `ia preview` or `ia author`, or a mandate refusal of any command, whose next command would
  * repeat a value holding shell syntax (`$(...)`, a backtick, `%`, a quote, `;` and the like) names an inert command in its
  * place: the word's preview, keeping an `--actor` the command named, or else the repository's position. The `--root` value
- * is the invocation's own and is repeated as every command repeats it.
+ * is the invocation's own and is repeated as every command repeats it: only that value, as the option before any `--`, is
+ * exempt (review C2-R8). Every token the command keeps is spelled by `spelled`, so a bare `#`, `@` or `~` token is quoted.
  */
 export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | 'args'>): Refusal {
   const verb = context.command.name;
@@ -295,11 +303,26 @@ export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | '
   const argv = [...match[1]!.matchAll(ARGUMENT)].map((token) =>
     token[0].startsWith('"') ? (JSON.parse(token[0]) as string) : token[0],
   );
-  if (argv.every((arg, index) => argv[index - 1] === '--root' || INERT.test(arg))) return refusal;
   const supplied = context.args.value('root'),
-    rooted = supplied === undefined ? '' : ` --root ${quote(supplied)}`,
+    end = argv.indexOf('--'),
+    own = (index: number): boolean =>
+      supplied !== undefined && argv[index - 1] === '--root' && (end === -1 || index < end) && argv[index] === supplied;
+  if (argv.every((arg, index) => own(index) || INERT.test(arg))) {
+    const command = argv.map((arg, index) => (own(index) ? quote(arg) : spelled(arg))).join(' ');
+    return command === match[1]
+      ? refusal
+      : new Refusal(
+          refusal.code,
+          refusal.message,
+          refusal.exit,
+          refusal.where,
+          refusal.next.replace(match[0], `"${command}"`),
+          refusal.at,
+        );
+  }
+  const rooted = supplied === undefined ? '' : ` --root ${quote(supplied)}`,
     at = argv.indexOf('--actor'),
-    actor = at !== -1 && INERT.test(argv[at + 1] ?? '-') ? ` --actor ${quote(argv[at + 1]!)}` : '',
+    actor = at !== -1 && INERT.test(argv[at + 1] ?? '-') ? ` --actor ${spelled(argv[at + 1]!)}` : '',
     word = verb === 'preview' || verb === 'author' ? wordOf(context.args) : undefined;
   return new Refusal(
     refusal.code,

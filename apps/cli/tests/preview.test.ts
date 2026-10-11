@@ -671,6 +671,31 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
       profile: { actor: participant, by: 'participant' },
     });
   });
+  it('exempts only the real --root value and quotes a bare #, @ or ~ token (review C2-R8)', async () => {
+    const { inertNext } = await import('../src/profile.js');
+    const { Refusal } = await import('../src/consumer.js');
+    const { parseArguments } = await import('../src/args.js');
+    const { findCommand } = await import('../src/commands.js');
+    const command = findCommand('preview')!,
+      args = parseArguments(['task', '--root', 'C:/ws'], command.grammar);
+    const nextOf = (next: string): string =>
+      inertNext(new Refusal('IA-CLI-EDIT-INVALID', 'refused', 1, null, `Run "${next}" again.`), { command, args })
+        .next!;
+    const FALLBACK = ['preview', 'task', '--root', 'C:/ws'];
+    // A `--root` after `--` is a positional, and a --root value other than the invocation's is no exemption.
+    expect(nextArgv(nextOf('ia preview task -- --root $(id) --root C:/ws'))).toEqual(FALLBACK);
+    expect(nextArgv(nextOf('ia preview task --root $(id)'))).toEqual(FALLBACK);
+    // A value with a space is quoted, but `$()` stays live in double quotes, so it is never repeated.
+    expect(nextArgv(nextOf('ia preview task "a $(id)" --root C:/ws'))).toEqual(FALLBACK);
+    // A bare token opening a comment, a PowerShell splat or a tilde expansion is repeated quoted.
+    for (const token of ['#x', '@milestone', '~/x']) {
+      const next = nextOf(`ia preview task ${token} --root C:/ws`);
+      expect(next, token).toBe(`Run "ia preview task ${JSON.stringify(token)} --root C:/ws" again.`);
+      expect(nextArgv(next)).toEqual(['preview', 'task', token, '--root', 'C:/ws']);
+    }
+    // The invocation's own --root value is repeated as every command repeats it.
+    expect(nextOf('ia preview task m-1 --root C:/ws')).toBe('Run "ia preview task m-1 --root C:/ws" again.');
+  });
   it('escapes terminal controls from caller input in human refusals', async () => {
     const root = workspace();
     const esc = String.fromCharCode(0x1b),

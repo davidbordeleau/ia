@@ -1,11 +1,12 @@
 import type { ReadHandle } from '@inventarch/db';
 import type { Node } from '@inventarch/graph';
-import type { CompiledField, CompiledRecord, CompiledValue } from '@inventarch/language';
+import type { CompiledValue } from '@inventarch/language';
 import { PACKET_MARKER } from '@inventarch/runtime';
 import type { PacketHost } from '@inventarch/runtime';
 import { inputFailure } from '../projection-format.js';
 import { claudeProseCatalog, nativeValue, PROSE_EFFECT_TOOLS } from '../projection-host.js';
 import { frozen } from '../resource-format.js';
+import { fieldsOf, stated, textsAt, valuesAt } from '../record-fields.js';
 
 /**
  * Generation of host agent files from authored `@agent-profile` records (milestone generation-binding, task
@@ -44,27 +45,8 @@ const CLAUDE_TOOLS: ReadonlyMap<string, string> = new Map(
   claudeProseCatalog('0'.repeat(64)).tools.map((tool) => [tool.id, tool.name]),
 );
 
-// The field readers and the markup helpers mirror runtime's private ones (packet.ts's `fieldsAt`, `valuesAt`, `textsAt`
-// and `stated`; packet-host.ts's `inline` and `code`), which runtime does not export: a fix to either copy belongs in
-// both.
-/** The unconditional fields of `record`'s `section`, in authored order. */
-const fieldsOf = (record: CompiledRecord, section: string): readonly CompiledField[] =>
-  record.sections
-    .filter((s) => s.name === section)
-    .flatMap((s) => s.fields)
-    .filter((f): f is CompiledField => 'key' in f && f.when === undefined);
-/** The fields `record` states unconditionally at `field`, a `section.key` path. */
-const fieldsAt = (record: CompiledRecord, field: string): readonly CompiledField[] => {
-  const [section = '', key] = field.split('.');
-  return fieldsOf(record, section).filter((f) => f.key === key);
-};
-/** The values `record` states unconditionally at `field`, a list's items one by one. */
-const valuesAt = (record: CompiledRecord, field: string): readonly CompiledValue[] =>
-  fieldsAt(record, field).flatMap((f) => (f.value.kind === 'list' ? f.value.items : [f.value]));
-const textsAt = (record: CompiledRecord, field: string): readonly string[] =>
-  valuesAt(record, field).flatMap((value) => ('text' in value ? [value.text] : []));
-/** Whether `record` states `field` at all: a declared empty list is stated, an absent key is not. */
-const stated = (record: CompiledRecord, field: string): boolean => fieldsAt(record, field).length > 0;
+// The field readers are the package's shared ones (../record-fields.ts). The markup helpers mirror runtime's private ones
+// (packet-host.ts's `inline` and `code`), which runtime does not export: a fix to either copy belongs in both.
 
 /** `text` on one line: a line break and the blanks around it become one space, so each entry stays one line. */
 const inline = (text: string): string => text.replace(/[ \t]*(?:\r\n|\r|\n)\s*/g, ' ');

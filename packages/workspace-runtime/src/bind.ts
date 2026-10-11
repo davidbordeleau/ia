@@ -1,7 +1,8 @@
 import type { ReadHandle } from '@inventarch/db';
 import type { InstalledOperation } from '@inventarch/db/distribution';
 import type { Node } from '@inventarch/graph';
-import type { CompiledField, CompiledValue } from '@inventarch/language';
+import type { CompiledValue } from '@inventarch/language';
+import { fieldsAt } from './record-fields.js';
 
 /**
  * Execution binding against the installed-implementation catalog (milestone generation-binding, original task
@@ -69,12 +70,8 @@ export interface BindingResult {
 /** The catalog sections a binding kind joins against; only operations have installed implementations so far. */
 const OPERATION_KIND = 'operation';
 
-const fieldValues = (record: Node, section: string, key: string): readonly CompiledValue[] =>
-  record.sections
-    .filter((candidate) => candidate.name === section)
-    .flatMap((candidate) => candidate.fields)
-    .filter((field): field is CompiledField => 'key' in field && field.when === undefined && field.key === key)
-    .map((field) => field.value);
+/** The first unconditional value `record` states at `field` (review finding B2-N11: the package's one field reader). */
+const firstValue = (record: Node, field: string): CompiledValue | undefined => fieldsAt(record, field)[0]?.value;
 const textOf = (value: CompiledValue | undefined): string | null =>
   value !== undefined && 'text' in value && typeof value.text === 'string' ? value.text : null;
 
@@ -90,11 +87,11 @@ export function executionBindingOf(
   record: Node,
   resolve: (value: Extract<CompiledValue, { kind: 'ref' }>) => string | null = () => null,
 ): ExecutionBinding {
-  const target = fieldValues(record, 'binding', 'target')[0];
+  const target = firstValue(record, 'binding.target');
   return {
     identity: record.identity,
-    kind: textOf(fieldValues(record, 'binding', 'kind')[0]),
-    implementation: textOf(fieldValues(record, 'binding', 'implementation')[0]),
+    kind: textOf(firstValue(record, 'binding.kind')),
+    implementation: textOf(firstValue(record, 'binding.implementation')),
     target:
       target === undefined
         ? null

@@ -597,14 +597,28 @@ function compiled(
       `Run "ia validate${run.rooted}" for the located findings of ${target.path}.`,
       { path: target.path },
     );
+  // Review C-R4: a finding counts when it is the edited (or new) record's, or one the base does not hold. In the target
+  // file lines move with the edit, so a finding there is matched by its code and record (its message, located finding
+  // prefix stripped, when it names none); elsewhere by its code, path, line and message.
+  const span = record === undefined ? undefined : record.source;
+  const own = (finding: Finding): boolean =>
+    finding.identity === identity ||
+    (finding.identity === undefined && span !== undefined && finding.line >= span.line && finding.line <= span.endLine);
+  const keyOf = (finding: Finding): string =>
+    pathKey(finding.path) === key
+      ? JSON.stringify([
+          finding.code,
+          finding.identity ?? null,
+          finding.identity === undefined ? finding.message.replace(/^[^:]*:d+: /, '') : null,
+        ])
+      : findingKey(finding);
   const base = new Map<string, number>();
-  for (const finding of run.snapshot.report.findings)
-    if (pathKey(finding.path) !== key) base.set(findingKey(finding), (base.get(findingKey(finding)) ?? 0) + 1);
+  for (const finding of run.snapshot.report.findings) base.set(keyOf(finding), (base.get(keyOf(finding)) ?? 0) + 1);
   const findings = candidate.report.findings.filter((finding) => {
-    if (pathKey(finding.path) === key) return true;
-    const held = base.get(findingKey(finding)) ?? 0;
+    if (pathKey(finding.path) === key && own(finding)) return true;
+    const held = base.get(keyOf(finding)) ?? 0;
     if (held === 0) return true;
-    base.set(findingKey(finding), held - 1);
+    base.set(keyOf(finding), held - 1);
     return false;
   });
   return {

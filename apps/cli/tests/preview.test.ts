@@ -256,6 +256,34 @@ describe('the four forms', () => {
   });
 });
 
+describe('what counts against a candidate (review C-R4)', () => {
+  /** An error already in the workspace, at `path`: a milestone missing its required exit, which admission refuses. */
+  const BROKEN =
+    '\n@milestone m4\n  meaning\n    says "No exit."\n  work\n    title "Fourth"\n    status open\n    plan @plan p1\n';
+  const broken = (path: string) =>
+    workspace((at) =>
+      writeFileSync(
+        resolve(at, path),
+        `${existsSync(resolve(at, path)) ? readFileSync(resolve(at, path), 'utf8') : '#! ia 1.0\n'}${BROKEN}`,
+      ),
+    );
+  it('leaves an error already in another record of the target file, or in another file, out of the verdict', async () => {
+    for (const path of ['.ia/src/work.ia', '.ia/src/broken.ia']) {
+      const root = broken(path);
+      const view = body(await preview(root, ['--set', '@milestone m1', 'work.owner=Tom']));
+      expect(view, path).toMatchObject({ clean: true, counts: { errors: 0 } });
+      // A new record's own findings count, and the error already there still does not.
+      const added = body(await preview(root, ['task', 't9', 'milestone=@milestone', 'm1', '--at', path]));
+      expect(added, path).toMatchObject({ clean: false });
+      const findings = added['findings'] as { code: string; identity?: string }[];
+      expect(findings.length, path).toBeGreaterThan(0);
+      expect(new Set(findings.map((finding) => finding.identity)), path).toEqual(
+        new Set(['work-system/definition/task/t9']),
+      );
+    }
+  });
+});
+
 describe('refusals', () => {
   it('refuses an unconsented relationship row, naming the system whose registration refuses it', async () => {
     const root = workspace();

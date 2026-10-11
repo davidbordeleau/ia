@@ -227,6 +227,18 @@ describe('ia author', () => {
     );
     expect((await ia(root, ['validate'])).exitCode).toBe(0);
   });
+  it('writes an edit beside an error already in another record of the file (review C-R4)', async () => {
+    const root = workspace((at) =>
+      rewrite(
+        at,
+        '.ia/src/work.ia',
+        (text) =>
+          `${text}\n@milestone m4\n  meaning\n    says "No exit."\n  work\n    title "Fourth"\n    status open\n    plan @plan p1\n`,
+      ),
+    );
+    const { before, after } = await authored(root, ['--set', '@milestone m1', 'work.owner=Tom']);
+    expect(onlyChanged(before, after)).toEqual([milestone('m1')]);
+  });
   it('writes a starter system, whose next command composes it into the workspace', async () => {
     const root = workspace();
     const guidance = body(await ia(root, ['preview', 'system']));

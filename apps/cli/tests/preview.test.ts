@@ -661,3 +661,37 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
     expect(human.stderr).toContain('\\u001b');
   });
 });
+
+describe('the portable path rule (review C-N9)', () => {
+  it("refuses exactly the paths db's opened-handle reader refuses as unsafe", async () => {
+    const root = workspace();
+    const { portable } = await import('../src/preview.js');
+    const { readWorkspaceBytes } = await import('@inventarch/db');
+    // `.` and `..` segments and empty ones db normalizes away, and reader.preview refuses as non-canonical; the CLI refuses
+    // them outright, so they are no part of this parity.
+    expect(['.ia/src/../new.ia', '.ia/src/./new.ia', '.ia//src/new.ia'].some(portable)).toBe(false);
+    for (const path of [
+      '.ia/src/new.ia',
+      '.ia/src/a b.ia',
+      '.ia/src/new.ia.',
+      '.ia/src/new.ia ',
+      '.ia/src/con.ia',
+      '.ia/src/aux/new.ia',
+      '.ia/src/x:y.ia',
+      '.ia/src/x?.ia',
+      '.ia/src/x*.ia',
+      '.ia/src/x|y.ia',
+      '.ia/src/x<y.ia',
+      '.ia/src/x"y.ia',
+      '.ia/src/tab\there.ia',
+    ]) {
+      let unsafe = false;
+      try {
+        readWorkspaceBytes(root, path, 1024);
+      } catch (error) {
+        unsafe = (error as { readonly code?: string }).code === 'IA-DB-PATH-UNSAFE';
+      }
+      expect(portable(path), path).toBe(!unsafe);
+    }
+  });
+});

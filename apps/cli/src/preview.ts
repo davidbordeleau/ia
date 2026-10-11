@@ -848,8 +848,11 @@ export function invocationOf(context: Context, root: string, editor: Editor): In
   };
 }
 
-/** A canonical workspace-relative path: what `reader.preview` and the opened-handle reader accept. */
-function portable(path: string): boolean {
+/**
+ * A canonical workspace-relative path: what `reader.preview` and the opened-handle reader accept. db keeps its rule private,
+ * so this copy is held to it by a parity test (review C-N9, tests/preview.test.ts).
+ */
+export function portable(path: string): boolean {
   return (
     path !== '' &&
     path === path.normalize('NFC') &&

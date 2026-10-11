@@ -1,7 +1,7 @@
 import type { ListItem, Value } from '../ast.js';
 import { parse } from '../parser/index.js';
 import type { SchemaField, SchemaSection } from '../registry/types.js';
-import { isId, isKind } from '../taxonomy.js';
+import { isId, isIsoDate, isNumberText, isQualifiedName } from '../taxonomy.js';
 
 /** The schema facts a source edit reads: a registry `SchemaDeclaration` is one. */
 export interface DraftSchema {
@@ -80,20 +80,6 @@ function inlineValue(text: string): Value {
   return field!.value;
 }
 
-/** Compliance's number predicate (`packages/compliance/src/values.ts`), which language cannot import. */
-const NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
-/** Compliance's iso-date form: `YYYY-MM-DD` and a real calendar date. */
-function isoDate(text: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  if (match === null) return false;
-  const year = Number(match[1]),
-    month = Number(match[2]),
-    day = Number(match[3]);
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
-  return days !== undefined && day >= 1 && day <= days;
-}
-
 const path = (field: DraftField): string => `${field.section}.${field.key}`;
 /**
  * One canonical scalar spelling of `value` for the field's item type, by the predicates compliance applies to it: an id,
@@ -106,7 +92,7 @@ function scalar(field: DraftField, value: Value): string {
   switch (type) {
     case 'text':
       if (text === undefined) return expected('text');
-      if (field.form === 'iso-date' && !isoDate(text)) return expected('an ISO date (YYYY-MM-DD)');
+      if (field.form === 'iso-date' && !isIsoDate(text)) return expected('an ISO date (YYYY-MM-DD)');
       return quotedText(text);
     case 'ref':
       if (value.kind !== 'ref')
@@ -120,13 +106,11 @@ function scalar(field: DraftField, value: Value): string {
         return expected(`one of ${field.values.join(', ')}`);
       return text;
     case 'qname': {
-      const slots = text?.split('/') ?? [];
-      if (slots.length !== 4 || !slots.every((slot) => /^[a-z][a-z0-9-]*$/.test(slot)) || !isKind(slots[1]!))
-        return expected('a qualified name system/kind/facet/name');
-      return text!;
+      if (text === undefined || !isQualifiedName(text)) return expected('a qualified name system/kind/facet/name');
+      return text;
     }
     case 'number':
-      if (text === undefined || !NUMBER.test(text) || !Number.isFinite(Number(text))) return expected('a number');
+      if (text === undefined || !isNumberText(text)) return expected('a number');
       return text;
     case 'flag':
       if (value.kind !== 'scalar' || !['true', 'false'].includes(value.text)) return expected('true or false');

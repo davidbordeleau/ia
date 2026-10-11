@@ -15,7 +15,7 @@ import { applyGuardRegistration, planGuardRegistration } from '@inventarch/distr
 import { legacyRegistration, STEWARD, LEGACY_FILES } from './host-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
-afterAll(cleanup);
+afterAll(cleanup, 120_000);
 
 async function hostContext(root: string, env: { IA_HOST_HOME: string }, ...extra: string[]) {
   const { parseArguments } = await import('../src/args.js');

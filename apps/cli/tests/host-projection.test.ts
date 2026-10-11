@@ -13,7 +13,7 @@ import { read } from './host-fixture.js';
 import { cleanup, cli, run, scratch } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 120_000 });
-afterAll(cleanup);
+afterAll(cleanup, 120_000);
 
 async function initialized(): Promise<string> {
   const root = resolve(scratch('host-projection'), 'demo');

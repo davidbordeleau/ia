@@ -11,7 +11,7 @@ import { host, initialized, put } from './host-fixture.js';
 import { cleanup, run } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
-afterAll(cleanup);
+afterAll(cleanup, 120_000);
 
 const BINDINGS = `#! ia 1.0
 

@@ -30,7 +30,7 @@ const MAIN = resolve(repository, 'apps/cli/dist/main.js');
 const DISTRIBUTION = resolve(repository, 'apps/distribution/dist/cli.js');
 const DESCRIPTOR_PATH = '.ia/work/descriptor.json';
 const ID = DESCRIPTOR.id;
-afterAll(cleanup);
+afterAll(cleanup, 120_000);
 
 const spawned = (binary: string, args: readonly string[], env?: NodeJS.ProcessEnv) =>
   runBounded(process.execPath, [binary, ...args], {

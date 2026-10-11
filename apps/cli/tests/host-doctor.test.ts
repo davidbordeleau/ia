@@ -44,7 +44,7 @@ import { cleanup } from './workspace-fixture.js';
 import type { Row } from './host-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
-afterAll(cleanup);
+afterAll(cleanup, 120_000);
 
 it('doctor reports registered, then stale after a simulated upgrade, and projection drift', async () => {
   const { root, env } = await initialized();

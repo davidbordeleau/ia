@@ -25,6 +25,7 @@ import type { ReadHandle } from '@inventarch/db';
 import { defaultActor, governingMandates, MODE_MOVES, profileRefusal, RuntimeError } from '@inventarch/runtime';
 import type { GoverningMandate, Mode, ProfileVerdict } from '@inventarch/runtime';
 import type { Context } from './consumer.js';
+import { findCommand } from './commands.js';
 import { Refusal, respell } from './consumer.js';
 import { quote } from './render.js';
 import type { Session } from './session.js';
@@ -142,6 +143,12 @@ function unreadable(
   );
 }
 
+/** Whether an `ia author` form's `--digest` can be checked: 64 lowercase hex digits, or absent for a starter system. */
+function usableDigest(args: Context['args']): boolean {
+  const digest = args.value('digest');
+  if (digest !== undefined) return /^[0-9a-f]{64}$/.test(digest);
+  return !args.flag('relate') && !args.flag('set') && args.positionals[0] === 'system';
+}
 /** The profile `request.mode` meets for its actor, or the refusal it gives (exit 1, IA-RUNTIME-MANDATE-*). */
 export function requireProfile(request: ProfileRequest): Profile {
   const { reader, within, context, mode } = request,
@@ -160,13 +167,29 @@ export function requireProfile(request: ProfileRequest): Profile {
     const mandates = governing(actor, request.path);
     return { mandates, verdict: profileRefusal(mandates, mode, words) };
   };
+  /**
+   * Review C3-R2: an `ia author` form without a usable `--digest` (absent, unless it writes a starter system, or not 64
+   * lowercase hex digits) would refuse again when named as it is, so an actor choice names its preview, which prints the
+   * digest: the actor must be allowed that preview too.
+   */
+  const previewFirst = context.command.name === 'author' && !usableDigest(context.args);
+  const allows = (actor: string | undefined): boolean =>
+    judge(actor).verdict.refusal === undefined &&
+    (!previewFirst || profileRefusal(governing(actor, request.path), 'validate', words).refusal === undefined);
+  /** This command, or for `previewFirst` its preview, with `--actor` set to `actor` or dropped. */
+  const rerun = (actor: readonly string[]): string =>
+    previewFirst
+      ? respell({ command: findCommand('preview')!, args: context.args }, { options: { actor } })
+      : respell(context, { options: { actor } });
   /** The next command after an open or refused actor choice: this one as the first participant allowed to run it. */
   const choose = (participants: readonly string[]): string => {
-    const allowed = participants.find((participant) => judge(participant).verdict.refusal === undefined);
+    const allowed = participants.find(allows);
     if (allowed !== undefined)
-      return `Run "${respell(context, { options: { actor: [allowed] } })}" to act as ${allowed}, a participant whose mandates allow it here.`;
+      return previewFirst
+        ? `Run "${rerun([allowed])}" as ${allowed}, a participant whose mandates allow it here, for the candidate and the digest ia author needs.`
+        : `Run "${rerun([allowed])}" to act as ${allowed}, a participant whose mandates allow it here.`;
     return workspace === undefined
-      ? `Run "${respell(context, { options: { actor: [] } })}" without naming an actor; this repository authors no @workspace.`
+      ? `Run "${rerun([])}" without naming an actor; this repository authors no @workspace.`
       : `Run "ia position --seat ${workspace} --shape governance${rooted}" for the workspace's participants and the mandates that bind them; none of them may run this command here.`;
   };
   /**
@@ -177,13 +200,12 @@ export function requireProfile(request: ProfileRequest): Profile {
   const mistyped = (participants: readonly string[]): string => {
     const fallback = workspace === undefined ? undefined : defaultActor(reader, within, workspace);
     if (fallback?.actor !== undefined)
-      return judge(fallback.actor).verdict.refusal === undefined
-        ? `Run "${respell(context, { options: { actor: [] } })}" as the workspace's default actor, ${fallback.actor}.`
+      return allows(fallback.actor)
+        ? `Run "${rerun([])}" as the workspace's default actor, ${fallback.actor}.`
         : `Run "ia position --seat ${workspace} --shape governance${rooted}" for the workspace's participants and the mandates that bind them.`;
     if (participants.length > 0) return choose(participants);
     // Review C2-N7: with no participant the command runs without an actor, so that profile is judged before it is named.
-    if (judge(undefined).verdict.refusal === undefined)
-      return `Run "${respell(context, { options: { actor: [] } })}" without naming an actor.`;
+    if (allows(undefined)) return `Run "${rerun([])}" without naming an actor.`;
     return workspace === undefined
       ? `Run "ia position${rooted}" for the repository's position and the mandates that govern it.`
       : `Run "ia position --seat ${workspace} --shape governance${rooted}" for the mandates that govern here; none of them allows this command without an actor.`;

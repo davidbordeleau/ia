@@ -548,7 +548,7 @@ describe('ia author refusals, each writing nothing', () => {
   });
   it('judges the profile before a missing or malformed digest, so the preview it names runs (review C2-R4)', async () => {
     const form = ['--set', '@milestone m1', 'work.owner=Tom'];
-    // An open actor choice is refused first; its next names the actor, and that author's digest refusal the preview.
+    // An open actor choice is refused before the digest.
     const ambiguous = workspace((at) => {
       rewrite(at, '.ia/src/workspace.ia', (text) => text.replace('    steward @agent demo\n', ''));
       writeFileSync(
@@ -556,17 +556,39 @@ describe('ia author refusals, each writing nothing', () => {
         `#! ia 1.0\n${AGENT('ops')}${MANDATE('ops-mandate', ['participant @agent ops', 'moves [Observation, Verification]', 'scope [@workspace demo]'])}`,
       );
     });
+    // Review C3-R2: without a usable digest the next is the preview with the actor named, one hop that runs and prints
+    // the digest; with one, it is the author form itself, the digest kept.
     for (const digest of [[], ['--digest', 'abc']]) {
-      const open = await refused(ambiguous, ['author', ...form, ...digest], 'IA-RUNTIME-MANDATE-ACTOR', false);
+      const open = await refused(ambiguous, ['author', ...form, ...digest], 'IA-RUNTIME-MANDATE-ACTOR');
       const named = nextArgv(open['next'] as string);
-      expect(named.slice(0, 4), open['next'] as string).toEqual(['author', '@milestone m1', 'work.owner=Tom', '--set']);
-      expect(named).toContain('--actor');
-      const usage = await run([...named, '--json'], { env: HOMES });
-      expect(body(usage), usage.stdout).toMatchObject({ ok: false, code: 'IA-CLI-USAGE' });
-      const preview = nextArgv(body(usage).next!);
-      expect(preview.slice(0, 4)).toEqual(['preview', '@milestone m1', 'work.owner=Tom', '--set']);
-      expect(preview).toContain('--actor');
-      expect((await run(preview, { env: HOMES })).exitCode, preview.join(' ')).toBe(0);
+      expect(named, open['next'] as string).toEqual([
+        'preview',
+        '@milestone m1',
+        'work.owner=Tom',
+        '--set',
+        '--actor',
+        participant,
+        '--root',
+        ambiguous,
+      ]);
+      const preview = await run([...named, '--json'], { env: HOMES });
+      expect(preview.exitCode, preview.stdout).toBe(0);
+      const printed = body(preview)['digest'] as string;
+      const author = await refused(
+        ambiguous,
+        ['author', ...form, '--digest', printed],
+        'IA-RUNTIME-MANDATE-ACTOR',
+        false,
+      );
+      expect(nextArgv(author['next'] as string).slice(0, 7)).toEqual([
+        'author',
+        '@milestone m1',
+        'work.owner=Tom',
+        '--set',
+        '--digest',
+        printed,
+        '--actor',
+      ]);
     }
     // A move the mandate does not grant and an excluded word are refused before the digest.
     const observer = workspace((at) => moves(at, 'Observation, Verification'));

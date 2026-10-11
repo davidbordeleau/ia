@@ -132,6 +132,11 @@ export interface HostView {
    * is materialized in the IA home, and the command that adds it. This verb only names that command; it never runs it.
    */
   readonly userPlugin: UserPlugin | null;
+  /**
+   * The projection rendering this plan made, on the session an apply's mandate gate judged; null for a removal. The apply
+   * writes exactly it, so the profile and the files written read one snapshot (review C3-N2).
+   */
+  readonly rendered: HostOutput | null;
 }
 export interface UserPlugin {
   readonly installed: boolean;
@@ -603,6 +608,7 @@ export function collectHost(context: Context): HostView {
     rooted: context.args.value('root') !== undefined,
     userPlugin:
       row.user === 'plugin' ? { installed: readMaterializedPlugin(home) !== null, command: USER_PLUGIN_COMMAND } : null,
+    rendered,
   };
 }
 
@@ -755,7 +761,8 @@ export function applyHostSet(
   if (!view.remove) {
     const cache = materialize(view, packageRoot);
     const mcp = replan(view, 'mcp', MCP_PATH[host], () => planHost(root, host, cache));
-    const rendered = renderProjectionFor(root, host);
+    // Review C3-N2: the rendering the plan's gated session made, re-planned against the files as they are now.
+    const { rendered } = view;
     replanProjection(root, host, rendered, (conflict) => refusalFor(view, 'projection', conflict));
     step('mcp', () => ({ status: applyHost(mcp).status }));
     done.push(skipped('context'));

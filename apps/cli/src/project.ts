@@ -19,7 +19,7 @@
  * root, as for every workspace verb (`openSession`).
  */
 import { workspaceRow } from '@inventarch/distribution/hosts';
-import type { PacketReceipt } from '@inventarch/runtime';
+import type { HostOutput, PacketReceipt } from '@inventarch/runtime';
 import type { Context, Result } from './consumer.js';
 import { confirm, Refusal, requireRoot } from './consumer.js';
 import type { HostName } from './host-projection.js';
@@ -75,6 +75,8 @@ export interface ProjectView {
   readonly packetDigest: string;
   /** `ia host`'s projection element for that rendering: its file plan, its guard step, or the conflict it found. */
   readonly projection: Element;
+  /** That rendering, made on the session the mandate gate judged; the apply writes exactly it (review C3-N2). */
+  readonly rendered: HostOutput;
 }
 
 /** Design row 27: the repair a conflict needs, worded as `ia host` words it, then this plan, which shows the file. */
@@ -117,6 +119,7 @@ export function collectProject(context: Context): ProjectView {
     entries: rendered.receipt.entries,
     packetDigest: rendered.receipt.packetDigest,
     projection: projectionElement(root, host, rendered),
+    rendered,
   };
 }
 
@@ -128,11 +131,12 @@ function applyFailure(error: unknown, view: ProjectView): Refusal {
   return projectionFailure(error, view.root, view.host, `${view.invocation} --apply`);
 }
 /**
- * The apply: the packet rendered again and re-planned through `ia host`'s projection element, so a file that changed
- * since the plan refuses before anything is written, then `applyHostProjection`, which returns the receipt it wrote.
+ * The apply: the rendering the plan made on its gated session (review C3-N2), re-planned through `ia host`'s projection
+ * element against the files as they are now, so a file that changed since the plan refuses before anything is written,
+ * then `applyHostProjection`, which returns the receipt it wrote.
  */
 export function applyProject(view: ProjectView): PacketReceipt {
-  const rendered = renderProjectionFor(view.root, view.host);
+  const { rendered } = view;
   replanProjection(view.root, view.host, rendered, (conflict) => conflictRefusal(view, conflict));
   try {
     // A render's apply always writes its receipt; only a removal, which this verb never runs, leaves none.

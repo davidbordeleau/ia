@@ -290,7 +290,8 @@ export function requireProfile(request: ProfileRequest): Profile {
 
 /**
  * Review C2-N3: a gate a command's own session runs as soon as it is open, before the service reads anything else from
- * it, so the profile and the verdict or effect are read from one snapshot, through one session.
+ * it, so the profile and the verdict or effect are read from one snapshot, through one session: `ia project --apply` and
+ * `ia host --apply` write the rendering their gated plan session made rather than render again (review C3-N2).
  */
 export type SessionGate = (session: Session) => void;
 export const sessionGate =

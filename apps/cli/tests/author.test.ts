@@ -687,6 +687,19 @@ describe('the mandate profile on every gated mode', () => {
       expect(sessions.opened, argv.join(' ')).toBe(1);
     }
   });
+  it('applies the projection its gate judged, through that one session, for project and host --apply (review C3-N2)', async () => {
+    for (const argv of [
+      ['project', 'claude', '--apply', '--yes'],
+      ['host', 'claude', '--apply', '--yes'],
+    ]) {
+      const root = workspace();
+      sessions.opened = 0;
+      const result = await ia(root, argv);
+      expect(result.exitCode, `${argv.join(' ')}: ${result.stdout}`).toBe(0);
+      expect(sessions.opened, argv.join(' ')).toBe(1);
+      expect(existsSync(resolve(root, '.claude/rules/ia-workspace.md')), argv.join(' ')).toBe(true);
+    }
+  });
   it('names the actor-less command after a mistyped actor only where its profile allows it (review C2-N7)', async () => {
     // No steward and no participant: the one mandate names none and grants Observation alone.
     const root = workspace((at) => {

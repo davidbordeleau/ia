@@ -1,0 +1,13 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "major",
+  "title": "ia compile becomes the deprecated alias of ia capture",
+  "summary": "Breaking: @inventarch/cli's ia compile no longer writes the 1.x ia.compiled.v1 artifact. As decision compile-verb-fate set for 2.x, it is a deprecated alias of ia capture, removed in 3.0: it runs the capture with the same root and output mode, --preview included, so its stdout, exit class and refusals are the capture's, and whenever it runs to a result it prints one line on stderr naming ia capture. Of the 1.x options, --force is accepted and changes nothing, because the capture always writes; --out <file> and --stdout refuse with IA-CLI-USAGE (exit 2) before the workspace is read, naming the ia capture command to run instead, and together they remain the usage error naming ia compile --help. ia compile --help shows ia compile [--preview] [--force] [--json]. A script that read .ia/work/compiled.json reads the admitted snapshot at .ia/work/snapshot/current.json instead. @inventarch/cli/internal/compile keeps buildArtifact, collectCompile, compileExit, compileEnvelope, renderCompile, DEFAULT_OUT, ARTIFACT and their types for one major; runCompile keeps its signature, and DEPRECATION keeps its name with the new line. The package README names 2.0.0 in its install commands, describes the alias, and names the ia recover command a recovery prints instead of the ia-distribution binary.",
+  "packages": [
+    "@inventarch/cli"
+  ],
+  "paths": [
+    "apps/cli/",
+    "tools/"
+  ]
+}

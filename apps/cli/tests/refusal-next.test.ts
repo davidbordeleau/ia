@@ -472,7 +472,6 @@ function invocations(): readonly {
     bare = resolve(scratch('refusal-bare'), 'workspace'),
     file = resolve(empty, 'file.txt'),
     absent = resolve(empty, 'absent'),
-    compiled = workspace(),
     floorBroken = workspace(),
     snapshotLinked = workspace(),
     refused = workspace({ foreign: true }),
@@ -780,17 +779,22 @@ function invocations(): readonly {
       argv: ['capture', '--root', floorBroken],
       command: `ia validate --root ${quote(floorBroken)}`,
     },
-    // The deprecated 1.x `ia compile` keeps its refusals: an existing artifact names the rerun with --force, an --out
-    // outside .ia/work/ the rerun with the one value to correct, and --out with --stdout the verb's help.
+    // Decision compile-verb-fate: `ia compile` is the deprecated alias of `ia capture`, so it refuses as the capture
+    // does, names the capture for a 1.x option the capture has no place for, and --out with --stdout its own help.
     {
-      code: 'IA-DIST-LOCAL-MODIFICATION',
-      argv: ['compile', '--root', compiled],
-      command: `ia compile --force --root ${quote(compiled)}`,
+      code: 'IA-DB-ROOT-INVALID',
+      argv: ['compile', '--root', empty],
+      command: `ia init ${quote(realpathSync(empty))}`,
     },
     {
-      code: 'IA-DIST-PATH-UNSAFE',
-      argv: ['compile', '--out', '../outside.json', '--root', FIXTURE],
-      command: `ia compile --out <file> --root ${root}`,
+      code: 'IA-CLI-USAGE',
+      argv: ['compile', '--out', '.ia/work/x.json', '--root', FIXTURE],
+      command: `ia capture --root ${root}`,
+    },
+    {
+      code: 'IA-CLI-USAGE',
+      argv: ['compile', '--stdout', '--root', FIXTURE],
+      command: `ia capture --root ${root}`,
     },
     {
       code: 'IA-CLI-USAGE',
@@ -802,9 +806,6 @@ function invocations(): readonly {
 
 it('prints one next command for every kind of consumer refusal, in --json and in human output', async () => {
   const rows = invocations();
-  // The compile row refuses only once its artifact exists.
-  const compiled = rows.find((row) => row.code === 'IA-DIST-LOCAL-MODIFICATION')!;
-  expect((await run(compiled.argv)).exitCode).toBe(0);
   for (const row of rows) {
     const label = row.argv.join(' ');
     const machine = await run([...row.argv, '--json'], row.cwd === undefined ? {} : { cwd: row.cwd });

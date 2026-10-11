@@ -269,29 +269,29 @@ export function qualifyInstalledViews(cli, cwd, env, workspace) {
   machine(['validate']);
   assert.deepEqual(readFileSync(current), snapshotBytes, 'Refused capture replaced the retained snapshot');
 
-  // The published 1.x CLI retains compile's artifact, stderr warning and overwrite refusal, not capture semantics.
-  const beforeCompile = tree(workspace),
-    stdout = invoke(['compile', '--stdout'], 0, true);
-  const artifact = JSON.parse(stdout);
-  assert.equal(artifact.artifact, 'ia.compiled.v1');
-  assert.equal(artifact.formatVersion, 1);
-  assert.ok(artifact.records.some((record) => record.identity === plan));
-  assert.ok(artifact.records.every((record) => !Object.hasOwn(record, 'digest')));
-  assert.deepEqual(tree(workspace), beforeCompile, 'Compile --stdout wrote workspace files');
-  const compiled = machine(['compile'], 0, true),
-    compiledPath = resolve(workspace, '.ia/work/compiled.json');
-  assert.equal(compiled.artifact, compiledPath);
-  assert.equal(readFileSync(compiledPath, 'utf8'), stdout);
-  assert.equal(compiled.digest, sha256(stdout));
-  const foreign = 'Locally edited compiled output must survive refusal.\n';
-  writeFileSync(compiledPath, foreign);
-  // Legacy createFile stages then removes a temporary file on EEXIST (distribution/src/files.ts), changing only
-  // the directory mtime. Preserve its 1.x semantics while checking entry inventory and every file's bytes/mtime.
-  refusal(['compile'], 3, 'IA-DIST-LOCAL-MODIFICATION', `ia compile --force ${rooted}`, 'overwrite it', false);
-  assert.equal(readFileSync(compiledPath, 'utf8'), foreign);
-  machine(['compile', '--force'], 0, true);
-  assert.equal(readFileSync(compiledPath, 'utf8'), stdout);
-  assert.deepEqual(readFileSync(current), snapshotBytes, 'Legacy compile changed capture output');
+  // From 2.0 compile is the deprecated alias of capture (decision compile-verb-fate): the capture's result and snapshot
+  // with one stderr note, --force mapped onto it, and --out and --stdout refused naming the capture to run instead.
+  const compiled = machine(['compile'], 0, true);
+  assert.equal(compiled.revision, captured.revision);
+  assert.equal(compiled.digest, captured.digest);
+  assert.equal(compiled.changed, 0);
+  assert.equal(compiled.rotated, false);
+  assert.deepEqual(readFileSync(current), snapshotBytes, 'The compile alias changed an unchanged capture');
+  assert.equal(
+    existsSync(resolve(workspace, '.ia/work/compiled.json')),
+    false,
+    'The compile alias wrote ia.compiled.v1',
+  );
+  assert.equal(machine(['compile', '--force'], 0, true).digest, captured.digest);
+  refusal(['compile', '--stdout'], 2, 'IA-CLI-USAGE', `ia capture ${rooted}`, 'write the admitted snapshot');
+  refusal(
+    ['compile', '--out', '.ia/work/compiled.json'],
+    2,
+    'IA-CLI-USAGE',
+    `ia capture ${rooted}`,
+    'admitted snapshot',
+  );
+  assert.deepEqual(readFileSync(current), snapshotBytes, 'A refused compile changed capture output');
   return [
     'three-record position, packet and format',
     'pack refusal without a distribution',
@@ -301,6 +301,6 @@ export function qualifyInstalledViews(cli, cwd, env, workspace) {
     'read/next observe uncaptured edits',
     'read/next no writes',
     'read/capture/next refusals',
-    'compile 1.x compatibility',
+    'compile alias of capture',
   ];
 }

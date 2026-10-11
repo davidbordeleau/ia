@@ -1,6 +1,6 @@
 /**
  * `ia capture` (position-and-projection §5, design rows 3 and 20), end to end against copies of the committed loop
- * fixture, kept apart from the deprecated 1.x `ia compile` (decision release-bump; tests/workspace-verbs.test.ts).
+ * fixture. From 2.0 `ia compile` is its deprecated alias (decision compile-verb-fate; tests/workspace-verbs.test.ts).
  *
  * The exit evidence of plan task ia-capture-verb: two captures with no edit between them report 0 changed, and an edit
  * reports exactly the edited record changed and rotates the prior capture into `previous.json`, as db D08 rotates its
@@ -513,8 +513,14 @@ it('refuses a root whose own sources declare no @workspace, writing nothing, and
   expect(human.stderr).toContain('IA-DB-ROOT-INVALID');
   expect(flat(human.stderr)).toContain(`→ Run "ia init ${quote(realpathSync(systems))}"`);
   expect(existsSync(resolve(systems, '.ia/work'))).toBe(false);
-  // The deprecated 1.x `ia compile` keeps its behaviour there: it compiles whatever admits.
-  expect((await run(['compile', '--root', systems])).exitCode).toBe(0);
+  // `ia compile`, its alias since 2.0, refuses there as the capture does and names the same command.
+  const aliased = await run(['compile', '--root', systems, '--json']);
+  expect(aliased.exitCode).toBe(3);
+  expect(aliased.stderr).toBe('');
+  const aliasedBody = JSON.parse(aliased.stdout) as { code: string; next: string };
+  expect(aliasedBody.code).toBe('IA-DB-ROOT-INVALID');
+  expect(commandsIn(aliasedBody.next)).toEqual([`ia init ${quote(realpathSync(systems))}`]);
+  expect(existsSync(resolve(systems, '.ia/work'))).toBe(false);
 });
 
 it('refuses a floor input that fails to parse, keeping both snapshot files, and names ia validate', async () => {
@@ -1111,7 +1117,7 @@ it('escapes the terminal controls a prior capture identity carries in the human 
   expect(pairAt(root)).toEqual(pair);
 });
 
-it('lists ia capture in the help, and ia compile as the deprecated 1.x verb with its 1.x syntax', async () => {
+it('lists ia capture in the help, and ia compile as its deprecated alias', async () => {
   const global = (await run(['--help'])).stdout;
   expect(global).toContain('capture');
   // Every command row fits the 80 columns piped help is rendered at, so no wrapped fragment reads as a command name.
@@ -1124,28 +1130,23 @@ it('lists ia capture in the help, and ia compile as the deprecated 1.x verb with
   const help = await run(['capture', '--help']);
   expect(help.stdout).toContain('ia capture [--preview] [--json]');
   expect(flat(help.stdout)).toContain('--preview Report what the capture would write; write nothing');
-  // Decision release-bump: `ia compile` keeps its 1.x grammar; the alias of decision compile-verb-fate waits for 2.0.
+  // Decision compile-verb-fate: from 2.0 `ia compile` is the deprecated alias of `ia capture`, removed in 3.0.
   const compile = await run(['compile', '--help']);
-  expect(compile.stdout).toContain('ia compile [--out <file> | --stdout] [--force] [--json]');
-  expect(flat(compile.stdout)).toContain('deprecated: use capture');
+  expect(compile.stdout).toContain('ia compile [--preview] [--force] [--json]');
+  expect(flat(compile.stdout)).toContain('Deprecated alias of capture, removed in 3.0');
 });
 
-it("keeps ia compile and ia capture apart: neither writes the other one's file", async () => {
+it('makes ia compile write the capture snapshot pair, never the 1.x compiled artifact', async () => {
   const root = workspace();
   const compiled = await run(['compile', '--root', root, '--json']);
   expect(compiled.exitCode).toBe(0);
   expect(compiled.stderr).toBe(DEPRECATION);
   expect(DEPRECATION).toContain(CURRENT);
-  expect(existsSync(resolve(root, DEFAULT_OUT))).toBe(true);
-  expect(existsSync(resolve(root, SNAPSHOT_DIRECTORY))).toBe(false);
-  const artifact = bytesAt(root, DEFAULT_OUT);
-  const captured = await capture(root);
-  expect(captured.prior).toBeNull();
-  expect(bytesAt(root, DEFAULT_OUT)).toEqual(artifact);
+  expect(existsSync(resolve(root, DEFAULT_OUT))).toBe(false);
   expect(snapshotAt(root).format).toBe(SNAPSHOT_FORMAT);
-  // A capture never makes a second compile succeed: the 1.x refusal for an existing artifact still answers.
-  const again = await run(['compile', '--root', root, '--json']);
-  expect(again.exitCode).toBe(3);
-  expect(JSON.parse(again.stdout)).toMatchObject({ code: 'IA-DIST-LOCAL-MODIFICATION' });
-  expect(again.stderr).toBe('');
+  // A capture after it is the second capture of an unchanged workspace: it sees the alias's snapshot as its prior.
+  const captured = await capture(root);
+  expect(captured.prior).not.toBeNull();
+  expect(captured.changed).toBe(0);
+  expect(existsSync(resolve(root, DEFAULT_OUT))).toBe(false);
 });

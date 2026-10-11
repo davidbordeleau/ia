@@ -201,23 +201,24 @@ export const COMMANDS: readonly CommandSpec[] = [
     ]),
   },
   {
-    // Decision release-bump (operator, 2026-10-07): the 1.x verb, unchanged, deprecated in favour of `ia capture`;
-    // the alias of decision compile-verb-fate waits for 2.0.
+    // Decision compile-verb-fate (operator, 2026-10-07): from 2.0 a deprecated alias of `ia capture`, removed in 3.0.
+    // The 1.x options stay in the grammar so a 1.x invocation meets its mapping or its refusal, never an unknown flag.
     name: 'compile',
     group: 'workspace',
     // Short enough that its global help row fits 80 columns, so no wrapped fragment reads as a command name.
-    summary: 'Write a deterministic compiled artifact (deprecated: use capture)',
-    syntax: ['ia compile [--out <file> | --stdout] [--force] [--json]'],
+    summary: 'Deprecated alias of capture, removed in 3.0',
+    syntax: ['ia compile [--preview] [--force] [--json]'],
     grammar: grammar([
+      option({ name: 'preview', kind: 'boolean', summary: 'As ia capture --preview' }),
       option({
         name: 'out',
         kind: 'value',
         conflicts: ['stdout'],
         placeholder: '<file>',
-        summary: 'Artifact path under <root>/.ia/work/',
+        summary: 'Refused: ia capture writes only .ia/work/snapshot/current.json',
       }),
-      option({ name: 'stdout', kind: 'boolean', summary: 'Write the artifact to stdout instead of a file' }),
-      option({ name: 'force', kind: 'boolean', summary: 'Overwrite an existing artifact' }),
+      option({ name: 'stdout', kind: 'boolean', summary: 'Refused: ia capture writes only its snapshot file' }),
+      option({ name: 'force', kind: 'boolean', summary: 'Accepted and ignored: ia capture always writes' }),
     ]),
   },
   {

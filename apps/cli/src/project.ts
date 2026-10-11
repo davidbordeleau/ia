@@ -24,7 +24,7 @@ import type { Context, Result } from './consumer.js';
 import { confirm, Refusal, requireRoot } from './consumer.js';
 import type { HostName } from './host-projection.js';
 import { applyHostProjection, renderProjectionFor } from './host-projection.js';
-import { gateMode } from './profile.js';
+import { sessionGate } from './profile.js';
 import type { Conflict, Element } from './host.js';
 import {
   GUARD_RETIRE,
@@ -106,9 +106,9 @@ export function collectProject(context: Context): ProjectView {
   requireInitialized(root, given ?? root);
   // The journal's recovery names the resolved root: the distribution mechanism takes only an absolute one.
   requireIdle(root, root);
-  // The effect mode (Execution) under the participant's mandate profile, a plan included, before the packet is rendered.
-  gateMode(context, root, 'effect');
-  const rendered = renderProjectionFor(root, host);
+  // The effect mode (Execution) under the participant's mandate profile, a plan included, judged on the rendering session
+  // before the packet is read from it.
+  const rendered = renderProjectionFor(root, host, sessionGate(context, 'effect'));
   return {
     root,
     host,

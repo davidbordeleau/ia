@@ -26,6 +26,22 @@ import { cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
 vi.setConfig({ testTimeout: 240_000, hookTimeout: 240_000 });
 afterAll(cleanup);
 
+/**
+ * Review C2-N3: every workspace session a command opens, counted at the distribution service the CLI's session module
+ * opens it through (that module imports the dispatcher, so it is not mocked itself).
+ */
+const sessions = vi.hoisted(() => ({ opened: 0 }));
+vi.mock('@inventarch/distribution/services', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@inventarch/distribution/services')>();
+  return {
+    ...actual,
+    openWorkspaceSession: (...args: Parameters<typeof actual.openWorkspaceSession>) => {
+      sessions.opened++;
+      return actual.openWorkspaceSession(...args);
+    },
+  };
+});
+
 const WORK = `#! ia 1.0
 
 @plan p1
@@ -569,6 +585,15 @@ describe('the mandate profile on every gated mode', () => {
     ]);
     for (const command of ['ia host claude', 'ia host claude --remove --apply', 'ia host claude --user --apply'])
       expect(nextOf(command), command).toBe(`Run "${command}" to repair it.`);
+  });
+  it('judges validate, capture and project on the session that reads the verdict or the effect (review C2-N3)', async () => {
+    const root = workspace();
+    for (const argv of [['validate'], ['capture', '--preview'], ['project', 'claude']]) {
+      sessions.opened = 0;
+      const result = await ia(root, argv);
+      expect(result.exitCode, `${argv.join(' ')}: ${result.stdout}`).toBe(0);
+      expect(sessions.opened, argv.join(' ')).toBe(1);
+    }
   });
   it("lets ia next name ia preview plan only when the actor's profile allows Verification", async () => {
     const noPlan = (list: string) =>

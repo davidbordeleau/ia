@@ -27,7 +27,7 @@ import type { GoverningMandate, Mode, ProfileVerdict } from '@inventarch/runtime
 import type { Context } from './consumer.js';
 import { Refusal, respell } from './consumer.js';
 import { quote } from './render.js';
-import { openSession } from './session.js';
+import type { Session } from './session.js';
 
 /**
  * The gated commands and their modes; every other command, `ia position` included, is never gated, and `ia host` is
@@ -261,17 +261,15 @@ export function requireProfile(request: ProfileRequest): Profile {
 }
 
 /**
- * A gated command's profile for a mode, read through a session of its own: for a command whose workspace reads happen
- * inside services that open their own session, so the profile is judged before any of them.
+ * Review C2-N3: a gate a command's own session runs as soon as it is open, before the service reads anything else from
+ * it, so the profile and the verdict or effect are read from one snapshot, through one session.
  */
-export function gateMode(context: Context, root: string, mode: Mode): Profile {
-  const session = openSession(root);
-  try {
-    return requireProfile({ reader: session.reader, within: session.reader.resolveScope().token, context, mode });
-  } finally {
-    session.close();
-  }
-}
+export type SessionGate = (session: Session) => void;
+export const sessionGate =
+  (context: Context, mode: Mode): SessionGate =>
+  (session) => {
+    requireProfile({ reader: session.reader, within: session.reader.resolveScope().token, context, mode });
+  };
 
 /**
  * Review C-R2: the characters a printed command may repeat from caller or authored input and stay inert pasted into sh,

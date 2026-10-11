@@ -52,6 +52,7 @@ import {
 import { packetCatalog } from './commands.js';
 import { Refusal } from './consumer.js';
 import { refusedPath, SETTINGS, STATE } from './host.js';
+import type { SessionGate } from './profile.js';
 import type { Session } from './session.js';
 import { codeOf, openSession } from './session.js';
 
@@ -90,11 +91,12 @@ export function checkAdmitted(root: string): void {
 /**
  * §6.1: the packet over the whole workspace, through the session's own scope, rendered by `host`'s adapter for the
  * consumer target: its files, each carrying `PACKET_MARKER`, and the receipt the render fills (B12). No agent file is
- * rendered for any host.
+ * rendered for any host. `gate`, when given, judges the session before anything is read from it (review C2-N3).
  */
-export function renderProjectionFor(root: string, host: HostName): HostOutput {
+export function renderProjectionFor(root: string, host: HostName, gate?: SessionGate): HostOutput {
   const session = openSession(root);
   try {
+    gate?.(session);
     requireAdmitted(session, root);
     const { packet, digest, hostNote } = renderPacket(
       session.reader,

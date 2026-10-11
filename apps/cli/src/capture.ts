@@ -51,7 +51,8 @@ import {
   truncateDigest,
   words,
 } from './render.js';
-import { gateMode } from './profile.js';
+import { sessionGate } from './profile.js';
+import type { SessionGate } from './profile.js';
 import { codeOf, openSession } from './session.js';
 import type { Session } from './session.js';
 import { NOT_EVALUATED } from './validate.js';
@@ -181,9 +182,10 @@ export const unparsedSeed = (diagnostics: readonly Finding[]): Finding | undefin
       SEEDED.some((prefix) => finding.path.startsWith(prefix)),
   );
 /** Admits the workspace at `root` and builds its snapshot; the session is closed before anything is written. */
-function admit(root: string): Admitted {
+function admit(root: string, gate?: SessionGate): Admitted {
   const session = openSession(root);
   try {
+    gate?.(session);
     const own = (path: string): boolean => path.startsWith('.ia/src/') && !path.startsWith('.ia/src/floor/');
     const declared =
       session.reader.records().some((record) => record.discriminator === 'workspace' && own(record.source.path)) ||
@@ -228,8 +230,8 @@ function captureRefusal(root: string, given: string | undefined, admitted: Admit
   );
 }
 /** Admits the workspace at `root` and builds the snapshot to write, unless one of §5's two refusals answers first. */
-function capturable(root: string, given: string | undefined): Omit<Admitted, 'declared'> {
-  const admitted = admit(root);
+function capturable(root: string, given: string | undefined, gate?: SessionGate): Omit<Admitted, 'declared'> {
+  const admitted = admit(root, gate);
   const refused = captureRefusal(root, given, admitted);
   if (refused !== null) throw refused;
   const { declared: _declared, ...built } = admitted;
@@ -237,18 +239,19 @@ function capturable(root: string, given: string | undefined): Omit<Admitted, 'de
 }
 /**
  * Admits the workspace at `root` and writes its snapshot pair through db D08a, unless one of §5's two refusals answers
- * first. `given` is the `--root` the invocation typed, which the `ia validate` a refusal names carries.
+ * first. `given` is the `--root` the invocation typed, which the `ia validate` a refusal names carries. `gate`,
+ * when given, judges the admitting session before anything is read from it (review C2-N3).
  */
-export function collectCapture(root: string, given?: string): CaptureView {
-  const built = capturable(root, given);
+export function collectCapture(root: string, given?: string, gate?: SessionGate): CaptureView {
+  const built = capturable(root, given, gate);
   return { root, ...built, ...writeCapture(root, built.text) };
 }
 /**
  * `ia capture --preview`: admits and refuses exactly as `collectCapture` does, then plans the write through db D08b's
  * `planCapture` instead of making it, so nothing is created or written and the pair stays as it was.
  */
-export function previewCapture(root: string, given?: string): CapturePreview {
-  const built = capturable(root, given);
+export function previewCapture(root: string, given?: string, gate?: SessionGate): CapturePreview {
+  const built = capturable(root, given, gate);
   return {
     root,
     ...built,
@@ -495,11 +498,15 @@ export function runCapture(context: Context): Result {
   const { caps, json: machine } = context;
   const root = requireRoot(context),
     preview = context.args.flag('preview');
-  // The effect mode (Execution) under the participant's mandate profile, a preview included, before anything is admitted.
-  gateMode(context, root, 'effect');
+  // The effect mode (Execution) under the participant's mandate profile, a preview included, judged on the admitting
+  // session before anything is read from it.
   let view: CaptureView | CapturePreview;
   try {
-    view = (preview ? previewCapture : collectCapture)(root, context.args.value('root'));
+    view = (preview ? previewCapture : collectCapture)(
+      root,
+      context.args.value('root'),
+      sessionGate(context, 'effect'),
+    );
   } catch (error) {
     throw captureFailure(error, root, respell(context), !preview);
   }

@@ -52,7 +52,7 @@ import { UsageError } from './args.js';
 import { homeSrcRemedy, hostHome, located } from './home-remedy.js';
 import type { Context, Result } from './consumer.js';
 import { confirm, Interrupted, Refusal, refusalOf, requireRoot } from './consumer.js';
-import { gateMode } from './profile.js';
+import { sessionGate } from './profile.js';
 import type { HostName } from './host-projection.js';
 import {
   applyHostProjection,
@@ -571,14 +571,13 @@ export function collectHost(context: Context): HostView {
   located(null, homeSrcRemedy(home, plan), () => assertIaHomeUsable(home));
   const { pin: bundled } = bundledPin(host.packageRoot);
   requireIdle(root, supplied);
-  // Review C2-R7: a workspace apply writes the projection `ia project --apply` writes, so it is the effect mode (Execution)
-  // under the participant's mandate profile, judged before the confirmation; its plan writes nothing, `--remove` restores
-  // editing, and `--user` reads no workspace, so none of them is gated.
-  if (args.flag('apply') && !remove) gateMode(context, supplied, 'effect');
   // §4: zero error findings. A removal renders nothing, so it checks admission alone.
   let rendered: HostOutput | null = null;
+  // Review C2-R7: a workspace apply writes the projection `ia project --apply` writes, so it is the effect mode (Execution)
+  // under the participant's mandate profile, judged on the rendering session before the confirmation; its plan writes
+  // nothing, `--remove` restores editing, and `--user` reads no workspace, so none of them is gated.
   if (remove) checkAdmitted(root);
-  else rendered = renderProjectionFor(root, name);
+  else rendered = renderProjectionFor(root, name, args.flag('apply') ? sessionGate(context, 'effect') : undefined);
   // A host home reached through a symbolic link or junction is refused by the mechanism (IA-DIST-PATH-UNSAFE), because
   // the payload it verifies must be the one the registration names; the remedy is a home with no link in its path.
   const expected: HostCacheTarget = located(

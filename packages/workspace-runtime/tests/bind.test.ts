@@ -4,11 +4,13 @@
 import { resolve } from 'node:path';
 import { open } from '@inventarch/db';
 import { afterAll, expect, it } from 'vitest';
-import { bindExecution, executionBindings } from '../src/bind.js';
+import { bindExecution, executionBindingOf, executionBindings } from '../src/bind.js';
+import type { ReadHandle } from '@inventarch/db';
 import type { InstalledOperation } from '@inventarch/db/distribution';
 import type { BindingCatalog, ExecutionBinding } from '../src/bind.js';
 
-const READ = 'authoring-system/binding/operation/read-captured-source';
+const READ = 'authoring-system/binding/operation/read-captured-source',
+  TARGET = { reference: '@operation read-captured-source', identity: READ };
 const available: InstalledOperation = {
   id: 'captured-source-read-v1',
   status: 'available',
@@ -26,7 +28,7 @@ const binding = (fields: Partial<ExecutionBinding> = {}): ExecutionBinding => ({
   identity: 'agent-composition-system/binding/execution-binding/probe',
   kind: 'operation',
   implementation: 'captured-source-read-v1',
-  target: READ,
+  target: TARGET,
   ...fields,
 });
 
@@ -62,9 +64,15 @@ it('reports every binding without a bound implementation as unavailable, never a
     [binding({ kind: null }), present(available), 'none of kind (none stated)'],
     [binding({ implementation: null }), present(available), 'names no implementation'],
     [
-      binding({ target: 'acme/binding/operation/other' }),
+      binding({ target: { reference: '@operation other', identity: 'acme/binding/operation/other' } }),
       present(available),
       `serves ${READ}, not acme/binding/operation/other`,
+    ],
+    // Review finding B2-R1: a stated target that resolves to no admitted record is not "no target".
+    [
+      binding({ target: { reference: '@operation read-captured-sourse', identity: null } }),
+      present(available),
+      'binding.target @operation read-captured-sourse resolves to no admitted record',
     ],
   ];
   for (const [subject, catalog, reason] of cases)
@@ -107,7 +115,7 @@ it('reads the repository’s execution bindings with their targets resolved, and
         identity: 'agent-composition-system/binding/execution-binding/read-captured-source-binding',
         kind: 'operation',
         implementation: 'captured-source-read-v1',
-        target: READ,
+        target: TARGET,
       },
       expect.objectContaining({
         identity: 'agent-composition-system/binding/execution-binding/example-entry',
@@ -122,4 +130,33 @@ it('reads the repository’s execution bindings with their targets resolved, and
   expect(bindExecution(read, present({ ...available, operation: 'acme/binding/operation/other' })).status).toBe(
     'unavailable',
   );
+});
+
+it('keeps a stated target that resolves to no admitted record apart from no target, so it never binds (B2-R1)', () => {
+  const canonical = reader
+    .records()
+    .find((record) => record.identity.endsWith('/execution-binding/read-captured-source-binding'))!;
+  // The same record read where its target answers nothing: as in an `ia init` consumer that admits no
+  // `@operation read-captured-source`.
+  const unresolved = { records: () => [canonical], resolve: () => ({ ok: false }) } as unknown as ReadHandle;
+  const [read] = executionBindings(unresolved);
+  expect(read).toEqual({
+    identity: canonical.identity,
+    kind: 'operation',
+    implementation: 'captured-source-read-v1',
+    target: { reference: '@operation read-captured-source', identity: null },
+  });
+  expect(bindExecution(read!, present(available))).toMatchObject({
+    status: 'unavailable',
+    reason: 'binding.target @operation read-captured-source resolves to no admitted record',
+  });
+  // Without a resolver a stated target resolves to nothing too; only a binding that states none skips the check.
+  expect(executionBindingOf(canonical).target).toEqual({
+    reference: '@operation read-captured-source',
+    identity: null,
+  });
+  expect(bindExecution(executionBindingOf(canonical), present(available)).status).toBe('unavailable');
+  expect(bindExecution({ ...read!, target: null }, present(available)).status).toBe('bound');
+  // A damaged catalog still revokes, whatever the target: the error is the catalog's.
+  expect(bindExecution(read!, { status: 'damaged', reason: 'x' }).status).toBe('revoked');
 });

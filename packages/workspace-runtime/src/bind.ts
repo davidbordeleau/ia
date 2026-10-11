@@ -15,11 +15,12 @@ import type { CompiledField, CompiledValue } from '@inventarch/language';
  *
  * Results are distinct, and only `bound` is ever a pass:
  * - `bound`: the catalog is present, lists the implementation as available (its shipped bytes matched their pins when
- *   the catalog was read), the binding is an operation binding, and its target, when it names one, is the operation
- *   the implementation serves.
+ *   the catalog was read), the binding is an operation binding, and its target, when it states one, resolves to an
+ *   admitted record that is the operation the implementation serves.
  * - `unavailable`: there is no catalog, it does not list the implementation, it lists it as unavailable (a
  *   metadata-only declaration or missing handler bytes), the binding is of a kind no installed catalog section
- *   provides, or the implementation serves another operation. Nothing is wrong with the host; nothing is bound.
+ *   provides, it states a target that resolves to no admitted record (review finding B2-R1: a typo is never a pass),
+ *   or the implementation serves another operation. Nothing is wrong with the host; nothing is bound.
  * - `revoked`, an error: the catalog revokes the implementation, or the catalog failed verification (bytes or pins that
  *   no longer match), so the implementation it vouched for is not the one installed. A revoked binding must block,
  *   where an unavailable one is only not bound.
@@ -35,13 +36,22 @@ export type BindingCatalog =
   | { readonly status: 'present'; readonly operations: readonly InstalledOperation[] }
   | { readonly status: 'unavailable'; readonly reason: string }
   | { readonly status: 'damaged'; readonly reason: string };
+/**
+ * `binding.target` as a binding states it (review finding B2-R1): the reference as written and the identity of the
+ * admitted record it resolves to, null when none answers it. A stated target and a resolved one are kept apart, so an
+ * unresolved target is never read as no target.
+ */
+export interface BindingTarget {
+  readonly reference: string;
+  readonly identity: string | null;
+}
 /** An `@execution-binding` as the binder reads it: its unconditional binding fields, its target resolved. */
 export interface ExecutionBinding {
   readonly identity: string;
   readonly kind: string | null;
   readonly implementation: string | null;
-  /** The identity `binding.target` resolves to; null when it names none or no admitted record answers it. */
-  readonly target: string | null;
+  /** The target the binding states, resolved; null only when it states none. */
+  readonly target: BindingTarget | null;
 }
 export type BindingStatus = 'bound' | 'unavailable' | 'revoked';
 export interface BindingResult {
@@ -68,7 +78,14 @@ const fieldValues = (record: Node, section: string, key: string): readonly Compi
 const textOf = (value: CompiledValue | undefined): string | null =>
   value !== undefined && 'text' in value && typeof value.text === 'string' ? value.text : null;
 
-/** `record`'s binding fields, with `binding.target` resolved through `resolve` when the caller gives one. */
+const referenceText = (value: CompiledValue): string =>
+  value.kind === 'ref'
+    ? `@${value.discriminator} ${value.name}${value.fragment === undefined ? '' : `#${value.fragment}`}`
+    : (textOf(value) ?? `(a ${value.kind} value)`);
+/**
+ * `record`'s binding fields, with a stated `binding.target` resolved through `resolve`. Without a resolver, or for a
+ * value that is not a reference, a stated target resolves to nothing, so the binding cannot bind.
+ */
 export function executionBindingOf(
   record: Node,
   resolve: (value: Extract<CompiledValue, { kind: 'ref' }>) => string | null = () => null,
@@ -78,7 +95,10 @@ export function executionBindingOf(
     identity: record.identity,
     kind: textOf(fieldValues(record, 'binding', 'kind')[0]),
     implementation: textOf(fieldValues(record, 'binding', 'implementation')[0]),
-    target: target === undefined || target.kind !== 'ref' ? null : resolve(target),
+    target:
+      target === undefined
+        ? null
+        : { reference: referenceText(target), identity: target.kind === 'ref' ? resolve(target) : null },
   };
 }
 
@@ -125,8 +145,10 @@ export function bindExecution(binding: ExecutionBinding, catalog: BindingCatalog
     return result('revoked', `the installed catalog revokes ${implementation}: ${operation.reason}`);
   if (operation.status === 'unavailable')
     return result('unavailable', `${implementation} is unavailable on this host: ${operation.reason}`);
-  if (binding.target !== null && binding.target !== operation.operation)
-    return result('unavailable', `${implementation} serves ${operation.operation}, not ${binding.target}`);
+  if (binding.target !== null && binding.target.identity === null)
+    return result('unavailable', `binding.target ${binding.target.reference} resolves to no admitted record`);
+  if (binding.target !== null && binding.target.identity !== operation.operation)
+    return result('unavailable', `${implementation} serves ${operation.operation}, not ${binding.target.identity}`);
   return {
     ...result(
       'bound',

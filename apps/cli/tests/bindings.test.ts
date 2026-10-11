@@ -31,8 +31,21 @@ const BINDINGS = `#! ia 1.0
     kind operation
     implementation missing-read-v1
 `;
+/** The canonical binding's own target line, which no `ia init` consumer can resolve (review finding B2-R1). */
+const TARGETED = `#! ia 1.0
+
+@execution-binding targeted-read-binding
+  meaning
+    says "Select the installed read adapter for the captured-source read operation."
+    answers "Does a binding whose target resolves to nothing bind?"
+  binding
+    kind operation
+    target @operation read-captured-source
+    implementation captured-source-read-v1
+`;
 const READ = 'agent-composition-system/binding/execution-binding/read-captured-source-binding',
-  MISSING = 'agent-composition-system/binding/execution-binding/missing-binding';
+  MISSING = 'agent-composition-system/binding/execution-binding/missing-binding',
+  TARGETED_ID = 'agent-composition-system/binding/execution-binding/targeted-read-binding';
 /** The report with every run of whitespace one space, so assertions do not depend on where lines wrap. */
 const validate = async (root: string, env: Record<string, string>, ...extra: string[]) => {
   const result = await run(['validate', '--root', root, ...extra], { env });
@@ -92,4 +105,14 @@ it('prints the Bindings section: unbound is never a pass, bound names the shippe
     writeFileSync(handler, original);
   }
   expect((await validate(root, env)).exitCode).toBe(0);
+  // The canonical binding's target line: this consumer admits no `@operation read-captured-source`, so the stated
+  // target resolves to nothing and the binding is unavailable though its implementation is shipped; the binding that
+  // states no target still binds.
+  put(root, '.ia/src/targeted.ia', TARGETED);
+  const targeted = await validate(root, env);
+  expect(targeted.exitCode).toBe(0);
+  expect(targeted.text).toContain('2 execution bindings are not bound; an unbound binding is not a pass.');
+  expect(targeted.text).toContain(`${TARGETED_ID} captured-source-read-v1: unavailable`);
+  expect(targeted.text).toContain('binding.target @operation read-captured-source resolves to no admitted record');
+  expect(targeted.text).toContain(`${READ} captured-source-read-v1: bound`);
 });

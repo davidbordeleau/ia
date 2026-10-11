@@ -98,15 +98,6 @@ function requireAdmitted(session: Session, root: string): void {
       'Run "ia validate" and fix the reported errors.',
     );
 }
-/** §4's admission gate alone, for a removal, which renders nothing. */
-export function checkAdmitted(root: string): void {
-  const session = openSession(root);
-  try {
-    requireAdmitted(session, root);
-  } finally {
-    session.close();
-  }
-}
 
 /**
  * A host-generation refusal (workspace-runtime's ProjectionError, which carries its code in `diagnostic`) as this CLI's

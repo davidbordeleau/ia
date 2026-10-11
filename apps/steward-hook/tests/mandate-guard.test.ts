@@ -502,3 +502,60 @@ it('refuses a file with more than one link, whose other name a hook may select, 
       'IA-HOOK-PROJECTION-MANAGED',
     );
 });
+
+/** A hook ownership state recording each `[hook, paths]` group's selection, in the order given. */
+const ownership = (root: string, groups: readonly (readonly [string, readonly string[]])[]): void =>
+  put(
+    root,
+    '.ia/distributions/hosts/claude-hooks-workspace.json',
+    JSON.stringify({
+      format: 'ia.hook-registration-state.v1',
+      id: 'workspace',
+      cache: resolve(root, '..', 'cache'),
+      release: 'a'.repeat(64),
+      created: true,
+      groups: groups.map(([hook, paths]) => ({ hook, group: { matcher: 'Write|Edit|MultiEdit', hooks: [] }, paths })),
+    }),
+  );
+
+it('refuses no more than the last registered selection when the records cannot open, naming only the removal (H-R8, H-N14)', () => {
+  // A descriptor the db cannot read: the workspace's records do not open at all.
+  const root = workspace({ '.ia/workspace.json': '{ not json' });
+  const removal = `"ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`,
+    validate = `"ia validate --root ${JSON.stringify(root)}"`,
+    register = `"ia host claude --root ${JSON.stringify(root)} --apply --yes"`;
+  // No recorded selection: every edit under the root is refused, naming the commands that work in this state.
+  for (const path of ['docs/guide.md', 'src/app.ts']) {
+    const refused = check(root, path);
+    expect(code(refused), path).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+    expect(reason(refused), path).toContain("The workspace's records cannot be read");
+    expect(reason(refused), path).toContain('every edit under the root is refused');
+    expect(reason(refused), path).toContain(removal);
+    expect(reason(refused), path).toContain(validate);
+    expect(reason(refused), path).not.toContain(register);
+  }
+  // Two recorded groups, this hook's second: only its own selection is refused (mutant H4 took the first group's).
+  ownership(root, [
+    ['hook-authoring-system/binding/hook/aaa-edits', ['src/**']],
+    [HOOK, ['docs/**', 'restricted/**']],
+  ]);
+  for (const path of ['src/app.ts', '.ia/workspace.json.bak', '.ia/src/hooks.ia'])
+    expect(check(root, path, {}, 'Edit'), path).toEqual({});
+  const refused = check(root, 'docs/guide.md', reviewer);
+  expect(code(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+  expect(reason(refused)).toContain('this edit is under its last registered selection');
+  expect(reason(refused)).toContain(removal);
+});
+
+it('names only the removal when the hook record is gone and the workspace does not admit (H-R2)', () => {
+  // A syntax error in hooks.ia: the hook is no admitted record and the workspace does not admit, so re-registering
+  // would refuse; the removal and `ia validate` are the commands that work.
+  const root = workspace({ '.ia/src/hooks.ia': hooks(['@hook note-edits', '@hook note-edits\n  bogus\nzzz']) });
+  ownership(root, [[HOOK, ['docs/**', '.ia/src/**']]]);
+  const refused = check(root, '.ia/src/hooks.ia', {}, 'Edit');
+  expect(code(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  expect(reason(refused)).toContain(`"ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`);
+  expect(reason(refused)).toContain(`"ia validate --root ${JSON.stringify(root)}"`);
+  expect(reason(refused)).not.toContain(`"ia host claude --root ${JSON.stringify(root)} --apply --yes"`);
+  expect(check(root, 'src/app.ts', {}, 'Edit')).toEqual({});
+});

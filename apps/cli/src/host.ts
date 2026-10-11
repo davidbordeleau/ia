@@ -56,7 +56,6 @@ import { confirm, Interrupted, Refusal, refusalOf, requireRoot } from './consume
 import type { HookCache, HostName } from './host-projection.js';
 import {
   applyHostProjection,
-  checkAdmitted,
   planFiles,
   planHookStep,
   planRetirement,
@@ -586,10 +585,10 @@ export function collectHost(context: Context): HostView {
   located(null, homeSrcRemedy(home, plan), () => assertIaHomeUsable(home));
   const { pin: bundled } = bundledPin(host.packageRoot);
   requireIdle(root, supplied);
-  // §4: zero error findings. A removal renders nothing, so it checks admission alone.
-  let rendered: HostOutput | null = null;
-  if (remove) checkAdmitted(root);
-  else rendered = renderProjectionFor(root, name);
+  // §4: zero error findings before anything is rendered or registered. A removal renders nothing and reads no record, so
+  // it needs neither an admitting workspace nor records that open (review findings H-R2 and H-R8): it is what restores
+  // editing when a broken record or an unreadable workspace leaves a hook group refusing the repair.
+  const rendered: HostOutput | null = remove ? null : renderProjectionFor(root, name);
   // A host home reached through a symbolic link or junction is refused by the mechanism (IA-DIST-PATH-UNSAFE), because
   // the payload it verifies must be the one the registration names; the remedy is a home with no link in its path.
   const expected: HostCacheTarget = located(

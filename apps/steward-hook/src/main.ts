@@ -752,12 +752,18 @@ export function evaluateHook(root: string, event: unknown, actorsPath?: string):
   }
 }
 /**
- * The commands that bring a registration whose hook cannot be read back in step, both runnable from a shell in that very
- * state: re-registering the workspace's current hooks (which removes a group whose record is gone), or removing the
- * host registration, which restores editing.
+ * The commands that bring a registration whose hook or records cannot be read back in step, each runnable from a shell in
+ * that very state (review findings G-R7, H-R2 and H-R8): removing the host registration, which restores editing and
+ * needs neither an admitting workspace nor readable records; and, only where the workspace admits, re-registering its
+ * current hooks, which removes a group whose record is gone. Where it does not admit, `ia validate` shows why.
  */
-const reregister = (root: string): string =>
-  `run "ia host claude --root ${JSON.stringify(root)} --apply --yes" from a shell to register the workspace's current hooks, or "ia host claude --root ${JSON.stringify(root)} --remove --apply --yes" to remove the registration and restore editing`;
+const recovery = (root: string, admits: boolean): string => {
+  const quoted = JSON.stringify(root),
+    remove = `"ia host claude --root ${quoted} --remove --apply --yes"`;
+  return admits
+    ? `run "ia host claude --root ${quoted} --apply --yes" from a shell to register the workspace's current hooks, or ${remove} to remove the registration and restore editing`
+    : `run ${remove} from a shell to remove the registration and restore editing, and "ia validate --root ${quoted}" to see why the workspace does not admit before registering again`;
+};
 /**
  * The `@mandate` guard (milestone generation-binding, plan amendments C9 and C10): one authored `@hook`'s group runs
  * `guard --root <root> --hook <identity>` for every edit tool. The same input checks, path safety and managed-state
@@ -767,8 +773,9 @@ const reregister = (root: string): string =>
  * evaluateMandateGuard decides the edit: allowed unless the hook selects it (its paths select the file and its tools
  * name the tool) and the actor is unknown or holds no governing mandate that grants Synthesis there. A selected path
  * reached through an alias is refused. What cannot be read refuses with a code; nothing is allowed because something was
- * unreadable once the hook is known to select the edit, and a registration whose hook cannot be read refuses the edits
- * under the selection last registered for it, or every edit under the root when none is recorded.
+ * unreadable once the hook is known to select the edit. When the hook's record, or the workspace's records at all,
+ * cannot be read, the registration refuses only the edits under the selection last registered for it, or every edit
+ * under the root when none is recorded (review findings G-N4 and H-R8).
  */
 export function evaluateMandateHook(root: string, hook: string, event: unknown): HookOutput {
   if (!editEvent(event)) return deny('IA-HOOK-INPUT-INVALID', 'Expected a PreToolUse file edit event');
@@ -789,8 +796,9 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     (spelling): spelling is string => spelling !== undefined,
   );
   if (paths.length === 0) return {};
-  // A file with more than one link has another name a hook may select: the edit is refused rather than decided by the
-  // name it was typed with (guard review finding G-N3).
+  // A file with more than one link has another name a hook may select, which the guard cannot find: the edit is refused
+  // wherever it is under the root rather than decided by the name it was typed with (guard review finding G-N3; a pnpm
+  // store link is such a file, H-N13).
   try {
     const linked = lstatSync(edit.actual, { throwIfNoEntry: false });
     if (linked !== undefined && linked.isFile() && linked.nlink > 1)
@@ -801,51 +809,64 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
   } catch (error) {
     return deny('IA-HOOK-PATH-UNSAFE', error instanceof Error ? error.message : String(error));
   }
+  // What cannot be read refuses no more than the selection the hook was registered with, which the hook ownership state
+  // recorded (guard review finding G-N4, review finding H-R8): edits elsewhere, the repair among them unless that
+  // selection holds it, proceed. With no recorded selection, every edit under the root is refused.
+  const unavailable = (code: HookCode, why: string, admits: boolean): HookOutput => {
+    let selection: readonly string[] | undefined;
+    try {
+      selection = registeredSelection(edit.base, hook);
+    } catch {
+      selection = undefined;
+    }
+    if (
+      selection !== undefined &&
+      !mandateGuardSelects({
+        hook: { identity: hook, tools: ['Write', 'Edit', 'MultiEdit'], paths: selection, message: '' },
+        tool: event.tool_name,
+        paths,
+        fold,
+      })
+    )
+      return {};
+    return deny(
+      code,
+      `${why}; ${selection === undefined ? 'no registered selection is recorded, so every edit under the root is refused' : 'this edit is under its last registered selection'}; ${recovery(edit.base, admits)}`,
+    );
+  };
+  const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
   let db: ReturnType<typeof openDatabase>;
   try {
     db = openDatabase(edit.base, { cache: false });
   } catch (error) {
-    return deny(
+    return unavailable(
       'IA-HOOK-MANDATE-UNAVAILABLE',
-      `The workspace's records cannot be read: ${error instanceof Error ? error.message : String(error)}. Next: ia validate`,
+      `The workspace's records cannot be read: ${message(error)}`,
+      false,
     );
   }
   try {
-    const within = db.resolveScope().token,
+    let within: string, nodes: ReturnType<typeof db.records>, admits: boolean;
+    try {
+      admits = !db.report.findings.some((finding) => finding.severity === 'error');
+      within = db.resolveScope().token;
       nodes = db
         .records({ within })
         .filter((node) => node.discriminator === 'hook' && node.band === 100 && node.identity === hook);
-    // A registration whose hook record cannot be read refuses no more than the selection it was registered with, which
-    // the hook ownership state recorded (guard review finding G-N4): edits elsewhere, the repair of the record among
-    // them unless that selection holds it, proceed. With no recorded selection, every edit under the root is refused.
-    const unavailable = (why: string): HookOutput => {
-      let selection: readonly string[] | undefined;
-      try {
-        selection = registeredSelection(edit.base, hook);
-      } catch {
-        selection = undefined;
-      }
-      if (
-        selection !== undefined &&
-        !mandateGuardSelects({
-          hook: { identity: hook, tools: ['Write', 'Edit', 'MultiEdit'], paths: selection, message: '' },
-          tool: event.tool_name,
-          paths,
-          fold,
-        })
-      )
-        return {};
-      return deny(
-        'IA-HOOK-DECLARATION-UNAVAILABLE',
-        `${why}; ${selection === undefined ? 'no registered selection is recorded, so every edit under the root is refused' : 'this edit is under its last registered selection'}; ${reregister(edit.base)}`,
+    } catch (error) {
+      return unavailable(
+        'IA-HOOK-MANDATE-UNAVAILABLE',
+        `The workspace's records cannot be read: ${message(error)}`,
+        false,
       );
-    };
-    if (nodes.length !== 1) return unavailable(`${hook} is not an admitted authored @hook`);
+    }
+    if (nodes.length !== 1)
+      return unavailable('IA-HOOK-DECLARATION-UNAVAILABLE', `${hook} is not an admitted authored @hook`, admits);
     let declaration: ReturnType<typeof hookDeclaration>;
     try {
       declaration = hookDeclaration(nodes[0]!);
     } catch (error) {
-      return unavailable(error instanceof Error ? error.message : String(error));
+      return unavailable('IA-HOOK-DECLARATION-UNAVAILABLE', message(error), admits);
     }
     const request = {
       hook: declaration,
@@ -861,7 +882,8 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     const decision = evaluateMandateGuard(db, within, request);
     if (decision.allowed) return {};
     // Guard review finding G-N1: a refusal of the main session names the shell command that lifts every hook, which
-    // works whatever the records say; a subagent's refusal is the main session's to resolve.
+    // needs neither an admitting workspace nor readable records (H-R2, H-R8); a subagent's refusal is the main
+    // session's to resolve.
     const lift =
       event['agent_id'] === undefined
         ? `; the main session can lift every hook from a shell with "ia host claude --root ${JSON.stringify(edit.base)} --remove --apply --yes"`
@@ -870,7 +892,7 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
   } catch (error) {
     return deny(
       'IA-HOOK-MANDATE-UNAVAILABLE',
-      `The records that decide this edit cannot be read: ${error instanceof Error ? error.message : String(error)}. Next: ia validate`,
+      `The records that decide this edit cannot be read: ${message(error)}. Next: ia validate`,
     );
   } finally {
     db.close();

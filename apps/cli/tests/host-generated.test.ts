@@ -516,3 +516,67 @@ it('applies the rest when a hook exceeds the bounds a registration holds, report
   ]);
   for (const path of [AGENT, SKILL]) expect(existsSync(resolve(root, path)), path).toBe(true);
 });
+
+/** The removal a guard refusal names, as it names it, and the hook groups left once it ran. */
+async function lifted(root: string, env: Record<string, string>, reason: string | undefined): Promise<number> {
+  expect(reason).toContain(`"ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`);
+  const removed = await host(root, env, 'claude', '--remove', '--apply', '--yes');
+  expect(removed.exitCode, removed.stdout).toBe(0);
+  expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+  return existsSync(resolve(root, SETTINGS)) ? hookGroups(root).size : 0;
+}
+
+it('restores editing with the removal the guard names when a broken record keeps the workspace from admitting (H-R2)', async () => {
+  const { root, env } = await composed();
+  edit(root, '.ia/src/hooks.ia', ['"restricted/**"]', '"restricted/**", ".ia/src/**"]']);
+  await apply(root, env);
+  const group = hookGroups(root).get(HOOK);
+  // A syntax error in the hook's own record: it is no admitted @hook, and the workspace no longer admits.
+  edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
+  const refused = await guarded(root, group, '.ia/src/hooks.ia', {}, 'Edit');
+  expect(codeOf(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  // Re-registering would refuse here, so it is not named; ia validate, which shows why, is.
+  expect(refused).not.toContain(`"ia host claude --root ${JSON.stringify(root)} --apply --yes"`);
+  expect(refused).toContain(`"ia validate --root ${JSON.stringify(root)}"`);
+  const validated = await run(['validate', '--root', root, '--json']);
+  expect(validated.exitCode).not.toBe(0);
+  expect(validated.stdout).toContain('hooks.ia');
+  expect(await lifted(root, env, refused)).toBe(0);
+
+  // The lift a main-session refusal names works whatever the records say: an ambiguous default actor and a source error.
+  const second = await composed();
+  edit(second.root, '.ia/src/workspace.ia', ['    steward @agent demo\n', '']);
+  put(
+    second.root,
+    '.ia/src/reviewer-scoped.ia',
+    '#! ia 1.0\n\n@mandate reviewer-scoped\n  meaning\n    says "x"\n    answers "x?"\n  governance\n    requires "x"\n  authority\n    participant @agent reviewer\n    moves [Observation]\n    scope [@workspace demo]\n',
+  );
+  await apply(second.root, second.env);
+  const ambiguous = hookGroups(second.root).get(HOOK);
+  put(second.root, '.ia/src/broken.ia', '#! ia 1.0\n\n@playbook broken\n  meaning\n    says "x"\nzzz not ia\n');
+  const lift = await guarded(second.root, ambiguous, 'docs/guide.md');
+  expect(codeOf(lift)).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
+  expect(await lifted(second.root, second.env, lift)).toBe(0);
+});
+
+it('refuses no more than the last registered selection when the records cannot open, and the removal it names works (H-R8)', async () => {
+  for (const breaking of [
+    (root: string) => put(root, '.ia/workspace.json', '{ not json'),
+    // A Windows checkout's autocrlf rewrites the lock with CRLF line ends: the db refuses it as drift.
+    (root: string) =>
+      writeFileSync(
+        resolve(root, '.ia/distributions.lock.json'),
+        read(root, '.ia/distributions.lock.json').replace(/\r?\n/g, '\r\n'),
+      ),
+  ]) {
+    const { root, env } = await composed();
+    await apply(root, env);
+    const group = hookGroups(root).get(HOOK);
+    breaking(root);
+    expect(await guarded(root, group, 'src/app.ts')).toBeUndefined();
+    const refused = await guarded(root, group, 'docs/guide.md');
+    expect(codeOf(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+    expect(refused).toContain('this edit is under its last registered selection');
+    expect(await lifted(root, env, refused)).toBe(0);
+  }
+});

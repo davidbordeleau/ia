@@ -1,4 +1,5 @@
 import type { ReadHandle } from '@inventarch/db';
+import type { InstalledOperation } from '@inventarch/db/distribution';
 import type { Node } from '@inventarch/graph';
 import type { CompiledField, CompiledValue } from '@inventarch/language';
 
@@ -24,26 +25,14 @@ import type { CompiledField, CompiledValue } from '@inventarch/language';
  *   where an unavailable one is only not bound.
  */
 
-/** One catalog operation row as a binder needs it; the distribution's verified rows are assignable to it. */
-export type BindingCatalogOperation =
-  | {
-      readonly id: string;
-      readonly status: 'available';
-      readonly version: number;
-      /** The canonical identity of the `@operation` the implementation serves. */
-      readonly operation: string;
-      readonly handler: string;
-      /** The SHA-256 of the shipped handler module. */
-      readonly digest: string;
-    }
-  | { readonly id: string; readonly status: 'unavailable'; readonly reason: string }
-  | { readonly id: string; readonly status: 'revoked'; readonly reason: string };
 /**
- * The catalog a binding is joined against: `present` as its reader verified it, `unavailable` (no catalog, or none
- * this workspace joined) with the reason, or `damaged` (it failed verification) with the reason.
+ * The catalog a binding is joined against: `present`, its operation rows as `@inventarch/db/distribution` shapes them
+ * and its reader verified them against the payload (review finding B-N9: one shape for reader and binder),
+ * `unavailable` (no catalog, or none this workspace joined) with the reason, or `damaged` (it failed verification)
+ * with the reason.
  */
 export type BindingCatalog =
-  | { readonly status: 'present'; readonly operations: readonly BindingCatalogOperation[] }
+  | { readonly status: 'present'; readonly operations: readonly InstalledOperation[] }
   | { readonly status: 'unavailable'; readonly reason: string }
   | { readonly status: 'damaged'; readonly reason: string };
 /** An `@execution-binding` as the binder reads it: its unconditional binding fields, its target resolved. */

@@ -1,5 +1,11 @@
 import { existsSync } from 'node:fs';
-import { decodeDistributionJson } from '@inventarch/db/distribution';
+import { checkInstalledImplementations, decodeDistributionJson } from '@inventarch/db/distribution';
+import type {
+  AvailableOperation,
+  InstalledImplementationsValue,
+  InstalledOperation,
+  UnavailableOperation,
+} from '@inventarch/db/distribution';
 import {
   acquireHostRegistrationLock,
   assertHostRegistrationIdle,
@@ -9,74 +15,40 @@ import {
 } from './host.js';
 import type { WorkspaceHost } from './hosts.js';
 import { asWorkspaceHost } from './hosts.js';
-import { bytes, contained, fail, json, locate, object, portable, replace, sha256, utf8, workspace } from './files.js';
+import { bytes, contained, fail, json, locate, object, replace, sha256, utf8, workspace } from './files.js';
 
 /**
  * Plan amendments C16 and C24 (milestone generation-binding; design item 9): the installed-implementation catalog a v2
  * host payload carries at its root. The payload builder (tools/distribution/host-payload.mjs) generates it and lists it
  * in the payload inventory, because `verifyHostCache` refuses any file the inventory does not list. It describes
  * implementations no host app may import, so this module reads data only: it never imports, loads or runs a handler.
+ * Its value's shape, operation rows included, is `@inventarch/db/distribution`'s (`checkInstalledImplementations`),
+ * which binders read too (review finding B-N9).
  *
  * Nothing is read from a payload that fails `verifyHostCache`: every entry under the payload directory must be a file
  * the inventory lists, with its bytes, and no link or junction, so a module planted anywhere Node's resolution could
  * reach (beside or above the handler's packages) refuses the whole catalog. An operation is then `available` only when
- * the payload ships its handler: the handler module and every file of the packages its closure names are in the
- * verified inventory, the catalog's handler digest is the SHA-256 the inventory pins for the module, and the closure
- * digest is the digest of those inventory rows. A declaration whose bytes are not shipped is `unavailable`, never
- * available; a payload that fails verification, or catalog pins that disagree with its inventory, are refusals.
+ * the payload ships its handler: the handler module and the manifest of every package its closure names are in the
+ * verified inventory, and the catalog's handler digest is the SHA-256 the inventory pins for the module. What binds is
+ * that module digest together with the verified inventory, which pins every other byte of the closure (review finding
+ * B-N5). A declaration whose bytes are not shipped is `unavailable`, never available; a payload that fails verification,
+ * or a handler digest that disagrees with its inventory, is a refusal.
  */
 export const INSTALLED_IMPLEMENTATIONS = 'implementations.json';
-export const INSTALLED_IMPLEMENTATIONS_FORMAT = 'ia.installed-implementations.v1';
+export { INSTALLED_IMPLEMENTATIONS_FORMAT } from '@inventarch/db/distribution';
+export type {
+  AvailableOperation,
+  InstalledImplementationsValue,
+  InstalledOperation,
+  RevokedOperation,
+  UnavailableOperation,
+} from '@inventarch/db/distribution';
 /** The implementation id a consumer's join names for the catalog itself. */
 export const INSTALLED_IMPLEMENTATIONS_ID = 'installed-implementations';
 /** Design item 9: the join receipts each consumer records under its own name, beside the host state files. */
 export const JOINS = '.ia/distributions/hosts/joins.json';
 export const JOINS_FORMAT = 'ia.host-joins.v1';
 
-/** An operation implementation whose handler bytes the payload ships. Digests are bare SHA-256 hex. */
-export interface AvailableOperation {
-  readonly id: string;
-  readonly status: 'available';
-  /** The installed descriptor's version. */
-  readonly version: number;
-  /** The canonical identity of the `@operation` the implementation serves. */
-  readonly operation: string;
-  readonly handler: string;
-  /** The input and output validator ids. */
-  readonly input: string;
-  readonly output: string;
-  /** The payload path of the shipped handler module. */
-  readonly module: string;
-  /** The SHA-256 of the shipped handler module's bytes. */
-  readonly digest: string;
-  /** The installed packages whose shipped files are the handler's closure: its own package and its dependencies. */
-  readonly packages: readonly string[];
-  /** `closureDigest` over every payload file of `packages`, as the inventory pins them. */
-  readonly closure: string;
-}
-/** An operation implementation the payload does not ship, with the reason. It binds nothing. */
-export interface UnavailableOperation {
-  readonly id: string;
-  readonly status: 'unavailable';
-  readonly reason: string;
-}
-/**
- * An operation implementation the catalog withdraws, with the reason: the payload's producer declares it must not be
- * bound, whatever bytes are present. A binder reports it as an error, never as merely unavailable. Nothing produces
- * one yet; the format carries it so a withdrawal stays distinct from an implementation that is simply not shipped.
- */
-export interface RevokedOperation {
-  readonly id: string;
-  readonly status: 'revoked';
-  readonly reason: string;
-}
-export type InstalledOperation = AvailableOperation | UnavailableOperation | RevokedOperation;
-export interface InstalledImplementationsValue {
-  readonly format: typeof INSTALLED_IMPLEMENTATIONS_FORMAT;
-  /** An `ia-evaluator-catalog/1.x` value as compliance's `createEvaluatorCatalog` takes it: its built-ins are implicit. */
-  readonly evaluators: { readonly format: string; readonly entries: readonly unknown[] };
-  readonly operations: readonly InstalledOperation[];
-}
 /** The catalog as `readInstalledImplementations` verified it in one materialized payload. */
 export interface InstalledImplementations extends InstalledImplementationsValue {
   readonly status: 'present';
@@ -113,27 +85,8 @@ export type JoinResult =
 
 const ROWS = 1024;
 const TOKEN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/,
-  HANDLER = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/,
-  IDENTITY = /^[a-z][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)+$/,
-  PACKAGE = /^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/,
-  MODULE = /\.[cm]?js$/,
-  HEX = /^[a-f0-9]{64}$/,
-  EVALUATOR_FORMAT = /^ia-evaluator-catalog\/1\.(?:0|[1-9][0-9]*)$/;
-const AVAILABLE_KEYS = [
-    'id',
-    'status',
-    'version',
-    'operation',
-    'handler',
-    'input',
-    'output',
-    'module',
-    'digest',
-    'packages',
-    'closure',
-  ] as const,
-  UNAVAILABLE_KEYS = ['id', 'status', 'reason'] as const,
-  JOIN_KEYS = ['consumer', 'implementation', 'version', 'digest', 'release', 'consumerRevision'] as const;
+  HEX = /^[a-f0-9]{64}$/;
+const JOIN_KEYS = ['consumer', 'implementation', 'version', 'digest', 'release', 'consumerRevision'] as const;
 const prose = (value: unknown, limit: number): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= limit && !/[\u0000-\u001f]/.test(value);
 const text = (value: Buffer | null): string | null => (value === null ? null : utf8(value));
@@ -142,104 +95,13 @@ const packageDirectory = (name: string): string => `runtime/node_modules/${name}
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
- * The digest an operation's `closure` pins: the SHA-256 of one `<sha256>  <path>` line per file, sorted by path, as
- * `sha256sum` prints them. The payload builder computes it from the bytes it ships; a reader recomputes it from the
- * inventory, so both name exactly the same files and bytes.
- */
-export function closureDigest(files: readonly { readonly path: string; readonly sha256: string }[]): string {
-  return sha256(
-    [...files]
-      .sort((a, b) => byText(a.path, b.path))
-      .map((file) => `${file.sha256}  ${file.path}\n`)
-      .join(''),
-  );
-}
-
-function operationRow(item: unknown): InstalledOperation {
-  if (item === null || typeof item !== 'object' || Array.isArray(item))
-    fail('INPUT-INVALID', 'Invalid installed operation');
-  const status = (item as { status?: unknown }).status;
-  if (status === 'unavailable' || status === 'revoked') {
-    const row = object(item, UNAVAILABLE_KEYS);
-    if (typeof row['id'] !== 'string' || !TOKEN.test(row['id']) || row['id'].length > 128 || !prose(row['reason'], 512))
-      fail('INPUT-INVALID', `Invalid ${status} installed operation`);
-    return row as unknown as UnavailableOperation | RevokedOperation;
-  }
-  if (status !== 'available') fail('INPUT-INVALID', 'An installed operation is available, unavailable or revoked');
-  const row = object(item, AVAILABLE_KEYS),
-    packages = row['packages'];
-  if (
-    typeof row['id'] !== 'string' ||
-    !TOKEN.test(row['id']) ||
-    row['id'].length > 128 ||
-    !Number.isSafeInteger(row['version']) ||
-    (row['version'] as number) < 1 ||
-    typeof row['operation'] !== 'string' ||
-    !IDENTITY.test(row['operation']) ||
-    row['operation'].length > 256 ||
-    typeof row['handler'] !== 'string' ||
-    !HANDLER.test(row['handler']) ||
-    row['handler'].length > 128 ||
-    typeof row['input'] !== 'string' ||
-    !TOKEN.test(row['input']) ||
-    typeof row['output'] !== 'string' ||
-    !TOKEN.test(row['output']) ||
-    typeof row['digest'] !== 'string' ||
-    !HEX.test(row['digest']) ||
-    typeof row['closure'] !== 'string' ||
-    !HEX.test(row['closure']) ||
-    !Array.isArray(packages) ||
-    packages.length === 0 ||
-    packages.length > 64 ||
-    !packages.every(
-      (name, index) =>
-        typeof name === 'string' &&
-        PACKAGE.test(name) &&
-        name.length <= 214 &&
-        (index === 0 || (packages[index - 1] as string) < name),
-    ) ||
-    typeof row['module'] !== 'string' ||
-    !MODULE.test(row['module'])
-  )
-    fail('INPUT-INVALID', 'Invalid available installed operation');
-  portable(row['module']);
-  // The handler module belongs to one of the packages its closure names, so its bytes are part of what is checked.
-  if (!(packages as string[]).some((name) => (row['module'] as string).startsWith(packageDirectory(name))))
-    fail('INPUT-INVALID', 'An installed handler module lies outside its package closure');
-  return row as unknown as AvailableOperation;
-}
-
-/**
- * The shape of a catalog: the evaluators section's format and entry list (compliance validates each entry when it
- * binds), and one row per operation, sorted by id and unique, each `available` with its handler pins or `unavailable`
- * with a reason. The payload builder checks what it writes with it too.
+ * The value of a catalog, as `@inventarch/db/distribution`'s `checkInstalledImplementations` admits one; any other is
+ * IA-DIST-INPUT-INVALID with its reason. The payload builder checks what it writes with it too.
  */
 export function installedImplementationsValue(value: unknown): InstalledImplementationsValue {
-  const row = object(value, ['format', 'evaluators', 'operations']),
-    evaluators = object(row['evaluators'], ['format', 'entries']);
-  if (row['format'] !== INSTALLED_IMPLEMENTATIONS_FORMAT)
-    fail('INPUT-INVALID', 'Unknown installed-implementation catalog format');
-  if (
-    typeof evaluators['format'] !== 'string' ||
-    !EVALUATOR_FORMAT.test(evaluators['format']) ||
-    !Array.isArray(evaluators['entries']) ||
-    evaluators['entries'].length > ROWS
-  )
-    fail('INPUT-INVALID', 'The evaluators section is not an ia-evaluator-catalog/1.x value');
-  if (!Array.isArray(row['operations']) || row['operations'].length > ROWS)
-    fail('INPUT-INVALID', 'Invalid installed operation list');
-  let previous = '';
-  const operations = row['operations'].map((item) => {
-    const operation = operationRow(item);
-    if (operation.id <= previous) fail('INPUT-INVALID', 'Installed operations must be sorted by id and unique');
-    previous = operation.id;
-    return operation;
-  });
-  return {
-    format: INSTALLED_IMPLEMENTATIONS_FORMAT,
-    evaluators: evaluators as unknown as InstalledImplementationsValue['evaluators'],
-    operations,
-  };
+  const checked = checkInstalledImplementations(value);
+  if (!checked.ok) fail('INPUT-INVALID', checked.reason);
+  return checked.value;
 }
 
 interface Listed {
@@ -249,8 +111,8 @@ interface Listed {
 /**
  * C24: `operation` as this payload ships it, against the inventory of a payload `verifyHostCache` has verified, so
  * every listed file is present with the bytes the inventory pins and nothing else is there. A handler module or closure
- * package the inventory does not list makes the operation unavailable; catalog pins that disagree with the inventory
- * are IA-DIST-INTEGRITY-MISMATCH.
+ * package the inventory does not list makes the operation unavailable; a handler digest that disagrees with the
+ * inventory is IA-DIST-INTEGRITY-MISMATCH.
  */
 function shipped(operation: AvailableOperation, inventory: ReadonlyMap<string, Listed>): InstalledOperation {
   const unavailable = (reason: string): UnavailableOperation => ({ id: operation.id, status: 'unavailable', reason });
@@ -261,11 +123,6 @@ function shipped(operation: AvailableOperation, inventory: ReadonlyMap<string, L
     fail('INTEGRITY-MISMATCH', `The catalog's handler digest for ${operation.id} differs from the payload inventory`);
   const missing = operation.packages.find((name) => !inventory.has(packageDirectory(name) + 'package.json'));
   if (missing !== undefined) return unavailable(`its closure package ${missing} is not in this payload`);
-  const files = [...inventory]
-    .filter(([path]) => operation.packages.some((name) => path.startsWith(packageDirectory(name))))
-    .map(([path, listed]) => ({ path, sha256: listed.sha256 }));
-  if (closureDigest(files) !== operation.closure)
-    fail('INTEGRITY-MISMATCH', `The catalog's closure digest for ${operation.id} differs from the payload inventory`);
   return operation;
 }
 

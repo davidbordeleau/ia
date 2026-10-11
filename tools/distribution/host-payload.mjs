@@ -322,11 +322,12 @@ export function moduleClosure(files, start) {
 /**
  * C24: one catalog row for a located implementation (`collectPayload`). It is available only when the payload ships
  * its handler module and every module the handler reaches lies in the package closure the payload ships, and when the
- * module, imported here by the producer, declares the implementation; the row then pins the SHA-256 of the shipped
- * module bytes and the closure digest of every shipped file of that package closure. Otherwise it is unavailable, with
- * the reason. A module that is shipped but does not declare its implementation is a producer error, never a row.
+ * module, imported here by the producer at build time, declares the implementation; the row then pins the SHA-256 of
+ * the shipped module bytes and names that package closure, whose other bytes the payload inventory pins (review finding
+ * B-N5). Otherwise it is unavailable, with the reason. A module that is shipped but does not declare its implementation
+ * is a producer error, never a row.
  */
-async function operationRow(implementation, files, closureDigest) {
+export async function operationRow(implementation, files) {
   const unavailable = (reason) => ({ id: implementation.id, status: 'unavailable', reason });
   if (implementation.reason !== null) return unavailable(implementation.reason);
   const module = `runtime/node_modules/${implementation.package}/${implementation.module}`,
@@ -353,9 +354,6 @@ async function operationRow(implementation, files, closureDigest) {
     );
   if (hash(readFileSync(source)) !== hash(bytes))
     throw Error('Handler module changed while the payload was built: ' + module);
-  const closure = [...files]
-    .filter(([path]) => packages.some((name) => path.startsWith(`runtime/node_modules/${name}/`)))
-    .map(([path, content]) => ({ path, sha256: hash(content) }));
   return {
     id: implementation.id,
     status: 'available',
@@ -367,7 +365,6 @@ async function operationRow(implementation, files, closureDigest) {
     module,
     digest: hash(bytes),
     packages,
-    closure: closureDigest(closure),
   };
 }
 /**
@@ -381,13 +378,13 @@ export async function generateHostPayload({ repository, write, implementations =
   const { packTree, HOST_TREE_LIMITS } = await import(
     pathToFileURL(resolve(repository, 'apps/distribution/dist/ustar.js')).href
   );
-  const { installedImplementationsValue, closureDigest } = await import(
+  const { installedImplementationsValue } = await import(
     pathToFileURL(resolve(repository, 'apps/distribution/dist/implementations.js')).href
   );
   const { files, packages, implementations: located } = await collectPayload(repository, implementations);
   const operations = [];
   for (const implementation of [...located].sort((a, b) => (a.id < b.id ? -1 : 1)))
-    operations.push(await operationRow(implementation, files, closureDigest));
+    operations.push(await operationRow(implementation, files));
   const catalog = installedImplementationsValue({
     format: 'ia.installed-implementations.v1',
     evaluators: { format: 'ia-evaluator-catalog/1.0', entries: [] },

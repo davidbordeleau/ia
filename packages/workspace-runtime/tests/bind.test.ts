@@ -5,18 +5,23 @@ import { resolve } from 'node:path';
 import { open } from '@inventarch/db';
 import { afterAll, expect, it } from 'vitest';
 import { bindExecution, executionBindings } from '../src/bind.js';
-import type { BindingCatalog, BindingCatalogOperation, ExecutionBinding } from '../src/bind.js';
+import type { InstalledOperation } from '@inventarch/db/distribution';
+import type { BindingCatalog, ExecutionBinding } from '../src/bind.js';
 
 const READ = 'authoring-system/binding/operation/read-captured-source';
-const available: BindingCatalogOperation = {
+const available: InstalledOperation = {
   id: 'captured-source-read-v1',
   status: 'available',
   version: 1,
   operation: READ,
   handler: 'ia.captured-source.read.v1',
+  input: 'captured-source-read-input-v1',
+  output: 'captured-source-read-output-v1',
+  module: 'runtime/node_modules/@inventarch/agent-composition-system/dist/installed-read.js',
   digest: 'c'.repeat(64),
+  packages: ['@inventarch/agent-composition-system'],
 };
-const present = (...operations: BindingCatalogOperation[]): BindingCatalog => ({ status: 'present', operations });
+const present = (...operations: InstalledOperation[]): BindingCatalog => ({ status: 'present', operations });
 const binding = (fields: Partial<ExecutionBinding> = {}): ExecutionBinding => ({
   identity: 'agent-composition-system/binding/execution-binding/probe',
   kind: 'operation',

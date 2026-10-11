@@ -41,6 +41,11 @@ export declare function moduleClosure(
   files: ReadonlyMap<string, Buffer>,
   start: string,
 ): { reached: string[]; packages: string[]; missing: string[] };
+/** C24: one catalog row for a located implementation; it imports the declaration module when the handler ships. */
+export declare function operationRow(
+  implementation: LocatedImplementation,
+  files: ReadonlyMap<string, Buffer>,
+): Promise<{ id: string; status: 'available' | 'unavailable'; reason?: string } & Record<string, unknown>>;
 export declare function generateHostPayload(options: {
   repository: string;
   write: boolean;

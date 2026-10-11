@@ -18,7 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 import { afterAll, expect, it } from 'vitest';
 import { unpackTree, HOST_TREE_LIMITS } from '../../apps/distribution/src/ustar.js';
 import { verifyHostCache } from '../../apps/distribution/src/host.js';
-import { closureDigest, readInstalledImplementations } from '../../apps/distribution/src/implementations.js';
+import { readInstalledImplementations } from '../../apps/distribution/src/implementations.js';
 import type { InstalledImplementations } from '../../apps/distribution/src/implementations.js';
 import { importedModules, moduleProblem } from '../dependencies/check.js';
 import {
@@ -125,14 +125,14 @@ it('ships the installed read handler as a payload root and pins the catalog to t
   expect(operation.digest).toBe(sha(shipped));
   expect(listed(HANDLER)!.sha256).toBe(operation.digest);
   expect(inventory.packages.map((row) => row.name)).toContain('@inventarch/agent-composition-system');
-  // The closure digest pins every shipped file of the handler's package closure, which the handler's imports stay in.
+  // The row names the handler's package closure, every file of which the verified inventory pins (B-N5).
   expect(operation.packages).toEqual(
     expect.arrayContaining(['@inventarch/agent-composition-system', '@inventarch/db']),
   );
+  expect(operation).not.toHaveProperty('closure');
   const closure = inventory.files.filter((row) =>
     operation.packages.some((name) => row.path.startsWith(`runtime/node_modules/${name}/`)),
   );
-  expect(operation.closure).toBe(closureDigest(closure));
   expect(closure.some((row) => row.path.endsWith('/dist/compile.js'))).toBe(true);
 });
 it('never reports the read handler available once its shipped bytes are altered or missing', async () => {

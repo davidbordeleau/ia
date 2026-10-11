@@ -20,7 +20,6 @@ import { afterEach, expect, it } from 'vitest';
 import { json, sha256 } from '../src/files.js';
 import { acquireHostRegistrationLock, verifyHostCache } from '../src/host.js';
 import {
-  closureDigest,
   installedImplementationsValue,
   joinedCatalog,
   joinHost,
@@ -68,11 +67,6 @@ function payload(options: { catalog?: boolean; mutate?: (operation: Operation) =
       [BASE, 'export default 1;\n'],
       ['runtime/node_modules/@acme/other/package.json', json({ name: '@acme/other' })],
     ]);
-  const closure = closureDigest(
-    [...files]
-      .filter(([path]) => PACKAGES.some((name) => path.startsWith(`runtime/node_modules/${name}/`)))
-      .map(([path, text]) => ({ path, sha256: sha256(text) })),
-  );
   const operation = (options.mutate ?? ((row) => row))({
     id: 'read-v1',
     status: 'available',
@@ -84,7 +78,6 @@ function payload(options: { catalog?: boolean; mutate?: (operation: Operation) =
     module: MODULE,
     digest: sha256(files.get(MODULE)!),
     packages: PACKAGES,
-    closure,
   });
   if (options.catalog !== false)
     files.set(
@@ -218,12 +211,9 @@ it('detects altered handler bytes and disagreeing pins as an integrity failure, 
     expect(() => readInstalledImplementations(root, release)).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
     expect(() => verifyHostCache(root)).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
   }
-  // A catalog whose handler or closure digest disagrees with the inventory the release pins.
-  for (const mutate of [
-    (row: Operation) => ({ ...row, digest: 'f'.repeat(64) }),
-    (row: Operation) => ({ ...row, closure: 'f'.repeat(64) }),
-  ]) {
-    const { root, release } = payload({ mutate });
+  // A catalog whose handler digest disagrees with the inventory the release pins.
+  {
+    const { root, release } = payload({ mutate: (row: Operation) => ({ ...row, digest: 'f'.repeat(64) }) });
     expect(verifyHostCache(root).release).toBe(release);
     expect(() => readInstalledImplementations(root, release)).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
   }
@@ -262,7 +252,8 @@ it('accepts only well-formed catalogs', () => {
   for (const bad of [
     catalog([unavailable, available]),
     catalog([available, available]),
-    catalog([{ ...available, closure: undefined }]),
+    catalog([{ ...available, packages: undefined }]),
+    catalog([{ ...available, closure: 'f'.repeat(64) }]),
     catalog([{ ...available, extra: 1 }]),
     catalog([{ ...available, module: 'runtime/node_modules/@acme/other/index.js' }]),
     catalog([{ ...available, packages: ['@acme/handler', '@acme/base'] }]),

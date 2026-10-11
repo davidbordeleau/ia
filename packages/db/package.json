@@ -65,6 +65,10 @@
       "types": "./dist/distribution/contracts.d.ts",
       "default": "./dist/distribution/contracts.js"
     },
+    "./internal/distribution/implementations": {
+      "types": "./dist/distribution/implementations.d.ts",
+      "default": "./dist/distribution/implementations.js"
+    },
     "./internal/distribution/index": {
       "types": "./dist/distribution/index.d.ts",
       "default": "./dist/distribution/index.js"
@@ -200,6 +204,10 @@
       "./internal/distribution/contracts": {
         "types": "./dist/distribution/contracts.d.ts",
         "default": "./dist/distribution/contracts.js"
+      },
+      "./internal/distribution/implementations": {
+        "types": "./dist/distribution/implementations.d.ts",
+        "default": "./dist/distribution/implementations.js"
       },
       "./internal/distribution/index": {
         "types": "./dist/distribution/index.d.ts",

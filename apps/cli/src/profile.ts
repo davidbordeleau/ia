@@ -148,6 +148,8 @@ export function requireProfile(request: ProfileRequest): Profile {
     words = request.words ?? [],
     rooted = rootedOf(context),
     workspace = repositoryWorkspace(reader, within);
+  // The CLI's one call of governingMandates (review C-RC1): the profile, the gate state and every next command it judges
+  // read the mandates through it, so an option the runtime adds is passed here once.
   const governing = (actor: string | undefined, path: string | undefined): readonly GoverningMandate[] =>
     governingMandates(reader, within, {
       ...(actor === undefined ? {} : { actor }),

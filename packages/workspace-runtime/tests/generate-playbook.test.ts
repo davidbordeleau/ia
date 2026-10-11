@@ -6,7 +6,13 @@ import { open } from '@inventarch/db';
 import type { Handle } from '@inventarch/db';
 import { PACKET_MARKER } from '@inventarch/runtime';
 import { adoptWorkspace } from '../src/corpus.js';
-import { generateDefinitions, generateHooks, generatePlaybookSkills } from '../src/generate/index.js';
+import {
+  generateDefinitions,
+  generateHooks,
+  generateHookSet,
+  generatePlaybookSkills,
+  hookDeclaration,
+} from '../src/generate/index.js';
 
 // Milestone generation-binding task generation-playbook-skill (plan amendments C8 and C12): the authored `@playbook` of
 // apps/cli's composition fixture renders one skill per host. The fixture's `.ia/src` is laid over the conformance
@@ -267,20 +273,54 @@ it('renders operation and harness definitions without importing a handler or val
   });
 });
 
-it('generates authored hooks only and refuses tools and selections outside the edit guard contract', () => {
+it('generates authored hooks only and reports tools and selections outside the edit guard contract', () => {
   const hooks = readFileSync(resolve(FIXTURE, 'hooks.ia'), 'utf8');
   const authored = fixture();
   expect(generateHooks(authored.db, authored.within, 'claude')).toHaveLength(1);
   expect(generateHooks(authored.db, authored.within, 'codex')).toEqual([]);
+  // C12: Codex registers no hook and reports each authored one.
+  expect(generateHookSet(authored.db, authored.within, 'codex')).toEqual({
+    hooks: [],
+    unsupported: [
+      {
+        identity: 'hook-authoring-system/binding/hook/note-edits',
+        word: 'hook',
+        reason: 'Codex hooks are unsupported',
+      },
+    ],
+  });
   const adopted = fixture({ '.ia/src/hooks.ia': null }, { '.ia/src/hooks.ia': hooks });
   expect(generateHooks(adopted.db, adopted.within, 'claude')).toEqual([]);
-  for (const text of [
-    hooks.replace('[Write, Edit, MultiEdit]', '[Bash]'),
-    hooks.replace('"docs/**"', '"../docs/**"'),
-  ]) {
+  expect(generateHookSet(adopted.db, adopted.within, 'claude').unsupported).toEqual([]);
+  for (const [text, why] of [
+    [hooks.replace('[Write, Edit, MultiEdit]', '[Bash]'), 'hook.tools must name Write, Edit or MultiEdit'],
+    [hooks.replace('"docs/**"', '"../docs/**"'), 'hook.paths must hold workspace-relative path selections'],
+    [hooks.replace('event PreToolUse', 'event Stop'), 'event Stop is not PreToolUse'],
+    // A hook that selects no path could never deny: it is reported, never registered as a guard that guards nothing.
+    [hooks.replace('["docs/**", "restricted/**"]', '[]'), 'hook.paths selects no path'],
+  ] as const) {
     const broken = fixture({ '.ia/src/hooks.ia': text });
-    expect(() => generateHooks(broken.db, broken.within, 'claude')).toThrow('Unsupported or unsafe authored hook');
+    expect(generateHooks(broken.db, broken.within, 'claude')).toEqual([]);
+    const { unsupported } = generateHookSet(broken.db, broken.within, 'claude');
+    expect(unsupported).toHaveLength(1);
+    expect(unsupported[0]).toMatchObject({ identity: 'hook-authoring-system/binding/hook/note-edits', word: 'hook' });
+    expect(unsupported[0]!.reason).toContain(why);
+    // The guard reads the same declaration, so it refuses what registration reports.
+    const node = broken.db.records({ within: broken.within }).find((record) => record.discriminator === 'hook')!;
+    expect(() => hookDeclaration(node)).toThrow(why);
   }
+  // One unsupported hook leaves every supported one registered, and the harness definitions still render.
+  const mixed = fixture({
+    '.ia/src/extra-hooks.ia':
+      '#! ia 1.0\n\n@hook session-start\n  meaning\n    says "Runs at session start."\n    answers "What runs at session start?"\n  hook\n    event Stop\n    tools [Write]\n    paths ["docs/**"]\n    message "Not an edit guard."\n',
+  });
+  const set = generateHookSet(mixed.db, mixed.within, 'claude');
+  expect(set.hooks.map((hook) => hook.identity)).toEqual(['hook-authoring-system/binding/hook/note-edits']);
+  expect(set.unsupported.map((hook) => hook.identity)).toEqual(['hook-authoring-system/binding/hook/session-start']);
+  expect(generateDefinitions(mixed.db, mixed.within, 'claude').map((row) => row.word)).toEqual([
+    'operation',
+    'harness',
+  ]);
 });
 
 it('refuses portable device names before emitting any host path', () => {

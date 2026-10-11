@@ -128,6 +128,36 @@ it('binds a built-in check to the admission verdicts its scope selects, and a pr
   });
 });
 
+it('selects verdicts by check.scope alone: check.covers claims paths and never changes a binding (C17, C22)', () => {
+  const root = workspace();
+  const covered = (name: string, scope: string) =>
+    check(name, 'COMP-SCHEMA', scope).replace(
+      `    scope "${scope}"\n`,
+      `    scope "${scope}"\n    covers ["src/**"]\n`,
+    );
+  fixture(
+    root,
+    check('whole-schema-check', 'COMP-SCHEMA', '*'),
+    covered('covered-whole-check', '*'),
+    covered('covered-prose-check', 'src/billing/*.ts'),
+  );
+  using(structural(root), (db) => {
+    const bound = byName(db);
+    // The same scope binds the same verdicts with or without covers.
+    const { identity: _a, name: _b, ...plain } = bound['whole-schema-check']!;
+    const { identity: _c, name: _d, ...withCovers } = bound['covered-whole-check']!;
+    expect(withCovers).toEqual(plain);
+    // A scope that selects nothing stays not-evaluated, whatever the check claims.
+    expect(bound['covered-prose-check']).toMatchObject({ status: 'bound', outcome: 'not-evaluated', selected: 0 });
+    // The claim is the location resolver's: covers claims src/x.ts, the scope claims nothing.
+    const claimants = db
+      .resolveSeat('src/billing/x.ts')
+      .claimants.map((claimant) => [claimant.identity.split('/').at(-1), claimant.matches.map((match) => match.field)]);
+    expect(claimants).toContainEqual(['covered-prose-check', ['check.covers']]);
+    expect(claimants.some(([identity]) => identity === 'whole-schema-check')).toBe(false);
+  });
+});
+
 it('admits an unknown evaluator only structurally, and binds it unavailable, revoked or supported-but-not-run (C15, C21)', () => {
   const root = workspace();
   fixture(root, check('typing-check', 'acme-strict-typing', 'package'), check('lint-check', 'acme-lint', 'package'));

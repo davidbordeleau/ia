@@ -989,6 +989,20 @@ it('refuses a generated skill at a populated folder it does not own, naming the 
     expect(body.next).toBe(
       `Move the files out of .claude/skills/note-review, or rename the @playbook that renders it, then run "ia host claude --root ${quote(root)} --apply".`,
     );
+    // The plans print the conflict as code, path and reason only (A-F4).
+    const conflict = {
+      code: 'IA-DIST-LOCAL-MODIFICATION',
+      path: '.claude/skills/note-review',
+      reason: expect.stringContaining('a folder this projection does not own that already holds files'),
+    };
+    const element = projection((await host(root, env, 'claude')).stdout) as unknown as { conflict: object };
+    expect(element.conflict).toMatchObject(conflict);
+    expect(Object.keys(element.conflict).sort()).toEqual(['code', 'path', 'reason']);
+    const planned = JSON.parse((await run(['project', 'claude', '--root', root, '--json'], { env })).stdout) as {
+      plan: { conflict: object };
+    };
+    expect(Object.keys(planned.plan.conflict).sort()).toEqual(['code', 'path', 'reason']);
+    expect(planned.plan.conflict).toMatchObject(conflict);
     // ia project names the same files to move.
     const project = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
     expect(JSON.parse(project.stdout).next).toBe(

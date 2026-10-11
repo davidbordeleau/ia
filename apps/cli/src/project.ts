@@ -42,6 +42,7 @@ import {
   requireInitialized,
   rootedNext,
   folderRepair,
+  printedConflict,
   hookRepair,
   STATE,
   unsupportedRows,
@@ -168,7 +169,7 @@ export const projectEnvelope = (view: ProjectView, applied: PacketReceipt | null
     guard: view.projection.guard ?? null,
     hooks: view.projection.hooks ?? [],
     unsupported: view.projection.unsupported ?? [],
-    conflict: view.projection.conflict,
+    conflict: printedConflict(view.projection.conflict),
   },
   ...(applied === null ? {} : { applied }),
 });

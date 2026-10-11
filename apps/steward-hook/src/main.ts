@@ -561,6 +561,14 @@ function anchored(root: string, target: string): string | undefined {
     current = parent;
   }
 }
+/**
+ * Whether a win32 path holds a `:` other than its drive designator's: after an optional `\\?\` or `\\.\` prefix and an
+ * optional `X:` drive, any further `:` names a stream or a drive-relative spelling.
+ */
+export function streamed(path: string): boolean {
+  const rest = path.replace(/^[\\/]{2}[?.][\\/]/, '').replace(/^[A-Za-z]:/, '');
+  return rest.includes(':');
+}
 /** A PreToolUse event for one file edit, as both modes accept it. */
 interface EditEvent extends Record<string, unknown> {
   readonly tool_name: 'Write' | 'Edit' | 'MultiEdit';
@@ -603,6 +611,11 @@ function editTarget(root: string, event: EditEvent, systems: boolean): EditTarge
     if (!unaliased(base, real)) throw new Error('Project root is aliased');
     base = real;
     const path = event['tool_input']['file_path'];
+    // On win32 a `:` after the drive designator names an alternate data stream (`x.md::$DATA`, `x.md:s`) or a
+    // drive-relative path: the write lands on a file the typed spelling does not name, so it is refused before any rule
+    // or selection reads it.
+    if (process.platform === 'win32' && streamed(path))
+      throw new Error('A path naming an alternate data stream or a drive-relative path is refused');
     if (
       !isAbsolute(path) &&
       (typeof event['cwd'] !== 'string' ||

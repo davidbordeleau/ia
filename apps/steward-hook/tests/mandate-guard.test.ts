@@ -15,7 +15,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { HOOK_CODES } from '@inventarch/runtime';
 import { runBounded } from '@tools/testing/subprocess.js';
-import { evaluateMandateHook, printable, runHook } from '../src/main.js';
+import { evaluateHook, evaluateMandateHook, printable, runHook, streamed } from '../src/main.js';
 import type { HookOutput } from '../src/main.js';
 
 // Every decision opens the disk-backed workspace.
@@ -334,4 +334,21 @@ it('runs from the built entry with --hook, as the launcher passes its guard argu
   };
   expect(await run({})).toEqual({});
   expect(code(await run(reviewer))).toBe('IA-HOOK-NOT-MANDATED');
+});
+
+it('refuses a win32 path that names an alternate data stream, in both modes, before any rule or selection reads it (G-R3)', () => {
+  // A `:` after the drive designator names a stream (or a drive-relative path): the write lands on the file without
+  // it, which the typed spelling does not name.
+  expect(streamed('C:\\w\\docs\\x.md')).toBe(false);
+  expect(streamed('\\\\?\\C:\\w\\docs\\x.md')).toBe(false);
+  expect(streamed('docs/x.md')).toBe(false);
+  for (const path of ['C:\\w\\docs\\x.md::$DATA', 'C:\\w\\docs\\x.md:s', 'docs/x.md:s', '\\\\?\\C:\\w\\x.md::$DATA'])
+    expect(streamed(path), path).toBe(true);
+  if (process.platform !== 'win32') return;
+  const root = workspace();
+  for (const path of ['docs/guide.md::$DATA', 'docs/guide.md:hidden', '.claude/settings.json::$DATA', 'src/app.ts:s']) {
+    for (const extra of [{}, reviewer])
+      expect(code(check(root, path, extra)), `${path} ${JSON.stringify(extra)}`).toBe('IA-HOOK-PATH-UNSAFE');
+    expect(code(evaluateHook(root, event(root, path))), path).toBe('IA-HOOK-PATH-UNSAFE');
+  }
 });

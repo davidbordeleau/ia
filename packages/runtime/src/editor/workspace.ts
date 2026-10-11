@@ -24,6 +24,7 @@ import {
   lineRange,
   projectSource,
   recordsIn,
+  SourceEditError,
 } from '@inventarch/language/editor';
 import type { Position, Range, SourceProjection } from '@inventarch/language/editor';
 import { cell, conditionHolds, reaches, stableSerialize, validateCoordinate } from '@inventarch/graph';
@@ -908,7 +909,14 @@ export class EditorWorkspace {
       throw new EditorError('unavailable', 'No writable admitted system provides this discriminator');
     const schema = this.#db.current.inspect().graph.registry.schemas.get(shape.schema);
     if (schema === undefined) throw new EditorError('unavailable', 'The draft schema is no longer admitted');
-    const text = draftSource(discriminator, name, schema, fields);
+    let text: string;
+    try {
+      text = draftSource(discriminator, name, schema, fields);
+    } catch (error) {
+      // A form value that would add a condition or a comment (language SourceEditError) is the caller's invalid input.
+      if (error instanceof SourceEditError) throw new EditorError('invalid', error.message);
+      throw error;
+    }
     return { path: `.ia/src/systems/${shape.system}/records/${name.toLowerCase()}.ia`, text };
   }
   validateProposal(

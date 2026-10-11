@@ -177,6 +177,15 @@ it('uses one captured system membership for reads, steward lookup, target discov
     expect(
       editor.validateProposal([draft], editor.stamp(), { system: 'agent-system', discriminator: 'agent' }).allowed,
     ).toBe(true);
+    // A form value that would add a condition is the caller's invalid input (language SourceEditError), as an
+    // EditorError the extension reports, not an unknown failure.
+    expect(() =>
+      editor.draft('agent', 'injected', {
+        'meaning/says': 'x',
+        'meaning/answers': 'y',
+        'governance/applies': '[] when phase act',
+      }),
+    ).toThrow(expect.objectContaining({ name: 'EditorError', code: 'invalid' }));
     expect(editor.sources.filter((s) => s.origin === 'adopted').every((s) => !s.writable)).toBe(true);
     expect(existsSync(resolve(root, '.ia/src/systems/agent-system/system.ia'))).toBe(false);
     expect(existsSync(resolve(root, '.ia/src/systems/agent-system/steward.ia'))).toBe(false);

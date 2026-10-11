@@ -101,6 +101,25 @@ export const isCardinality: (x: string) => x is Cardinality = member(CARDINALITI
 export const isTextForm: (x: string) => x is TextForm = member(TEXT_FORMS);
 /** The `id` value rule (compliance C05): an ASCII letter, then letters, digits or hyphens. */
 export const isId = (x: string): boolean => /^[A-Za-z][A-Za-z0-9-]*$/.test(x);
+/** The `number` value rule (compliance C05): a decimal with an optional sign, fraction and exponent, and finite. */
+export const isNumberText = (x: string): boolean =>
+  /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(x) && Number.isFinite(Number(x));
+/** The `qname` value rule (compliance C05): `system/kind/facet/name`, each a lowercase word, the kind a kernel kind. */
+export function isQualifiedName(x: string): boolean {
+  const slots = x.split('/');
+  return slots.length === 4 && slots.every((slot) => /^[a-z][a-z0-9-]*$/.test(slot)) && isKind(slots[1]!);
+}
+/** The `iso-date` text form (W0-L5): `YYYY-MM-DD` and a real calendar date. */
+export function isIsoDate(text: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (match === null) return false;
+  const year = Number(match[1]),
+    month = Number(match[2]),
+    day = Number(match[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return days !== undefined && day >= 1 && day <= days;
+}
 export function isBand(x: number): x is Band {
   return (BANDS as readonly number[]).includes(x);
 }

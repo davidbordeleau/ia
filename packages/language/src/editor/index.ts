@@ -7,17 +7,24 @@ import { scan } from '../scanner/index.js';
 import { logicalLines, walk } from '../scanner/lines.js';
 import { tokenizeLine } from '../scanner/tokenize.js';
 import type { Token } from '../scanner/tokens.js';
-import type { SchemaField, SchemaSection } from '../registry/types.js';
+import { draftValue } from './values.js';
+import type { DraftSchema } from './values.js';
 export { format, checkFormatPreservation } from '../formatter.js';
+export { annotateRecord, appendRecord, addRelationship, relationshipConsent, setField } from './edit-source.js';
+export type { RelationshipConsent } from './edit-source.js';
+export { draftValue, encodeValue, SourceEditError } from './values.js';
+export type { DraftField, DraftSchema, SourceEditReason } from './values.js';
 
-/** Minimal source serialization for a schema-backed form; admission remains a separate operation. */
+/**
+ * Minimal source serialization for a schema-backed form; admission remains a separate operation. Each value is spelled
+ * as 2.0.0 spelled it (`draftValue`: text quoted, other types as given). A line break throws a plain Error, as it did in
+ * 2.0.0; a value that would add a `when` condition or a comment, or that opens a string, prose or list it does not close,
+ * throws SourceEditError. The strict typed spelling is `encodeValue`.
+ */
 export function draftSource(
   discriminator: string,
   name: string,
-  schema: {
-    readonly sections: readonly Pick<SchemaSection, 'name' | 'must'>[];
-    readonly fields: readonly Pick<SchemaField, 'section' | 'key' | 'type' | 'must'>[];
-  },
+  schema: DraftSchema,
   values: Readonly<Record<string, string>>,
 ): string {
   if (!/^[a-z][a-z0-9-]*$/.test(discriminator) || !/^[A-Za-z][A-Za-z0-9-]*$/.test(name))
@@ -31,8 +38,7 @@ export function draftSource(
     if (value === undefined) continue;
     if (typeof value !== 'string' || /[\r\n]/.test(value))
       throw new Error('Form fields must be single-line; use the source draft for multiline prose or structure');
-    // IA strings escape only quotes and backslashes. JSON escapes would change tabs and newlines into literal text.
-    const encoded = field.type === 'text' ? `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : value;
+    const encoded = draftValue(field, value);
     const rows = sections.get(field.section) ?? [];
     rows.push(`${field.key} ${encoded}`);
     sections.set(field.section, rows);

@@ -346,7 +346,7 @@ export const quote = (value: string): string => (/[ "]/.test(value) ? JSON.strin
  */
 export const terminalText = (text: string): string =>
   text.replace(
-    /[\u0000-\u001f\u007f-\u009f]/g,
+    /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g,
     (control) => `\\u${control.charCodeAt(0).toString(16).padStart(4, '0')}`,
   );
 /** `value` with every string in it, at any depth, escaped as `terminalText` escapes one, for a renderer to lay out. */

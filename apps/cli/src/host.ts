@@ -52,6 +52,7 @@ import { UsageError } from './args.js';
 import { homeSrcRemedy, hostHome, located } from './home-remedy.js';
 import type { Context, Result } from './consumer.js';
 import { confirm, Interrupted, Refusal, refusalOf, requireRoot } from './consumer.js';
+import { sessionGate } from './profile.js';
 import type { HostName } from './host-projection.js';
 import {
   applyHostProjection,
@@ -131,6 +132,11 @@ export interface HostView {
    * is materialized in the IA home, and the command that adds it. This verb only names that command; it never runs it.
    */
   readonly userPlugin: UserPlugin | null;
+  /**
+   * The projection rendering this plan made, on the session an apply's mandate gate judged; null for a removal. The apply
+   * writes exactly it, so the profile and the files written read one snapshot (review C3-N2).
+   */
+  readonly rendered: HostOutput | null;
 }
 export interface UserPlugin {
   readonly installed: boolean;
@@ -319,7 +325,7 @@ export const recoverNext = (root: string, command: string): string =>
  */
 export const rootedNext = (next: string, host: HostName, root: string): string =>
   next.replace(
-    new RegExp(`"ia (?:host ${host}|project ${host}|validate)(?! --root\\b)`, 'g'),
+    new RegExp(`"ia (?:host ${host}|project ${host}|validate)(?![^"]*\\s--root\\b)`, 'g'),
     (command) => `${command} --root ${quote(root)}`,
   );
 /** A next action as printed: with `--root` given, each `ia host <host>` command in it carries the root. */
@@ -572,8 +578,11 @@ export function collectHost(context: Context): HostView {
   requireIdle(root, supplied);
   // §4: zero error findings. A removal renders nothing, so it checks admission alone.
   let rendered: HostOutput | null = null;
+  // Review C2-R7: a workspace apply writes the projection `ia project --apply` writes, so it is the effect mode (Execution)
+  // under the participant's mandate profile, judged on the rendering session before the confirmation; its plan writes
+  // nothing, `--remove` restores editing, and `--user` reads no workspace, so none of them is gated.
   if (remove) checkAdmitted(root);
-  else rendered = renderProjectionFor(root, name);
+  else rendered = renderProjectionFor(root, name, args.flag('apply') ? sessionGate(context, 'effect') : undefined);
   // A host home reached through a symbolic link or junction is refused by the mechanism (IA-DIST-PATH-UNSAFE), because
   // the payload it verifies must be the one the registration names; the remedy is a home with no link in its path.
   const expected: HostCacheTarget = located(
@@ -599,6 +608,7 @@ export function collectHost(context: Context): HostView {
     rooted: context.args.value('root') !== undefined,
     userPlugin:
       row.user === 'plugin' ? { installed: readMaterializedPlugin(home) !== null, command: USER_PLUGIN_COMMAND } : null,
+    rendered,
   };
 }
 
@@ -751,7 +761,8 @@ export function applyHostSet(
   if (!view.remove) {
     const cache = materialize(view, packageRoot);
     const mcp = replan(view, 'mcp', MCP_PATH[host], () => planHost(root, host, cache));
-    const rendered = renderProjectionFor(root, host);
+    // Review C3-N2: the rendering the plan's gated session made, re-planned against the files as they are now.
+    const { rendered } = view;
     replanProjection(root, host, rendered, (conflict) => refusalFor(view, 'projection', conflict));
     step('mcp', () => ({ status: applyHost(mcp).status }));
     done.push(skipped('context'));

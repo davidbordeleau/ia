@@ -26,6 +26,8 @@ import {
   truncateDigest,
   words,
 } from './render.js';
+import { sessionGate } from './profile.js';
+import type { SessionGate } from './profile.js';
 import { openSession } from './session.js';
 import type { Session } from './session.js';
 
@@ -104,10 +106,14 @@ export interface ValidationOptions {
 export const DEFAULT_OPTIONS: ValidationOptions = { filters: [], severity: 'warning', limit: 50 };
 export const validationExit = (view: ValidationView): 0 | 1 => (countsOf(view.findings).errors === 0 ? 0 : 1);
 
-/** Opens the workspace, reads its admission and closes it. The only part of this verb that touches a workspace. */
-export function collectValidation(root: string): ValidationView {
+/**
+ * Opens the workspace, reads its admission and closes it. The only part of this verb that touches a workspace. `gate`,
+ * when given, judges the session before admission is read (review C2-N3).
+ */
+export function collectValidation(root: string, gate?: SessionGate): ValidationView {
   const session: Session = openSession(root);
   try {
+    gate?.(session);
     // The distribution's one validation service, which `ia-distribution validate` reports as well: admission's findings
     // and the warnings for db D02a/D02b declarations that declare nothing.
     const admission = session.validation();
@@ -297,7 +303,10 @@ export function renderValidation(view: ValidationView, options: ValidationOption
 
 export function runValidate(context: Context): Result {
   const { args, caps, json } = context;
-  const view = collectValidation(requireRoot(context));
+  const root = requireRoot(context);
+  // The validate mode (Verification) under the participant's mandate profile, judged on the validation's own session
+  // before it reads anything.
+  const view = collectValidation(root, sessionGate(context, 'validate'));
   const options: ValidationOptions = {
     filters: args.positionals,
     severity: (args.value('severity') ?? 'warning') as Severity,

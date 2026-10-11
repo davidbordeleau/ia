@@ -1132,7 +1132,7 @@ it('lists ia capture in the help, and ia compile as its deprecated alias', async
       command.name,
     ).toBe(true);
   const help = await run(['capture', '--help']);
-  expect(help.stdout).toContain('ia capture [--preview] [--json]');
+  expect(help.stdout).toContain('ia capture [--preview] [--actor <agent>] [--json]');
   expect(flat(help.stdout)).toContain('--preview Report what the capture would write; write nothing');
   // Decision compile-verb-fate: from 2.0 `ia compile` is the deprecated alias of `ia capture`, removed in 3.0.
   const compile = await run(['compile', '--help']);

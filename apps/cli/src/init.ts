@@ -278,7 +278,8 @@ export const STARTER_VERSION = '0.1.0';
 export const INSTALL_LOCK = '.ia/distributions/install-lock.json';
 const cachePath = (digest: string): string => `.ia/distributions/cache/${digest}.ia.tgz`;
 const systemFolder = (name: string): string => `.ia/src/systems/${name}`;
-const systemPath = (name: string): string => `${systemFolder(name)}/system.ia`;
+/** Plan amendment C20: where `ia author system <name>` writes a local system, as `ia init --system` does. */
+export const systemPath = (name: string): string => `${systemFolder(name)}/system.ia`;
 const distributionPath = (name: string): string => `${systemFolder(name)}/records/distribution.ia`;
 /** Position-and-projection §3: the one file the three starter records share, at the root of the authored source. */
 export const WORKSPACE_PATH = '.ia/src/workspace.ia';
@@ -404,6 +405,8 @@ function migrationGitConflict(root: string, base: Base, lock: DistributionLock):
 /** `packages/db/src/distribution/codec.ts` packageId and identifier: the id rule and the system-name ceiling. */
 const NAME = /^[a-z][a-z0-9-]*$/;
 const NAME_LIMIT = 64;
+/** A local system name `ia init --system` and `ia author system` accept: the id rule and the system-name ceiling. */
+export const isSystemName = (name: string): boolean => NAME.test(name) && name.length <= NAME_LIMIT;
 /** M5.2 §4.3: `createFile`'s temporary name, `<target>.<randomUUID()>.tmp` (apps/distribution/src/files.ts:76). */
 export const LEFTOVER =
   /^(system\.ia|workspace\.ia|distribution\.ia|release\.json|\.gitignore)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;

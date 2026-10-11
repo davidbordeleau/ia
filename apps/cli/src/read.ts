@@ -21,6 +21,7 @@ import type { Context, Result } from './consumer.js';
 import { Refusal, requireRoot } from './consumer.js';
 import type { Capabilities } from './render.js';
 import { atom, document, entry, headerLine, quote, terminalText, truncateDigest, words } from './render.js';
+import { requireProfile } from './profile.js';
 import { identityNext, openSession } from './session.js';
 import type { Session } from './session.js';
 
@@ -170,6 +171,8 @@ export function runRead(context: Context): Result {
   const session = openSession(root);
   let got: ReturnType<typeof readBody>;
   try {
+    // The read mode (Observation) under the participant's mandate profile, before anything is read.
+    requireProfile({ reader: session.reader, within: session.reader.resolveScope().token, context, mode: 'read' });
     got = readBody(session.reader, target, readOptions(root, session.reader, args.flag('include-runtime')));
     // Refused while the workspace is open, so an identity no source holds is answered from what it admits.
     if (!got.ok) throw readRefusal(got, context, root, session.reader);

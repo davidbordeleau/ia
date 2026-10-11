@@ -2,7 +2,7 @@ import { cpSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, wri
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { decodeDistributionLock } from '@inventarch/db/distribution';
-import { json, sha256 } from '../src/files.js';
+import { createFile, json, replace, sha256 } from '../src/files.js';
 import { applyHost, planHost } from '../src/host.js';
 import { applyInstallation, cacheArchive, planInstallation } from '../src/install.js';
 import { resolveReleases } from '../src/resolve.js';
@@ -124,6 +124,20 @@ it('saves output only as a new relative file under .ia/work', () => {
   expect(refusal(() => writeWorkOutput({ root, path: '.ia/work/plan.json', content: Buffer.from('{}\n') }))).toBe(
     'IA-DIST-LOCAL-MODIFICATION',
   );
+});
+
+it('removes its temporary file when a replace or a create fails before it publishes (review C2-N14)', () => {
+  const root = fixture.target();
+  mkdirSync(join(root, 'out'), { recursive: true });
+  // The temporary file is opened, then the write refuses content that is no buffer.
+  const unwritable = {} as unknown as Buffer;
+  expect(() => replace(root, 'out/a.txt', unwritable, 0o644)).toThrow();
+  expect(() => createFile(root, 'out/b.txt', unwritable, 0o644)).toThrow();
+  expect(readdirSync(join(root, 'out'))).toEqual([]);
+  // Both still publish a complete file.
+  replace(root, 'out/a.txt', Buffer.from('a'), 0o644);
+  createFile(root, 'out/b.txt', Buffer.from('b'), 0o644);
+  expect(readdirSync(join(root, 'out')).sort()).toEqual(['a.txt', 'b.txt']);
 });
 
 it('resolves a local catalog entry and a cached remote entry without a request', async () => {

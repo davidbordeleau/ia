@@ -54,7 +54,8 @@ const legacy = (args: readonly string[]) => {
 };
 const extensions: readonly Extension[] = [
   {
-    token: 'preview',
+    // Not `preview`, which is a consumer verb from milestone generation-binding (plan amendment C19).
+    token: 'sandbox',
     summary: 'A private namespace',
     run: async (args: readonly string[]) => {
       calls.extension.push(args);
@@ -80,11 +81,11 @@ it('routes the seven dispatch steps in order and never shadows a legacy operatio
   // spec-0012 CLI-04: the one row that points at each operation's own help.
   expect(help.stdout).toContain('ia <operation> --help');
   for (const command of COMMANDS) expect(help.stdout).toContain(command.name);
-  expect(help.stdout).toContain('ia preview --help');
+  expect(help.stdout).toContain('ia sandbox --help');
   expect((await run(['-h'])).stdout).toBe(help.stdout);
   expect(await run(['--version'])).toEqual({ exitCode: 0, stdout: '9.9.9\n', stderr: '' });
   // Step 3: the private namespace claims its token before anything else looks at it.
-  expect((await run(['preview', 'inspect', '--json'])).exitCode).toBe(5);
+  expect((await run(['sandbox', 'inspect', '--json'])).exitCode).toBe(5);
   expect(calls.extension.at(-1)).toEqual(['inspect', '--json']);
   // Step 4: every frozen operation reaches the legacy entry point with its whole argv, unchanged.
   for (const operation of LEGACY_OPERATIONS) {
@@ -647,7 +648,7 @@ it('§1.6: extension tokens are well-formed and never shadow a core token', asyn
     expect(CORE_TOKENS.has(token), token).toBe(true);
   // At run time a core token falls through to its core route even when an extension claims it.
   const claimed: string[] = [];
-  const shadows: readonly Extension[] = ['host', 'scope', 'agent'].map((token) => ({
+  const shadows: readonly Extension[] = ['host', 'scope', 'agent', 'preview'].map((token) => ({
     token,
     summary: 'shadow',
     run: async () => {
@@ -660,6 +661,7 @@ it('§1.6: extension tokens are well-formed and never shadow a core token', asyn
   expect(help.stdout).toContain('ia host');
   expect((await dispatch(['scope', '--root', fixture], makeHost(), legacy, shadows)).exitCode).toBe(7);
   expect((await dispatch(['agent'], makeHost(), legacy, shadows)).exitCode).toBe(2);
+  expect((await dispatch(['preview', '--help'], makeHost(), legacy, shadows)).stdout).toContain('ia preview --relate');
   expect(claimed).toEqual([]);
 });
 

@@ -11,7 +11,9 @@ import { discard, entryAt, staged, syncDirectory } from './retention.js';
  * whose selected verdicts passed or failed as one `@observation` in `.ia/work/evidence/<authored revision>.ia`, a source
  * at runtime placement band 0 that only a reader opened with `evidence` reads, and that never moves the authored
  * revision. An observation is named `<check name>-<12-hex authored revision>`; pass is verdict `success`, fail is
- * `refusal`, and a not-evaluated check records nothing. Nothing else writes this directory.
+ * `refusal`, and a not-evaluated check records nothing. The validate request records nothing for a refused admission,
+ * and a failing built-in verdict always refuses it, so in this release it never writes a `refusal` (review finding F1).
+ * Nothing else writes this directory.
  */
 /** The word an evidence record is an instance of; a workspace whose vocabulary lacks it records no evidence. */
 export const CHECK_EVIDENCE_WORD = 'observation';

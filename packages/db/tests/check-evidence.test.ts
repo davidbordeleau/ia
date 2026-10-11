@@ -547,7 +547,7 @@ it('admits only evidence exactly as the writer makes it, which never changes wha
   }
 });
 
-it('records a failing built-in check as a refusal an evidence reader admits, failure dominating the real report (B3-R2)', () => {
+it('renders a failing built-in check as a refusal, failure dominating the real report, which no reader admits for a refused admission (B3-R2, F1)', () => {
   const root = workspace();
   fixture(
     root,
@@ -573,20 +573,13 @@ it('records a failing built-in check as a refusal an evidence reader admits, fai
     ['method-schema-check', 'success'],
     ['whole-schema-check', 'refusal'],
   ]);
-  using(structural(root, true), (db) => {
-    const verdicts = band0(db).map((record) => [
-      record.name.replace(/-[0-9a-f]{12}$/, ''),
-      record.sections
-        .find((section) => section.name === 'evidence')!
-        .fields.flatMap((field) =>
-          'key' in field && field.key === 'verdict' && 'text' in field.value ? [field.value.text] : [],
-        ),
-    ]);
-    expect(verdicts.sort()).toEqual([
-      ['method-schema-check', ['success']],
-      ['whole-schema-check', ['refusal']],
-    ]);
-  });
+  // A failing verdict always refuses admission, and the validate request records nothing for a refused admission, so
+  // the writer's own output for this view is still not evidence to any reader (review finding F1).
+  expect(using(structural(root), (db) => db.report.findings.some((finding) => finding.severity === 'error'))).toBe(
+    true,
+  );
+  using(structural(root, true), (db) => expect(band0(db)).toEqual([]));
+  using(open(root, { cache: false, evidence: true }), (db) => expect(band0(db)).toEqual([]));
 });
 
 it('prunes best effort, never refusing with nothing to record or for a file it may not remove (B3-R1, B3-N2, B3-N6)', () => {

@@ -88,6 +88,8 @@ export interface ViewOptions {
  * is not evidence. Only built-in evaluators produce evidence, so no catalog takes part.
  */
 function writerEvidence(source: RevisionSource, root: View): RevisionSource | undefined {
+  // Review finding F1: the validate request records nothing for a refused admission, so no file is evidence for one.
+  if (root.report.findings.some((finding) => finding.severity === 'error')) return undefined;
   const records = [...root.graph.nodes.values()];
   return reproducesEvidence({
     authoredRevision: root.authoredRevision,

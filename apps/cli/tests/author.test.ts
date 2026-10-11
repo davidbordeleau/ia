@@ -617,6 +617,20 @@ describe('the mandate profile on every gated mode', () => {
       expect(sessions.opened, argv.join(' ')).toBe(1);
     }
   });
+  it('names the actor-less command after a mistyped actor only where its profile allows it (review C2-N7)', async () => {
+    // No steward and no participant: the one mandate names none and grants Observation alone.
+    const root = workspace((at) => {
+      rewrite(at, '.ia/src/workspace.ia', (text) =>
+        text.replace('    steward @agent demo\n', '').replace('    participant @agent demo\n', ''),
+      );
+      moves(at, 'Observation');
+    });
+    const refusal = await refused(root, ['validate', '--actor', 'nobody'], 'IA-RUNTIME-MANDATE-ACTOR');
+    expect(nextArgv(refusal['next'] as string).slice(0, 3)).toEqual(['position', '--seat', demo]);
+    // Where the actor-less profile allows the command, the next is that command.
+    const read = await refused(root, ['read', participant, '--actor', 'nobody'], 'IA-RUNTIME-MANDATE-ACTOR');
+    expect(nextArgv(read['next'] as string)).toEqual(['read', participant, '--root', root]);
+  });
   it("lets ia next name ia preview plan only when the actor's profile allows Verification", async () => {
     const noPlan = (list: string) =>
       workspace((at) => {

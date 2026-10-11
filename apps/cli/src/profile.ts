@@ -178,9 +178,13 @@ export function requireProfile(request: ProfileRequest): Profile {
       return judge(fallback.actor).verdict.refusal === undefined
         ? `Run "${respell(context, { options: { actor: [] } })}" as the workspace's default actor, ${fallback.actor}.`
         : `Run "ia position --seat ${workspace} --shape governance${rooted}" for the workspace's participants and the mandates that bind them.`;
-    return participants.length === 0
-      ? `Run "${respell(context, { options: { actor: [] } })}" without naming an actor.`
-      : choose(participants);
+    if (participants.length > 0) return choose(participants);
+    // Review C2-N7: with no participant the command runs without an actor, so that profile is judged before it is named.
+    if (judge(undefined).verdict.refusal === undefined)
+      return `Run "${respell(context, { options: { actor: [] } })}" without naming an actor.`;
+    return workspace === undefined
+      ? `Run "ia position${rooted}" for the repository's position and the mandates that govern it.`
+      : `Run "ia position --seat ${workspace} --shape governance${rooted}" for the mandates that govern here; none of them allows this command without an actor.`;
   };
   try {
     const spelled = context.args.value('actor');

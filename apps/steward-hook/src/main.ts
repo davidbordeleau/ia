@@ -765,9 +765,10 @@ const reregister = (root: string): string =>
  * registration, the installation state or the owned projection open (the retired steward rule is not one of them). Then
  * the admitted authored `@hook` the registration names is read as hook generation declares it, and runtime's
  * evaluateMandateGuard decides the edit: allowed unless the hook selects it (its paths select the file and its tools
- * name the tool) and the actor is unknown or holds no governing mandate that grants Synthesis there. A selected path reached through an alias is refused. What cannot be read refuses with a code; nothing is
- * allowed because something was unreadable once the hook is known to select the edit, and a registration whose hook
- * cannot be read refuses every edit it receives, since what it selects is unknown.
+ * name the tool) and the actor is unknown or holds no governing mandate that grants Synthesis there. A selected path
+ * reached through an alias is refused. What cannot be read refuses with a code; nothing is allowed because something was
+ * unreadable once the hook is known to select the edit, and a registration whose hook cannot be read refuses the edits
+ * under the selection last registered for it, or every edit under the root when none is recorded.
  */
 export function evaluateMandateHook(root: string, hook: string, event: unknown): HookOutput {
   if (!editEvent(event)) return deny('IA-HOOK-INPUT-INVALID', 'Expected a PreToolUse file edit event');

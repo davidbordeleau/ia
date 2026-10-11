@@ -13,7 +13,7 @@ import { hookGroupDigest } from '@inventarch/distribution/guard-registration';
 import { sha256 } from '@inventarch/distribution/services';
 import { runBounded } from '@tools/testing/subprocess.js';
 import { ProjectionError } from '@inventarch/workspace-runtime/projections';
-import { renderProjectionFor } from '../src/host-projection.js';
+import { applyHostProjection, renderProjectionFor } from '../src/host-projection.js';
 import { quote } from '../src/render.js';
 import { cleanup, cli, nextArgv, run } from './workspace-fixture.js';
 import {
@@ -123,6 +123,7 @@ const receipt = (root: string, name = 'claude') =>
     definitions: { identity: string; word: string; definition: Record<string, unknown> }[];
     unsupported: { identity: string; word: string; reason: string }[];
     removed: { path: string; sha256: string }[];
+    removedHooks?: { identity: string; sha256: string }[];
     guard: string;
     writtenAt: string;
   };
@@ -408,6 +409,8 @@ it('removes the obsolete agent, skill and hook group when their records are rena
   for (const path of [AGENT, SKILL]) expect(existsSync(resolve(root, path)), path).toBe(false);
   const written = receipt(root);
   expect(written.removed.map((file) => file.path).sort()).toEqual([AGENT, SKILL].sort());
+  // The removed group is listed by its hook and the digest it was registered with (H-R5).
+  expect(written.removedHooks).toEqual([{ identity: HOOK, sha256: hookGroupDigest(old) }]);
   expect(written.generated.map((row) => row.path)).toEqual([
     '.claude/agents/auditor.md',
     '.claude/skills/doc-review/SKILL.md',
@@ -454,6 +457,7 @@ it('removes the obsolete agent, skill and hook group when their records are rena
   expect(settings(root)['env']).toEqual({ KEPT: '1' });
   expect(settings(root).hooks?.PreToolUse).toEqual([bash]);
   expect(receipt(root).hooks).toEqual([]);
+  expect(receipt(root).removedHooks).toEqual([{ identity: RENAMED, sha256: hookGroupDigest(group) }]);
 
   // Removing the registration takes the generated files and leaves the user's own.
   await apply(root, env, '--remove');
@@ -662,4 +666,29 @@ it('keeps unchanged hook groups without the payload their registration recorded,
   expect(JSON.parse(read(root, HOOK_STATE)).groups.map((group: { paths: string[] }) => group.paths)).toEqual([
     ['docs/**'],
   ]);
+});
+
+it('lists a removed hook group in the receipt even when the apply that removed it was interrupted (H-R5)', async () => {
+  const { root, env } = await composed();
+  const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release,
+    old = hookGroups(root).get(HOOK)!;
+  edit(root, '.ia/src/hooks.ia', ['note-edits', 'doc-edits']);
+  // Cut the apply right after the hook groups changed: the old group is gone, the receipt not yet written.
+  expect(() =>
+    applyHostProjection(
+      root,
+      'claude',
+      renderProjectionFor(root, 'claude'),
+      (stage) => {
+        if (stage === 'hooks') throw new Error('cut at hooks');
+      },
+      undefined,
+      { verified: resolve(env.IA_HOST_HOME, 'hosts', release) },
+    ),
+  ).toThrow('cut at hooks');
+  expect([...hookGroups(root).keys()]).toEqual([RENAMED]);
+  // The rerun finds no group to remove, yet its receipt lists the one the cut apply removed, with its digest.
+  await apply(root, env);
+  expect(receipt(root).removedHooks).toEqual([{ identity: HOOK, sha256: hookGroupDigest(old) }]);
+  expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([RENAMED]);
 });

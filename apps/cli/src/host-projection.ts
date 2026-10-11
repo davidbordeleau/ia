@@ -38,6 +38,7 @@ import type {
   HostHookDeclaration,
   HostOutput,
   PacketReceipt,
+  RemovedHookRow,
   UnsupportedRow,
 } from '@inventarch/runtime';
 import { ProjectionError } from '@inventarch/workspace-runtime/projections';
@@ -355,7 +356,20 @@ interface PendingReceipt {
   readonly guard: boolean;
   readonly receipt?: string;
   readonly removed: readonly { readonly path: string; readonly sha256: string }[];
+  /** The hook groups this apply removes, by `@hook` and last group digest; present only when there are any (H-R5). */
+  readonly removedHooks?: readonly RemovedHookRow[];
 }
+/** Rows `{identity, sha256}` of removed hook groups, each identity once. */
+const hookDigests = (value: unknown): boolean =>
+  Array.isArray(value) &&
+  value.every(
+    (row) =>
+      row !== null &&
+      typeof row === 'object' &&
+      typeof (row as { identity?: unknown }).identity === 'string' &&
+      HEX.test(String((row as { sha256?: unknown }).sha256)),
+  ) &&
+  new Set(value.map((row: { identity: string }) => row.identity)).size === value.length;
 function readPending(root: string, host: HostName): PendingReceipt | null {
   const path = pendingPath(host);
   if (!existsSync(resolve(root, path))) return null;
@@ -380,8 +394,16 @@ function readPending(root: string, host: HostName): PendingReceipt | null {
     !digests(value.removed) ||
     value.removed.some((file) => !projectionOwnable(host, file.path)) ||
     (value.receipt !== undefined && !HEX.test(value.receipt)) ||
+    (value.removedHooks !== undefined && (!hookDigests(value.removedHooks) || value.removedHooks.length === 0)) ||
     Object.keys(body).sort().join(',') !==
-      (value.receipt === undefined ? 'format,guard,host,removed' : 'format,guard,host,receipt,removed') ||
+      [
+        'format',
+        'guard',
+        'host',
+        ...(value.receipt === undefined ? [] : ['receipt']),
+        'removed',
+        ...(value.removedHooks === undefined ? [] : ['removedHooks']),
+      ].join(',') ||
     digest !== sha256(json(body))
   )
     throw new DistributionError('IA-DIST-INPUT-INVALID', 'Invalid pending projection receipt evidence', path);
@@ -402,6 +424,7 @@ export function projectionEvidence(
   actions: readonly { readonly action: string; readonly path: string }[],
   retirement: boolean,
   previous?: PacketReceipt,
+  hookRemovals: readonly RemovedHookRow[] = [],
 ): PendingReceipt {
   if (
     previous !== undefined &&
@@ -420,8 +443,15 @@ export function projectionEvidence(
       : [],
   );
   const pending = readPending(root, host);
-  const prior =
-    pending ?? (previous === undefined ? null : { guard: previous.guard === 'retired', removed: previous.removed });
+  const prior: Pick<PendingReceipt, 'guard' | 'removed' | 'removedHooks'> | null =
+    pending ??
+    (previous === undefined
+      ? null
+      : {
+          guard: previous.guard === 'retired',
+          removed: previous.removed,
+          ...(previous.removedHooks === undefined ? {} : { removedHooks: previous.removedHooks }),
+        });
   for (const file of removed) {
     const recorded = prior?.removed.find((row) => row.path === file.path);
     if (recorded !== undefined && recorded.sha256 !== file.sha256)
@@ -431,11 +461,21 @@ export function projectionEvidence(
         file.path,
       );
   }
+  // A hook group an interrupted earlier apply removed stays listed with the digest it recorded then (H-R5).
+  const removedHooks = [
+    ...new Map(
+      [...hookRemovals, ...(prior?.removedHooks ?? [])].map((row) => [
+        row.identity,
+        { identity: row.identity, sha256: row.sha256 },
+      ]),
+    ).values(),
+  ].sort((a, b) => (a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0));
   return {
     format: 'ia.packet-receipt-pending.v1',
     host,
     guard: prior?.guard === true || retirement,
     removed: [...new Map([...(prior?.removed ?? []), ...removed].map((file) => [file.path, file])).values()],
+    ...(removedHooks.length === 0 ? {} : { removedHooks }),
   };
 }
 
@@ -485,7 +525,14 @@ export function applyHostProjection(
       unlock();
     }
   };
-  const evidence = projectionEvidence(root, host, plan.actions, retirement !== null, previous);
+  // The groups this apply removes, each with the digest the ownership state recorded for it (H-R5).
+  const recorded = new Map(
+    (readHookRegistration(root)?.groups ?? []).map((row) => [row.hook, hookGroupDigest(row.group)]),
+  );
+  const hookRemovals = (hooks.plan?.hooks ?? [])
+    .filter((row) => row.action === 'remove' && recorded.has(row.hook))
+    .map((row) => ({ identity: row.hook, sha256: recorded.get(row.hook)! }));
+  const evidence = projectionEvidence(root, host, plan.actions, retirement !== null, previous, hookRemovals);
   // Evidence precedes retirement and every deletion; it survives failure and the projection state's collapse.
   writeEvidence(pendingPath(host), { ...evidence, digest: sha256(json(evidence)) });
   checkpoint('evidence');
@@ -501,6 +548,9 @@ export function applyHostProjection(
   writeEvidence(STATE.receipt(host), null);
   const result = applyProjection(plan, checkpoint),
     guard = evidence.guard ? 'retired' : 'none';
+  // The groups owned now, and those removed: this apply's and an interrupted earlier one's, not registered again (H-R5).
+  const owned = host === 'claude' && rendered !== null ? hookRows(root, rendered.hooks ?? []) : [],
+    registered = new Set(owned.map((row) => row.identity));
   const receipt: PacketReceipt | null =
     rendered === null
       ? null
@@ -510,7 +560,12 @@ export function applyHostProjection(
           removed: evidence.removed.filter((file) => !existsSync(resolve(root, file.path))),
           foreign: plan.actions.filter((action) => action.action === 'foreign').map((action) => action.path),
           guard,
-          ...(host === 'claude' ? { hooks: hookRows(root, rendered.hooks ?? []) } : {}),
+          ...(host === 'claude'
+            ? {
+                hooks: owned,
+                removedHooks: (evidence.removedHooks ?? []).filter((row) => !registered.has(row.identity)),
+              }
+            : {}),
           unsupported: [...(rendered.receipt.unsupported ?? []), ...registration.unregistered],
           writtenAt: new Date().toISOString(),
         };
@@ -625,6 +680,7 @@ export function readReceipt(root: string, host: HostName): PacketReceipt | null 
             Array.isArray((item as { tools?: unknown }).tools) &&
             HEX.test(String((item as { sha256?: unknown }).sha256)),
         ))) ||
+    (row.removedHooks !== undefined && !hookDigests(row.removedHooks)) ||
     (row.unsupported !== undefined && !Array.isArray(row.unsupported)) ||
     (row.definitions !== undefined && !Array.isArray(row.definitions))
   )

@@ -69,6 +69,14 @@ export interface HookGroupRow {
   readonly tools: readonly HookToolName[];
   readonly sha256: string;
 }
+/**
+ * One hook group a receipt lists as removed (review finding H-R5): its `@hook` and the SHA-256 of the group as it was last
+ * registered, which the applying caller read from the hook ownership state before removing it.
+ */
+export interface RemovedHookRow {
+  readonly identity: string;
+  readonly sha256: string;
+}
 /** An authored record the host does not render or register, and why. */
 export interface UnsupportedRow {
   readonly identity: string;
@@ -144,6 +152,8 @@ export interface PacketReceipt {
   readonly definitions?: readonly PacketDefinition[];
   /** The hook groups the applying caller registered, one per `@hook`. */
   readonly hooks?: readonly HookGroupRow[];
+  /** The hook groups the applying caller removed, an interrupted earlier apply's included. */
+  readonly removedHooks?: readonly RemovedHookRow[];
   /** The authored records the host does not render or register, each with the reason. */
   readonly unsupported?: readonly UnsupportedRow[];
   /** The owned files the applying caller deleted: 1.x files (B9), and generated files no render writes any more. */

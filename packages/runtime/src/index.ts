@@ -50,6 +50,7 @@ export type {
   GeneratedRow,
   HarnessDefinition,
   HookGroupRow,
+  RemovedHookRow,
   HookToolName,
   UnsupportedRow,
   HostFile,

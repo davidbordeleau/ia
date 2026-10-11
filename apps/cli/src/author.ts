@@ -303,10 +303,14 @@ export function runAuthor(context: Context): Result {
         `Run "${again}" for the candidate against the file as it is now, and the digest to pass.`,
       );
     if (!preview.clean) {
-      const errors = preview.findings.filter((finding) => finding.severity === 'error');
+      const errors = preview.findings.filter((finding) => finding.severity === 'error'),
+        first = errors[0]!,
+        at = `${first.path}:${first.line}`;
+      // Review C2-N12: a located finding's message already opens with its location, which is stated once.
+      const message = first.message.startsWith(`${at}: `) ? first.message.slice(at.length + 2) : first.message;
       throw new Refusal(
         'IA-CLI-EDIT-UNCLEAN',
-        `The candidate has ${errors.length} ${errors.length === 1 ? 'error' : 'errors'} in what it changes, so nothing was written; the first is ${errors[0]!.code} at ${errors[0]!.path}:${errors[0]!.line}: ${errors[0]!.message}`,
+        `The candidate has ${errors.length} ${errors.length === 1 ? 'error' : 'errors'} in what it changes, so nothing was written; the first is ${first.code} at ${at}: ${message}`,
         1,
         { path: target.path, identity: preview.identity },
         `Run "${again}" for the candidate's findings.`,

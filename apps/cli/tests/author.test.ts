@@ -431,6 +431,28 @@ describe('ia author refusals, each writing nothing', () => {
     );
     expect(unclean['message']).toContain('IA-COMP-FIELD-MISSING');
     expect(nextArgv(unclean['next'] as string)[0]).toBe('preview');
+    // Review C2-N12: the first error is located once, not as `path:line: path:line:`.
+    const located = /at (\S+:\d+): /.exec(unclean['message'] as string)![1]!;
+    expect(unclean['message']).not.toContain(`${located}: ${located}:`);
+  });
+  it('tells an empty --digest from an absent one, and an absent file from an empty one (review C2-N12)', async () => {
+    const root = workspace();
+    const form = ['--set', '@milestone m1', 'work.owner=Tom'];
+    // An empty value is the parser's usage error; an absent one is judged after the profile and names the preview.
+    const empty = await ia(root, ['author', ...form, '--digest', '']);
+    expect(empty.exitCode, empty.stdout).toBe(2);
+    expect(body(empty)).toMatchObject({ ok: false, code: 'IA-CLI-USAGE' });
+    expect(body(empty)['message']).toContain('--digest');
+    const absent = await refused(root, ['author', ...form], 'IA-CLI-USAGE');
+    expect(nextArgv(absent['next'] as string)[0]).toBe('preview');
+    // A new record's preview digests an absent file as the empty one, so an empty file in its place is the same file.
+    const draft = ['task', 't1', 'meaning.says=x', 'work.title=x', 'work.status=open', 'work.milestone=@milestone m1'];
+    expect(await previewed(root, draft)).toBe(EMPTY);
+    writeFileSync(resolve(root, '.ia/src/task.ia'), '');
+    const written = await ia(root, ['author', ...draft, '--digest', EMPTY]);
+    expect(written.exitCode, written.stdout).toBe(0);
+    expect(body(written)).toMatchObject({ created: false, previousDigest: EMPTY });
+    expect(readFileSync(resolve(root, '.ia/src/task.ia'), 'utf8')).toContain('@task t1');
   });
   it('refuses a move outside the mandate and an excluded word', async () => {
     const root = workspace((at) => moves(at, 'Observation, Verification'));

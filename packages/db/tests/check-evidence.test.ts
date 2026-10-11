@@ -450,7 +450,12 @@ const findingLines = (db: Handle) =>
 
 it('admits only evidence exactly as the writer makes it, which never changes what the authored records admit (B3-R4)', () => {
   const root = workspace();
-  fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'), check('consent-check', 'COMP-CONSENT', 'graph'));
+  fixture(
+    root,
+    check('whole-schema-check', 'COMP-SCHEMA', '*'),
+    check('consent-check', 'COMP-CONSENT', 'graph'),
+    check('prose-check', 'COMP-SCHEMA', 'every admitted record'),
+  );
   validateOnce(root);
   const template = written(root).text,
     start = template.indexOf('@observation '),
@@ -475,6 +480,17 @@ it('admits only evidence exactly as the writer makes it, which never changes wha
     expect(findingLines(db)).toEqual(baseline.findings);
   });
   const genuineName = genuine.text.match(/^@observation (\S+)/m)![1]!;
+  // A writer-shaped observation for the prose-scoped check, which is never evaluated and so never recorded.
+  const prose = using(structural(root), (db) => db.records().find((record) => record.name === 'prose-check')!),
+    wholeAt = genuine.text.indexOf('@observation whole-schema-check'),
+    wholeEnd = genuine.text.indexOf('\n\n@observation', wholeAt),
+    notEvaluated = genuine.text
+      .slice(wholeAt, wholeEnd < 0 ? undefined : wholeEnd + 1)
+      .replaceAll('whole-schema-check', 'prose-check')
+      .replace(/locator "[^"]+"/, `locator "${prose.identity}"`)
+      .replace(/ {4}digest "[0-9a-f]{64}"/, `    digest "${prose.digest}"`)
+      .replace(/subject-revision "[0-9a-f]{64}"/, `subject-revision "${prose.digest}"`);
+  expect(wholeAt).toBeGreaterThanOrEqual(0);
   const vectors: [string, string][] = [
     // Resolving the authored dangling reference: a name no admitted check's evidence takes.
     ['forged name', genuine.text.replaceAll(genuineName, 'forged-one')],
@@ -493,6 +509,27 @@ it('admits only evidence exactly as the writer makes it, which never changes wha
       genuine.text.replaceAll(genuineName, genuineName.replace('whole-schema-check', 'absent-check')),
     ],
     ['an extra field', genuine.text.replace('    move Verification\n', '    move Verification\n    note "planted"\n')],
+    // Review finding B4-RC1: writer-shaped, but not what the writer writes for this view.
+    ['a forged verdict', genuine.text.replace(/(@observation whole-schema-check[\s\S]*?verdict )success/, '$1refusal')],
+    [
+      'a forged reason',
+      genuine.text.replace(/reason "built-in COMP-SCHEMA[^"]*"/, 'reason "planted: an auditor passed it"'),
+    ],
+    [
+      'a time without milliseconds',
+      genuine.text.replace(/(observed|captured)-at "[^"]+"/g, '$1-at "2001-01-01T00:00:00Z"'),
+    ],
+    [
+      'observed and captured apart',
+      genuine.text.replace(/captured-at "[^"]+"/, 'captured-at "2001-01-01T00:00:00.000Z"'),
+    ],
+    [
+      'a time not yet reached',
+      genuine.text.replace(/(observed|captured)-at "[^"]+"/g, '$1-at "2999-01-01T00:00:00.000Z"'),
+    ],
+    ['an observation for a check not evaluated', `${genuine.text}\n${notEvaluated}`],
+    ['a byte-order mark', `﻿${genuine.text}`],
+    ['CRLF line endings', genuine.text.replaceAll('\n', '\r\n')],
   ];
   for (const [label, text] of vectors) {
     expect(text, label).not.toBe(genuine.text);
@@ -510,7 +547,7 @@ it('admits only evidence exactly as the writer makes it, which never changes wha
   }
 });
 
-it('records a failing built-in check as a refusal an evidence reader admits, failure dominating the real report (B3-R2)', () => {
+it('renders a failing built-in check as a refusal, failure dominating the real report, which no reader admits for a refused admission (B3-R2, F1)', () => {
   const root = workspace();
   fixture(
     root,
@@ -536,20 +573,13 @@ it('records a failing built-in check as a refusal an evidence reader admits, fai
     ['method-schema-check', 'success'],
     ['whole-schema-check', 'refusal'],
   ]);
-  using(structural(root, true), (db) => {
-    const verdicts = band0(db).map((record) => [
-      record.name.replace(/-[0-9a-f]{12}$/, ''),
-      record.sections
-        .find((section) => section.name === 'evidence')!
-        .fields.flatMap((field) =>
-          'key' in field && field.key === 'verdict' && 'text' in field.value ? [field.value.text] : [],
-        ),
-    ]);
-    expect(verdicts.sort()).toEqual([
-      ['method-schema-check', ['success']],
-      ['whole-schema-check', ['refusal']],
-    ]);
-  });
+  // A failing verdict always refuses admission, and the validate request records nothing for a refused admission, so
+  // the writer's own output for this view is still not evidence to any reader (review finding F1).
+  expect(using(structural(root), (db) => db.report.findings.some((finding) => finding.severity === 'error'))).toBe(
+    true,
+  );
+  using(structural(root, true), (db) => expect(band0(db)).toEqual([]));
+  using(open(root, { cache: false, evidence: true }), (db) => expect(band0(db)).toEqual([]));
 });
 
 it('prunes best effort, never refusing with nothing to record or for a file it may not remove (B3-R1, B3-N2, B3-N6)', () => {
@@ -630,4 +660,21 @@ it('never counts COMP-CHECK passing a check only structural admission admits (B3
     );
     expect(raw?.outcome).toBe('pass');
   });
+});
+
+it('touches an unchanged current file, so a validation of an older revision that began earlier never prunes it (B4-RC3)', () => {
+  const root = workspace();
+  fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
+  const first = validateOnce(root),
+    current = resolve(root, first.path!),
+    text = readFileSync(current, 'utf8'),
+    revision = written(root).revision;
+  const hourAgo = new Date(Date.now() - 3_600_000);
+  utimesSync(current, hourAgo, hourAgo);
+  // An older revision's validation opened now, before the current run below found its file unchanged.
+  const olderOpened = Date.now() - 1_000;
+  expect(writeEvidence(root, revision, text)).toEqual({ path: first.path, written: false, pruned: [] });
+  expect(statSync(current).mtimeMs).toBeGreaterThanOrEqual(olderOpened);
+  expect(writeEvidence(root, '9'.repeat(64), null, { pruneBefore: olderOpened }).pruned).toEqual([]);
+  expect(readFileSync(current, 'utf8')).toBe(text);
 });

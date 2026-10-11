@@ -32,6 +32,6 @@ export type { DraftChange, DraftPreview } from './preview.js';
 export { EVIDENCE_DIRECTORY, EVIDENCE_FILE } from './inputs.js';
 export { bindChecks, checkVerdicts, WHOLE_WORKSPACE_SCOPE } from './checks.js';
 export type { CheckBinding, CheckBindingStatus, CheckCatalog, CheckOutcome } from './checks.js';
-export { CHECK_EVIDENCE_WORD, evidenceText, readEvidence, writeEvidence } from './evidence.js';
+export { CHECK_EVIDENCE_WORD, evidenceText, readEvidence, reproducesEvidence, writeEvidence } from './evidence.js';
 export type { EvidenceObservation, EvidenceWrite } from './evidence.js';
 export type { ViewOptions } from './view.js';

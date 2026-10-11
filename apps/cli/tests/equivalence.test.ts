@@ -480,3 +480,54 @@ it('reports one Checks result through both validation binaries, which record the
     ]);
   }
 });
+
+/** A check naming a catalog evaluator, which only the validate request admits. */
+const TYPING = `#! ia 1.0
+
+@check typing-check
+  meaning
+    says "Run an evaluator the host catalog would list."
+    answers "Which evaluator checks typing?"
+  check
+    runs acme-strict-typing
+    scope "package"
+  governance
+    severity blocking
+`;
+it('fails ia-distribution validate, as ia validate, for a check a damaged catalog revokes alone (B3-R2)', async () => {
+  const root = resolve(scratch('equivalence-revoked'), 'workspace'),
+    home = resolve(scratch('equivalence-revoked-home'), '.ia'),
+    env = { ...process.env, IA_HOME: home };
+  expect((await spawned(MAIN, ['init', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  expect((await spawned(MAIN, ['host', 'claude', '--root', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  const registration = JSON.parse(
+      readFileSync(resolve(root, '.ia/distributions/hosts/claude-workspace.json'), 'utf8'),
+    ) as { cache: string },
+    machineBinary = resolve(registration.cache, 'runtime/node_modules/@inventarch/distribution/dist/cli.js');
+  // Added after the host applies: ia host admits strictly, and refuses a check naming an evaluator that is not built in.
+  writeFileSync(resolve(root, '.ia/src/typing.ia'), TYPING);
+  const handler = resolve(
+      registration.cache,
+      'runtime/node_modules/@inventarch/agent-composition-system/dist/installed-read.js',
+    ),
+    original = readFileSync(handler);
+  writeFileSync(handler, Buffer.concat([original, Buffer.from('\n// altered\n')]));
+  try {
+    const consumer = result(
+        await spawned(MAIN, ['validate', '--root', root, '--json'], env),
+        'stdout',
+        1,
+        'ia validate',
+      ),
+      machine = result(await spawned(machineBinary, ['validate', '--root', root], env), 'stdout', 1, 'ia-distribution');
+    // No execution binding and no admission error: the revoked check alone fails both runs.
+    expect(machine['bindings']).toEqual({ catalog: null, results: [] });
+    expect(machine['status']).toBe('admitted');
+    expect((machine['checks'] as { results: unknown[] }).results).toEqual([
+      expect.objectContaining({ name: 'typing-check', status: 'revoked' }),
+    ]);
+    expect(consumer['checks']).toEqual(machine['checks']);
+  } finally {
+    writeFileSync(handler, original);
+  }
+});

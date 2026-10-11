@@ -10,10 +10,15 @@ import type { Token } from '../scanner/tokens.js';
 import { encodeValue } from './values.js';
 import type { DraftSchema } from './values.js';
 export { format, checkFormatPreservation } from '../formatter.js';
-export { appendRecord, addRelationship, setField } from './edit-source.js';
-export type { DraftSchema } from './values.js';
+export { appendRecord, addRelationship, relationshipConsent, setField } from './edit-source.js';
+export type { RelationshipConsent } from './edit-source.js';
+export { encodeValue, SourceEditError } from './values.js';
+export type { DraftField, DraftSchema, SourceEditReason } from './values.js';
 
-/** Minimal source serialization for a schema-backed form; admission remains a separate operation. */
+/**
+ * Minimal source serialization for a schema-backed form; admission remains a separate operation. Each value is spelled
+ * by `encodeValue` for its field's type, so a form value is data and never adds a condition, comment or field.
+ */
 export function draftSource(
   discriminator: string,
   name: string,
@@ -31,7 +36,6 @@ export function draftSource(
     if (value === undefined) continue;
     if (typeof value !== 'string' || /[\r\n]/.test(value))
       throw new Error('Form fields must be single-line; use the source draft for multiline prose or structure');
-    // IA strings escape only quotes and backslashes. JSON escapes would change tabs and newlines into literal text.
     const encoded = encodeValue(field, value);
     const rows = sections.get(field.section) ?? [];
     rows.push(`${field.key} ${encoded}`);

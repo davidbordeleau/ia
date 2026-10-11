@@ -1,0 +1,32 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "minor",
+  "title": "Language's editor edits one record of a source file and spells form values by their field type",
+  "summary": "@inventarch/language/editor exports appendRecord(text, draft), addRelationship(text, identity, spelling, target), setField(text, identity, path, value, schema, append?), encodeValue(field, text, item?), relationshipConsent(registry, word, spelling, target, fragment?) and SourceEditError, with the DraftSchema, DraftField, SourceEditReason and RelationshipConsent types; @inventarch/runtime/editor re-exports them with draftSource and VERB_PHRASES, for hosts that may not import the language package. Each edit takes one whole .ia file and returns it again normalized by format(), with exactly one top-level record, named `@word name`, changed: a draftSource draft appended (its pragma dropped, and an empty file given the draft's pragma), one row added to the record's relationships section (or a new section at the record's end), or one schema field set as <section>.<key>, with append adding one item to a list field and creating it when absent. Every other record keeps its source bytes, comments and blank lines, so only the edited record's digest can change, and a trailing comment on a one-line field being replaced is kept. encodeValue treats a form value as data: text is always quoted, and every other type must parse as exactly one value of it by the predicates compliance applies (an id and its `in` set, a reference and its `to` word, a qname, a number, a flag, a list of one, the iso-date form), an id, qname or number written quoted being spelled bare, with nothing after it; line breaks and other controls are refused, so no condition, comment, section, record or second field can ride along. A refused edit throws SourceEditError with a closed reason (parse, identity, nested, field, value, repeated, duplicate, spelling, target, structure) and returns no text: an undeclared field, a value of another type, a field, section or record the file states twice, a duplicate row, list item or record, a conditional or structured field, a comment inside a multi-line value being replaced, a nested record, an unknown verb, and a target that is neither a canonical identity nor `@word name` (either with an optional fragment). relationshipConsent judges one row by the two-sided consent rule admission applies and names the refusing side and the system that registers its word. draftSource now spells each value through encodeValue, so a non-text value that is not one value of its field's type, or that carries a `when` condition, a comment or an `is` form, now throws SourceEditError where 2.0.0 wrote it as typed and left it to admission; text values are written as before. Limits: only top-level records are edited, consent and admission are the caller's to compile and report (no IA-LANG diagnostic code is added), the result uses LF line endings as format() does, and @inventarch/runtime/editor's EditorWorkspace drafting meets the stricter draftSource.",
+  "packages": [
+    "@inventarch/language",
+    "@inventarch/runtime"
+  ],
+  "paths": [
+    ".agents/",
+    ".claude/",
+    ".github/",
+    ".gitignore",
+    ".ia/authoring.resources.json",
+    ".ia/src/floor/taxonomy.system.ia",
+    ".ia/src/participant.ia",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "apps/vscode/LANGUAGE.md",
+    "distributions/",
+    "docs/",
+    "examples/",
+    "nx.json",
+    "package.json",
+    "packages/language/",
+    "packages/runtime/",
+    "pnpm-lock.yaml",
+    "tools/"
+  ]
+}

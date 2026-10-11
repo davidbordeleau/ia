@@ -1,60 +1,159 @@
 import type { ListItem, Value } from '../ast.js';
 import { parse } from '../parser/index.js';
 import type { SchemaField, SchemaSection } from '../registry/types.js';
-import { isId } from '../taxonomy.js';
+import { isId, isKind } from '../taxonomy.js';
 
+/** The schema facts a source edit reads: a registry `SchemaDeclaration` is one. */
 export interface DraftSchema {
   readonly sections: readonly Pick<SchemaSection, 'name' | 'must'>[];
   readonly fields: readonly Pick<SchemaField, 'section' | 'key' | 'type' | 'must' | 'values' | 'target' | 'form'>[];
 }
 export type DraftField = DraftSchema['fields'][number];
+
+/** Why a source edit was refused. Each is a defect in the requested edit, never in the file being edited. */
+export type SourceEditReason =
+  /** The file does not parse, so no edit can be placed in it. */
+  | 'parse'
+  /** No top-level record of the file answers the identity, or the identity is not `@word name`. */
+  | 'identity'
+  /** The record is nested in another record; nested records are edited in their source. */
+  | 'nested'
+  /** The schema declares no such field. */
+  | 'field'
+  /** The value is not one canonical value of the field's type, or would carry syntax beyond it. */
+  | 'value'
+  /** The record states the section, field or record more than once, so no single place can be edited. */
+  | 'repeated'
+  /** The row, list item or record is already there. */
+  | 'duplicate'
+  /** The relationship spelling is no verb of the kernel. */
+  | 'spelling'
+  /** The relationship target is not a canonical identity or an `@word name` reference. */
+  | 'target'
+  /** The field is conditional, structured or commented inside its value, so a one-line edit would lose source. */
+  | 'structure';
+
+/** A refused source edit. The language registers no diagnostic code for it: the caller reports the refusal. */
+export class SourceEditError extends Error {
+  constructor(
+    readonly reason: SourceEditReason,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SourceEditError';
+  }
+}
+export const refuse = (reason: SourceEditReason, message: string): never => {
+  throw new SourceEditError(reason, message);
+};
+
+/** IA strings escape only quotes and backslashes. JSON escapes would change tabs and newlines into literal text. */
 export const quotedText = (value: string): string => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 
+/** Line breaks, and the controls a terminal or a line scanner could read as structure; a tab is data. */
+const UNSAFE = /[\u0000-\u0008\n-\u001f\u007f\u2028\u2029]/;
+const PROBE = (text: string): string => `#! ia 1.0\n@schema probe\n  value ${text}\n`;
+
 function inlineValue(text: string): Value {
-  const parsed = parse(`#! ia 1.0\n@schema probe\n  value ${text}\n`, 'value.ia');
-  const field = parsed.ast.records[0]?.head[0];
-  if (parsed.diagnostics.length || !field || field.when || parsed.ast.records[0]!.head.length !== 1)
-    throw new Error('Expected one unconditional typed value');
-  return field.value;
+  const parsed = parse(PROBE(text), 'value.ia');
+  const record = parsed.ast.records[0];
+  const field = record?.head[0];
+  if (
+    parsed.diagnostics.length > 0 ||
+    parsed.ast.records.length !== 1 ||
+    record === undefined ||
+    field === undefined ||
+    record.head.length !== 1 ||
+    record.sections.length > 0 ||
+    field.when !== undefined ||
+    field.assertive === true ||
+    field.children.length > 0 ||
+    // The key, then the scalar's one word; a string, list or reference leaves the key as the only word.
+    field.words.length !== (field.value.kind === 'scalar' ? 2 : 1)
+  )
+    refuse('value', `Expected one unconditional value; got ${JSON.stringify(text)}`);
+  if (parsed.ast.trivia.some((trivia) => trivia.kind === 'comment'))
+    refuse('value', `Expected a value without a comment; got ${JSON.stringify(text)}`);
+  return field!.value;
 }
+
+/** Compliance's number predicate (`packages/compliance/src/values.ts`), which language cannot import. */
+const NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+/** Compliance's iso-date form: `YYYY-MM-DD` and a real calendar date. */
+function isoDate(text: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (match === null) return false;
+  const year = Number(match[1]),
+    month = Number(match[2]),
+    day = Number(match[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return days !== undefined && day >= 1 && day <= days;
+}
+
+const path = (field: DraftField): string => `${field.section}.${field.key}`;
+/**
+ * One canonical scalar spelling of `value` for the field's item type, by the predicates compliance applies to it: an id,
+ * qname or number may be quoted, as compliance admits, and is spelled bare.
+ */
 function scalar(field: DraftField, value: Value): string {
   const type = field.type.replace(/^list of /, '');
-  if (type === 'text' && (value.kind === 'string' || value.kind === 'scalar')) {
-    if (field.form === 'iso-date' && !/^\d{4}-\d{2}-\d{2}$/.test(value.text)) throw new Error('Expected an ISO date');
-    return quotedText(value.text);
+  const expected = (what: string): never => refuse('value', `${path(field)} expects ${what}`);
+  const text = value.kind === 'scalar' || value.kind === 'string' ? value.text : undefined;
+  switch (type) {
+    case 'text':
+      if (text === undefined) return expected('text');
+      if (field.form === 'iso-date' && !isoDate(text)) return expected('an ISO date (YYYY-MM-DD)');
+      return quotedText(text);
+    case 'ref':
+      if (value.kind !== 'ref')
+        return expected(`a reference @<word> <name>${field.target ? ` to @${field.target}` : ''}`);
+      if (field.target !== undefined && value.discriminator !== field.target)
+        return expected(`a reference to @${field.target}, not @${value.discriminator}`);
+      return value.raw;
+    case 'id':
+      if (text === undefined || !isId(text)) return expected('an id');
+      if (field.values !== undefined && !field.values.includes(text))
+        return expected(`one of ${field.values.join(', ')}`);
+      return text;
+    case 'qname': {
+      const slots = text?.split('/') ?? [];
+      if (slots.length !== 4 || !slots.every((slot) => /^[a-z][a-z0-9-]*$/.test(slot)) || !isKind(slots[1]!))
+        return expected('a qualified name system/kind/facet/name');
+      return text!;
+    }
+    case 'number':
+      if (text === undefined || !NUMBER.test(text) || !Number.isFinite(Number(text))) return expected('a number');
+      return text;
+    case 'flag':
+      if (value.kind !== 'scalar' || !['true', 'false'].includes(value.text)) return expected('true or false');
+      return value.text;
+    default:
+      return expected(`a ${type} value`);
   }
-  if (type === 'ref' && value.kind === 'ref') {
-    if (field.target && value.discriminator !== field.target) throw new Error(`Expected a reference to ${field.target}`);
-    return value.raw;
-  }
-  if (value.kind !== 'scalar') throw new Error(`Expected ${type}`);
-  const text = value.text;
-  if (type === 'id' && isId(text) && (!field.values || field.values.includes(text))) return text;
-  if (type === 'qname' && /^[a-z][a-z0-9-]*(\/[a-z][a-z0-9-]*)+$/.test(text)) return text;
-  if (type === 'number' && /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(text) && Number.isFinite(Number(text))) return text;
-  if (type === 'flag' && ['true', 'false'].includes(text)) return text;
-  throw new Error(`Expected ${type}${field.values ? ` in [${field.values.join(', ')}]` : ''}`);
 }
-/** Form strings are data. Structural types accept exactly their canonical IA value grammar. */
+
+/**
+ * The canonical IA spelling of one form value for `field`, or a SourceEditError. A form value is data: text is always
+ * quoted, so quotes and backslashes cannot end it, and every other type must parse as exactly one value of its type,
+ * with nothing after it, so no comment, condition, section, record or second field can ride along. A list type takes a
+ * bracketed list, or with `item` one list item. Line breaks and other controls are refused outright.
+ */
 export function encodeValue(field: DraftField, text: string, item = false): string {
-  if (typeof text !== 'string' || /[\r\n]/.test(text)) throw new Error('Form fields must be single-line');
-  if (field.type === 'text') return scalar(field, { kind: 'string', text, raw: quotedText(text) });
-  const value = inlineValue(text);
-  // A trailing comment would otherwise be silently discarded by the parser.
-  const normalized = text.trim();
-  if (value.kind === 'ref' && normalized !== value.raw) throw new Error('Expected one reference without trailing syntax');
-  if (value.kind === 'scalar' && normalized !== value.text) throw new Error('Expected one scalar without trailing syntax');
-  if (field.type.startsWith('list of ') && !item) {
-    if (value.kind !== 'list') throw new Error('Expected a bracketed list');
-    const items = value.items.map(v => scalar(field, v));
-    if (new Set(items).size !== items.length) throw new Error('Duplicate list value');
-    // Lists also reject comments: they are input data, not a source editor.
-    if (parse(`#! ia 1.0\n@schema probe\n  value ${text}\n`, 'value.ia').ast.trivia.some(t => t.kind === 'comment'))
-      throw new Error('Expected a list without comments');
+  if (typeof text !== 'string' || UNSAFE.test(text)) refuse('value', 'Form fields must be single-line plain text');
+  if (field.type === 'text' || (item && field.type === 'list of text'))
+    return scalar(field, { kind: 'string', text, raw: quotedText(text) });
+  const value = inlineValue(text.trim());
+  const list = field.type.startsWith('list of ');
+  if (list && !item) {
+    if (value.kind !== 'list') refuse('value', `${path(field)} expects a bracketed list`);
+    const items = (value as Extract<Value, { kind: 'list' }>).items.map((entry) => scalar(field, entry));
+    if (new Set(items).size !== items.length) refuse('duplicate', `${path(field)} lists a value twice`);
     return `[${items.join(', ')}]`;
   }
   return scalar(field, value);
 }
+/** An authored list item, re-spelled canonically for the field's item type; one the type refuses is refused here too. */
 export function encodeItem(field: DraftField, item: ListItem): string {
   return scalar(field, item);
 }

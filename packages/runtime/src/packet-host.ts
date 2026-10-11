@@ -42,7 +42,7 @@ export interface HostFile {
 export type GeneratedFileWord = 'agent-profile' | 'playbook';
 export type GeneratedRecordWord = GeneratedFileWord | 'hook';
 export type DefinitionWord = 'operation' | 'harness';
-/** The edit tools a hook group's matcher can name, in matcher order. */
+/** The edit tools a hook can declare, in canonical order. */
 export type HookToolName = 'Write' | 'Edit' | 'MultiEdit';
 /** Authored hook metadata; registration derives a fixed command, never authored shell text. */
 export interface HostHookDeclaration {
@@ -60,8 +60,9 @@ export interface GeneratedRow {
   readonly sha256: string;
 }
 /**
- * One registered hook group a receipt lists, keyed by its `@hook`: the tools its matcher names and the SHA-256 of the
- * group as it was written (its canonical JSON, keys sorted), so a hand edit of the group is evidence against the row.
+ * One registered hook group a receipt lists, keyed by its `@hook`: the tools the hook declares (the group itself matches
+ * every edit tool) and the SHA-256 of the group as it was written (its canonical JSON, keys sorted), so a hand edit of the
+ * group is evidence against the row.
  */
 export interface HookGroupRow {
   readonly identity: string;
@@ -145,7 +146,7 @@ export interface PacketReceipt {
   readonly hooks?: readonly HookGroupRow[];
   /** The authored records the host does not render or register, each with the reason. */
   readonly unsupported?: readonly UnsupportedRow[];
-  /** The owned legacy files the applying caller deleted (B9). */
+  /** The owned files the applying caller deleted: 1.x files (B9), and generated files no render writes any more. */
   readonly removed: readonly { readonly path: string; readonly sha256: string }[];
   /** The unmarked files the applying caller left in place (design §4, adapter rule 2). */
   readonly foreign: readonly string[];

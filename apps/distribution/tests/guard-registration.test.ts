@@ -578,7 +578,8 @@ it("renders the fixture's @hook as one owned group, keeps every unrelated key an
   expect(both.map((row) => row.identity)).toEqual([HOOK, other]);
   applyHookRegistration(planHookRegistration(root, { cache, hooks: both }));
   const second = JSON.parse(readFileSync(resolve(root, settings), 'utf8')).hooks.PreToolUse[2];
-  expect(second).toEqual({ matcher: 'Write', hooks: [handler(cache, root, other)] });
+  // Every group matches every edit tool (G-R2): the hook's own tools apply to its paths, read from the record.
+  expect(second).toEqual({ matcher: 'Write|Edit|MultiEdit', hooks: [handler(cache, root, other)] });
   const removal = planHookRegistration(root, { cache, hooks: both.slice(1) });
   expect(removal.hooks).toEqual([
     { hook: HOOK, action: 'remove' },
@@ -611,9 +612,9 @@ it('writes nothing authored but the identity into a group, whatever the paths an
   expect(JSON.parse(text).hooks.PreToolUse).toEqual([
     { matcher: 'Write|Edit|MultiEdit', hooks: [handler(cache, root, HOOK)] },
   ]);
-  // The tools name a matcher in a fixed order, never authored text.
-  expect(hookGroup('/c/scripts/ia.mjs', '/w', { identity: HOOK, tools: ['MultiEdit', 'Write'] }, 'win32').matcher).toBe(
-    'Write|MultiEdit',
+  // The matcher is fixed, whatever tools the hook names, and never authored text.
+  expect(hookGroup('/c/scripts/ia.mjs', '/w', { identity: HOOK, tools: ['MultiEdit'] }, 'win32').matcher).toBe(
+    'Write|Edit|MultiEdit',
   );
 });
 

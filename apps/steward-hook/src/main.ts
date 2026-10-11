@@ -731,12 +731,12 @@ const reregister = (root: string): string =>
   `run "ia host claude --root ${JSON.stringify(root)} --apply --yes" from a shell to register the workspace's current hooks, or "ia host claude --root ${JSON.stringify(root)} --remove --apply --yes" to remove the registration and restore editing`;
 /**
  * The `@mandate` guard (milestone generation-binding, plan amendments C9 and C10): one authored `@hook`'s group runs
- * `guard --root <root> --hook <identity>`. The same input checks, path safety and managed-state protection as the legacy
- * guard run first, so no hook leaves the guard's own registration, the installation state or the owned projection open
- * (the retired steward rule is not one of them). Then the admitted authored `@hook` the registration names is read as
- * hook generation declares it, and runtime's evaluateMandateGuard decides the edit: allowed unless the hook selects it
- * (its tools and paths, or the authored `.ia/src` tree) and the actor holds no governing mandate that grants Synthesis
- * there. A selected path reached through an alias is refused. What cannot be read refuses with a code; nothing is
+ * `guard --root <root> --hook <identity>` for every edit tool. The same input checks, path safety and managed-state
+ * protection as the legacy guard run first, whatever tools the hook names, so no hook leaves the guard's own
+ * registration, the installation state or the owned projection open (the retired steward rule is not one of them). Then
+ * the admitted authored `@hook` the registration names is read as hook generation declares it, and runtime's
+ * evaluateMandateGuard decides the edit: allowed unless the hook selects it (its paths select the file and its tools
+ * name the tool) and the actor is unknown or holds no governing mandate that grants Synthesis there. A selected path reached through an alias is refused. What cannot be read refuses with a code; nothing is
  * allowed because something was unreadable once the hook is known to select the edit, and a registration whose hook
  * cannot be read refuses every edit it receives, since what it selects is unknown.
  */

@@ -421,19 +421,19 @@ function hookRows(value: unknown): HookRow[] {
     fail('INPUT-INVALID', 'Each hook is registered at most once');
   return rows;
 }
-/** The group a `@hook` registers: its matcher names the hook's tools, and the guard runs with this root and that identity. */
+/**
+ * The group a `@hook` registers: the guard runs with this root and that identity for every edit tool (`Write|Edit|MultiEdit`,
+ * as the retired steward guard's group did), so the managed-state protection decides every edit; the hook's own tools
+ * apply only to its paths, which the guard reads from the record (guard review finding G-R2).
+ */
 export function hookGroup(
   launcher: string,
   root: string,
   hook: HookRow,
   platform: NodeJS.Platform = process.platform,
 ): Group {
-  return fixedGroup(
-    hookTools(hook.tools).join('|'),
-    launcher,
-    ['--root', root, '--hook', hookIdentity(hook.identity)],
-    platform,
-  );
+  hookTools(hook.tools);
+  return fixedGroup(GUARD_MATCHER, launcher, ['--root', root, '--hook', hookIdentity(hook.identity)], platform);
 }
 /**
  * A hook ownership state, or null for none. Each recorded group must be `hookGroup`'s derivation for the state's cache,
@@ -474,7 +474,7 @@ export function savedHooks(content: string | null, root: string, id: string, rem
     const group = object(owned['group'], ['matcher', 'hooks']);
     if (
       typeof group['matcher'] !== 'string' ||
-      hookTools(group['matcher'].split('|')).join('|') !== group['matcher'] ||
+      group['matcher'] !== GUARD_MATCHER ||
       !Array.isArray(group['hooks']) ||
       group['hooks'].length !== 1
     )

@@ -93,7 +93,7 @@ export type {
 } from './machine-protocol.js';
 export { HOOK_CODES, evaluateSteward } from './steward.js';
 export type { HookCode, StewardActor, StewardDecision } from './steward.js';
-export { GUARDED_SOURCES, evaluateMandateGuard, mandateGuardSelects } from './mandate-guard.js';
+export { evaluateMandateGuard, mandateGuardSelects } from './mandate-guard.js';
 export type { MandateGuardDecision, MandateGuardRequest } from './mandate-guard.js';
 export { validateCandidate } from './candidate.js';
 export type { CandidateEnvelope, CandidateScope, CandidateValidation } from './candidate.js';
@@ -118,6 +118,7 @@ export {
   mandateAuthorityOf,
   mandateRefusal,
   profileRefusal,
+  seatedWorkspace,
 } from './mandate-modes.js';
 export type {
   DefaultActor,

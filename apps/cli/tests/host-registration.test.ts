@@ -205,7 +205,7 @@ it('prints the machine-local sentence and never claims an observation', async ()
   // The guard's scope (milestone generation-binding, C9 and C10; B11's retirement kept) is disclosed wherever Claude is
   // registered, and only there.
   expect(GUARD_SCOPE).toBe(
-    'ia host registers one guard group per authored @hook, which refuses an edit its paths (or .ia/src) select unless the acting agent holds a governing @mandate granting Synthesis there; it registers no per-system steward guard, and applying the projection retires one an earlier release registered.',
+    'ia host registers one guard group per authored @hook, which refuses an edit its paths and tools select unless the acting agent holds a governing @mandate granting Synthesis there; it registers no per-system steward guard, and applying the projection retires one an earlier release registered.',
   );
   expect(preview.stdout.replace(/\s+/g, ' ')).toContain(GUARD_SCOPE);
   expect(applied.stdout.replace(/\s+/g, ' ')).toContain(GUARD_SCOPE);

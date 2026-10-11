@@ -432,6 +432,16 @@ export function governingMandates(
 }
 
 /**
+ * The workspace position seats a workspace-relative `path` in (C1's closure for a path): the workspace whose declared root
+ * holds the seat's records, else the repository's own `@workspace`; undefined when no admitted `@workspace` holds it.
+ * Reads through the scope token `within`, as `governingMandates` does.
+ */
+export function seatedWorkspace(reader: ReadHandle, within: string, path: string): string | undefined {
+  const { read, workspaceOf } = admitted(reader, within);
+  return workspaceOf(reader.resolveSeat(path, read).seat);
+}
+
+/**
  * OD1: the actor a mandate-gated command acts as at `workspace` when none is named. It is the `@agent` the workspace's
  * `composition.steward` resolves to (ia init names its participant there); failing that, the workspace's one
  * participant, an authored `@agent` that an authored mandate of its closure scoped to it names. With several

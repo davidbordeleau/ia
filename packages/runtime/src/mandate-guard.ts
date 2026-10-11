@@ -1,7 +1,7 @@
 import type { ReadHandle } from '@inventarch/db';
 import { selects } from '@inventarch/graph';
 import { RuntimeError } from './errors.js';
-import { defaultActor, governingMandates, profileRefusal } from './mandate-modes.js';
+import { defaultActor, governingMandates, profileRefusal, seatedWorkspace } from './mandate-modes.js';
 import type { GoverningMandate, ProfileVerdict } from './mandate-modes.js';
 import type { HostHookDeclaration } from './packet-host.js';
 import type { HookCode } from './steward.js';
@@ -10,20 +10,25 @@ import { freeze } from './types.js';
 /**
  * The `@mandate` edit guard (milestone generation-binding, plan amendment C10; operator decision OD4): whether one file
  * edit an authored `@hook` selects may proceed, decided from admitted records only. The caller (steward-hook's
- * `--hook` mode) owns the event, the path's safety and the hook record's admission as a declaration; this module only
- * reads the reader through the scope token, as evaluateSteward does for the retired steward guard.
+ * `--hook` mode) owns the event, the path's safety, the managed-state protection and the hook record's admission as a
+ * declaration; this module only reads the reader through the scope token, as evaluateSteward does for the retired
+ * steward guard.
  *
- * - A hook decides an edit when its tools name the event's tool and its `paths` select the file, or when the file is
- *   under `.ia/src`, the authored source tree that holds the hook, the mandates and the profiles the guard itself reads:
- *   no authored selection can leave the guard's own governing records open to the actors it restricts. Any other edit
- *   is allowed.
- * - The mandates that govern a decided edit are C1's (`governingMandates`) for the file's path, and for a file under
- *   `.ia/src` also those scoped to the repository's own `@workspace`. With none, nothing is restricted.
- * - The actor (OD4): an event that carries `agent_id` is a subagent, which acts as the `composition.agent` of the one
- *   authored `@agent-profile` whose name is its `agent_type`, and is refused when there is none. Any other event is the
- *   main session, a session launched with `--agent` included: it acts as the workspace's default actor (OD1).
- * - The edit is allowed when C1's profile allows the author mode (Synthesis) for that actor; otherwise it is refused
- *   with the hook's message and the profile's one next command, `ia position --seat <mandate> --shape governance`.
+ * - A hook decides an edit only when its `hook.paths` select the file and its `hook.tools` name the event's tool (C10).
+ *   Any other edit is allowed. A workspace protects its governing records (the `.ia/src` sources of its hooks, mandates
+ *   and profiles) by selecting them in a hook, such as `paths [".ia/src/**"]`.
+ * - The actor (OD4) is resolved first: an event that carries `agent_id` is a subagent, which acts as the
+ *   `composition.agent` of the one authored `@agent-profile` whose name is exactly its `agent_type`; a subagent no such
+ *   profile names is refused at every path the hook selects, governed or not. Any other event is the main session, a
+ *   session launched with `--agent` included: it acts as the default actor (OD1) of the workspace position seats the path
+ *   in.
+ * - The mandates that govern a decided edit are C1's (`governingMandates`) for the path and that workspace, so a mandate
+ *   scoped to the workspace governs every path a hook selects in it, beside those whose `authority.covers` claims the path.
+ *   With none, an established actor (and the main session) is allowed: a mandate only adds restrictions.
+ * - The edit is allowed when C1's profile allows the author mode (Synthesis) for that actor: a governing mandate that binds
+ *   it (its participant, or one that names no participant, which binds every established actor) grants Synthesis.
+ *   Otherwise it is refused with the hook's message and the profile's one next command,
+ *   `ia position --seat <mandate> --shape governance`.
  *
  * Excluded words are not judged: the guard sees file bytes, not records, and `ia author` and `ia preview` enforce them.
  * Paths are matched in the G06c dialect (`selects`): `!`, `[` and every other character but `*`, `?` and `/` are
@@ -57,26 +62,22 @@ export interface MandateGuardDecision {
   readonly next?: string;
 }
 
-/** The authored source tree; the guard decides every edit under it (see above). */
-export const GUARDED_SOURCES = '.ia/src/';
 const LIMIT = 512;
 const governance = (seat: string): string => `ia position --seat ${seat} --shape governance`;
 const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Whether the hook decides the edit: its tools name the tool, and its paths or the authored source tree select a spelling. */
+/** Whether the hook decides the edit: its tools name the tool and its paths select a spelling of the file (C10). */
 export function mandateGuardSelects(request: MandateGuardRequest): boolean {
   const fold = request.fold ?? ((text: string) => text);
   if (!request.hook.tools.includes(request.tool as 'Write')) return false;
-  return request.paths.some(
-    (path) =>
-      selects(fold(GUARDED_SOURCES), fold(path)) ||
-      request.hook.paths.some((selection) => selects(fold(selection), fold(path))),
-  );
+  return request.paths.some((path) => request.hook.paths.some((selection) => selects(fold(selection), fold(path))));
 }
 
-type Acting = { readonly agent?: string; readonly as: string } | { readonly refusal: string; readonly next?: string };
+type Acting =
+  | { readonly agent?: string; readonly as: string; readonly refusal?: undefined }
+  | { readonly refusal: string; readonly next?: string; readonly subagent: boolean };
 
-/** OD4's actor, through the scope token `within`; `workspace` is the repository's own `@workspace`, if one. */
+/** OD4's actor, through the scope token `within`; `workspace` is the workspace position seats the path in, if one. */
 function acting(
   reader: ReadHandle,
   within: string,
@@ -86,14 +87,17 @@ function acting(
   const { agentId, agentType } = request;
   if (agentId !== undefined) {
     if (typeof agentId !== 'string' || agentId === '' || agentId.length > LIMIT)
-      return { refusal: 'the subagent event carries a malformed agent_id' };
+      return { refusal: 'the subagent event carries a malformed agent_id', subagent: true };
     if (typeof agentType !== 'string' || agentType === '' || agentType.length > LIMIT)
-      return { refusal: 'the subagent event names no agent_type' };
+      return { refusal: 'the subagent event names no agent_type', subagent: true };
     const profiles = reader
       .records({ within })
       .filter((node) => node.discriminator === 'agent-profile' && node.band === 100 && node.name === agentType);
     if (profiles.length !== 1)
-      return { refusal: `subagent ${agentType} matches no single authored @agent-profile of that name` };
+      return {
+        refusal: `subagent ${agentType} matches no single authored @agent-profile of that name`,
+        subagent: true,
+      };
     const profile = profiles[0]!.identity;
     const agents = reader
       .directedView(profile, { within })
@@ -105,13 +109,13 @@ function acting(
           reader.get(row.counterpart, { within })?.discriminator === 'agent',
       )
       .map((row) => row.counterpart);
-    if (agents.length !== 1) return { refusal: `${profile} names no admitted composition.agent` };
+    if (agents.length !== 1) return { refusal: `${profile} names no admitted composition.agent`, subagent: true };
     return { agent: agents[0]!, as: `subagent ${agentType} acts as ${agents[0]!} (${profile})` };
   }
-  if (workspace === undefined)
-    return { as: 'the main session has no default actor: the repository names no single @workspace' };
+  if (workspace === undefined) return { as: 'the main session has no default actor: no @workspace holds this path' };
   const fallback = defaultActor(reader, within, workspace);
-  if (fallback.refusal !== undefined) return { refusal: fallback.refusal.message, next: fallback.refusal.next };
+  if (fallback.refusal !== undefined)
+    return { refusal: fallback.refusal.message, next: fallback.refusal.next, subagent: false };
   return fallback.actor === undefined
     ? { as: `the main session has no default actor: ${fallback.reason!}` }
     : { agent: fallback.actor, as: `the main session acts as ${fallback.actor}` };
@@ -124,8 +128,7 @@ export function evaluateMandateGuard(
   request: MandateGuardRequest,
 ): MandateGuardDecision {
   const { hook } = request,
-    paths = [...new Set(request.paths)],
-    fold = request.fold ?? ((text: string) => text);
+    paths = [...new Set(request.paths)];
   if (!mandateGuardSelects({ ...request, paths }))
     return freeze({ allowed: true, selected: false, message: `${hook.identity} does not select this edit` });
   const deny = (code: HookCode, why: string, next: string, actor?: string): MandateGuardDecision =>
@@ -138,35 +141,35 @@ export function evaluateMandateGuard(
       ...(actor === undefined ? {} : { actor }),
     });
   try {
-    const repository = reader.resolveSeat('', { within }).seat,
-      workspace =
-        repository !== undefined && reader.get(repository, { within })?.discriminator === 'workspace'
-          ? repository
-          : undefined;
-    const sources = paths.some((path) => selects(fold(GUARDED_SOURCES), fold(path)));
-    // C1 for the path, and for the authored source tree the workspace's own mandates too; one row per mandate.
+    const workspace = seatedWorkspace(reader, within, paths[0]!);
+    // C1 for the path and its workspace, over every spelling of the file; one row per mandate.
     const locate = (actor?: string): readonly GoverningMandate[] => {
       const found = new Map<string, GoverningMandate>();
       for (const path of paths)
         for (const mandate of governingMandates(reader, within, {
           path,
+          ...(workspace === undefined ? {} : { workspace }),
           ...(request.fold === undefined ? {} : { fold: request.fold }),
           ...(actor === undefined ? {} : { actor }),
-          ...(sources && workspace !== undefined ? { workspace } : {}),
         }))
           if (!found.has(mandate.identity)) found.set(mandate.identity, mandate);
       return [...found.values()].sort((a, b) => order(a.identity, b.identity));
     };
-    const governing = locate();
+    // The actor before anything else: an unknown subagent is refused at every selected path, governed or not.
+    const actor = acting(reader, within, request, workspace),
+      governing = locate(),
+      seat = governing[0]?.identity ?? workspace;
+    const first = seat === undefined ? 'ia position --shape governance' : governance(seat);
+    if (actor.refusal !== undefined && actor.subagent)
+      return deny('IA-HOOK-IDENTITY-UNAVAILABLE', actor.refusal, first);
     if (governing.length === 0)
       return freeze({
         allowed: true,
         selected: true,
         message: `no authored @mandate governs ${paths[0]}, so ${hook.identity} restricts nothing there`,
+        ...(actor.refusal === undefined && actor.agent !== undefined ? { actor: actor.agent } : {}),
       });
-    const actor = acting(reader, within, request, workspace),
-      first = governance(governing[0]!.identity);
-    if ('refusal' in actor) return deny('IA-HOOK-IDENTITY-UNAVAILABLE', actor.refusal, actor.next ?? first);
+    if (actor.refusal !== undefined) return deny('IA-HOOK-IDENTITY-UNAVAILABLE', actor.refusal, actor.next ?? first);
     let verdict: ProfileVerdict;
     if (actor.agent === undefined) {
       // No actor to bind: a mandate that names a participant cannot be satisfied, and only participant-less ones judge.

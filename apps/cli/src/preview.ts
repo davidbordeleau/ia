@@ -175,7 +175,6 @@ export function previewRequest(args: Arguments): PreviewRequest {
     const set = assignment(token);
     if (set !== undefined) {
       if (set.append) throw new UsageError(`A new record sets each field with =; got ${token}`);
-      if (fields.some((field) => field.key === set.key)) throw new UsageError(`Field ${set.key} is given twice`);
       fields.push({ ...set });
     } else if (fields.length === 0) throw new UsageError(`Expected <field>=<value>; got ${token}`);
     else fields.at(-1)!.value += ` ${token}`;
@@ -656,6 +655,9 @@ function previewRecord(
     const field = schemaField(run, schema, word, assigned.key);
     // Each value is judged as its field's type first, so draftSource meets only values it spells.
     edited(run, word, target.path, () => encodeValue(field, assigned.value));
+    // Review C-N10: one field given twice is refused alike whether spelled `key` or `section.key`.
+    if (values[`${field.section}/${field.key}`] !== undefined)
+      throw invalid(`@${word} field ${field.section}.${field.key} is given twice`, guidance(run, word));
     values[`${field.section}/${field.key}`] = assigned.value;
   }
   const draft = edited(run, word, target.path, () => draftSource(word, name, schema, values));

@@ -78,8 +78,8 @@
 | --- | --- | --- | --- | --- |
 | `ia init` | effect | Execution | a target already initialized; --apply writes nothing | `ia position --root <directory>` |
 | `ia validate` | validate | Verification | no .ia/src directory at the root or in any parent | `ia init` |
-| `ia preview` | validate | Verification | an actor or move the governing mandates do not allow, an excluded word, an unowned record, or a field, value or relationship the schema and consent refuse; writes nothing | `ia position --seat <mandate> --shape governance` |
-| `ia author` | author | Synthesis | a stale or missing --digest, a candidate with errors, or what ia preview refuses for the same form; writes nothing | `ia preview <the same form>` |
+| `ia preview` | validate | Verification | a move or a word the governing mandates do not allow; writes nothing | `ia position --seat <mandate> --shape governance` |
+| `ia author` | author | Synthesis | a --digest that no longer names the target file; writes nothing | `ia preview <the same form>` |
 | `ia capture` | effect | Execution | an uninitialized root with no authored `@workspace` and no source errors; nothing is written | `ia init <directory>` |
 | `ia read` | read | Observation | a locator no admitted record answers | `ia inspect` |
 | `ia position` | read | Observation | a seat the workspace does not admit, or a path outside it | `ia position` |
@@ -92,4 +92,4 @@
 - state intent to the CLI as shape + optional phase + optional seat + optional word; the CLI never receives free text
 - when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation
 
-ia-generated b020a3e417b10422c20141059dca78f930aeed8bb4f68ba5a636afab9b17d29a 1cc24a255fe5843cd7471d5af8fb823e99fb6f3be35729fc470976c67bab329b ia-claude
+ia-generated b020a3e417b10422c20141059dca78f930aeed8bb4f68ba5a636afab9b17d29a 85169cc22c872f2bca36cbfac14f1916eefa0312409d7640850a45bf8ce88162 ia-claude

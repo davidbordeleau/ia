@@ -87,10 +87,17 @@ function tree(root: string): Readonly<Record<string, string>> {
   return entries;
 }
 /** One preview, with the workspace directory checked unchanged by it whatever it returned. */
+/** The IA homes every command here runs with (review C-N6), so a write to either is seen. */
+const HOMES = { IA_HOST_HOME: scratch('preview-host-home'), IA_CONFIG_HOME: scratch('preview-config-home') };
+const trees = (root: string) => ({
+  root: tree(root),
+  host: tree(HOMES.IA_HOST_HOME),
+  config: tree(HOMES.IA_CONFIG_HOME),
+});
 async function preview(root: string, argv: readonly string[], json = true): Promise<Result> {
-  const before = tree(root);
-  const result = await run(['preview', ...argv, '--root', root, ...(json ? ['--json'] : [])]);
-  expect(tree(root), `ia preview ${argv.join(' ')} wrote`).toEqual(before);
+  const before = trees(root);
+  const result = await run(['preview', ...argv, '--root', root, ...(json ? ['--json'] : [])], { env: HOMES });
+  expect(trees(root), `ia preview ${argv.join(' ')} wrote`).toEqual(before);
   return result;
 }
 const body = (result: Result) => JSON.parse(result.stdout) as Record<string, unknown> & { readonly next?: string };
@@ -106,7 +113,7 @@ async function refused(root: string, argv: readonly string[], code: string): Pro
   const next = nextArgv(refusal.next!);
   expect(next, refusal.next).toContain('--root');
   const before = tree(root);
-  const followed = await run(next);
+  const followed = await run(next, { env: HOMES });
   expect(followed.stderr, refusal.next).toBe('');
   expect(followed.exitCode, `${refusal.next}\n${followed.stdout}`).toBeLessThanOrEqual(1);
   expect(tree(root)).toEqual(before);
@@ -315,6 +322,8 @@ describe('refusals', () => {
       [['--set', '@milestone m1', 'title+=x'], 'not a list'],
       [['task', 't9', 'meaning.colour=blue'], '@task declares no field meaning.colour'],
       [['task', 't9', 'work.due=tomorrow'], 'ISO date'],
+      [['task', 't9', 'work.title=a', 'work.title=b'], '@task field work.title is given twice'],
+      [['task', 't9', 'says=first', 'meaning.says=second'], '@task field meaning.says is given twice'],
     ] as const) {
       const refusal = await refused(root, argv, 'IA-CLI-EDIT-INVALID');
       expect(refusal['message'], argv.join(' ')).toContain(message);
@@ -350,7 +359,6 @@ describe('refusals', () => {
       ['Task'],
       ['task', '9t'],
       ['task', 't1', 'loose'],
-      ['task', 't1', 'work.title=a', 'work.title=b'],
     ]) {
       const result = await preview(root, argv);
       expect(result.exitCode, argv.join(' ')).toBe(2);

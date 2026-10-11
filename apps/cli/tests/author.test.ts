@@ -113,12 +113,20 @@ function digests(root: string): ReadonlyMap<string, string> {
   }
 }
 const body = (result: Result) => JSON.parse(result.stdout) as Record<string, unknown> & { readonly next?: string };
-const ia = (root: string, argv: readonly string[]): Promise<Result> => run([...argv, '--root', root, '--json']);
+const ia = (root: string, argv: readonly string[]): Promise<Result> =>
+  run([...argv, '--root', root, '--json'], { env: HOMES });
+/** The IA homes every command here runs with (review C-N6), so a write to either is seen. */
+const HOMES = { IA_HOST_HOME: scratch('author-host-home'), IA_CONFIG_HOME: scratch('author-config-home') };
+const trees = (root: string) => ({
+  root: tree(root),
+  host: tree(HOMES.IA_HOST_HOME),
+  config: tree(HOMES.IA_CONFIG_HOME),
+});
 /** One command that must write nothing, whatever it returns. */
 async function unchanged(root: string, argv: readonly string[]): Promise<Result> {
-  const before = tree(root);
+  const before = trees(root);
   const result = await ia(root, argv);
-  expect(tree(root), `ia ${argv.join(' ')} wrote`).toEqual(before);
+  expect(trees(root), `ia ${argv.join(' ')} wrote`).toEqual(before);
   return result;
 }
 /**
@@ -140,7 +148,7 @@ async function refused(
   const next = nextArgv(refusal.next!);
   expect(next, refusal.next).toContain('--root');
   const before = tree(root);
-  const followed = await run(next);
+  const followed = await run(next, { env: HOMES });
   expect(followed.stderr, refusal.next).toBe('');
   expect(followed.exitCode, `${refusal.next}\n${followed.stdout}`).toBeLessThanOrEqual(1);
   if (next[0] !== 'author') expect(tree(root), refusal.next).toEqual(before);
@@ -458,6 +466,49 @@ describe('the mandate profile on every gated mode', () => {
       readOnly,
     ]);
     expect(refusal['next']).toContain('preview needs Verification and @plan');
+    // Review C-R6: an excluded @plan is no command the profile allows either.
+    const excluded = workspace((at) => {
+      rmSync(resolve(at, '.ia/src/work.ia'));
+      rewrite(at, '.ia/src/workspace.ia', (text) =>
+        text.replace('    scope [@workspace demo]\n', '    scope [@workspace demo]\n    excluded-words [plan]\n'),
+      );
+    });
+    const word = await refused(excluded, ['next'], 'IA-RUNTIME-NEXT-NO-PLAN');
+    expect(nextArgv(word['next'] as string)[0]).toBe('position');
+    // Under an open actor choice, the named actor's preview carries --actor.
+    const open = workspace((at) => {
+      rmSync(resolve(at, '.ia/src/work.ia'));
+      rewrite(at, '.ia/src/workspace.ia', (text) => text.replace('    steward @agent demo\n', ''));
+      writeFileSync(
+        resolve(at, '.ia/src/ops.ia'),
+        `#! ia 1.0\n${AGENT('ops')}${MANDATE('ops-mandate', ['participant @agent ops', 'moves [Observation]', 'scope [@workspace demo]'])}`,
+      );
+    });
+    const actor = await refused(open, ['next', '--actor', participant], 'IA-RUNTIME-NEXT-NO-PLAN');
+    expect(nextArgv(actor['next'] as string)).toEqual(['preview', 'plan', '--root', open, '--actor', participant]);
+    // ops may read but not preview: its next names no preview.
+    const ops = await refused(open, ['next', '--actor', 'agent-system/binding/agent/ops'], 'IA-RUNTIME-NEXT-NO-PLAN');
+    expect(nextArgv(ops['next'] as string)[0]).toBe('position');
+  });
+  it('keeps CRLF line endings and a byte-order mark in what it writes (review C-R8)', async () => {
+    const bom = String.fromCharCode(0xfeff);
+    for (const [label, encode] of [
+      ['CRLF', (text: string) => text.replaceAll('\n', '\r\n')],
+      ['BOM', (text: string) => `${bom}${text}`],
+    ] as const) {
+      const root = workspace((at) => rewrite(at, '.ia/src/work.ia', encode));
+      const original = readFileSync(resolve(root, '.ia/src/work.ia'), 'utf8');
+      const { before, after } = await authored(root, ['--set', '@milestone m2', 'work.owner=Tom']);
+      expect(onlyChanged(before, after), label).toEqual([milestone('m2')]);
+      const written = readFileSync(resolve(root, '.ia/src/work.ia'), 'utf8');
+      // Everything before the attribution of m2 is the file's own bytes.
+      expect(written.slice(0, written.indexOf('# authored-by')), label).toBe(
+        original.slice(0, original.indexOf('@milestone m2')),
+      );
+      if (label === 'CRLF') expect(/[^\r]\n/.test(written), label).toBe(false);
+      else expect(written.startsWith(bom), label).toBe(true);
+      expect((await ia(root, ['validate'])).exitCode, label).toBe(0);
+    }
   });
   it('resolves an open actor choice with --actor on every gated mode, carrying it into the next command', async () => {
     const root = workspace((at) => {

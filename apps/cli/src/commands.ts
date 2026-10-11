@@ -225,8 +225,8 @@ export const COMMANDS: readonly CommandSpec[] = [
     catalog: {
       mode: 'validate',
       move: 'Verification',
-      refuses:
-        'an actor or move the governing mandates do not allow, an excluded word, an unowned record, or a field, value or relationship the schema and consent refuse; writes nothing',
+      // Review C-N7: the refusal its next command answers; the others are in apps/cli/SPEC.md.
+      refuses: 'a move or a word the governing mandates do not allow; writes nothing',
       next: 'ia position --seat <mandate> --shape governance',
     },
     syntax: [
@@ -247,8 +247,8 @@ export const COMMANDS: readonly CommandSpec[] = [
     catalog: {
       mode: 'author',
       move: 'Synthesis',
-      refuses:
-        'a stale or missing --digest, a candidate with errors, or what ia preview refuses for the same form; writes nothing',
+      // Review C-N7: the refusal its next command answers; the others are in apps/cli/SPEC.md.
+      refuses: 'a --digest that no longer names the target file; writes nothing',
       next: 'ia preview <the same form>',
     },
     syntax: [

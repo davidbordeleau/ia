@@ -130,7 +130,7 @@ function capturedOf(bytes: Buffer): Captured | string {
  * The entry at `path`, contained the D01 way: undefined when nothing is there, refused as IA-DB-PATH-UNSAFE when the
  * path runs through a link or junction or the entry is not a regular file, so nothing is read or written through one.
  */
-function entryAt(root: string, path: string): string | undefined {
+export function entryAt(root: string, path: string): string | undefined {
   const target = safePath(root, path),
     stat = lstatSync(target, { throwIfNoEntry: false });
   if (stat === undefined) return undefined;
@@ -309,7 +309,7 @@ export function planCapture(root: string, text: string): CapturePlan {
     }),
   });
 }
-const syncDirectory = (path: string): void => {
+export const syncDirectory = (path: string): void => {
   // Windows exposes no fsync on a directory handle; a flushed file and a same-volume rename are what it offers.
   if (process.platform === 'win32') return;
   const fd = openSync(path, 'r');
@@ -320,7 +320,7 @@ const syncDirectory = (path: string): void => {
   }
 };
 /** A new same-directory temporary file holding `bytes`, flushed, owner-only; its workspace-relative path. */
-function staged(root: string, path: string, bytes: Buffer): string {
+export function staged(root: string, path: string, bytes: Buffer): string {
   const temporary = `${path}.${randomUUID()}.tmp`,
     fd = openSync(safePath(root, temporary), 'wx', 0o600);
   try {
@@ -331,7 +331,7 @@ function staged(root: string, path: string, bytes: Buffer): string {
   }
   return temporary;
 }
-const discard = (root: string, path: string | undefined): void => {
+export const discard = (root: string, path: string | undefined): void => {
   if (path === undefined) return;
   try {
     unlinkSync(safePath(root, path));

@@ -32,12 +32,18 @@ import type { Readiness, RetainedSnapshot, Staleness } from './retention.js';
 import { seatOf } from './seat.js';
 import type { SeatResolution } from './seat.js';
 import { occurrenceKey, viewBuilder } from './view.js';
+import type { ViewOptions } from './view.js';
 import type { RefusedRecord, View } from './view.js';
 import { previewInputs } from './preview.js';
 import type { DraftChange, DraftPreview } from './preview.js';
 
 export interface OpenOptions extends InputOptions {
   readonly cache?: boolean;
+  /**
+   * D15: how `@check` records are admitted (`ViewOptions.checks`). `strict`, the default, keeps every existing reader's
+   * admission; `structural` is for the validate path that binds checks.
+   */
+  readonly checks?: 'strict' | 'structural';
 }
 export interface ReadOptions {
   readonly root?: string;
@@ -128,11 +134,11 @@ function scopeRoot(value: string): string {
 
 /** Internal observation seam: production supplies readInputs, tests can prove
  * the bounded retry and no-publication invariant with real captured inputs. */
-export function stableState(read: () => InputSnapshot, cache: boolean): State {
+export function stableState(read: () => InputSnapshot, cache: boolean, view: ViewOptions = {}): State {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const inputs = read(),
-        build = viewBuilder(inputs),
+        build = viewBuilder(inputs, view),
         rootView = build();
       if (read().fingerprint !== inputs.fingerprint) continue;
       return {
@@ -507,8 +513,12 @@ export class Reader {
 export class Handle extends Reader {
   #options: OpenOptions;
   constructor(root: string, options: OpenOptions = {}) {
-    const selected = Object.freeze({ ...inputOptions(options), cache: options.cache ?? true });
-    const state = stableState(() => readInputs(root, selected), selected.cache),
+    const selected = Object.freeze({
+      ...inputOptions(options),
+      cache: options.cache ?? true,
+      ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
+    });
+    const state = stableState(() => readInputs(root, selected), selected.cache, selected),
       canonical = state.inputs.root,
       current = rootSnapshot(state),
       seed = once(() => readCapture(canonical, current));
@@ -529,7 +539,7 @@ export class Handle extends Reader {
   }
   refresh(): Snapshot {
     const held = this.retention,
-      next = stableState(() => readInputs(this.root, this.#options), this.#options.cache!),
+      next = stableState(() => readInputs(this.root, this.#options), this.#options.cache!, this.#options),
       root = next.inputs.root,
       current = rootSnapshot(next);
     // D08 rotation (`rotate`) without reading the pair: a changed authored revision makes the held root snapshot

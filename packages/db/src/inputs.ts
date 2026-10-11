@@ -43,6 +43,11 @@ export interface InputOptions {
   readonly adopted?: readonly AdoptedSource[];
   /** Host-selected project instance targets; adopted definitions remain read-only. */
   readonly writableSystems?: readonly string[];
+  /**
+   * D14: read the runtime evidence files under `.ia/work/evidence` as candidates, of which a view admits only the one
+   * named after its own authored revision. Absent or false, as for every existing reader, none is read.
+   */
+  readonly evidence?: boolean;
 }
 export interface InputSnapshot {
   readonly authoredRoots?: readonly string[];
@@ -53,7 +58,53 @@ export interface InputSnapshot {
   readonly sources: readonly RevisionSource[];
   readonly folders: readonly string[];
   readonly floorOrigin: 'explicit' | 'local' | 'embedded';
+  /** D14: the evidence files read when `evidence` was asked for, at runtime placement band 0; never in `sources`. */
+  readonly evidence?: readonly RevisionSource[];
   readonly fingerprint: string;
+}
+/** D14: where the validate effect writes runtime evidence, one file per authored revision. */
+export const EVIDENCE_DIRECTORY = '.ia/work/evidence';
+/** D14: an evidence file's name, `<authored revision>.ia`; anything else in the directory is not evidence. */
+export const EVIDENCE_FILE = /^[0-9a-f]{64}\.ia$/;
+const EVIDENCE_BYTES = 4 * 1024 * 1024;
+/**
+ * D14: the evidence files at `.ia/work/evidence`, each at runtime placement band 0. The directories from the root are
+ * contained the D01 way: a link or junction refuses as IA-DB-PATH-UNSAFE, and so does an entry at `.ia`, `.ia/work` or the
+ * directory itself that is not a directory; a missing one means there is none. A file is read through
+ * `readWorkspaceBytes`, so a linked, hard-linked or nonregular one refuses as IA-DB-PATH-UNSAFE; one that is not exact
+ * UTF-8, or that grew past its bound, is not evidence and is skipped.
+ */
+function evidenceSources(root: string): readonly RevisionSource[] {
+  for (const directory of ['.ia', '.ia/work', EVIDENCE_DIRECTORY]) {
+    const stat = lstatSync(safePath(root, directory), { throwIfNoEntry: false });
+    if (stat === undefined) return [];
+    if (!stat.isDirectory()) throw new DbError('IA-DB-PATH-UNSAFE', `${directory} is not a directory`, directory);
+  }
+  const found: RevisionSource[] = [];
+  for (const name of readdirSync(safePath(root, EVIDENCE_DIRECTORY)).sort(compare)) {
+    if (!EVIDENCE_FILE.test(name)) continue;
+    const path = `${EVIDENCE_DIRECTORY}/${name}`;
+    let text: string;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+        readWorkspaceBytes(root, path, EVIDENCE_BYTES),
+      );
+    } catch (error) {
+      if (error instanceof DbError && error.code === 'IA-DB-PATH-UNSAFE') throw error;
+      continue;
+    }
+    found.push(
+      Object.freeze({
+        path,
+        text,
+        location: Object.freeze({
+          placement: Object.freeze({ kind: 'runtime' as const, band: 0 as const, reach: '' }),
+          provenance: 'runtime' as const,
+        }),
+      }),
+    );
+  }
+  return Object.freeze(found);
 }
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 export { pathKey };
@@ -297,6 +348,7 @@ export function inputOptions(options: InputOptions): InputOptions {
     throw new DbError('IA-DB-PATH-UNSAFE', 'Duplicate floor source aliases');
   return Object.freeze({
     locations: Object.freeze(locations),
+    ...(options.evidence === true ? { evidence: true } : {}),
     ...(authoredRoots === undefined ? {} : { authoredRoots: Object.freeze(authoredRoots) }),
     ...(candidateInstallation === undefined ? {} : { candidateInstallation }),
     ...(floor === undefined ? {} : { floor: Object.freeze(floor) }),
@@ -627,6 +679,8 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
   sources.sort((a, b) => compare(a.path, b.path));
   const activation = installed ? { activation: installed.pointer } : {};
   const authored = options.authoredRoots === undefined ? {} : { authoredRoots: options.authoredRoots };
+  // D14: only a reader that asks reads evidence, and its fingerprint then covers it, so a concurrent write is seen.
+  const evidence = options.evidence === true ? { evidence: evidenceSources(canonical) } : {};
   return Object.freeze({
     root: canonical,
     sources: Object.freeze(sources),
@@ -634,9 +688,10 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
     floorOrigin,
     ...activation,
     ...authored,
+    ...evidence,
     ...(installed ? { installed: installed.lock.packages } : {}),
     fingerprint: createHash('sha256')
-      .update(stableSerialize({ sources, folders, floorOrigin, ...activation, ...authored }))
+      .update(stableSerialize({ sources, folders, floorOrigin, ...activation, ...authored, ...evidence }))
       .digest('hex'),
   });
 }

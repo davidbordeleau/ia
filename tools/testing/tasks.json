@@ -1618,6 +1618,7 @@
       "project": "packages/db",
       "files": [
         "tests/acceptance.test.ts",
+        "tests/check-evidence.test.ts",
         "tests/complete-scope.test.ts",
         "tests/descriptors.test.ts",
         "tests/distribution-contracts.test.ts",

@@ -11,6 +11,7 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -164,36 +165,44 @@ export function replace(root: string, path: string, content: Buffer | null, mode
   }
   mkdirSync(dirname(target), { recursive: true });
   contained(root, path);
-  const temp = `${target}.${randomUUID()}.tmp`,
-    fd = openSync(temp, 'wx', mode);
-  try {
-    if (mode !== 0o600) fchmodSync(fd, mode);
-    writeFileSync(fd, content);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
+  const temp = drafted(target, content, mode);
   try {
     renameSync(temp, target);
     syncDirectory(dirname(target));
   } finally {
-    if (existsSync(temp)) unlinkSync(temp);
+    rmSync(temp, { force: true });
   }
+}
+/**
+ * A complete, fsynced temporary sibling of `target` holding `content`, which `replace` renames and `createFile` links
+ * into place. A step that fails removes it again, so a failed write leaves no temporary file (milestone 6 review
+ * C2-N14). Neither publisher locks the target: a writer that saves it between a caller's last read and the rename is
+ * replaced, which a caller narrows by reading the file through an opened handle just before (as `ia author` does) but
+ * cannot close.
+ */
+function drafted(target: string, content: Buffer, mode: number): string {
+  const temp = `${target}.${randomUUID()}.tmp`,
+    fd = openSync(temp, 'wx', mode);
+  try {
+    try {
+      if (mode !== 0o600) fchmodSync(fd, mode);
+      writeFileSync(fd, content);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+  } catch (error) {
+    rmSync(temp, { force: true });
+    throw error;
+  }
+  return temp;
 }
 /** Publish one complete draft file without replacing an existing directory entry. */
 export function createFile(root: string, path: string, content: Buffer, mode = 0o600): void {
   const target = contained(root, path);
   mkdirSync(dirname(target), { recursive: true });
   contained(root, path);
-  const temp = `${target}.${randomUUID()}.tmp`,
-    fd = openSync(temp, 'wx', mode);
-  try {
-    if (mode !== 0o600) fchmodSync(fd, mode);
-    writeFileSync(fd, content);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
+  const temp = drafted(target, content, mode);
   try {
     linkSync(temp, target);
     syncDirectory(dirname(target));
@@ -201,7 +210,7 @@ export function createFile(root: string, path: string, content: Buffer, mode = 0
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') fail('LOCAL-MODIFICATION', 'Draft output already exists');
     throw error;
   } finally {
-    unlinkSync(temp);
+    rmSync(temp, { force: true });
   }
 }
 export function canonicalJson(content: Buffer): unknown {

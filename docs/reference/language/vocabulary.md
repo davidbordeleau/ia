@@ -2,7 +2,7 @@
 
 Generated from the public contract corpus by `pnpm vocabulary:generate`. Required sections and fields are structural obligations; `id` is not an implicit enumeration. See [the language guide](README.md) for shared syntax, allowed values, relationship resolution, domain constraints and evaluator limits. The [JSON catalogue](vocabulary.json) carries the same machine-readable contract.
 
-This catalogue contains 44 words. Source digest: `b57cce54697f36634d379efd7d7edaf0657daa42d5ef92ac33fdcdb021b813c3`.
+This catalogue contains 44 words. Source digest: `714d9ebdfce5092ccb2f39bc12baa4f613397731a24c99544c0528e1e0750e3b`.
 
 ## @agent
 
@@ -261,7 +261,8 @@ Required sections: meaning, check. Optional sections: relationships, governance.
 | meaning.answers | text | yes |  |
 | check.implementation | text | no | The evaluator that runs the check: a built-in or catalog evaluator id, the same value check.runs takes, and equal to it when both are stated. The \<id>@\<version> form of evidence.implementation is not accepted here. |
 | check.runs | id | no |  |
-| check.scope | text | yes |  |
+| check.scope | text | yes | What the check selects: the whole-workspace token *, a scope its evaluator reports, or prose. It is text and claims no path; check.covers does. |
+| check.covers | list of text | no | Path selections the check claims, matched by the location resolver. Claiming a path does not change which verdicts the check selects; check.scope does that. |
 
 ## @contract
 

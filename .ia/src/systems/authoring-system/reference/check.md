@@ -17,7 +17,8 @@ Section governance: optional.
 - meaning.answers: text; required.
 - check.implementation: text; optional. — The evaluator that runs the check: a built-in or catalog evaluator id, the same value check.runs takes, and equal to it when both are stated. The \<id>@\<version> form of evidence.implementation is not accepted here.
 - check.runs: id; optional.
-- check.scope: text; required.
+- check.scope: text; required. — What the check selects: the whole-workspace token *, a scope its evaluator reports, or prose. It is text and claims no path; check.covers does.
+- check.covers: list of text; optional. — Path selections the check claims, matched by the location resolver. Claiming a path does not change which verdicts the check selects; check.scope does that.
 
 
 A valid declaration establishes structural conformance. Execution, host authority and evidence verification require their respective explicit consumers.

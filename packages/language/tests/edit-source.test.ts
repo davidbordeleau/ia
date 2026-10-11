@@ -389,6 +389,16 @@ describe('the bytes of everything but the edited record (review C-R8)', () => {
     const appended = edits[2]![1](odd);
     expect(appended.startsWith(odd)).toBe(true);
   });
+  it("keeps the old last line's own ending in a file of mixed endings (review C-RC3)", () => {
+    // CRLF for every line but the last, which ends LF: the file's bytes stay a prefix, new lines take CRLF.
+    const lines = source.replace(/\n$/, '').split('\n');
+    const mixed = `${lines.join('\r\n')}\n`;
+    const appended = edits[2]![1](mixed);
+    expect(appended.startsWith(mixed)).toBe(true);
+    expect(appended.slice(mixed.length)).toBe(
+      '\r\n@task three\r\n  meaning\r\n    says "Third"\r\n  work\r\n    status open\r\n',
+    );
+  });
   it('gives a last line with no ending one before appending, and keeps it absent on an edit at the end', () => {
     const open = source.replace(/\n$/, '');
     const appended = edits[2]![1](open);

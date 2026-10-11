@@ -160,10 +160,10 @@ export function appendRecord(text: string, draft: string): string {
   )
     refuse('duplicate', `This file already declares @${record!.discriminator} ${record!.name}`);
   const end = raw.texts.length - 1;
-  // The last line keeps its bytes and gains the file's ending if it had none; one blank line separates the record.
-  const separated = raw.texts[end]!.trim() === '' ? [raw.texts[end]!] : [raw.texts[end]!, ''];
-  const out = assemble(raw, end, end, [...separated, ...body]);
-  return raw.endings[end] === '' ? `${out}${raw.eol}` : out;
+  // The file keeps its bytes, the last line its own ending (review C-RC3), gaining the file's only if it had none; one
+  // blank line separates the record, and only the new lines take the file's ending.
+  const blank = raw.texts[end]!.trim() === '' ? [] : [''];
+  return `${text}${raw.endings[end] === '' ? raw.eol : ''}${[...blank, ...body].map((line) => `${line}${raw.eol}`).join('')}`;
 }
 
 /**

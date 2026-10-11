@@ -35,6 +35,19 @@ export interface HostFile {
   readonly path: string;
   readonly text: string;
 }
+/** Authored hook metadata; registration derives a fixed command, never authored shell text. */
+export interface HostHookDeclaration {
+  readonly identity: string;
+  readonly event: 'PreToolUse';
+  readonly tools: readonly ('Write' | 'Edit' | 'MultiEdit')[];
+  readonly paths: readonly string[];
+  readonly message: string;
+}
+export interface PacketDefinition {
+  readonly identity: string;
+  readonly word: 'operation' | 'harness';
+  readonly definition: Readonly<Record<string, unknown>>;
+}
 /**
  * B12: the receipt of one render, which the caller that applies the files writes beside the projection state.
  * `renderHost` fills what the render decides and leaves `removed` and `foreign` empty, `guard` `none`, and `cli` and
@@ -59,6 +72,20 @@ export interface PacketReceipt {
   readonly entries: number;
   /** The files this render writes and expects to remain, in render order, each with the SHA-256 of its UTF-8 text. */
   readonly files: readonly { readonly path: string; readonly sha256: string }[];
+  /** Optional on receipts predating authored generation. Ownership remains projection state. */
+  readonly generated?: readonly {
+    readonly identity: string;
+    readonly word: 'agent-profile' | 'playbook' | 'hook';
+    readonly path: string;
+    readonly sha256: string;
+  }[];
+  readonly definitions?: readonly PacketDefinition[];
+  readonly hooks?: readonly HostHookDeclaration[];
+  readonly unsupported?: readonly {
+    readonly identity: string;
+    readonly word: 'agent-profile' | 'hook';
+    readonly reason: string;
+  }[];
   /** The owned legacy files the applying caller deleted (B9). */
   readonly removed: readonly { readonly path: string; readonly sha256: string }[];
   /** The unmarked files the applying caller left in place (design §4, adapter rule 2). */
@@ -77,6 +104,7 @@ export interface PacketReceipt {
 export interface HostOutput {
   readonly files: readonly HostFile[];
   readonly receipt: PacketReceipt;
+  readonly hooks?: readonly HostHookDeclaration[];
 }
 
 /** This package's version, read from its own manifest as the MCP door reads its own. */

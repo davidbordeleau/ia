@@ -43,7 +43,15 @@ export type {
   PositionPacket,
 } from './packet.js';
 export { PACKET_MARKER, renderHost } from './packet-host.js';
-export type { HostFile, HostOutput, PacketHost, PacketReceipt, PacketTarget } from './packet-host.js';
+export type {
+  HostFile,
+  HostOutput,
+  HostHookDeclaration,
+  PacketDefinition,
+  PacketHost,
+  PacketReceipt,
+  PacketTarget,
+} from './packet-host.js';
 export { context, DEFAULT_TOKENIZER } from './context.js';
 export type {
   ContextRequest,

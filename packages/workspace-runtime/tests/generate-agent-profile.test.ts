@@ -117,14 +117,14 @@ it("renders the fixture profile as one claude agent file naming its mandate and 
   expect(lines.filter((line) => line === PACKET_MARKER)).toHaveLength(1);
 });
 
-it('says in one line that a profile names no mandate', () => {
+it('falls back to the default participant mandate when the profile names none', () => {
   const { db, within } = fixture({
       '.ia/src/composition.ia': composition((text) => text.replace('    mandate @mandate demo-mandate\n', '')),
     }),
     [file, ...rest] = claude(db, within);
   expect(rest).toEqual([]);
-  expect(file!.text).toContain('\n## Mandate\n\nThis profile names no mandate.\n\n## Voice\n');
-  expect(file!.text).not.toContain('demo-mandate');
+  expect(file!.text).toContain('agent-system/policy/mandate/demo-mandate');
+  expect(file!.text).not.toContain('reviewer-docs');
 });
 
 it('renders every bound the named mandate states: participant, moves, scope, excluded words, covers and limits', () => {
@@ -221,9 +221,7 @@ it('renders one line per delegate in authored order and each authored profile as
   ).toBe(true);
   // A profile with no mandate and no voice still renders, its agent describing it.
   expect(files[0]!.text).toContain(`description: "Reviews the demo workspace's notes and reports what it finds."`);
-  expect(files[0]!.text).toContain(
-    '\n## Mandate\n\nThis profile names no mandate.\n\n## Tools\n\n- `agent-composition-system/definition/capability/note-reading`: ',
-  );
+  expect(files[0]!.text).toContain('\n## Tools\n\n- `agent-composition-system/definition/capability/note-reading`: ');
   expect(files[0]!.text).not.toContain('## Voice');
   expect(files[0]!.text).not.toContain('## Delegates');
 });

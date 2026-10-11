@@ -33,6 +33,7 @@
     answers "Which operation reads a note?"
   composition
     operations [@operation read-note]
+    playbooks [@playbook note-review]
   execution
     effects [read]
 

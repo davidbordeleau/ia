@@ -6,7 +6,7 @@ import { open } from '@inventarch/db';
 import type { Handle } from '@inventarch/db';
 import { PACKET_MARKER } from '@inventarch/runtime';
 import { adoptWorkspace } from '../src/corpus.js';
-import { generatePlaybookSkills } from '../src/generate/index.js';
+import { generateDefinitions, generateHooks, generatePlaybookSkills } from '../src/generate/index.js';
 
 // Milestone generation-binding task generation-playbook-skill (plan amendments C8 and C12): the authored `@playbook` of
 // apps/cli's composition fixture renders one skill per host. The fixture's `.ia/src` is laid over the conformance
@@ -88,7 +88,9 @@ it('renders the fixture playbook as one claude skill with its four phase section
   const { db, within } = fixture(),
     files = generatePlaybookSkills(db, within, 'claude');
   // The adopted corpus's own playbook renders nothing.
-  expect(files).toEqual([{ path: '.claude/skills/note-review/SKILL.md', text: SKILL, identity: IDENTITY, word: 'playbook' }]);
+  expect(files).toEqual([
+    { path: '.claude/skills/note-review/SKILL.md', text: SKILL, identity: IDENTITY, word: 'playbook' },
+  ]);
   expect(Object.isFrozen(files) && Object.isFrozen(files[0])).toBe(true);
   // Frontmatter first, describing the playbook by its meaning; the marker next, on its own line.
   const lines = files[0]!.text.split('\n');
@@ -232,4 +234,56 @@ it('writes the same bytes at two roots and names neither root nor scope token', 
         expect(file.text).not.toContain(within);
       }
   }
+});
+
+it('renders operation and harness definitions without importing a handler or validator', () => {
+  const { db, within } = fixture();
+  const definitions = generateDefinitions(db, within, 'claude');
+  expect(definitions.find((row) => row.word === 'operation')?.definition).toEqual({
+    name: 'read-note',
+    description: 'Read one captured note.',
+    handler: 'read-note-v1',
+    input: 'read-note-input-v1',
+    output: 'read-note-output-v1',
+    effects: ['read-only'],
+  });
+  expect(definitions.find((row) => row.word === 'harness')?.definition.registrations).toMatchObject({
+    agents: [{ path: '.claude/agents/reviewer.md' }],
+    skills: [{ path: '.claude/skills/note-review/SKILL.md' }],
+    hooks: [
+      {
+        identity: 'hook-authoring-system/binding/hook/note-edits',
+        event: 'PreToolUse',
+        tools: ['Write', 'Edit', 'MultiEdit'],
+      },
+    ],
+  });
+  expect(
+    generateDefinitions(db, within, 'codex').find((row) => row.word === 'harness')?.definition.registrations,
+  ).toMatchObject({
+    agents: [],
+    hooks: [],
+    skills: [{ path: '.agents/skills/note-review/SKILL.md' }],
+  });
+});
+
+it('generates authored hooks only and refuses tools and selections outside the edit guard contract', () => {
+  const hooks = readFileSync(resolve(FIXTURE, 'hooks.ia'), 'utf8');
+  const authored = fixture();
+  expect(generateHooks(authored.db, authored.within, 'claude')).toHaveLength(1);
+  expect(generateHooks(authored.db, authored.within, 'codex')).toEqual([]);
+  const adopted = fixture({ '.ia/src/hooks.ia': null }, { '.ia/src/hooks.ia': hooks });
+  expect(generateHooks(adopted.db, adopted.within, 'claude')).toEqual([]);
+  for (const text of [
+    hooks.replace('[Write, Edit, MultiEdit]', '[Bash]'),
+    hooks.replace('"docs/**"', '"../docs/**"'),
+  ]) {
+    const broken = fixture({ '.ia/src/hooks.ia': text });
+    expect(() => generateHooks(broken.db, broken.within, 'claude')).toThrow('Unsupported or unsafe authored hook');
+  }
+});
+
+it('refuses portable device names before emitting any host path', () => {
+  const { db, within } = fixture({ '.ia/src/playbook.ia': PLAYBOOK.replace('note-review', 'con') });
+  expect(() => generatePlaybookSkills(db, within, 'claude')).toThrow('Unsafe generated host name');
 });

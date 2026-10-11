@@ -6,7 +6,7 @@ import { PACKET_MARKER } from '@inventarch/runtime';
 import type { PacketHost } from '@inventarch/runtime';
 import { inputFailure } from '../projection-format.js';
 import { frozen } from '../resource-format.js';
-import { authoredOf, code, inline, knownHost, section, textsAt } from './format.js';
+import { authoredOf, code, inline, knownHost, safeName, section, textsAt } from './format.js';
 import type { GeneratedFile } from './format.js';
 
 /**
@@ -43,12 +43,10 @@ export function generatePlaybookSkills(reader: ReadHandle, within: string, host:
   // either.
   const reserved = playbooks.find((playbook) => playbook.name === RESERVED);
   if (reserved !== undefined)
-    inputFailure(
-      `Playbook ${reserved.identity} would render over the packet's ${RESERVED} skill; rename the playbook`,
-    );
+    inputFailure(`Playbook ${reserved.identity} would render over the packet's ${RESERVED} skill; rename the playbook`);
   return frozen(
     playbooks.map((playbook) => ({
-      path: `${SKILLS[host]}/${playbook.name}/SKILL.md`,
+      path: `${SKILLS[host]}/${safeName(playbook.name)}/SKILL.md`,
       text: skillFile(playbook),
       identity: playbook.identity,
       word: 'playbook' as const,
@@ -74,7 +72,9 @@ function skillFile(playbook: Node): string {
     const cells = playbook.cells.filter((cell) => cell.phase === phase);
     // The primary primitive first, then each named primitive in authored order.
     if (cells.length > 0)
-      out.push(...section(phase, [...cells.filter((c) => c.primary), ...cells.filter((c) => !c.primary)].map(cellLine)));
+      out.push(
+        ...section(phase, [...cells.filter((c) => c.primary), ...cells.filter((c) => !c.primary)].map(cellLine)),
+      );
   }
   return `${out.join('\n')}\n`;
 }

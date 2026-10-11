@@ -1,11 +1,23 @@
 import type { ReadHandle } from '@inventarch/db';
 import type { Node } from '@inventarch/graph';
 import type { CompiledValue } from '@inventarch/language';
-import { PACKET_MARKER } from '@inventarch/runtime';
+import { defaultActor, governingMandates, PACKET_MARKER } from '@inventarch/runtime';
 import type { PacketHost } from '@inventarch/runtime';
 import { claudeProseCatalog, nativeValue, PROSE_EFFECT_TOOLS } from '../projection-host.js';
 import { frozen } from '../resource-format.js';
-import { authoredOf, code, fieldsOf, inline, knownHost, list, section, stated, textsAt, valuesAt } from './format.js';
+import {
+  authoredOf,
+  code,
+  fieldsOf,
+  inline,
+  knownHost,
+  list,
+  safeName,
+  section,
+  stated,
+  textsAt,
+  valuesAt,
+} from './format.js';
 import type { GeneratedFile } from './format.js';
 
 /**
@@ -51,6 +63,17 @@ export function generateAgentProfiles(reader: ReadHandle, within: string, host: 
   const records = reader.records({ within });
   if (host === 'codex') return frozen([]);
   const nodes = new Map(records.map((node) => [node.identity, node]));
+  const workspace = reader.resolveSeat('', { within }).seat;
+  const participant =
+    workspace !== undefined && nodes.get(workspace)?.discriminator === 'workspace'
+      ? defaultActor(reader, within, workspace).actor
+      : undefined;
+  const fallback =
+    participant === undefined || workspace === undefined
+      ? []
+      : governingMandates(reader, within, { workspace, actor: participant })
+          .filter((mandate) => mandate.binds && mandate.participant === participant)
+          .flatMap((mandate) => nodes.get(mandate.identity) ?? []);
   /** The admitted record a reference resolves to in the scope, or undefined. */
   const target = (value: CompiledValue): Node | undefined => {
     if (value.kind !== 'ref') return undefined;
@@ -72,8 +95,8 @@ export function generateAgentProfiles(reader: ReadHandle, within: string, host: 
         ? []
         : [
             {
-              path: `.claude/agents/${profile.name}.md`,
-              text: agentFile(profile, tools, target, named),
+              path: `.claude/agents/${safeName(profile.name)}.md`,
+              text: agentFile(profile, tools, target, named, fallback),
               identity: profile.identity,
               word: 'agent-profile' as const,
             },
@@ -87,6 +110,7 @@ function agentFile(
   tools: readonly string[],
   target: (value: CompiledValue) => Node | undefined,
   named: (value: CompiledValue) => string,
+  fallback: readonly Node[],
 ): string {
   const agent = valuesAt(profile, 'composition.agent')[0],
     agentNode = agent === undefined ? undefined : target(agent),
@@ -119,7 +143,9 @@ function agentFile(
     ...section(
       'Mandate',
       mandate === undefined
-        ? ['This profile names no mandate.']
+        ? fallback.length === 0
+          ? ['This profile names no mandate; no default participant mandate resolves.']
+          : fallback.flatMap((node) => mandateLines(node, named))
         : mandateNode === undefined
           ? [`- ${named(mandate)}: not admitted in this scope`]
           : mandateLines(mandateNode, named),

@@ -9,7 +9,7 @@ import { inputFailure } from '../projection-format.js';
  */
 
 /** The words a generator renders records of. */
-export type GeneratedWord = 'agent-profile' | 'playbook';
+export type GeneratedWord = 'agent-profile' | 'playbook' | 'hook' | 'operation' | 'harness';
 /** One generated host file and the record it renders. */
 export interface GeneratedFile {
   /** Workspace-relative and `/`-separated. */
@@ -26,6 +26,12 @@ const AUTHORED = 100;
 /** An unknown host is IA-PROJECTION-INPUT-INVALID. */
 export function knownHost(host: PacketHost): void {
   if (host !== 'claude' && host !== 'codex') inputFailure(`Unknown host: ${String(host)}`);
+}
+/** Host paths must also be portable on Windows, including its reserved device names. */
+export function safeName(name: string): string {
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(name) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/.test(name))
+    inputFailure(`Unsafe generated host name: ${name}`);
+  return name;
 }
 /** The records of `word` among `records` that the workspace authors (band 100), by identity. */
 export const authoredOf = (records: readonly Node[], word: GeneratedWord): readonly Node[] =>

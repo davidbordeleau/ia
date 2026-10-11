@@ -9,14 +9,10 @@ import type {
   InstalledOperation,
   UnavailableOperation,
 } from '@inventarch/db/distribution';
-import {
-  acquireHostRegistrationLock,
-  assertHostRegistrationIdle,
-  HOST_REGISTRATION,
-  saved,
-  verifyHostCache,
-} from './host.js';
+import { acquireHostRegistrationLock, assertHostRegistrationIdle, HOST_REGISTRATION, saved } from './host.js';
 import { hostPayloadPath } from './host-home.js';
+import { verifierOf } from './host-observe.js';
+import type { HostVerifier } from './host-observe.js';
 import type { WorkspaceHost } from './hosts.js';
 import { asWorkspaceHost } from './hosts.js';
 import { bytes, contained, fail, json, locate, object, replace, sha256, utf8, workspace } from './files.js';
@@ -29,9 +25,12 @@ import { bytes, contained, fail, json, locate, object, replace, sha256, utf8, wo
  * Its value's shape, operation rows included, is `@inventarch/db/distribution`'s (`checkInstalledImplementations`),
  * which binders read too (review finding B-N9).
  *
- * Nothing is read from a payload that fails `verifyHostCache`: every entry under the payload directory must be a file
- * the inventory lists, with its bytes, and no link or junction, so a module planted anywhere Node's resolution could
- * reach (beside or above the handler's packages) refuses the whole catalog. An operation is then `available` only when
+ * Nothing is read from a payload that fails `verifyHostCache`: every file under the payload directory must be one the
+ * inventory lists, with its bytes, and no entry may be a link or junction, so a module planted inside the payload
+ * directory, beside or above the handler's packages, refuses the whole catalog. Only the payload directory is verified,
+ * and the closure check follows literal import specifiers only (review finding B2-N10). An unlisted empty directory is
+ * not refused (B-RC1): it holds no module, though one where Node's resolution expects a file can keep a handler from
+ * loading, which denies service but never substitutes code. An operation is then `available` only when
  * the payload ships its handler: the handler module and the manifest of every package its closure names are in the
  * verified inventory, and the catalog's handler digest is the SHA-256 the inventory pins for the module. What binds is
  * that module digest together with the verified inventory, which pins every other byte of the closure (review finding
@@ -132,10 +131,12 @@ function shipped(operation: AvailableOperation, inventory: ReadonlyMap<string, L
 
 /**
  * The catalog of the materialized host payload at `directory`. The whole payload is verified first, as `verifyHostCache`
- * verifies it before a registration may launch it, and must verify as `release`: a file the inventory does not list
- * (wherever Node's resolution could find it), a link or junction, a missing file or changed bytes refuse, with that
- * verification's code (release.json hashing to `release`, inventory.json to the digest release.json names, every listed
- * file to its pin). The catalog is the file that verified inventory lists, read again and compared with its pin. Each
+ * verifies it before a registration may launch it, and must verify as `release`: a file anywhere in the payload directory
+ * that the inventory does not list, a link or junction, a missing file or changed bytes refuse, with that verification's
+ * code (release.json hashing to `release`, inventory.json to the digest release.json names, every listed file to its
+ * pin). A release.json that does not hash to `release` refuses as IA-DIST-INTEGRITY-MISMATCH before it is parsed. `given`
+ * shares the verification of one report when `hostVerifier` made it; any other value is ignored and the payload is
+ * verified afresh (review finding B2-N6). The catalog is the file that verified inventory lists, read again and compared with its pin. Each
  * available operation is checked against the verified inventory (`shipped`). A v1 payload, or a v2 payload whose
  * inventory lists no catalog (one built before the catalog existed), is `unavailable`, not an integrity failure. A
  * missing payload file or release.json is IA-DIST-ARTIFACT-UNAVAILABLE; unexpected or changed bytes are
@@ -145,8 +146,10 @@ function shipped(operation: AvailableOperation, inventory: ReadonlyMap<string, L
 export function readInstalledImplementations(
   directory: string,
   release: string,
-  verify: (directory: string) => ReturnType<typeof verifyHostCache> = verifyHostCache,
+  given?: HostVerifier,
 ): InstalledCatalog {
+  // Review finding B2-N6: only a verifier `hostVerifier` made is shared; anything else is replaced by a fresh one.
+  const verify = verifierOf(given);
   if (!HEX.test(release)) fail('INPUT-INVALID', 'Invalid host release pin');
   // Review finding B2-N2: a release.json that does not hash to the pin is changed bytes, whether or not it still parses.
   const root = workspace(directory),

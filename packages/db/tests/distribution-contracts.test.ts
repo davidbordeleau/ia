@@ -277,4 +277,17 @@ it('shapes an installed-implementation catalog once for its reader and its binde
     ],
   ] as const)
     expect(checkInstalledImplementations(bad)).toEqual({ ok: false, reason: expect.stringContaining(reason) });
+  // Review finding B2-N11: the checked value is a frozen plain-data copy, so a later change to the input, or an
+  // accessor that answers differently when read again, cannot alter what was checked.
+  const input = catalog([{ ...available }]),
+    copy = checkInstalledImplementations(input);
+  expect(copy.ok && Object.isFrozen(copy.value.operations[0])).toBe(true);
+  (input.operations[0] as { id: string }).id = 'changed-v1';
+  expect(copy.ok && copy.value.operations[0]!.id).toBe('captured-source-read-v1');
+  const shifting = catalog([]);
+  Object.defineProperty(shifting, 'operations', { enumerable: true, get: () => [] });
+  expect(checkInstalledImplementations(shifting)).toEqual({
+    ok: false,
+    reason: 'The installed-implementation catalog is not plain, acyclic, bounded data',
+  });
 });

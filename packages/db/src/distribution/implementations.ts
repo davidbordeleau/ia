@@ -14,6 +14,8 @@
  * - `revoked`, with a reason: the payload's producer withdraws it, whatever bytes are present. A binder reports it as an
  *   error. Nothing produces one yet; the format carries it so a withdrawal stays distinct from an absence.
  */
+import { deepFreeze, snapshot } from '../descriptors/codec.js';
+
 export const INSTALLED_IMPLEMENTATIONS_FORMAT = 'ia.installed-implementations.v1';
 
 export interface AvailableOperation {
@@ -159,10 +161,19 @@ function operationProblem(item: unknown): string | null {
 /**
  * Whether `value` is a catalog: exactly `format`, `evaluators` (an `ia-evaluator-catalog/1.x` format and entry list,
  * whose entries compliance validates when it binds) and `operations`, one row per operation sorted by id and unique,
- * each as the module comment describes. Returns the value, or the first reason it is not one.
+ * each as the module comment describes. Review finding B2-N11: `value` is first copied once as plain data, as the
+ * descriptor codec copies host input (`snapshot`: no proxy, accessor, class instance, cycle or excess size), and the
+ * checked copy is returned deeply frozen, so what was checked is what every reader of it sees. Returns that copy, or the
+ * first reason `value` is not a catalog.
  */
-export function checkInstalledImplementations(value: unknown): InstalledImplementationsCheck {
+export function checkInstalledImplementations(input: unknown): InstalledImplementationsCheck {
   const refuse = (reason: string): InstalledImplementationsCheck => ({ ok: false, reason });
+  let value: unknown;
+  try {
+    value = snapshot(input, 'DESC-ENVELOPE-INVALID', 'implementations', { depth: 16, nodes: 200_000 });
+  } catch {
+    return refuse('The installed-implementation catalog is not plain, acyclic, bounded data');
+  }
   const row = record(value, ['format', 'evaluators', 'operations']);
   if (row === null) return refuse('Unexpected installed-implementation catalog fields');
   if (row['format'] !== INSTALLED_IMPLEMENTATIONS_FORMAT)
@@ -186,5 +197,5 @@ export function checkInstalledImplementations(value: unknown): InstalledImplemen
     if (id <= previous) return refuse('Installed operations must be sorted by id and unique');
     previous = id;
   }
-  return { ok: true, value: value as InstalledImplementationsValue };
+  return { ok: true, value: deepFreeze(value as InstalledImplementationsValue) };
 }

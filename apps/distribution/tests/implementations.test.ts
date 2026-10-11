@@ -22,6 +22,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { json, sha256 } from '../src/files.js';
 import { acquireHostRegistrationLock, verifyHostCache } from '../src/host.js';
 import { hostVerifier, observeHosts } from '../src/host-observe.js';
+import type { HostVerifier } from '../src/host-observe.js';
 import {
   installedImplementationsValue,
   joinedCatalog,
@@ -35,6 +36,7 @@ import { openWorkspaceSession, recordValidation } from '../src/services.js';
 
 // Spies that keep the real behaviour, so a test can count how often a payload is verified.
 vi.mock('../src/host.js', { spy: true });
+const actualHost = await vi.importActual<typeof import('../src/host.js')>('../src/host.js');
 
 const roots: string[] = [];
 const temp = () => {
@@ -586,6 +588,15 @@ it('records no join while another holder has the host lock, and checks for a pen
     held();
   }
   expect(readFileSync(resolve(root, JOINS), 'utf8')).toBe(before);
+  // Review finding B-RC3: the journal is checked under the lock, so one that appears as the lock is taken still
+  // refuses, and no receipt is written. Checked before the lock, as the code before B-N4 did, it would be missed.
+  rmSync(resolve(root, JOINS));
+  vi.mocked(acquireHostRegistrationLock).mockImplementationOnce((locked) => {
+    put(locked, '.ia/distributions/hosts/pending.json', '{}');
+    return actualHost.acquireHostRegistrationLock(locked);
+  });
+  expect(() => joinHost(root, 'claude', REVISION)).toThrow(code('IA-DIST-RECOVERY-REQUIRED'));
+  expect(existsSync(resolve(root, JOINS))).toBe(false);
 });
 
 it('verifies a payload once for every read of one report that shares a verifier (B-N7)', () => {
@@ -728,4 +739,64 @@ it('reads only in validation, bindings and checks; recordValidation is the one w
   } finally {
     plain.close();
   }
+});
+
+it('never lets a caller stand in for verification: a verifier hostVerifier did not make is ignored (B2-N6)', () => {
+  const root = temp(),
+    { root: cache, release } = payload();
+  registered(root, 'claude', cache, release);
+  writeFileSync(resolve(cache, MODULE), readFileSync(resolve(cache, MODULE), 'utf8') + '// altered\n');
+  // A function that claims every payload verifies, typed past the brand as a JavaScript caller could pass it.
+  const claims = vi.fn(() => ({ release, format: 2, files: new Map(), directory: cache })) as unknown as HostVerifier;
+  expect(() => readInstalledImplementations(cache, release, claims)).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
+  expect(observeHosts(root, release, claims)[0]).toMatchObject({ host: 'claude' });
+  expect(vi.mocked(claims)).not.toHaveBeenCalled();
+});
+
+const PROBE_BINDING = `#! ia 1.0
+
+@execution-binding probe-read-binding
+  meaning
+    says "Select the test payload's read handler."
+    answers "What does an execution binding join against?"
+  binding
+    kind operation
+    implementation read-v1
+`;
+it('binds a deleted handler as unavailable and a catalog-declared revocation as revoked, through the session (B2-N4)', () => {
+  const root = checked();
+  put(root, '.ia/src/systems/agent-composition-system/records/probe-read-binding.ia', PROBE_BINDING);
+  const bindings = (trust: { home: string; release: string }) => {
+    const session = openWorkspaceSession({ root });
+    try {
+      return session.bindings(trust);
+    } finally {
+      session.close();
+    }
+  };
+  const current = installed();
+  registered(root, 'claude', current.root, current.release);
+  joinHost(root, 'claude', REVISION);
+  expect(bindings(current.trust).results).toEqual([expect.objectContaining({ status: 'bound' })]);
+  // Only the handler module deleted: the payload is incomplete, which is not changed bytes, so nothing binds and
+  // nothing is revoked either.
+  rmSync(resolve(current.root, MODULE));
+  const deleted = bindings(current.trust);
+  expect(deleted.catalog).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining('IA-DIST-ARTIFACT-UNAVAILABLE: Host payload is incomplete'),
+  });
+  expect(deleted.results).toEqual([expect.objectContaining({ status: 'unavailable' })]);
+  // An intact catalog that revokes the implementation: revoked, an error, with the producer's reason.
+  const withdrawn = installed({
+    mutate: () => ({ id: 'read-v1', status: 'revoked', reason: 'withdrawn by its producer' }),
+  });
+  registered(root, 'claude', withdrawn.root, withdrawn.release);
+  joinHost(root, 'claude', REVISION);
+  expect(bindings(withdrawn.trust).results).toEqual([
+    expect.objectContaining({
+      status: 'revoked',
+      reason: 'the installed catalog revokes read-v1: withdrawn by its producer',
+    }),
+  ]);
 });

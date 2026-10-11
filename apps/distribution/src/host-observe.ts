@@ -69,8 +69,18 @@ function readUserJson(root: string, path: string): Record<string, unknown> | nul
     return null;
   }
 }
-/** `verifyHostCache`, or a memo of it a caller shares across the reads of one report. */
-export type HostVerifier = (directory: string) => ReturnType<typeof verifyHostCache>;
+declare const MINTED: unique symbol;
+/**
+ * A memo of `verifyHostCache` a caller shares across the reads of one report, made only by `hostVerifier`. Review
+ * finding B2-N6: a reader handed one still verifies, because a function a caller wrote is never one of these
+ * (`verifierOf`), so no caller can stand in for verification.
+ */
+export type HostVerifier = ((directory: string) => ReturnType<typeof verifyHostCache>) & { readonly [MINTED]: true };
+const minted = new WeakSet<object>();
+/** `verify` when `hostVerifier` made it; otherwise, or when absent, a fresh one, so a reader always verifies. */
+export function verifierOf(verify: HostVerifier | undefined): HostVerifier {
+  return verify !== undefined && minted.has(verify) ? verify : hostVerifier();
+}
 /**
  * Memoizes `verifyHostCache` per cache directory for the lifetime of one report: the mcp and guard elements often
  * (though not always) name the same cache, and `ia doctor`'s catalog and join rows read the payload its host row
@@ -83,7 +93,7 @@ export function hostVerifier(): HostVerifier {
     | { readonly ok: true; readonly value: ReturnType<typeof verifyHostCache> }
     | { readonly ok: false; readonly error: unknown }
   >();
-  return (directory) => {
+  const verify = (directory: string): ReturnType<typeof verifyHostCache> => {
     let entry = cache.get(directory);
     if (!entry) {
       try {
@@ -97,6 +107,8 @@ export function hostVerifier(): HostVerifier {
     if (!entry.ok) throw entry.error;
     return entry.value;
   };
+  minted.add(verify);
+  return verify as HostVerifier;
 }
 /** Spec §9: never a guess. A corrupted own state file is reported, not fabricated data for the fields it would have supplied. */
 function invalid(host: Host): HostObservation {
@@ -159,9 +171,10 @@ function hasProjection(root: string, host: Host): boolean | typeof BROKEN {
 export function observeHosts(
   rootInput: string,
   currentRelease: string | null,
-  verify: HostVerifier = hostVerifier(),
+  given?: HostVerifier,
 ): HostObservation[] {
-  const root = workspace(rootInput),
+  const verify = verifierOf(given),
+    root = workspace(rootInput),
     out: HostObservation[] = [];
   for (const host of WORKSPACE_HOSTS) {
     const found = stateRow(root, host);

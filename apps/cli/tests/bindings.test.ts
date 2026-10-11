@@ -4,7 +4,7 @@
  * one says so, and a revoked one is an error. Nothing is executed. tests/equivalence.test.ts compares the section the
  * two validation binaries report and proves neither writes; this file owns its presentation.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { host, initialized, put } from './host-fixture.js';
@@ -113,6 +113,18 @@ it('prints the Bindings section: unbound is never a pass, bound names the shippe
     writeFileSync(handler, original);
   }
   expect((await validate(root, env)).exitCode).toBe(0);
+  // Only the shipped handler deleted (review finding B2-N4): the payload is incomplete rather than changed, so the
+  // catalog is unavailable, every binding is unbound rather than revoked, and the run does not fail.
+  rmSync(handler);
+  try {
+    const deleted = await validate(root, env);
+    expect(deleted.exitCode).toBe(0);
+    expect(deleted.text).toContain('IA-DIST-ARTIFACT-UNAVAILABLE: Host payload is incomplete');
+    expect(deleted.text).toContain(`${READ} captured-source-read-v1: unavailable`);
+    expect(deleted.text).not.toContain('revoked');
+  } finally {
+    writeFileSync(handler, original);
+  }
   // The canonical binding's target line: this consumer admits no `@operation read-captured-source`, so the stated
   // target resolves to nothing and the binding is unavailable though its implementation is shipped; the binding that
   // states no target still binds.

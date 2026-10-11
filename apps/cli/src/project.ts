@@ -41,6 +41,7 @@ import {
   requireIdle,
   requireInitialized,
   rootedNext,
+  hookRepair,
   STATE,
   unsupportedRows,
 } from './host.js';
@@ -83,9 +84,12 @@ export interface ProjectView {
 
 /** Design row 27: the repair a conflict needs, worded as `ia host` words it, then this plan, which shows the file. */
 const conflictNext = (view: ProjectView, conflict: Conflict): string => {
-  const repair = projectionRepair(view.host, conflict.path, view.invocation, conflict.code, conflict.repair);
-  // A repair that names `ia host` (a hook group changed by hand, H-R1) carries `--root` as typed, as the plan does.
-  return view.given === undefined ? repair : rootedNext(repair, view.host, view.given);
+  // A hook refusal's repair names `ia host` (H-R1, H-R4); with `--root` given it carries it as typed, as the plan does.
+  if (conflict.hook !== undefined)
+    return view.given === undefined
+      ? hookRepair(conflict.hook)
+      : rootedNext(hookRepair(conflict.hook), view.host, view.given);
+  return projectionRepair(view.host, conflict.path, view.invocation, conflict.code);
 };
 const conflictRefusal = (view: ProjectView, conflict: Conflict): Refusal =>
   new Refusal(conflict.code, conflict.reason, 3, { path: conflict.path }, conflictNext(view, conflict));

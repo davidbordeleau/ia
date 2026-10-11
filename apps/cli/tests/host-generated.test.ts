@@ -37,7 +37,7 @@ import {
   STEWARD,
 } from './host-fixture.js';
 
-vi.setConfig({ testTimeout: 600_000 });
+vi.setConfig({ testTimeout: 600_000, hookTimeout: 300_000 });
 
 /** A seam on the host set's generation, so a test can make it refuse as workspace-runtime refuses; it passes through. */
 const seams = vi.hoisted(() => ({ refuse: undefined as Error | undefined }));

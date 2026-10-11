@@ -94,8 +94,8 @@ export interface Conflict {
   readonly code: string;
   readonly path: string;
   readonly reason: string;
-  /** The repair the refusal names for itself, unrooted (a hook group changed by hand, `hookRepair`). */
-  readonly repair?: string;
+  /** What a hook-registration refusal needs to name its own recovery (`hookRepair`). */
+  readonly hook?: HookRefusal;
 }
 export interface Element {
   readonly id: ElementId;
@@ -353,23 +353,39 @@ export const refusedPath = (error: unknown): string | null =>
  * ownership state alone, and settings it cannot read are fixed; any other file is never replaced or adopted, so it is
  * moved or deleted first. `ia host`, `ia doctor` and the install refresh all name it this way.
  */
-export const projectionRepair = (
-  host: HostName,
-  path: string,
-  rerun: string,
-  code?: string,
-  repair?: string,
-): string =>
-  repair !== undefined
-    ? repair
-    : code === 'IA-CLI-FAILED'
-      ? `Make ${path} writable and release any file lock, then run "${rerun}".`
-      : (stateRepair(host, path, rerun) ??
-        (![SETTINGS, '.claude/settings.json'].includes(path)
-          ? `Move or delete ${path}, then run "${rerun}".`
-          : code === undefined || code === 'IA-DIST-LOCAL-MODIFICATION'
-            ? `Delete only the IA guard group in ${path}, then run "${rerun}".`
-            : `Fix ${path}, then run "${rerun}".`));
+export const projectionRepair = (host: HostName, path: string, rerun: string, code?: string): string =>
+  code === 'IA-CLI-FAILED'
+    ? `Make ${path} writable and release any file lock, then run "${rerun}".`
+    : (stateRepair(host, path, rerun) ??
+      (![SETTINGS, '.claude/settings.json'].includes(path)
+        ? `Move or delete ${path}, then run "${rerun}".`
+        : code === undefined || code === 'IA-DIST-LOCAL-MODIFICATION'
+          ? `Delete only the IA guard group in ${path}, then run "${rerun}".`
+          : `Fix ${path}, then run "${rerun}".`));
+/**
+ * What a hook-registration refusal carries so it can name its own recovery (review findings H-R1 and H-R4): an owned
+ * group deleted (`missing`), or changed or duplicated (`modified`), by hand, or a recorded host payload a change of hooks
+ * needs and cannot use.
+ */
+export type HookRefusal =
+  | { readonly drift: 'missing' | 'modified'; readonly hook: string }
+  | { readonly payload: string };
+/** The hook refusal an error carries (`hookRefusal`), if any. */
+export const hookRefusalOf = (error: unknown): HookRefusal | undefined =>
+  error !== null && typeof error === 'object' && 'hookRefusal' in error
+    ? (error.hookRefusal as HookRefusal)
+    : undefined;
+/**
+ * The recovery for a hook refusal, as `ia doctor` names it: a group taken away by hand is one apply never puts back on
+ * its own, so the removal drops the registration (after a changed or duplicated group, which the removal refuses too,
+ * is deleted) and `ia host` registers the workspace's hooks again; a payload a change needs is materialized by `ia host`.
+ */
+export const hookRepair = (refusal: HookRefusal): string =>
+  'payload' in refusal
+    ? `Run "ia host claude --apply" to materialize this release's payload and register the workspace's hooks against it.`
+    : refusal.drift === 'modified'
+      ? `Delete every IA hook group for ${refusal.hook} in ${SETTINGS}, then run "ia host claude --remove --apply" and register again with ia host.`
+      : `Run "ia host claude --remove --apply", which drops the registration of the hook group deleted by hand, then register again with ia host.`;
 /** A journal owns recovery; raw operating-system errors never authorize deleting settings or ownership. */
 export function projectionFailure(error: unknown, root: string, host: HostName, rerun: string): Refusal {
   const refusal = refusalOf(error),
@@ -386,7 +402,13 @@ export function projectionFailure(error: unknown, root: string, host: HostName, 
       refusal.message,
       3,
       { path },
-      rootedNext(projectionRepair(host, path, rerun, refusal.code, repairOf(error)), host, root),
+      rootedNext(
+        hookRefusalOf(error) === undefined
+          ? projectionRepair(host, path, rerun, refusal.code)
+          : hookRepair(hookRefusalOf(error)!),
+        host,
+        root,
+      ),
     );
   }
   const system = error as NodeJS.ErrnoException | null;
@@ -445,14 +467,9 @@ function conflictOf(error: unknown, path: string): Conflict {
   const at =
     refusedPath(error) ??
     (typeof raw?.path === 'string' ? (raw.path.endsWith('.tmp') ? dirname(raw.path) : raw.path) : path);
-  const repair = repairOf(error);
-  return { code: refusal.code, path: at, reason: refusal.message, ...(repair === undefined ? {} : { repair }) };
+  const hook = hookRefusalOf(error);
+  return { code: refusal.code, path: at, reason: refusal.message, ...(hook === undefined ? {} : { hook }) };
 }
-/** The unrooted repair a refusal carries for itself (`hookRepair`), when it names one. */
-export const repairOf = (error: unknown): string | undefined =>
-  error !== null && typeof error === 'object' && 'repair' in error && typeof error.repair === 'string'
-    ? error.repair
-    : undefined;
 const pin = (text: string | null): string | null =>
   text === null ? null : createHash('sha256').update(text).digest('hex');
 /** A registration plan's action, from the bytes it would write against the bytes it read. */
@@ -673,7 +690,10 @@ function conflictNext(view: HostView, id: ElementId, conflict: Conflict): string
       ? 'Remove any ia-workspace server outside the IA block from .codex/config.toml and make sure the file parses as TOML, then run "ia host codex --apply".'
       : `Remove that entry, then run "ia host ${view.host} --apply".`;
   }
-  if (id === 'projection') return projectionRepair(view.host, conflict.path, rerun, conflict.code, conflict.repair);
+  if (id === 'projection')
+    return conflict.hook === undefined
+      ? projectionRepair(view.host, conflict.path, rerun, conflict.code)
+      : hookRepair(conflict.hook);
   return `Fix ${conflict.path}, then run "${rerun}".`;
 }
 const refusalFor = (view: HostView, id: ElementId, conflict: Conflict): Refusal =>

@@ -77,6 +77,7 @@ import {
 } from '@inventarch/distribution/services';
 import { packetCatalog } from './commands.js';
 import { Refusal } from './consumer.js';
+import type { HookRefusal } from './host.js';
 import { refusedPath, SETTINGS, STATE } from './host.js';
 import type { Session } from './session.js';
 import { codeOf, openSession } from './session.js';
@@ -232,9 +233,7 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
           `The host payload the hook registration recorded cannot be used: ${error instanceof Error ? error.message : String(error)}`,
           directory,
         ),
-        {
-          repair: `Run "ia host claude --apply" to materialize this release's payload and register the workspace's hooks against it.`,
-        },
+        { hookRefusal: { payload: directory } satisfies HookRefusal },
       );
     }
   }
@@ -644,8 +643,8 @@ export function planHookStep(root: string, host: HostName, rendered: HostOutput 
       refusedPath(error) === null
     ) {
       const located = new DistributionError(code, error.message, SETTINGS),
-        repair = code === 'IA-DIST-LOCAL-MODIFICATION' ? hookRepair(root) : undefined;
-      throw repair === undefined ? located : Object.assign(located, { repair });
+        hookRefusal = code === 'IA-DIST-LOCAL-MODIFICATION' ? handEditedGroup(root) : undefined;
+      throw hookRefusal === undefined ? located : Object.assign(located, { hookRefusal });
     }
     throw error;
   }
@@ -682,30 +681,23 @@ export function preflightHooks(root: string, host: HostName): void {
   const changed = observeHookRegistration(root).find((row) => row.drift === 'modified');
   if (changed !== undefined)
     throw Object.assign(new DistributionError('IA-DIST-LOCAL-MODIFICATION', handEdited(changed).message, SETTINGS), {
-      repair: hookRepair(root),
+      hookRefusal: { drift: 'modified', hook: changed.hook } satisfies HookRefusal,
     });
 }
 /**
- * The recovery for an owned hook group the user deleted, changed or duplicated by hand, which apply refuses to put back
- * on its own (review finding H-R1), as `ia doctor` names it: the removal drops the registration (after the user deletes
- * a changed or duplicated group, which the removal refuses too), and `ia host` then registers the workspace's hooks
- * again. Undefined when the refusal is about no owned group (an unmanaged identical one), which the settings repair
- * covers.
+ * The owned hook group a hook-registration refusal concerns, by its drift (review finding H-R1), so the refusal names the
+ * recovery `hookRepair` words: a changed or duplicated group first, else a deleted one. Undefined when no owned group
+ * drifted (an unmanaged identical one), which the settings repair covers.
  */
-function hookRepair(root: string): string | undefined {
+function handEditedGroup(root: string): HookRefusal | undefined {
   let drift: ReturnType<typeof observeHookRegistration>;
   try {
     drift = observeHookRegistration(root);
   } catch {
     return undefined;
   }
-  const changed = drift.find((row) => row.drift === 'modified'),
-    missing = drift.find((row) => row.drift === 'missing');
-  if (changed !== undefined)
-    return `Delete every IA hook group for ${changed.hook} in ${SETTINGS}, then run "ia host claude --remove --apply" and register again with ia host.`;
-  if (missing !== undefined)
-    return `Run "ia host claude --remove --apply", which drops the registration of the hook group deleted by hand, then register again with ia host.`;
-  return undefined;
+  const found = drift.find((row) => row.drift === 'modified') ?? drift.find((row) => row.drift === 'missing');
+  return found === undefined ? undefined : { drift: found.drift as 'missing' | 'modified', hook: found.hook };
 }
 
 const HEX = /^[a-f0-9]{64}$/;

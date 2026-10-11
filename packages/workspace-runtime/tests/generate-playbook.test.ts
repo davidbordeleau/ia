@@ -547,6 +547,53 @@ it('generates authored hooks only and reports tools and selections outside the e
   ]);
 });
 
+it('reports a hook beyond the bounds a registration holds, never refusing the others (H-N2)', () => {
+  const selections = (count: number) => `[${Array.from({ length: count }, (_, at) => `"notes/n${at}/**"`).join(', ')}]`;
+  const hook = (name: string, paths: string) =>
+    `\n@hook ${name}\n  meaning\n    says "Hook ${name}."\n    answers "Which hook is ${name}?"\n  hook\n    event PreToolUse\n    tools [Write]\n    paths ${paths}\n    message "Use the ${name} mandate."\n`;
+  // 65 selections and a 600-character selection are each an unsupported row; 64 selections of 512 register.
+  const bounded = fixture({
+    '.ia/src/extra-hooks.ia':
+      '#! ia 1.0\n' +
+      hook('many-paths', selections(65)) +
+      hook('long-path', `["${'a'.repeat(600)}/**"]`) +
+      hook('at-bounds', selections(63).replace(']', `, "${'b'.repeat(512 - 3)}/**"]`)),
+  });
+  const set = generateHookSet(bounded.db, bounded.within, 'claude');
+  expect(set.hooks.map((row) => row.identity)).toEqual([
+    'hook-authoring-system/binding/hook/at-bounds',
+    'hook-authoring-system/binding/hook/note-edits',
+  ]);
+  expect(set.hooks[0]!.paths).toHaveLength(64);
+  expect(set.unsupported).toEqual([
+    {
+      identity: 'hook-authoring-system/binding/hook/long-path',
+      word: 'hook',
+      reason: expect.stringContaining('a selection longer than the 512 characters a registration records'),
+    },
+    {
+      identity: 'hook-authoring-system/binding/hook/many-paths',
+      word: 'hook',
+      reason: expect.stringContaining('hook.paths holds 65 selections, and a registration records at most 64'),
+    },
+  ]);
+  // Past 64 accepted hooks, each further one is reported.
+  const crowded = fixture({
+    '.ia/src/extra-hooks.ia':
+      '#! ia 1.0\n' +
+      Array.from({ length: 64 }, (_, at) => hook(`h${String(at).padStart(2, '0')}`, '["docs/**"]')).join(''),
+  });
+  const full = generateHookSet(crowded.db, crowded.within, 'claude');
+  expect(full.hooks).toHaveLength(64);
+  expect(full.unsupported).toEqual([
+    {
+      identity: 'hook-authoring-system/binding/hook/note-edits',
+      word: 'hook',
+      reason: expect.stringContaining('a registration holds at most 64 hooks, and 64 come before it'),
+    },
+  ]);
+});
+
 it('reports a playbook whose name is no portable host name or whose text is not inert, and renders the others', () => {
   // Review findings N5 and A-R3: com0 and lpt0 as db's input paths refuse them, a trailing or doubled hyphen, and a cell
   // that runs a command or holds active HTML; the fixture's own playbook still renders.

@@ -491,3 +491,28 @@ it('reports a generation refusal with its own code, naming ia validate, and writ
   }
   for (const path of [AGENT, SKILL, HOOK_STATE]) expect(existsSync(resolve(root, path)), path).toBe(false);
 });
+
+it('applies the rest when a hook exceeds the bounds a registration holds, reporting that hook (H-N2)', async () => {
+  const { root, env } = await composed();
+  const hook = (name: string, paths: string) =>
+    `\n@hook ${name}\n  meaning\n    says "Hook ${name}."\n    answers "Which hook is ${name}?"\n  hook\n    event PreToolUse\n    tools [Write]\n    paths ${paths}\n    message "Use the ${name} mandate."\n`;
+  put(
+    root,
+    '.ia/src/extra-hooks.ia',
+    '#! ia 1.0\n' +
+      hook('many-paths', `[${Array.from({ length: 65 }, (_, at) => `"notes/n${at}/**"`).join(', ')}]`) +
+      hook('long-path', `["${'a'.repeat(600)}/**"]`),
+  );
+  const element = projection((await apply(root, env)).stdout);
+  expect(element.hooks).toEqual([{ hook: HOOK, action: 'create' }]);
+  expect(element.unsupported.map((row) => [row.word, row.identity])).toEqual([
+    ['hook', 'hook-authoring-system/binding/hook/long-path'],
+    ['hook', 'hook-authoring-system/binding/hook/many-paths'],
+  ]);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  expect(receipt(root).unsupported.map((row) => row.identity)).toEqual([
+    'hook-authoring-system/binding/hook/long-path',
+    'hook-authoring-system/binding/hook/many-paths',
+  ]);
+  for (const path of [AGENT, SKILL]) expect(existsSync(resolve(root, path)), path).toBe(true);
+});

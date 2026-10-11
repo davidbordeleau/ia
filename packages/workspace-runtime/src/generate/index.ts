@@ -9,8 +9,12 @@ export {
   generateHookSet,
   HOOK_IDENTITY,
   HOOK_IDENTITY_LIMIT,
+  HOOK_LIMIT,
+  HOOK_SELECTION_LENGTH,
+  HOOK_SELECTION_LIMIT,
   hookDeclaration,
   registrableHook,
+  registrableSelection,
 } from './hook.js';
 export type { HookSet } from './hook.js';
 export type { GeneratedFile, GeneratedSet, GeneratedWord, UnsupportedRecord } from './format.js';

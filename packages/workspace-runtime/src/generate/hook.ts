@@ -13,22 +13,48 @@ const TOOLS = new Map([
   ['multiedit', 'MultiEdit'],
 ] as const);
 /**
- * The identities a hook registration can carry on the guard's command line: a canonical `system/kind/facet/name` of the
- * language's lower-cased name characters, bounded. Every admitted record's identity has this shape (its name is
- * `[A-Za-z][A-Za-z0-9-]*`, lower-cased), so only the bound can refuse one. A hook's name is not a host path, so no
- * portable-name rule applies to it.
- */
-/**
  * The characters no registered selection may hold: every C0 and C1 control, DEL, the Unicode line and paragraph
  * separators and the bidirectional controls (built from a string, which names them).
  */
 const CONTROL = new RegExp(
   '[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]',
 );
+/**
+ * The identities a hook registration can carry on the guard's command line: a canonical `system/kind/facet/name` of the
+ * language's lower-cased name characters, bounded. Every admitted record's identity has this shape (its name is
+ * `[A-Za-z][A-Za-z0-9-]*`, lower-cased), so only the bound can refuse one. A hook's name is not a host path, so no
+ * portable-name rule applies to it.
+ */
 export const HOOK_IDENTITY = /^[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*){3}$/;
 export const HOOK_IDENTITY_LIMIT = 512;
 export const registrableHook = (identity: unknown): identity is string =>
   typeof identity === 'string' && identity.length <= HOOK_IDENTITY_LIMIT && HOOK_IDENTITY.test(identity);
+/**
+ * The bounds a registration holds (review finding H-N2): at most `HOOK_LIMIT` hooks, each with one to
+ * `HOOK_SELECTION_LIMIT` selections of at most `HOOK_SELECTION_LENGTH` characters. Generation applies them, so a hook
+ * beyond them is an unsupported row rather than a refusal of the whole registration; distribution's hook registration
+ * holds its rows to the same ones.
+ */
+export const HOOK_LIMIT = 64;
+export const HOOK_SELECTION_LIMIT = 64;
+export const HOOK_SELECTION_LENGTH = 512;
+/**
+ * A selection a registration can record: a workspace-relative G06c selection written with `/`, none empty, absolute,
+ * escaping or holding a `.` or `..` segment, an empty segment but a trailing one, a backslash or a control, and at most
+ * `HOOK_SELECTION_LENGTH` characters.
+ */
+export const registrableSelection = (path: unknown): path is string =>
+  typeof path === 'string' &&
+  path.length > 0 &&
+  path.length <= HOOK_SELECTION_LENGTH &&
+  isSelection(path) &&
+  !path.includes('\\') &&
+  !path.startsWith('/') &&
+  !/^[A-Za-z]:/.test(path) &&
+  !CONTROL.test(path) &&
+  !path
+    .split('/')
+    .some((segment, at, all) => (segment === '' && at < all.length - 1) || segment === '.' || segment === '..');
 /**
  * Narrow an authored `@hook` to the edit events the `@mandate` guard can decide: PreToolUse, one or more of Write, Edit
  * and MultiEdit, one or more workspace-relative path selections written with `/`, and a message. A hook that selects no
@@ -50,7 +76,15 @@ export function hookDeclaration(node: Node): HostHookDeclaration {
   if (tools.length === 0 || tools.some((tool) => !TOOLS.has(tool.toLowerCase() as 'write')))
     unsupported('hook.tools must name Write, Edit or MultiEdit');
   if (paths.length === 0) unsupported('hook.paths selects no path, so the hook could never deny');
-  if (paths.some((path) => !isSelection(path) || path.includes('\\') || CONTROL.test(path)))
+  if (paths.length > HOOK_SELECTION_LIMIT)
+    unsupported(
+      `hook.paths holds ${paths.length} selections, and a registration records at most ${HOOK_SELECTION_LIMIT}`,
+    );
+  if (paths.some((path) => path.length > HOOK_SELECTION_LENGTH))
+    unsupported(
+      `hook.paths holds a selection longer than the ${HOOK_SELECTION_LENGTH} characters a registration records`,
+    );
+  if (paths.some((path) => !registrableSelection(path)))
     unsupported('hook.paths must hold workspace-relative path selections written with /');
   if (message === undefined || message.trim() === '') unsupported('hook.message is required and not blank');
   return frozen({
@@ -68,8 +102,9 @@ export interface HookSet {
 }
 /**
  * Every authored (band 100) `@hook`, by identity: each one `hookDeclaration` accepts is registered and each one it refuses
- * is reported with its reason, so one unsupported record never blocks the others (plan amendment C9). Codex registers
- * none and reports each (C12: Codex hooks are unsupported).
+ * is reported with its reason, so one unsupported record never blocks the others (plan amendment C9); past the first
+ * `HOOK_LIMIT` accepted hooks, each is reported, since a registration holds no more (review finding H-N2). Codex
+ * registers none and reports each (C12: Codex hooks are unsupported).
  */
 export function generateHookSet(reader: ReadHandle, within: string, host: PacketHost): HookSet {
   knownHost(host);
@@ -81,7 +116,14 @@ export function generateHookSet(reader: ReadHandle, within: string, host: Packet
       continue;
     }
     try {
-      hooks.push(hookDeclaration(node));
+      const declaration = hookDeclaration(node);
+      if (hooks.length === HOOK_LIMIT)
+        unsupported.push({
+          identity: node.identity,
+          word: 'hook',
+          reason: `Unsupported authored hook ${node.identity}: a registration holds at most ${HOOK_LIMIT} hooks, and ${HOOK_LIMIT} come before it`,
+        });
+      else hooks.push(declaration);
     } catch (error) {
       if (!(error instanceof ProjectionError)) throw error;
       unsupported.push({ identity: node.identity, word: 'hook', reason: error.message });

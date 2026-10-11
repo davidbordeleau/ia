@@ -1,6 +1,11 @@
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
-import { registrableHook } from '@inventarch/workspace-runtime/internal/generate';
+import {
+  HOOK_LIMIT,
+  HOOK_SELECTION_LIMIT,
+  registrableHook,
+  registrableSelection,
+} from '@inventarch/workspace-runtime/internal/generate';
 import {
   acquireHostRegistrationLock,
   assertHostRegistrationIdle,
@@ -397,7 +402,8 @@ export function applyGuardRegistration(
 /** The edit tools a hook group can match, in matcher order. */
 export const HOOK_TOOLS = ['Write', 'Edit', 'MultiEdit'] as const;
 export type HookTool = (typeof HOOK_TOOLS)[number];
-const MAX_HOOKS = 64;
+// The bounds hook generation applies, so a hook beyond them is reported there, never refused here (H-N2).
+const MAX_HOOKS = HOOK_LIMIT;
 /** The ownership state of a registration's hook groups. */
 export const hookStatePath = (id: string): string => `${area}/claude-hooks-${identity(id)}.json`;
 /** One group to register: the authored `@hook`'s identity and the edit tools its matcher names. */
@@ -465,29 +471,13 @@ function hookTools(value: unknown): HookTool[] {
     fail('INPUT-INVALID', 'Hook tools must name Write, Edit or MultiEdit, each at most once');
   return HOOK_TOOLS.filter((tool) => value.includes(tool));
 }
-// Built from a string: the class names the control characters themselves.
-const CONTROL = new RegExp(
-  '[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]',
-);
-/** A registered selection: one to 64 workspace-relative `/` selections, none empty, escaping or holding a control. */
+/** A registered selection: one to 64 selections hook generation can register (`registrableSelection`). */
 function hookPaths(value: unknown): string[] {
   if (
     !Array.isArray(value) ||
     value.length === 0 ||
-    value.length > MAX_HOOKS ||
-    value.some(
-      (path) =>
-        typeof path !== 'string' ||
-        path.length === 0 ||
-        path.length > 512 ||
-        path.includes('\\') ||
-        path.startsWith('/') ||
-        /^[A-Za-z]:/.test(path) ||
-        CONTROL.test(path) ||
-        path
-          .split('/')
-          .some((segment, at, all) => (segment === '' && at < all.length - 1) || segment === '.' || segment === '..'),
-    )
+    value.length > HOOK_SELECTION_LIMIT ||
+    value.some((path) => !registrableSelection(path))
   )
     fail('INPUT-INVALID', 'Hook paths must be workspace-relative selections written with /');
   return [...value];

@@ -199,15 +199,21 @@ function hostsArea(root: string): string | undefined {
 }
 /**
  * The same projection allowlist `@inventarch/distribution` validates a state against (projection.ts), so a state cannot
- * claim other paths: the packet's two files per host, and for claude a 1.x steward file a state still lists until the
- * next apply removes it (B9). The state format is unchanged.
+ * claim other paths: the packet's two files per host, the agents and skills authored generation writes (milestone
+ * generation-binding: claude agents and skills, codex skills), and for claude a 1.x steward file a state still lists
+ * until the next apply removes it (B9). The state format name is unchanged.
  */
 const PROJECTION_OWNED: Readonly<Record<'claude' | 'codex', (path: string) => boolean>> = {
   claude: (path) =>
     path === '.claude/rules/ia-workspace.md' ||
     path === '.claude/skills/ia-authoring/SKILL.md' ||
-    /^\.claude\/agents\/[a-z][a-z0-9-]*\.md$/.test(path),
-  codex: (path) => path === 'AGENTS.md' || path === '.agents/skills/ia-authoring/SKILL.md',
+    /^\.claude\/agents\/[a-z][a-z0-9-]*\.md$/.test(path) ||
+    // Milestone generation-binding: a generated skill (distribution's GENERATED_PATHS); a generated agent is the pattern above.
+    /^\.claude\/skills\/[a-z][a-z0-9-]*\/SKILL\.md$/.test(path),
+  codex: (path) =>
+    path === 'AGENTS.md' ||
+    path === '.agents/skills/ia-authoring/SKILL.md' ||
+    /^\.agents\/skills\/[a-z][a-z0-9-]*\/SKILL\.md$/.test(path),
 };
 /**
  * A bounded read of the projection ownership states, not a validation of the projected bytes. Undefined when neither

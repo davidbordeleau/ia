@@ -45,14 +45,29 @@ export interface ProjectionPlan {
   readonly before: string | null;
   readonly digest: string;
 }
-/** Spec §6.3: the exact paths each host's projection writes. */
+/** Spec §6.3: the exact paths each host's projection writes for the position packet. */
 export const PROJECTION_PATHS: Readonly<Record<Host, readonly string[]>> = Object.freeze({
   claude: ['.claude/rules/ia-workspace.md', '.claude/skills/ia-authoring/SKILL.md'],
   codex: ['AGENTS.md', '.agents/skills/ia-authoring/SKILL.md'],
 });
 /**
- * B9: a 1.x per-system steward file. A claude ownership state may still list one, for its removal only: no artifact is
- * written there, and the planner deletes a listed one that is marked and unedited.
+ * Milestone generation-binding (plan amendments C4, C5 and C12): the paths authored host generation writes beside the
+ * packet's, owned through the same state: a claude agent `.claude/agents/<name>.md` and skill
+ * `.claude/skills/<name>/SKILL.md`, and a codex skill `.agents/skills/<name>/SKILL.md` (codex takes no agent). A name is
+ * a portable host name, as generation's `safeName` requires.
+ */
+export const GENERATED_PATHS: Readonly<Record<Host, RegExp>> = Object.freeze({
+  claude: /^\.claude\/(?:agents\/[a-z][a-z0-9-]*\.md|skills\/[a-z][a-z0-9-]*\/SKILL\.md)$/,
+  codex: /^\.agents\/skills\/[a-z][a-z0-9-]*\/SKILL\.md$/,
+});
+/** Whether a projection for `host` may own `path`: the packet's, or one authored generation writes. */
+export const projectionOwnable = (host: Host, path: string): boolean =>
+  PROJECTION_PATHS[host].includes(path) || GENERATED_PATHS[host].test(path);
+/**
+ * B9: a 1.x per-system steward file. A claude ownership state may still list one, for its removal: the planner deletes
+ * a listed one that is marked and unedited, unless a generated agent is written at that very path, which then replaces
+ * it as an update (a profile named after a 1.x steward). A generated agent the state lists and no render writes any
+ * more is removed the same way: it carries the plan's own marker.
  */
 const LEGACY_AGENT = /^\.claude\/agents\/[a-z][a-z0-9-]*\.md$/;
 /**
@@ -67,7 +82,7 @@ const asHost = (value: unknown): Host => {
   if (value !== 'claude' && value !== 'codex') fail('INPUT-INVALID', 'Expected Claude or Codex');
   return value;
 };
-const allowed = (host: Host, path: string): boolean => PROJECTION_PATHS[host].includes(path);
+const allowed = projectionOwnable;
 const legacyAgent = (host: Host, path: string): boolean => host === 'claude' && LEGACY_AGENT.test(path);
 const statePath = (host: Host): string => `.ia/distributions/hosts/${host}-projection.json`;
 const read = (root: string, path: string): string | null => {
@@ -160,11 +175,13 @@ function agentActions(
   host: Host,
   files: Readonly<Record<string, Accepted>>,
   marker: string,
+  written: ReadonlySet<string> = new Set(),
 ): ProjectionAction[] {
-  const listed = Object.keys(files).filter((path) => legacyAgent(host, path)),
+  // A path a generated agent is written at is the artifact's alone: one action for one path, never update and remove.
+  const listed = Object.keys(files).filter((path) => legacyAgent(host, path) && !written.has(path)),
     actions: ProjectionAction[] = [];
   if (linkedAgents(root, host)) return listed.length ? listed.map((path) => ({ path, action: 'foreign' })) : [];
-  for (const path of new Set([...listed, ...agentEntries(root, host)])) {
+  for (const path of new Set([...listed, ...agentEntries(root, host).filter((path) => !written.has(path))])) {
     const value = files[path];
     if (value === undefined) {
       actions.push({ path, action: 'foreign' });
@@ -225,6 +242,8 @@ export function planProjection(input: {
       if (seen.has(artifact.path)) fail('INPUT-INVALID', 'Duplicate projection path');
       if (!allowed(host, artifact.path))
         fail('PATH-UNSAFE', `Projection path is outside the ${host} allowlist: ${artifact.path}`);
+      if (linkedAgents(root, host) && legacyAgent(host, artifact.path))
+        fail('PATH-UNSAFE', `Generated agents need an unlinked .claude/agents directory: ${artifact.path}`);
       if (!hasMarker(artifact.text, input.marker))
         fail('INPUT-INVALID', `Projection artifact is missing the marker line: ${artifact.path}`);
       seen.add(artifact.path);
@@ -256,7 +275,7 @@ export function planProjection(input: {
           fail('LOCAL-MODIFICATION', handEditMessage(path, existing, value));
         actions.push({ path, action: 'remove' });
       });
-  actions.push(...agentActions(root, host, files, input.marker));
+  actions.push(...agentActions(root, host, files, input.marker, seen));
   const body = {
     format: 'ia.host-projection-plan.v1' as const,
     root,

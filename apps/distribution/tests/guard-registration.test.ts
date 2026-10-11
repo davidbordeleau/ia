@@ -17,6 +17,9 @@ import {
   guardGroup,
   guardNode,
   hookGroup,
+  hookGroupDigest,
+  observeHookRegistration,
+  readHookRegistration,
   planGuardFor,
   planGuardRegistration,
   planHookRegistration,
@@ -720,3 +723,37 @@ it.each(['pending', 'config', 'state', 'complete'])(
     expect(existsSync(resolve(root, '.ia/distributions/hosts/lock.json'))).toBe(false);
   },
 );
+
+it("observes each owned hook group's drift read-only: missing, modified, duplicated and foreign", () => {
+  const root = temp(),
+    cache = cacheV2(),
+    rows = fixtureRows();
+  expect(observeHookRegistration(root)).toEqual([]);
+  expect(readHookRegistration(root)).toBeNull();
+  applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }));
+  const state = readHookRegistration(root)!;
+  expect(state.groups.map((row) => row.hook)).toEqual([HOOK]);
+  expect(hookGroupDigest(state.groups[0]!.group)).toBe(sha256(json(state.groups[0]!.group)));
+  expect(observeHookRegistration(root)).toEqual([]);
+  const original = readFileSync(resolve(root, settings), 'utf8'),
+    config = JSON.parse(original);
+  const foreign = hookGroup(join(cache, 'scripts/ia.mjs'), root, {
+    identity: 'hook-authoring-system/binding/hook/stranger',
+    tools: ['Write'],
+  });
+  const variants: readonly [unknown[], { hook: string; drift: string }[]][] = [
+    [[], [{ hook: HOOK, drift: 'missing' }]],
+    [[{ ...config.hooks.PreToolUse[0], matcher: 'Write' }], [{ hook: HOOK, drift: 'modified' }]],
+    [[config.hooks.PreToolUse[0], config.hooks.PreToolUse[0]], [{ hook: HOOK, drift: 'modified' }]],
+    [
+      [config.hooks.PreToolUse[0], foreign],
+      [{ hook: 'hook-authoring-system/binding/hook/stranger', drift: 'foreign' }],
+    ],
+  ];
+  for (const [groups, drift] of variants) {
+    put(root, settings, json({ ...config, hooks: { PreToolUse: groups } }));
+    const before = readFileSync(resolve(root, settings), 'utf8');
+    expect(observeHookRegistration(root), JSON.stringify(drift)).toEqual(drift);
+    expect(readFileSync(resolve(root, settings), 'utf8')).toBe(before);
+  }
+});

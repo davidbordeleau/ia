@@ -451,3 +451,30 @@ it('preserves legacy marker decisions for stable files, including hardlinks and 
   writeFileSync(target, 'x'.repeat(1024 * 1024 + 1));
   expect(check(root, path)).toEqual({});
 });
+
+it('protects the agents and skills a projection state owns as generated, and leaves every other one to the user', () => {
+  // Milestone generation-binding: PROJECTION_OWNED admits what authored generation writes (distribution GENERATED_PATHS).
+  const root = workspace();
+  write(
+    root,
+    'claude-projection.json',
+    projection('claude', {
+      '.claude/rules/ia-workspace.md': hash,
+      '.claude/agents/reviewer.md': hash,
+      '.claude/skills/note-review/SKILL.md': hash,
+    }),
+  );
+  write(
+    root,
+    'codex-projection.json',
+    projection('codex', { 'AGENTS.md': hash, '.agents/skills/note-review/SKILL.md': hash }),
+  );
+  for (const path of [
+    '.claude/agents/reviewer.md',
+    '.claude/skills/note-review/SKILL.md',
+    '.agents/skills/note-review/SKILL.md',
+  ])
+    expect(code(root, path), path).toBe('IA-HOOK-PROJECTION-MANAGED');
+  for (const path of ['.claude/agents/other.md', '.claude/skills/other/SKILL.md', '.agents/skills/other/SKILL.md'])
+    expect(check(root, path), path).toEqual({});
+});

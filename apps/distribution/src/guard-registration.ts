@@ -36,7 +36,7 @@ interface Side {
   readonly config: string | null;
   readonly state: string | null;
 }
-interface Group {
+export interface Group {
   readonly matcher: string;
   readonly hooks: readonly {
     readonly type: 'command';
@@ -356,11 +356,11 @@ export interface HookRow {
 }
 /** Register exactly `hooks` against a verified cache (an empty list removes every owned group), or remove them all. */
 export type HookRequest = { readonly cache: string; readonly hooks: readonly HookRow[] } | { readonly remove: string };
-interface OwnedHook {
+export interface OwnedHook {
   readonly hook: string;
   readonly group: Group;
 }
-interface HookState {
+export interface HookState {
   readonly format: 'ia.hook-registration-state.v1';
   readonly id: string;
   readonly cache: string;
@@ -610,6 +610,52 @@ function planHooksWith(
   };
   return { ...body, digest: digest(body) };
 }
+/** The registration's hook ownership state as `savedHooks` reads it for this root, or null when it owns none. */
+export function readHookRegistration(rootInput: string, id: string = HOST_REGISTRATION): HookState | null {
+  const root = workspace(rootInput),
+    stateFile = hookStatePath(id);
+  return locate(stateFile, () => savedHooks(read(root, stateFile), root, id));
+}
+/** One owned or IA-looking hook group as the settings hold it now (`observeHookRegistration`). */
+export interface HookDrift {
+  readonly hook: string;
+  /**
+   * `missing`: an owned group is not in the settings; `modified`: a group runs that hook's guard but is not the owned
+   * group byte for byte, or the owned group is there more than once; `foreign`: a group runs the guard for a hook this
+   * registration does not own.
+   */
+  readonly drift: 'missing' | 'modified' | 'foreign';
+}
+/**
+ * Read-only drift of the hook groups (doctor): each owned group found exactly once is current and not listed. Reads the
+ * ownership state and `.claude/settings.local.json` as the planner does, so a file the planner would refuse to read
+ * refuses here too, located at that file. Writes nothing.
+ */
+export function observeHookRegistration(rootInput: string, id: string = HOST_REGISTRATION): readonly HookDrift[] {
+  const root = workspace(rootInput),
+    state = readHookRegistration(root, id),
+    text = read(root, configPath);
+  const config = locate(configPath, () => (text === null ? {} : plain(decodeDistributionJson(text)))),
+    hooks = config['hooks'] === undefined ? {} : plain(config['hooks']),
+    rows: unknown[] = hooks['PreToolUse'] === undefined ? [] : (hooks['PreToolUse'] as unknown[]);
+  if (!Array.isArray(rows)) fail('INPUT-INVALID', 'Expected PreToolUse hook array');
+  const owned = state?.groups ?? [],
+    drift: HookDrift[] = [];
+  for (const { hook, group } of owned) {
+    const exact = rows.filter((row) => json(row) === json(group)).length;
+    if (exact === 1) continue;
+    drift.push({
+      hook,
+      drift: exact > 1 || rows.some((row) => guardInvocation(row) === hook) ? 'modified' : 'missing',
+    });
+  }
+  const ownedHooks = new Set(owned.map(({ hook }) => hook));
+  for (const hook of new Set(rows.map(guardInvocation)))
+    if (typeof hook === 'string' && !ownedHooks.has(hook)) drift.push({ hook, drift: 'foreign' });
+  return drift.sort((a, b) => order(a.hook, b.hook));
+}
+/** The canonical JSON digest of an owned group, as a receipt's hook row records it. */
+export const hookGroupDigest = (group: unknown): string => sha256(json(group));
 /**
  * Apply a hook plan under the host lock: re-plan, refuse a stale plan, journal, write the settings, then the ownership
  * state (the commit), then clear the journal. A plan that changes nothing writes nothing. `checkpoint` runs after each

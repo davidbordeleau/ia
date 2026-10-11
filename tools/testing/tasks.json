@@ -885,6 +885,36 @@
       ]
     },
     {
+      "id": "cli:test-host-generated",
+      "kind": "vitest",
+      "project": "apps/cli",
+      "files": [
+        "tests/host-generated.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "selected-tests-workspace-records",
+      "dependsOn": [
+        "cli:build",
+        "host-payload:generate",
+        "language-base:generate"
+      ],
+      "outputs": [
+        "artifacts/tests/cli-test-host-generated"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
       "id": "cli:test-host-recovery",
       "kind": "vitest",
       "project": "apps/cli",
@@ -1348,7 +1378,8 @@
         "tests/context-guard.test.ts",
         "tests/context-inventory.test.ts",
         "tests/context.test.ts",
-        "tests/hook.test.ts"
+        "tests/hook.test.ts",
+        "tests/mandate-guard.test.ts"
       ],
       "profile": "installed",
       "platforms": [
@@ -2065,6 +2096,7 @@
         "tests/bind.test.ts",
         "tests/boundary.test.ts",
         "tests/generate-agent-profile.test.ts",
+        "tests/generate-playbook.test.ts",
         "tests/installed-catalog.test.ts",
         "tests/installed-sources.test.ts",
         "tests/lifecycle-profile.test.ts",

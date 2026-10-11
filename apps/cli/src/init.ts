@@ -121,7 +121,14 @@ import {
   THEN_RERUN,
 } from './host.js';
 import type { HostName } from './host-projection.js';
-import { applyHostProjection, planFiles, planRetirement, readReceipt, renderProjectionFor } from './host-projection.js';
+import {
+  applyHostProjection,
+  planFiles,
+  planRetirement,
+  preflightHooks,
+  readReceipt,
+  renderProjectionFor,
+} from './host-projection.js';
 import { located } from './home-remedy.js';
 import { findProgram, programEnv, programHome } from './program.js';
 import type { Session } from './session.js';
@@ -1967,6 +1974,8 @@ export function collectMigration(request: MigrationRequest): MigrationView {
   for (const host of projected)
     try {
       const guard = planRetirement(root, host) === null ? 'none' : 'retire';
+      // The hook step the projection effect runs (review finding H-R3), found before the migration plans its writes.
+      preflightHooks(root, host);
       hosts.push({ host, guard, files: migratedFiles(root, host) });
     } catch (error) {
       const refusal = refusalOf(error);

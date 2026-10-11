@@ -1,0 +1,53 @@
+#! ia 1.0
+
+@hook note-edits
+  meaning
+    says "Require the editing participant's mandate for documentation changes."
+    answers "Who may change a selected document?"
+  hook
+    event PreToolUse
+    tools [Write, Edit, MultiEdit]
+    paths ["docs/**", "restricted/**"]
+    message "Use the participant's documentation mandate."
+
+@mandate docs-mandate
+  meaning
+    says "The demo participant may author documentation."
+    answers "Who may change docs?"
+  governance
+    requires "Claim no host permission or execution from this mandate."
+  authority
+    participant @agent demo
+    moves [Synthesis]
+    covers ["docs/"]
+
+@mandate reviewer-docs
+  meaning
+    says "The reviewer may observe restricted documents."
+    answers "Who may observe restricted documents?"
+  governance
+    requires "Claim no host permission or execution from this mandate."
+  authority
+    participant @agent reviewer
+    moves [Observation]
+    covers ["restricted/"]
+
+@execution-binding notes-hook
+  meaning
+    says "The declaration selected by the harness."
+    answers "Which hook belongs to this harness?"
+  binding
+    kind hook
+    target @hook note-edits
+    implementation mandate-guard-v1
+
+@harness note-workspace
+  meaning
+    says "The documentation review registrations."
+    answers "Which profiles and bindings compose this workspace?"
+  composition
+    workspace @workspace demo
+    profiles [@agent-profile reviewer]
+    bindings [@execution-binding notes-hook]
+  execution
+    host-profile claude-prose

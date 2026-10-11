@@ -9,8 +9,11 @@
  * would make, beside the packet's entry count and digest. `--apply` re-plans through the same element
  * (`replanProjection`) and writes through `applyHostProjection`, the one writer of projection files, which retires a
  * steward guard an earlier release registered before any file changes (B11), deletes the owned 1.x steward files,
- * leaves foreign ones and writes the receipt (B12). It registers no MCP server and no hook; those stay `ia host`'s,
- * whose projection element is this same plan and apply. The packet reads the live admitted revision, so no capture is
+ * leaves foreign ones and writes the receipt (B12). It writes the generated agents and skills of the workspace's
+ * authored records with the packet (milestone generation-binding), and keeps the hook groups an `ia host` registration
+ * owns in step with the authored `@hook` records, against the payload that registration recorded; it registers no MCP
+ * server and no hook group of its own, so a hook with no registration to join is reported as not taken. `ia host`'s
+ * projection element is this same plan and apply. The packet reads the live admitted revision, so no capture is
  * required (B8). A plan with a conflict is a successful report naming the file, as `ia host`'s is (§4); only `--apply`
  * refuses it, before anything is asked or written, naming the plan to run once the file is out of the way. The `ia
  * project`, `ia validate` and `ia init` commands a next action names carry the root as the invocation typed it; the
@@ -33,12 +36,15 @@ import {
   projectionElement,
   projectionFailure,
   projectionFileRows,
+  projectionHookRows,
   projectionRepair,
   replanProjection,
   requireIdle,
   requireInitialized,
   rootedNext,
+  hookRepair,
   STATE,
+  unsupportedRows,
 } from './host.js';
 import type { Capabilities, Field } from './render.js';
 import {
@@ -80,8 +86,14 @@ export interface ProjectView {
 }
 
 /** Design row 27: the repair a conflict needs, worded as `ia host` words it, then this plan, which shows the file. */
-const conflictNext = (view: ProjectView, conflict: Conflict): string =>
-  projectionRepair(view.host, conflict.path, view.invocation, conflict.code);
+const conflictNext = (view: ProjectView, conflict: Conflict): string => {
+  // A hook refusal's repair names `ia host` (H-R1, H-R4); with `--root` given it carries it as typed, as the plan does.
+  if (conflict.hook !== undefined)
+    return view.given === undefined
+      ? hookRepair(conflict.hook)
+      : rootedNext(hookRepair(conflict.hook), view.host, view.given);
+  return projectionRepair(view.host, conflict.path, view.invocation, conflict.code);
+};
 const conflictRefusal = (view: ProjectView, conflict: Conflict): Refusal =>
   new Refusal(conflict.code, conflict.reason, 3, { path: conflict.path }, conflictNext(view, conflict));
 
@@ -159,6 +171,8 @@ export const projectEnvelope = (view: ProjectView, applied: PacketReceipt | null
     // With a conflict `files` is empty and `guard` null: an apply refuses it, so it writes and retires nothing.
     files: view.projection.files ?? [],
     guard: view.projection.guard ?? null,
+    hooks: view.projection.hooks ?? [],
+    unsupported: view.projection.unsupported ?? [],
     conflict: view.projection.conflict,
   },
   ...(applied === null ? {} : { applied }),
@@ -176,7 +190,7 @@ const headerBlock = (
 ];
 /** The packet, the B11 step and any conflict, then the file plan in `ia host`'s words, then the guard's note. */
 function planBlocks(view: ProjectView, caps: Capabilities): readonly (readonly string[])[] {
-  const { conflict, files, guard } = view.projection;
+  const { conflict, files, guard, hooks, unsupported } = view.projection;
   const fields: Field[] = [
     {
       symbol: 'info',
@@ -206,6 +220,12 @@ function planBlocks(view: ProjectView, caps: Capabilities): readonly (readonly s
   return [
     [sectionLabel('Projection', caps), ...fieldRows(fields, { depth: 1 }, caps)],
     files === undefined ? [] : [sectionLabel('Files', caps), ...projectionFileRows(files, indentOf(1), caps)],
+    hooks === undefined || hooks.length === 0
+      ? []
+      : [sectionLabel('Hook groups', caps), ...projectionHookRows(hooks, indentOf(1), caps)],
+    unsupported === undefined || unsupported.length === 0
+      ? []
+      : [sectionLabel('Not taken', caps), ...unsupportedRows(unsupported, indentOf(1), caps)],
     guard === 'retire' ? entry([words(GUARD_SCOPE)], { depth: 1, symbol: 'info' }, caps) : [],
   ];
 }
@@ -279,6 +299,14 @@ export function renderProjectApplied(view: ProjectView, receipt: PacketReceipt, 
         receipt.foreign.map((path) => ({ path })),
         'info',
       ),
+      listed(
+        'Hook groups',
+        (receipt.hooks ?? []).map((row) => ({ path: row.identity, sha256: row.sha256 })),
+        'added',
+      ),
+      (receipt.unsupported ?? []).length === 0
+        ? []
+        : [sectionLabel('Not taken', caps), ...unsupportedRows(receipt.unsupported ?? [], indentOf(1), caps)],
       entry([remedyWords(`Run "${doctor}" for the observed projection state.`)], { depth: 0, symbol: 'step' }, caps),
     ],
     { leadingBlank: true },

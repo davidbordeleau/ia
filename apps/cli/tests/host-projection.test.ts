@@ -7,6 +7,7 @@ import { cpSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { PACKET_MARKER } from '@inventarch/runtime';
+import { sha256 } from '@inventarch/distribution/services';
 import { packetCatalog } from '../src/commands.js';
 import { renderProjectionFor } from '../src/host-projection.js';
 import { read } from './host-fixture.js';
@@ -80,10 +81,11 @@ it('renders a consumer workspace for claude as its position packet, with no agen
   expect(receipt.entries).toBe(39);
 });
 
-it('admits the composition fixture over the bundled base, and renders no agent for its profile until it is wired', async () => {
+it('admits the composition fixture over the bundled base, and renders its generated set beside the packet', async () => {
   // Milestone generation-binding plan amendment C7: the fixture is this initialization's starter and descriptor, byte
-  // for byte, with an authored @agent-profile, its @agent, @voice and @capability, and the @operation that capability
-  // names.
+  // for byte, with an authored @agent-profile, its @agent, @voice and @capability, the @operation that capability
+  // names, an authored @playbook with cells in all four phases, and an authored @hook. Task host-consumes-generated-set:
+  // the render holds the host set generated once from those records.
   const root = await initialized(),
     fixture = resolve(cli, 'tests/fixtures/composition-workspace');
   for (const path of ['.ia/src/workspace.ia', '.ia/release.json'])
@@ -92,10 +94,56 @@ it('admits the composition fixture over the bundled base, and renders no agent f
   const validated = await run(['validate', '--root', root, '--json']);
   expect(validated.exitCode, validated.stdout).toBe(0);
   expect(JSON.parse(validated.stdout)).toMatchObject({ status: 'admitted', counts: { errors: 0 } });
-  // workspace-runtime's generateAgentProfiles renders the profile; task host-consumes-generated-set applies it.
-  expect(renderProjectionFor(root, 'claude').files.map((file) => file.path)).toEqual([
+  const claude = renderProjectionFor(root, 'claude'),
+    profile = 'agent-composition-system/binding/agent-profile/reviewer',
+    playbook = 'governance-system/definition/procedure/note-review',
+    hook = 'hook-authoring-system/binding/hook/note-edits';
+  expect(claude.files.map((file) => file.path)).toEqual([
     '.claude/rules/ia-workspace.md',
     '.claude/skills/ia-authoring/SKILL.md',
+    '.claude/agents/reviewer.md',
+    '.claude/skills/note-review/SKILL.md',
+  ]);
+  for (const file of claude.files) expect(file.text.split('\n'), file.path).toContain(PACKET_MARKER);
+  const digestOf = (path: string) => sha256(claude.files.find((file) => file.path === path)!.text);
+  expect(claude.receipt.files.map((file) => file.path)).toEqual(claude.files.map((file) => file.path));
+  expect(claude.receipt.generated).toEqual([
+    {
+      identity: profile,
+      word: 'agent-profile',
+      path: '.claude/agents/reviewer.md',
+      sha256: digestOf('.claude/agents/reviewer.md'),
+    },
+    {
+      identity: playbook,
+      word: 'playbook',
+      path: '.claude/skills/note-review/SKILL.md',
+      sha256: digestOf('.claude/skills/note-review/SKILL.md'),
+    },
+  ]);
+  expect(claude.receipt.unsupported).toEqual([]);
+  expect(claude.hooks?.map((row) => [row.identity, row.tools])).toEqual([[hook, ['Write', 'Edit', 'MultiEdit']]]);
+  // Definitions only: the operation's handler and validators are catalog keys, and the harness registers this set.
+  expect(claude.receipt.definitions?.map((row) => [row.word, row.identity])).toEqual([
+    ['operation', 'authoring-system/binding/operation/read-note'],
+    ['harness', 'agent-composition-system/definition/harness/note-workspace'],
+  ]);
+  expect(claude.receipt.definitions?.[0]?.definition).toMatchObject({
+    handler: 'read-note-v1',
+    input: 'read-note-input-v1',
+    output: 'read-note-output-v1',
+  });
+  // Codex takes the packet and the skill; the agent and the hook are reported, never written (C12).
+  const codex = renderProjectionFor(root, 'codex');
+  expect(codex.files.map((file) => file.path)).toEqual([
+    'AGENTS.md',
+    '.agents/skills/ia-authoring/SKILL.md',
+    '.agents/skills/note-review/SKILL.md',
+  ]);
+  expect(codex.hooks).toEqual([]);
+  expect(codex.receipt.unsupported?.map((row) => [row.word, row.identity])).toEqual([
+    ['agent-profile', profile],
+    ['hook', hook],
   ]);
 });
 

@@ -88,6 +88,9 @@ it('plans the claude projection and writes nothing: the entry count, the packet 
         { path: SKILL, action: 'create' },
       ],
       guard: 'none',
+      // Milestone generation-binding: no authored @hook to register, and no authored record the host does not take.
+      hooks: [],
+      unsupported: [],
       conflict: null,
     },
   });

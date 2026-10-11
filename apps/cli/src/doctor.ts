@@ -74,6 +74,7 @@ import type { HostTrust } from '@inventarch/distribution/implementations';
 import { hostVerifier } from '@inventarch/distribution/host-observe';
 import type { HostVerifier } from '@inventarch/distribution/host-observe';
 import { observeProjection } from '@inventarch/distribution/projection';
+import { observeHookRegistration } from '@inventarch/distribution/guard-registration';
 import { registryChooser, registryLocation } from '@inventarch/distribution/registry';
 import type { HostObservation } from '@inventarch/distribution/services';
 import {
@@ -84,6 +85,7 @@ import {
   validateWorkspace,
 } from '@inventarch/distribution/services';
 import { PACKET_MARKER } from '@inventarch/runtime';
+import type { PacketReceipt } from '@inventarch/runtime';
 import { brief } from './briefing.js';
 import type { BriefInput } from './briefing.js';
 import type { Channel } from './channel.js';
@@ -532,10 +534,12 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
       apply,
     );
   };
-  let observedDrift: ReturnType<typeof observeProjection>;
+  let observedDrift: ReturnType<typeof observeProjection>, hookDrift: ReturnType<typeof observeHookRegistration>;
   try {
     planRetirement(root, host);
     observedDrift = observeProjection({ root, host, artifacts: null, marker: PACKET_MARKER });
+    // The hook groups the workspace owns (milestone generation-binding, C9): read-only, as the planner reads them.
+    hookDrift = host === 'claude' ? observeHookRegistration(root) : [];
   } catch (error) {
     return [unreadable(error, STATE.projection(host))];
   }
@@ -588,8 +592,49 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
         ),
       );
   }
+  // A group deleted, changed or duplicated by hand is one apply refuses to put back on its own (guard review finding
+  // G-N2): the remedy removes the registration, and the next apply registers the workspace's hooks again.
+  const reregister = commands.apply(host, `ia host ${host} --remove --apply`),
+    again = `"ia host ${host} --apply" then registers the workspace's hooks again`;
+  for (const { hook, drift } of hookDrift)
+    checks.push(
+      drift === 'foreign'
+        ? installation(
+            `projection-${host}-hook:${hook}`,
+            title,
+            'warn',
+            `${SETTINGS} holds a guard hook group for ${hook}, which this workspace's registration does not own; it is left in place`,
+            apply,
+          )
+        : installation(
+            `projection-${host}-hook:${hook}`,
+            title,
+            'fail',
+            commands.prose(
+              host,
+              drift === 'missing'
+                ? `the hook group for ${hook} was deleted from ${SETTINGS}, which apply does not put back on its own; the remedy removes the registration, and ${again}`
+                : `the hook group for ${hook} in ${SETTINGS} changed since it was registered, or appears twice; delete only that group, then run the remedy, which removes the registration, and ${again}`,
+            ),
+            reregister,
+          ),
+    );
+  // An authored @hook the last apply could not register guards nothing (review finding H-N4): `ia host` registers it, or,
+  // where disableAllHooks turned hooks off, nothing does until that setting changes.
+  for (const row of receipt.unsupported ?? [])
+    if (row.word === 'hook')
+      checks.push(
+        installation(
+          `projection-${host}-hook:${row.identity}`,
+          title,
+          'warn',
+          commands.prose(host, `the authored @hook ${row.identity} guards nothing: ${row.reason}`),
+          row.reason.includes('disableAllHooks') ? null : commands.apply(host, `ia host ${host} --apply`),
+        ),
+      );
   try {
-    const current = renderProjectionFor(root, host).receipt.packetDigest;
+    const rendered = renderProjectionFor(root, host),
+      current = rendered.receipt.packetDigest;
     if (current !== receipt.packetDigest)
       checks.push(
         installation(
@@ -597,6 +642,22 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
           title,
           'warn',
           `outdated: the current records render packet ${short(current)}; the receipt names ${short(receipt.packetDigest)}`,
+          apply,
+        ),
+      );
+    // The generated files the records render now against the ones the receipt lists; a receipt from before authored
+    // generation lists none, so it is outdated where the records generate any, never an error.
+    const rows = (list: PacketReceipt['generated']) =>
+      JSON.stringify((list ?? []).map(({ identity, path, sha256 }) => [identity, path, sha256]));
+    if (rows(rendered.receipt.generated) !== rows(receipt.generated))
+      checks.push(
+        installation(
+          `projection-${host}-generated`,
+          title,
+          'warn',
+          receipt.generated === undefined
+            ? `outdated: the receipt predates authored generation, and the records render ${rendered.receipt.generated?.length ?? 0} generated files`
+            : `outdated: the records render other generated files (${rendered.receipt.generated?.length ?? 0}) than the ${receipt.generated.length} the receipt lists`,
           apply,
         ),
       );

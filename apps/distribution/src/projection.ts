@@ -1,4 +1,4 @@
-import { lstatSync, readdirSync, type Dirent } from 'node:fs';
+import { lstatSync, readdirSync, rmdirSync, type Dirent } from 'node:fs';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
 import {
   bytes,
@@ -45,14 +45,29 @@ export interface ProjectionPlan {
   readonly before: string | null;
   readonly digest: string;
 }
-/** Spec §6.3: the exact paths each host's projection writes. */
+/** Spec §6.3: the exact paths each host's projection writes for the position packet. */
 export const PROJECTION_PATHS: Readonly<Record<Host, readonly string[]>> = Object.freeze({
   claude: ['.claude/rules/ia-workspace.md', '.claude/skills/ia-authoring/SKILL.md'],
   codex: ['AGENTS.md', '.agents/skills/ia-authoring/SKILL.md'],
 });
 /**
- * B9: a 1.x per-system steward file. A claude ownership state may still list one, for its removal only: no artifact is
- * written there, and the planner deletes a listed one that is marked and unedited.
+ * Milestone generation-binding (plan amendments C4, C5 and C12): the paths authored host generation writes beside the
+ * packet's, owned through the same state: a claude agent `.claude/agents/<name>.md` and skill
+ * `.claude/skills/<name>/SKILL.md`, and a codex skill `.agents/skills/<name>/SKILL.md` (codex takes no agent). A name is
+ * a portable host name, as generation's `safeName` requires.
+ */
+export const GENERATED_PATHS: Readonly<Record<Host, RegExp>> = Object.freeze({
+  claude: /^\.claude\/(?:agents\/[a-z][a-z0-9-]*\.md|skills\/[a-z][a-z0-9-]*\/SKILL\.md)$/,
+  codex: /^\.agents\/skills\/[a-z][a-z0-9-]*\/SKILL\.md$/,
+});
+/** Whether a projection for `host` may own `path`: the packet's, or one authored generation writes. */
+export const projectionOwnable = (host: Host, path: string): boolean =>
+  PROJECTION_PATHS[host].includes(path) || GENERATED_PATHS[host].test(path);
+/**
+ * B9: a 1.x per-system steward file. A claude ownership state may still list one, for its removal: the planner deletes
+ * a listed one that is marked and unedited, unless a generated agent is written at that very path, which then replaces
+ * it as an update (a profile named after a 1.x steward). A generated agent the state lists and no render writes any
+ * more is removed the same way: it carries the plan's own marker.
  */
 const LEGACY_AGENT = /^\.claude\/agents\/[a-z][a-z0-9-]*\.md$/;
 /**
@@ -67,7 +82,7 @@ const asHost = (value: unknown): Host => {
   if (value !== 'claude' && value !== 'codex') fail('INPUT-INVALID', 'Expected Claude or Codex');
   return value;
 };
-const allowed = (host: Host, path: string): boolean => PROJECTION_PATHS[host].includes(path);
+const allowed = projectionOwnable;
 const legacyAgent = (host: Host, path: string): boolean => host === 'claude' && LEGACY_AGENT.test(path);
 const statePath = (host: Host): string => `.ia/distributions/hosts/${host}-projection.json`;
 const read = (root: string, path: string): string | null => {
@@ -160,11 +175,13 @@ function agentActions(
   host: Host,
   files: Readonly<Record<string, Accepted>>,
   marker: string,
+  written: ReadonlySet<string> = new Set(),
 ): ProjectionAction[] {
-  const listed = Object.keys(files).filter((path) => legacyAgent(host, path)),
+  // A path a generated agent is written at is the artifact's alone: one action for one path, never update and remove.
+  const listed = Object.keys(files).filter((path) => legacyAgent(host, path) && !written.has(path)),
     actions: ProjectionAction[] = [];
   if (linkedAgents(root, host)) return listed.length ? listed.map((path) => ({ path, action: 'foreign' })) : [];
-  for (const path of new Set([...listed, ...agentEntries(root, host)])) {
+  for (const path of new Set([...listed, ...agentEntries(root, host).filter((path) => !written.has(path))])) {
     const value = files[path];
     if (value === undefined) {
       actions.push({ path, action: 'foreign' });
@@ -181,13 +198,20 @@ function agentActions(
   return actions;
 }
 /** Deletion/foreign preview independent of the live files an install re-renders afterwards. */
-export function legacyProjectionActions(rootInput: string, host: Host, marker: string): ProjectionAction[] {
+export function legacyProjectionActions(
+  rootInput: string,
+  host: Host,
+  marker: string,
+  written: readonly string[] = [],
+): ProjectionAction[] {
   const root = workspace(rootInput);
+  // `written`: the paths the caller's render writes, so a generated agent there is no legacy removal (H-N7).
   return agentActions(
     root,
     host,
     locate(statePath(host), () => owned(root, host)),
     marker,
+    new Set(written),
   ).sort((a, b) => (a.path < b.path ? -1 : 1));
 }
 /** Spec §6.3: a marked `.claude/agents/*.md` file neither rendered nor owned is reported, never touched. Claude only. */
@@ -205,6 +229,22 @@ function orphanStewardFiles(root: string, host: Host, exclude: ReadonlySet<strin
     if (existing !== null && marked(existing, marker)) found.push(path);
   }
   return found;
+}
+/** A generated skill's folder (`.claude/skills/<name>` or `.agents/skills/<name>`), or undefined for any other path. */
+const skillFolder = (host: Host, path: string): string | undefined =>
+  GENERATED_PATHS[host].test(path) && path.endsWith('/SKILL.md') ? path.slice(0, -'/SKILL.md'.length) : undefined;
+/** The entries of a workspace folder, none when it does not exist; a link or a file there is refused. */
+function folderEntries(root: string, folder: string): readonly string[] {
+  const absolute = contained(root, folder);
+  let stat: ReturnType<typeof lstatSync> | undefined;
+  try {
+    stat = lstatSync(absolute);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+  if (!stat.isDirectory()) fail('PATH-UNSAFE', `Generated skill folder is not a directory: ${folder}`);
+  return readdirSync(absolute);
 }
 export function planProjection(input: {
   readonly root: string;
@@ -225,11 +265,24 @@ export function planProjection(input: {
       if (seen.has(artifact.path)) fail('INPUT-INVALID', 'Duplicate projection path');
       if (!allowed(host, artifact.path))
         fail('PATH-UNSAFE', `Projection path is outside the ${host} allowlist: ${artifact.path}`);
+      if (linkedAgents(root, host) && legacyAgent(host, artifact.path))
+        fail('PATH-UNSAFE', `Generated agents need an unlinked .claude/agents directory: ${artifact.path}`);
       if (!hasMarker(artifact.text, input.marker))
         fail('INPUT-INVALID', `Projection artifact is missing the marker line: ${artifact.path}`);
       seen.add(artifact.path);
       const existing = read(root, artifact.path);
       if (existing === null) {
+        // A generated skill never moves into a folder IA does not own that already holds the user's files (H-N11).
+        const folder = skillFolder(host, artifact.path);
+        if (
+          folder !== undefined &&
+          !Object.keys(files).some((path) => path.startsWith(`${folder}/`)) &&
+          folderEntries(root, folder).length > 0
+        )
+          fail(
+            'LOCAL-MODIFICATION',
+            `Refusing to write a generated skill into ${folder}, a folder this projection does not own that already holds files; move them, or rename the @playbook, then rerun`,
+          );
         actions.push({ path: artifact.path, action: 'create' });
         return;
       }
@@ -252,11 +305,17 @@ export function planProjection(input: {
     if (!seen.has(path) && !legacyAgent(host, path))
       locate(path, () => {
         const existing = read(root, path);
+        // A listed generated file without an owned marker is the user's: it is kept as foreign, never deleted on the
+        // strength of a recorded hash alone (review finding H-N10).
+        if (existing !== null && GENERATED_PATHS[host].test(path) && !marked(existing, input.marker)) {
+          actions.push({ path, action: 'foreign' });
+          return;
+        }
         if (existing !== null && !accepts(value, sha256(existing)))
           fail('LOCAL-MODIFICATION', handEditMessage(path, existing, value));
         actions.push({ path, action: 'remove' });
       });
-  actions.push(...agentActions(root, host, files, input.marker));
+  actions.push(...agentActions(root, host, files, input.marker, seen));
   const body = {
     format: 'ia.host-projection-plan.v1' as const,
     root,
@@ -300,8 +359,17 @@ export function applyProjection(
       );
       checkpoint('pending');
       for (const action of mutating) {
-        if (action.action === 'remove') replace(root, action.path, null);
-        else replace(root, action.path, Buffer.from(plan.artifacts.find((a) => a.path === action.path)!.text));
+        if (action.action === 'remove') {
+          replace(root, action.path, null);
+          // The folder a removed generated skill emptied goes too, never recursively (review findings H-N6, H-N11).
+          const folder = skillFolder(host, action.path);
+          if (folder !== undefined && folderEntries(root, folder).length === 0)
+            try {
+              rmdirSync(contained(root, folder));
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+            }
+        } else replace(root, action.path, Buffer.from(plan.artifacts.find((a) => a.path === action.path)!.text));
         checkpoint(action.path);
       }
     }

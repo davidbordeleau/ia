@@ -437,7 +437,9 @@ describe('path spelling (review C-R1, C-R7)', () => {
     const root = workspace((at) =>
       rewrite(at, '.ia/src/workspace.ia', (text) => `#! ia 1.0\n${text.slice(text.indexOf('\n@agent demo'))}`),
     );
-    const refusal = await refused(root, ['task', 't9', 'meaning.says=x', '--at', 'docs/t9.ia'], 'IA-CLI-EDIT-UNOWNED');
+    // A path no fixture mandate covers (docs/ is covered by the composition fixture's docs-mandate, which grants only
+    // Synthesis, so the profile would refuse a preview there first).
+    const refusal = await refused(root, ['task', 't9', 'meaning.says=x', '--at', 'notes/t9.ia'], 'IA-CLI-EDIT-UNOWNED');
     expect(nextArgv(refusal['next'] as string)).toEqual(['position', '--root', root]);
   });
 });

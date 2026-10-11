@@ -23,12 +23,19 @@ const fixture = packetFixture,
   NONE = 'none (no authored @mandate names an @agent)';
 const RUNTIME: Location = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' };
 /**
- * A catalog fixture with the shape of the CLI's seven rows (apps/cli packetCatalog): the runtime takes the catalog as
+ * A catalog fixture with the shape of the CLI's eight rows (apps/cli packetCatalog): the runtime takes the catalog as
  * data and imports no app (B2), so the rows the CLI builds are pinned in apps/cli.
  */
 const CATALOG: readonly PacketCatalogRow[] = [
   { command: 'ia init', mode: 'effect', move: 'Execution', refuses: 'a target already initialized', next: 'ia init' },
   { command: 'ia validate', mode: 'validate', move: 'Verification', refuses: 'no .ia/src', next: 'ia init' },
+  {
+    command: 'ia preview',
+    mode: 'validate',
+    move: 'Verification',
+    refuses: 'a move the mandates do not allow',
+    next: 'ia position --seat <mandate> --shape governance',
+  },
   { command: 'ia capture', mode: 'effect', move: 'Execution', refuses: 'no @workspace', next: 'ia init' },
   { command: 'ia read', mode: 'read', move: 'Observation', refuses: 'an unadmitted locator', next: 'ia inspect' },
   { command: 'ia position', mode: 'read', move: 'Observation', refuses: 'an unadmitted seat', next: 'ia position' },
@@ -115,11 +122,11 @@ it('matches the golden packet of a fresh init and pins its entry count, the revi
     )}\n`;
   if (process.env['IA_POSITION_GOLDEN'] === 'write') writeFileSync(file, text);
   else expect(text).toBe(readFileSync(file, 'utf8'));
-  // P = M = 1, N = 11, T = 3 (workspace, agent, mandate) and C = 7, the milestone's final catalog (B1: 26 + N).
+  // P = M = 1, N = 11, T = 3 (workspace, agent, mandate) and C = 8, with plan amendment C3's `ia preview` (B1: 27 + N).
   expect([packet.participants.length, packet.mandates.length, packet.systems.length, packet.tallies.length]).toEqual([
     1, 1, 11, 3,
   ]);
-  expect(entryCount(packet)).toBe(37);
+  expect(entryCount(packet)).toBe(38);
   expect(entryCount(packet)).toBe(formula(db, CATALOG.length));
   // The output is frozen whole, and its intent rows are copies: the kernel's rows are not the packet's to freeze.
   expect([Object.isFrozen(output), Object.isFrozen(packet), Object.isFrozen(packet.intents[0]!.kinds)]).toEqual([
@@ -140,9 +147,9 @@ it('holds the entry formula on the conformance corpus and on this repository, co
       { packet } = render(db);
     expect(packet.systems.length, name).toBe(packet.seat.systems);
     expect(entryCount(packet), name).toBe(formula(db, CATALOG.length));
-    // B1's pinned counts under the seven-row catalog: the conformance corpus (P = M = T = 0, N = 5) and this repository
-    // (P = M = 1, N = 11, T = 22), whose committed CLAUDE.md renders the same 56 (tools/projections/generate.test.ts).
-    expect(entryCount(packet), name).toBe(name === 'conformance' ? 26 : 56);
+    // B1's pinned counts under the eight-row catalog: the conformance corpus (P = M = T = 0, N = 5) and this repository
+    // (P = M = 1, N = 11, T = 22), whose committed CLAUDE.md renders the same 57 (tools/projections/generate.test.ts).
+    expect(entryCount(packet), name).toBe(name === 'conformance' ? 27 : 57);
     // The host note is no entry, and the formula does not read the catalog's contents.
     expect(entryCount(render(db, []).packet), name).toBe(entryCount(packet) - CATALOG.length);
   }
@@ -188,7 +195,7 @@ it('renders a workspace with no participant with no participant entry and no ref
   const { packet } = render(database(adopted));
   expect([packet.participants, packet.mandates]).toEqual([[], []]);
   expect(packet.seat.participants).toBe(NONE);
-  expect(entryCount(packet)).toBe(35);
+  expect(entryCount(packet)).toBe(36);
   // With one, the seat line names no `none` and the participant is read through the scope.
   const one = render(database(freshInit())).packet;
   expect(one.seat).toEqual({
@@ -236,7 +243,7 @@ it('renders two participants named by three mandates by identity, each agent onc
     },
   ]);
   expect(packet.seat.participants).toBeUndefined();
-  expect(entryCount(packet)).toBe(40);
+  expect(entryCount(packet)).toBe(41);
   expect(entryCount(packet)).toBe(formula(db, CATALOG.length));
 });
 

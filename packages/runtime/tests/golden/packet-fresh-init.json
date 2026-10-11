@@ -413,6 +413,13 @@
       "next": "ia init"
     },
     {
+      "command": "ia preview",
+      "mode": "validate",
+      "move": "Verification",
+      "refuses": "a move the mandates do not allow",
+      "next": "ia position --seat <mandate> --shape governance"
+    },
+    {
       "command": "ia capture",
       "mode": "effect",
       "move": "Execution",

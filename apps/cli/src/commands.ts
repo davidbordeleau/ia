@@ -182,6 +182,57 @@ export const COMMANDS: readonly CommandSpec[] = [
     ),
   },
   {
+    // Milestone generation-binding plan amendments C18, C19 and C3: the read-only half of record authoring. The parser
+    // takes one value per option, so --relate and --set are mode flags followed by positionals.
+    name: 'preview',
+    group: 'workspace',
+    summary: 'Show what one new record, field or relationship would compile to',
+    // requireProfile (profile.ts): a mode the governing mandates do not allow names their governance position.
+    catalog: {
+      mode: 'validate',
+      move: 'Verification',
+      refuses:
+        'an actor or move the governing mandates do not allow, an excluded word, an unowned record, or a field, value or relationship the schema and consent refuse; writes nothing',
+      next: 'ia position --seat <mandate> --shape governance',
+    },
+    syntax: [
+      'ia preview <word> [<name> [<field>=<value>...] [--at <path>]] [--actor <agent>] [--json]',
+      'ia preview --relate <owned> <spelling> <target> [--actor <agent>] [--json]',
+      'ia preview --set <owned> <section.key>=<value> [--actor <agent>] [--json]',
+      'ia preview --set <owned> <section.key>+=<item> [--actor <agent>] [--json]',
+    ],
+    grammar: grammar(
+      [
+        option({
+          name: 'relate',
+          kind: 'boolean',
+          conflicts: ['set', 'at'],
+          summary: 'Add one relationship row <spelling> <target> to the owned record',
+        }),
+        option({
+          name: 'set',
+          kind: 'boolean',
+          conflicts: ['at'],
+          summary: 'Set one field of the owned record; += adds one item to a list field',
+        }),
+        option({
+          name: 'at',
+          kind: 'value',
+          placeholder: '<path>',
+          summary: 'File for a new record, under an authored root in .ia/src (default <first authored root>/<word>.ia)',
+        }),
+        option({
+          name: 'actor',
+          kind: 'value',
+          placeholder: '<agent>',
+          summary:
+            "The acting participant: an authored @agent of the workspace's mandates (default: its steward, or its one participant)",
+        }),
+      ],
+      positionals('argument', 1, Number.POSITIVE_INFINITY),
+    ),
+  },
+  {
     // Position-and-projection §5: the capture effect. It takes no output option, because a snapshot has one place.
     name: 'capture',
     group: 'workspace',

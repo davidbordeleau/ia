@@ -168,8 +168,8 @@ function refusedOnTheWay(reader: Session['reader'], seat: string): string | unde
 /**
  * The command that reads a plan without a seat, chosen by the @plan records at band 100 the workspace admits, which
  * `deliveryView` counts the same way: the view of the only one; the first of several, which the view refuses to choose
- * between; with none, the validation that says why admission refused a @plan a source holds, else the records to
- * author, then the view.
+ * between; with none, the validation that says why admission refused a @plan a source holds, else the preview of the
+ * @plan word where the workspace registers it (plan amendment C3), else the records to author, then the view.
  */
 function unseated(reader: Session['reader'], rooted: string): string {
   const plans = reader
@@ -181,8 +181,10 @@ function unseated(reader: Session['reader'], rooted: string): string {
   if (plans.length > 1)
     return `Run "ia next --seat ${quote(plans[0]!)}${rooted}" to read the first of the ${plans.length} plans the workspace authors; seat any other the same way.`;
   const refused = refusedOnly(reader).find((record) => record.identity.split('/')[2] === 'plan');
-  return refused !== undefined
-    ? validateNext(rooted, refused.identity)
+  if (refused !== undefined) return validateNext(rooted, refused.identity);
+  // Plan amendment C3: where the workspace registers the word, its preview says what a @plan holds and where it goes.
+  return reader.words().includes('plan')
+    ? `Run "ia preview plan${rooted}" for what a @plan holds and the file it goes to; author one, with @milestone records whose work.plan names it and @task records whose work.milestone names one of them.`
     : `Author a @plan, @milestone records whose work.plan names it and @task records whose work.milestone names one of them, then run "ia next${rooted}".`;
 }
 

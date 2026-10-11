@@ -79,8 +79,8 @@ it('plans the claude projection and writes nothing: the entry count, the packet 
     host: 'claude',
     apply: false,
     plan: {
-      // Plan amendment B1 on a fresh init with the CLI's seven catalog rows: 26 + N, N = 11.
-      entries: 37,
+      // Plan amendment B1 on a fresh init with the CLI's eight catalog rows (C3 adds `ia preview`): 27 + N, N = 11.
+      entries: 38,
       packetDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
       files: [
         { path: RULES, action: 'create' },
@@ -94,7 +94,7 @@ it('plans the claude projection and writes nothing: the entry count, the packet 
   expect(text.exitCode).toBe(0);
   const shown = flat(text.stdout);
   expect(shown).toContain('This is a preview. Nothing has been written.');
-  expect(shown).toContain(`37 entries, digest ${envelope.plan.packetDigest.slice(0, 12)}`);
+  expect(shown).toContain(`38 entries, digest ${envelope.plan.packetDigest.slice(0, 12)}`);
   expect(shown).toContain(`${RULES} create`);
   expect(shown).toContain('no steward guard to retire');
   // A long command breaks with a backslash continuation (§6.4); joined, it is the apply of this plan.
@@ -113,14 +113,14 @@ it('applies the packet and its receipt, which doctor reads with no drift until a
   const applied = await project(root, env, 'claude', '--apply', '--yes');
   expect(applied.exitCode, applied.stdout).toBe(0);
   const envelope = JSON.parse(applied.stdout);
-  expect(envelope).toMatchObject({ command: 'project', host: 'claude', apply: true, plan: { entries: 37 } });
+  expect(envelope).toMatchObject({ command: 'project', host: 'claude', apply: true, plan: { entries: 38 } });
   // `applied` is the receipt written beside the projection state (B12), and its digests are the bytes on disk.
   const receipt = JSON.parse(read(root, RECEIPT));
   expect(envelope.applied).toEqual(receipt);
   expect(receipt).toMatchObject({
     format: 'ia.packet-receipt.v1',
     host: 'claude',
-    entries: 37,
+    entries: 38,
     packetDigest: envelope.plan.packetDigest,
     removed: [],
     foreign: [],
@@ -180,7 +180,7 @@ it('applies the packet and its receipt, which doctor reads with no drift until a
   const again = await human(root, env, 'claude', '--apply', '--yes');
   expect(again.exitCode).toBe(0);
   const shown = flat(again.stdout);
-  expect(shown).toContain('Projected 37 entries for claude: written; not observed being read.');
+  expect(shown).toContain('Projected 38 entries for claude: written; not observed being read.');
   expect(shown).toContain(RECEIPT);
   expect(shown).toContain(`${RULES} sha256 ${sha(readFileSync(resolve(root, RULES))).slice(0, 12)}`);
   expect(shown).toContain(`Run "${rooted('ia doctor', root)}" for the observed projection state.`);

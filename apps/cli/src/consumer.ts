@@ -35,6 +35,7 @@ import { runInspect } from './inspect.js';
 import { runNext } from './next.js';
 import { runPack } from './pack.js';
 import { runPosition } from './position.js';
+import { runPreview } from './preview.js';
 import { runProject } from './project.js';
 import { runRead } from './read.js';
 import { runValidate } from './validate.js';
@@ -474,6 +475,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   capture: runCapture,
   compile: runCompile,
   validate: runValidate,
+  preview: runPreview,
   inspect: runInspect,
   read: runRead,
   position: runPosition,

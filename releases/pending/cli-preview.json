@@ -1,0 +1,30 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "minor",
+  "title": "`ia preview` shows what one new record, field or relationship would compile to, under the participant's mandate profile",
+  "summary": "@inventarch/cli adds `ia preview` (catalog row: mode validate, move Verification), which writes nothing. `ia preview <word> <name> [<field>=<value>...] [--at <path>]` drafts a new record into --at or <first authored root>/<word>.ia, the first root the repository's `@workspace` declares at authored placement inside .ia/src; `ia preview --relate <owned> <spelling> <target>` adds one relationship row and `ia preview --set <owned> <section.key>=<value>` sets one field (`+=` adds one item to a list field) of an owned record: one at authored placement (band 100) in a file under such a root, outside the floor, named by canonical identity or `@word name`; --at must lie under such a root. A field is <section>.<key> or a key one schema field alone has, and a value the shell split is joined again with single spaces. The edit is language's, compiled through db's draft overlay against one editor snapshot of the workspace; the output gives the record before and after, the findings at the target file and any the edit adds elsewhere, the base and candidate revisions, every record of the file with its digest before and after, and the file's current sha256 (an absent file reads as empty). A record other than the target whose digest would change refuses the preview. `ia preview <word>` prints the word's lowering, schema, default file and consent. Refusals: IA-CLI-EDIT-INVALID (an unknown word, field or verb, a value of another type or carrying syntax, a duplicate), IA-CLI-EDIT-MISSING (no admitted record answers a name), IA-CLI-EDIT-UNOWNED (an installed, adopted or floor record, or a path outside the authored roots), IA-LANG-EDGE-UNCONSENTED (a row the two-sided consent rule refuses, naming the system whose ledger refuses it), each exit 1, and IA-DB-PATH-UNSAFE or IA-DB-SOURCE-CHANGED at exit 3; a malformed form is usage at exit 2; a candidate with errors exits 1. Before any edit the participant's mandate profile is judged (runtime governingMandates, defaultActor and profileRefusal) for the Verification move and the previewed word: --actor <agent> names the acting participant, which must be an authored participant of the repository's `@workspace`; it is a local declaration, not authentication, that resolves an open actor choice and lifts no move or excluded word. IA-RUNTIME-MANDATE-MOVE, -WORD and -ACTOR refuse at exit 1, each naming a command that runs in the same state: the governance position of the mandate concerned, or this preview again with --actor naming the first participant whose mandates allow it; a governing mandate whose authority the runtime cannot read (such as `authority.moves []`, which admission accepts) refuses with IA-RUNTIME-REQUEST-INVALID naming its governance position. `ia position` stays ungated. `ia next` on a workspace that registers `@plan` and authors none now names `ia preview plan` instead of the records to author. The position packet's command catalog gains the preview row, so a fresh init's packet has 27 + N entries where 2.0.0 had 26 + N, and the repository's own CLAUDE.md is regenerated. Limits: only `ia preview` consults the mandate profile in this release; `ia author`, which will write what preview shows, is not part of this change; nested records and conditional, structured or internally commented fields are not edited; --actor is accepted by `ia preview` alone.",
+  "packages": [
+    "@inventarch/cli"
+  ],
+  "paths": [
+    ".agents/",
+    ".claude/",
+    ".github/",
+    ".gitignore",
+    ".ia/authoring.resources.json",
+    ".ia/src/floor/taxonomy.system.ia",
+    ".ia/src/participant.ia",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "apps/cli/",
+    "apps/vscode/LANGUAGE.md",
+    "distributions/",
+    "docs/",
+    "examples/",
+    "nx.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "tools/"
+  ]
+}

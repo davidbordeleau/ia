@@ -4,17 +4,17 @@
  * Admission is whole-workspace by construction, so positionals restrict reporting and never admission: the
  * summary always states the true total and the exit class is computed from the unfiltered finding set.
  *
- * Acquisition and presentation are separated so that §7's reference blocks can be produced by this verb's own
- * renderer over this verb's own captured data — tools/docs/cli-examples.ts calls `collectValidation` and
- * `renderValidation` rather than recomposing the report from renderer primitives. The only value that tool
- * supplies of its own is the display root, which §2.5 already defines as a CLI-resolved value and which is the
- * one part of this output that differs between machines.
+ * Acquisition and presentation are separated (review finding B2-N9): `collectValidation` is the only part of this
+ * verb that touches a workspace, and `renderValidation` and `validationEnvelope` render only the view it captured,
+ * so the human report and the JSON envelope describe one acquisition and a test can render a captured view without
+ * opening a workspace. The display root is the one value the view carries that differs between machines (§2.5).
  *
  * Task execution-binding-host-entry (plan amendment C24): the report also carries the workspace's execution bindings,
  * each joined against the installed-implementation catalog its host joined, through the same distribution service
  * `ia-distribution validate` reports (`WorkspaceSession.bindings`). A revoked binding is an error and fails the run;
  * an unavailable one is never a pass. Computing them writes nothing and executes nothing (C23; milestone 7 runs
- * operations). With no `@execution-binding` record the human report is unchanged.
+ * operations); the evidence below is the one write this verb makes. With no `@execution-binding` record the human
+ * report is unchanged.
  *
  * Review finding B2-R2: a join binds only through this installation's own payload (`validationTrust`), the one its
  * bundled pin names in the IA home it materializes payloads in; a registration of any other payload is unavailable.

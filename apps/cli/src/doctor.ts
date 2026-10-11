@@ -387,16 +387,15 @@ function parses(root: string, path: string): boolean {
 }
 
 /**
- * `launcher-unverified` covers two different facts, told apart here by verifying once more: a payload that fails
- * verification, and one that verifies as another release than the state recorded. Only a stale row pays for it.
+ * `launcher-unverified` covers two different facts: a payload that fails verification, and one that verifies as another
+ * release than the state recorded. `verify` is the report's one shared verification (`hostVerifier`, a memo), so it
+ * answers exactly what observation saw without scanning the payload again (review finding B2-N9): its failure, or the
+ * release it verified as, which observation found differs from the recorded one.
  */
 function unverified(cache: string | null, recorded: string | null, verify: HostVerifier): string {
   if (cache === null) return 'the payload fails verification';
   try {
-    const found = verify(cache).release;
-    return found === recorded
-      ? `the payload at ${cache} did not verify when observed`
-      : `the payload at ${cache} verifies, but as release ${short(found)} rather than the recorded ${short(recorded)}`;
+    return `the payload at ${cache} verifies, but as release ${short(verify(cache).release)} rather than the recorded ${short(recorded)}`;
   } catch (error) {
     return `the payload at ${cache} fails verification (${codeOf(error, 'unreadable')})`;
   }

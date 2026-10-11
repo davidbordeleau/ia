@@ -142,8 +142,21 @@ it('reads a payload with no catalog, such as one built before it existed, as una
   });
   // A v1 payload carries none either; a payload whose release no longer matches its pin is damaged, not old.
   const v1 = temp(),
-    text = json({ format: 'ia.host-release.v1', inventory: 'a'.repeat(64), launcher: 'b'.repeat(64) });
+    inventory = json({
+      format: 'ia.host-cache.v1',
+      host: 'claude',
+      name: 'legacy',
+      version: '1.0.0',
+      native: 'a'.repeat(64),
+      packages: [],
+      files: [],
+    }),
+    launcher = '// launcher\n',
+    text = json({ format: 'ia.host-release.v1', inventory: sha256(inventory), launcher: sha256(launcher) });
+  put(v1, 'inventory.json', inventory);
+  put(v1, 'scripts/ia.mjs', launcher);
   put(v1, 'release.json', text);
+  expect(verifyHostCache(v1).format).toBe(1);
   expect(readInstalledImplementations(v1, sha256(text))).toMatchObject({ status: 'unavailable' });
   expect(() => readInstalledImplementations(root, 'c'.repeat(64))).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
   expect(() => readInstalledImplementations(temp(), release)).toThrow(code('IA-DIST-ARTIFACT-UNAVAILABLE'));
@@ -167,15 +180,33 @@ it('reports a declaration whose handler bytes are not shipped as unavailable, ne
     status: 'unavailable',
     reason: expect.stringContaining('@acme/zzz'),
   });
-  // Handler or closure bytes deleted from a materialized payload: unavailable here, and the payload no longer verifies.
+  // Handler or closure bytes deleted from a materialized payload: the payload no longer verifies, so nothing in it is
+  // read, let alone available (binders report it as unavailable).
   for (const path of [MODULE, BASE]) {
     const { root, release } = payload();
     unlinkSync(resolve(root, path));
-    expect(unavailable(readInstalledImplementations(root, release))).toMatchObject({
-      status: 'unavailable',
-      reason: expect.stringContaining(`handler closure file ${path} is missing`),
-    });
+    expect(() => readInstalledImplementations(root, release)).toThrow(code('IA-DIST-ARTIFACT-UNAVAILABLE'));
     expect(() => verifyHostCache(root)).toThrow(code('IA-DIST-ARTIFACT-UNAVAILABLE'));
+  }
+});
+
+it('refuses a payload with any file its inventory does not list, inside a closure package or outside every one (B-R1)', () => {
+  // A module planted where Node's resolution prefers it to the shipped dependency: in the handler package's own
+  // node_modules, or in a node_modules beside the scope directories, outside every closure package.
+  for (const directory of [
+    'runtime/node_modules/@acme/handler/node_modules/@acme/base',
+    'runtime/node_modules/@acme/node_modules/@acme/base',
+  ]) {
+    const { root, release } = payload(),
+      workspaceRoot = temp();
+    put(root, `${directory}/package.json`, json({ name: '@acme/base', main: 'index.js' }));
+    put(root, `${directory}/index.js`, 'export default "planted";\n');
+    expect(() => verifyHostCache(root), directory).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
+    expect(() => readInstalledImplementations(root, release), directory).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
+    // A registration naming that payload records no join: the join refuses rather than vouch for it.
+    registered(workspaceRoot, 'claude', root, release);
+    expect(() => joinHost(workspaceRoot, 'claude', REVISION), directory).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
+    expect(existsSync(resolve(workspaceRoot, JOINS))).toBe(false);
   }
 });
 
@@ -202,8 +233,9 @@ it('detects altered handler bytes and disagreeing pins as an integrity failure, 
 });
 
 it('refuses handler bytes reached through a hard link or a junction', () => {
+  // The second name lives outside the payload, so the inventoried file is aliased without an unexpected entry in it.
   const linked = payload();
-  linkSync(resolve(linked.root, BASE), resolve(linked.root, 'alias.js'));
+  linkSync(resolve(linked.root, BASE), resolve(temp(), 'alias.js'));
   expect(() => readInstalledImplementations(linked.root, linked.release)).toThrow(code('IA-DIST-PATH-UNSAFE'));
   const junction = payload(),
     copy = temp(),

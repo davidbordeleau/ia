@@ -610,6 +610,25 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
     }),
   ]);
 
+  // B-R1: a module the inventory does not list, planted where Node would load it instead of a shipped one, fails host
+  // verification, and the catalog and join rows agree: nothing in that payload is listed or joined as present.
+  const planted = resolve(payload, 'runtime/node_modules/@inventarch/agent-composition-system/node_modules');
+  put(planted, '@inventarch/agent-system/package.json', JSON.stringify({ name: '@inventarch/agent-system' }));
+  put(planted, '@inventarch/agent-system/index.js', 'export const planted = true;\n');
+  const shadowed = await doctor(root, env);
+  expect(shadowed.exitCode).toBe(1);
+  expect(row(shadowed.checks, 'host-claude')!.status).toBe('fail');
+  expect(row(shadowed.checks, 'implementations')).toMatchObject({
+    status: 'fail',
+    detail: expect.stringContaining('IA-DIST-INTEGRITY-MISMATCH'),
+  });
+  expect(row(shadowed.checks, 'join-claude')).toMatchObject({
+    status: 'unknown',
+    detail: expect.stringContaining('cannot be verified (IA-DIST-INTEGRITY-MISMATCH)'),
+  });
+  rmSync(planted, { recursive: true });
+  expect(row((await doctor(root, env)).checks, 'implementations')!.status).toBe('ok');
+
   // A join that names another catalog is drifted, and the remedy records the current one again.
   put(root, JOINS, json({ ...recorded, joins: [{ ...recorded.joins[0], digest: '0'.repeat(64) }] }));
   const drifted = await doctor(root, env);

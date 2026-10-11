@@ -1,23 +1,15 @@
-import { existsSync, lstatSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
-import { acquireHostRegistrationLock, assertHostRegistrationIdle, HOST_REGISTRATION, saved } from './host.js';
+import {
+  acquireHostRegistrationLock,
+  assertHostRegistrationIdle,
+  HOST_REGISTRATION,
+  saved,
+  verifyHostCache,
+} from './host.js';
 import type { WorkspaceHost } from './hosts.js';
 import { asWorkspaceHost } from './hosts.js';
-import {
-  bytes,
-  contained,
-  fail,
-  json,
-  locate,
-  object,
-  portable,
-  replace,
-  sha256,
-  unaliased,
-  utf8,
-  workspace,
-} from './files.js';
+import { bytes, contained, fail, json, locate, object, portable, replace, sha256, utf8, workspace } from './files.js';
 
 /**
  * Plan amendments C16 and C24 (milestone generation-binding; design item 9): the installed-implementation catalog a v2
@@ -25,11 +17,13 @@ import {
  * in the payload inventory, because `verifyHostCache` refuses any file the inventory does not list. It describes
  * implementations no host app may import, so this module reads data only: it never imports, loads or runs a handler.
  *
- * An operation is `available` only when the payload ships its handler: the handler module and every file of the
- * packages its closure names are in the inventory, the catalog's handler digest is the SHA-256 the inventory pins for
- * the module, the closure digest is the digest of those inventory rows, and every one of those files is present with
- * the bytes the inventory pins. A declaration whose bytes are not shipped is `unavailable`, never available; bytes that
- * differ from their pins are an integrity failure.
+ * Nothing is read from a payload that fails `verifyHostCache`: every entry under the payload directory must be a file
+ * the inventory lists, with its bytes, and no link or junction, so a module planted anywhere Node's resolution could
+ * reach (beside or above the handler's packages) refuses the whole catalog. An operation is then `available` only when
+ * the payload ships its handler: the handler module and every file of the packages its closure names are in the
+ * verified inventory, the catalog's handler digest is the SHA-256 the inventory pins for the module, and the closure
+ * digest is the digest of those inventory rows. A declaration whose bytes are not shipped is `unavailable`, never
+ * available; a payload that fails verification, or catalog pins that disagree with its inventory, are refusals.
  */
 export const INSTALLED_IMPLEMENTATIONS = 'implementations.json';
 export const INSTALLED_IMPLEMENTATIONS_FORMAT = 'ia.installed-implementations.v1';
@@ -107,8 +101,7 @@ export type JoinResult =
   | { readonly status: 'unavailable'; readonly reason: string }
   | { readonly status: 'unregistered' };
 
-const ROWS = 1024,
-  FILE_BYTES = 64 * 1024 * 1024;
+const ROWS = 1024;
 const TOKEN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/,
   HANDLER = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/,
   IDENTITY = /^[a-z][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)+$/,
@@ -136,46 +129,6 @@ const prose = (value: unknown, limit: number): value is string =>
 const text = (value: Buffer | null): string | null => (value === null ? null : utf8(value));
 /** The payload directory of an installed package, with its trailing slash. */
 const packageDirectory = (name: string): string => `runtime/node_modules/${name}/`;
-type PayloadRead = (path: string, limit?: number) => Buffer | null;
-/**
- * A reader of the payload at `root` (which `workspace()` already found link-free up to the volume root) that reads as
- * `verifyHostCache` does: no link or junction at any level below `root`, each directory lstat'd once and remembered,
- * and each file an unaliased regular file read on the lstat that admitted it, within its bound. Null when the file or a
- * directory above it is absent. Remembering directories keeps a closure of a thousand files cheap.
- */
-function payloadReader(root: string): PayloadRead {
-  const directories = new Map<string, boolean>();
-  const present = (relative: string): boolean => {
-    if (relative === '') return true;
-    let known = directories.get(relative);
-    if (known === undefined) {
-      const slash = relative.lastIndexOf('/');
-      known = present(slash < 0 ? '' : relative.slice(0, slash));
-      if (known) {
-        const stat = lstatSync(join(root, ...relative.split('/')), { throwIfNoEntry: false });
-        if (stat?.isSymbolicLink()) fail('PATH-UNSAFE', `Link/junction is not allowed: ${relative}`);
-        if (stat !== undefined && !stat.isDirectory()) fail('PATH-UNSAFE', `Expected a payload directory: ${relative}`);
-        known = stat !== undefined;
-      }
-      directories.set(relative, known);
-    }
-    return known;
-  };
-  return (path, limit = 1024 * 1024) => {
-    portable(path);
-    const slash = path.lastIndexOf('/');
-    if (!present(slash < 0 ? '' : path.slice(0, slash))) return null;
-    const target = join(root, ...path.split('/')),
-      stat = lstatSync(target, { throwIfNoEntry: false });
-    if (stat === undefined) return null;
-    try {
-      return unaliased(target, path, stat, limit);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-      throw error;
-    }
-  };
-}
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
@@ -284,16 +237,12 @@ interface Listed {
   readonly sha256: string;
 }
 /**
- * C24: `operation` as this payload ships it. Every file of its package closure is read from the payload directory and
- * compared with the inventory, whose digest the release pins: a handler module or closure package the inventory does
- * not list, or a listed file that is not there, makes the operation unavailable; a file whose bytes differ from the
- * inventory, or catalog pins that disagree with it, is IA-DIST-INTEGRITY-MISMATCH.
+ * C24: `operation` as this payload ships it, against the inventory of a payload `verifyHostCache` has verified, so
+ * every listed file is present with the bytes the inventory pins and nothing else is there. A handler module or closure
+ * package the inventory does not list makes the operation unavailable; catalog pins that disagree with the inventory
+ * are IA-DIST-INTEGRITY-MISMATCH.
  */
-function shipped(
-  read: PayloadRead,
-  operation: AvailableOperation,
-  inventory: ReadonlyMap<string, Listed>,
-): InstalledOperation {
+function shipped(operation: AvailableOperation, inventory: ReadonlyMap<string, Listed>): InstalledOperation {
   const unavailable = (reason: string): UnavailableOperation => ({ id: operation.id, status: 'unavailable', reason });
   const module = inventory.get(operation.module);
   if (module === undefined)
@@ -307,59 +256,30 @@ function shipped(
     .map(([path, listed]) => ({ path, sha256: listed.sha256 }));
   if (closureDigest(files) !== operation.closure)
     fail('INTEGRITY-MISMATCH', `The catalog's closure digest for ${operation.id} differs from the payload inventory`);
-  for (const file of files) {
-    const content = read(file.path, FILE_BYTES);
-    if (content === null) return unavailable(`its handler closure file ${file.path} is missing from the payload`);
-    if (sha256(content) !== file.sha256)
-      fail('INTEGRITY-MISMATCH', `Shipped handler bytes differ from the payload inventory: ${file.path}`);
-  }
   return operation;
 }
 
 /**
- * The catalog of the materialized host payload at `directory`, read through the chain its release digest pins:
- * release.json must hash to `release`, inventory.json to the inventory release.json names, and the catalog to the digest
- * the inventory lists, so the bytes returned are the bytes the release pins. Each available operation is then checked
- * against the handler bytes the payload ships (`shipped`). A v1 payload, or a v2 payload whose inventory lists no
- * catalog (one built before the catalog existed), is `unavailable`, not an integrity failure. A missing release.json is
- * IA-DIST-ARTIFACT-UNAVAILABLE; changed bytes are IA-DIST-INTEGRITY-MISMATCH; malformed metadata is IA-DIST-INPUT-INVALID.
- * Nothing is written, imported or executed.
+ * The catalog of the materialized host payload at `directory`. The whole payload is verified first, as `verifyHostCache`
+ * verifies it before a registration may launch it, and must verify as `release`: a file the inventory does not list
+ * (wherever Node's resolution could find it), a link or junction, a missing file or changed bytes refuse, with that
+ * verification's code (release.json hashing to `release`, inventory.json to the digest release.json names, every listed
+ * file to its pin). The catalog is the file that verified inventory lists, read again and compared with its pin. Each
+ * available operation is checked against the verified inventory (`shipped`). A v1 payload, or a v2 payload whose
+ * inventory lists no catalog (one built before the catalog existed), is `unavailable`, not an integrity failure. A
+ * missing payload file or release.json is IA-DIST-ARTIFACT-UNAVAILABLE; unexpected or changed bytes are
+ * IA-DIST-INTEGRITY-MISMATCH; a link is IA-DIST-PATH-UNSAFE; malformed metadata is IA-DIST-INPUT-INVALID. Nothing is
+ * written, imported or executed.
  */
 export function readInstalledImplementations(directory: string, release: string): InstalledCatalog {
   if (!HEX.test(release)) fail('INPUT-INVALID', 'Invalid host release pin');
-  const read = payloadReader(workspace(directory)),
-    releaseText = text(read('release.json'));
-  if (releaseText === null) fail('ARTIFACT-UNAVAILABLE', 'Missing host release');
-  if (sha256(releaseText) !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
-  const pinned = object(decodeDistributionJson(releaseText), ['format', 'inventory', 'launcher']);
-  if (pinned['format'] === 'ia.host-release.v1')
+  // B-R1: never read a catalog from a payload that fails verification; an uninventoried module could be loaded in place
+  // of a shipped one, inside a closure package or outside every one.
+  const verified = verifyHostCache(workspace(directory));
+  if (verified.release !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
+  if (verified.format === 1)
     return { status: 'unavailable', release, reason: 'a v1 host payload carries no installed-implementation catalog' };
-  if (pinned['format'] !== 'ia.host-release.v2') fail('INPUT-INVALID', 'Unknown host release');
-  const inventoryText = text(read('inventory.json', 4 * 1024 * 1024));
-  if (inventoryText === null || sha256(inventoryText) !== pinned['inventory'])
-    fail('INTEGRITY-MISMATCH', 'Host release inventory changed');
-  const inventory = object(decodeDistributionJson(inventoryText), ['format', 'version', 'packages', 'files']);
-  if (
-    inventory['format'] !== 'ia.host-cache.v2' ||
-    typeof inventory['version'] !== 'string' ||
-    inventory['version'].length > 128 ||
-    !Array.isArray(inventory['files']) ||
-    inventory['files'].length > 10000
-  )
-    fail('INPUT-INVALID', 'Invalid host cache inventory');
-  const listed = new Map<string, Listed>();
-  for (const item of inventory['files'] as unknown[]) {
-    const file = object(item, ['path', 'bytes', 'sha256']);
-    if (
-      typeof file['path'] !== 'string' ||
-      !Number.isSafeInteger(file['bytes']) ||
-      typeof file['sha256'] !== 'string' ||
-      !HEX.test(file['sha256'])
-    )
-      fail('INPUT-INVALID', 'Invalid host payload file');
-    listed.set(portable(file['path']), { bytes: file['bytes'] as number, sha256: file['sha256'] });
-  }
-  const catalog = listed.get(INSTALLED_IMPLEMENTATIONS);
+  const catalog = verified.files.get(INSTALLED_IMPLEMENTATIONS);
   if (catalog === undefined)
     return {
       status: 'unavailable',
@@ -367,7 +287,8 @@ export function readInstalledImplementations(directory: string, release: string)
       reason:
         'this host payload carries no installed-implementation catalog; payloads built before the catalog existed carry none',
     };
-  const content = read(INSTALLED_IMPLEMENTATIONS);
+  // Read again through the inventory's pin, so the bytes parsed are the bytes verification hashed.
+  const content = bytes(verified.directory, INSTALLED_IMPLEMENTATIONS);
   if (content === null || content.length !== catalog.bytes || sha256(content) !== catalog.sha256)
     fail('INTEGRITY-MISMATCH', 'Installed-implementation catalog is missing or changed');
   const value = installedImplementationsValue(decodeDistributionJson(utf8(content)));
@@ -376,10 +297,10 @@ export function readInstalledImplementations(directory: string, release: string)
     format: value.format,
     evaluators: value.evaluators,
     operations: value.operations.map((operation) =>
-      operation.status === 'available' ? shipped(read, operation, listed) : operation,
+      operation.status === 'available' ? shipped(operation, verified.files) : operation,
     ),
     release,
-    version: inventory['version'],
+    version: verified.version,
     digest: catalog.sha256,
   };
 }

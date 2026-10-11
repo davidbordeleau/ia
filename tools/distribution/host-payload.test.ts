@@ -152,14 +152,34 @@ it('never reports the read handler available once its shipped bytes are altered 
   expect(() => readInstalledImplementations(dependency, pin.release)).toThrow(
     expect.objectContaining({ code: 'IA-DIST-INTEGRITY-MISMATCH' }),
   );
+  // Missing handler bytes: the payload is incomplete, so nothing in it is read (binders report it as unavailable).
   const missing = extract(archive);
   unlinkSync(resolve(missing, HANDLER));
-  expect(present(missing, pin.release).operations[0]).toMatchObject({
-    id: 'captured-source-read-v1',
-    status: 'unavailable',
-    reason: expect.stringContaining(HANDLER),
-  });
+  expect(() => readInstalledImplementations(missing, pin.release)).toThrow(
+    expect.objectContaining({ code: 'IA-DIST-ARTIFACT-UNAVAILABLE' }),
+  );
   expect(() => verifyHostCache(missing)).toThrow(expect.objectContaining({ code: 'IA-DIST-ARTIFACT-UNAVAILABLE' }));
+  // B-R1: a module the inventory does not list, where Node's resolution would load it instead of the shipped
+  // agent-system: in the handler package's own node_modules, or beside the scope directory, outside every closure
+  // package. Either refuses the catalog, as host verification refuses the payload.
+  for (const planted of [
+    'runtime/node_modules/@inventarch/agent-composition-system/node_modules/@inventarch/agent-system',
+    'runtime/node_modules/@inventarch/node_modules/@inventarch/agent-system',
+  ]) {
+    const root = extract(archive);
+    mkdirSync(resolve(root, planted), { recursive: true });
+    writeFileSync(
+      resolve(root, planted, 'package.json'),
+      JSON.stringify({ name: '@inventarch/agent-system', type: 'module' }),
+    );
+    writeFileSync(resolve(root, planted, 'index.js'), 'export const planted = true;\n');
+    expect(() => verifyHostCache(root), planted).toThrow(
+      expect.objectContaining({ code: 'IA-DIST-INTEGRITY-MISMATCH' }),
+    );
+    expect(() => readInstalledImplementations(root, pin.release), planted).toThrow(
+      expect.objectContaining({ code: 'IA-DIST-INTEGRITY-MISMATCH' }),
+    );
+  }
 });
 it('reads the actual payload without its catalog, as a release before the catalog shipped, as unavailable yet verified', async () => {
   const { archive } = await generateHostPayload({ repository, write: false });

@@ -730,9 +730,10 @@ function operationFacts(catalog: InstalledImplementations): string {
 /**
  * C16 and C24: the installed-implementation catalog of the payload this installation pins, as the IA home holds it.
  * Present is `ok`, or `warn` when it lists an operation unavailable; a payload that carries no catalog (one built
- * before the catalog existed) is an `info` note, and so is one not materialized yet. A catalog or handler bytes that
- * fail their pins are `fail`: the payload is damaged, and its repair deletes the payload directory so the remedy
- * materializes it again. Never throws, and only reads: no handler is imported or run.
+ * before the catalog existed) is an `info` note, and so is one not materialized yet. A payload that fails host
+ * verification (a file its inventory does not list, a missing or changed one, a link), or a catalog whose pins disagree
+ * with it, is `fail`, as its host row is: the payload is damaged, and its repair deletes the payload directory so the
+ * remedy materializes it again. Never throws, and only reads: no handler is imported or run.
  */
 function catalogRow(
   request: DoctorRequest,

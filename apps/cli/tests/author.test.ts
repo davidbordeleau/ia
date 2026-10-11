@@ -6,7 +6,17 @@
  * the state that refused.
  */
 import { createHash } from 'node:crypto';
-import { cpSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { open } from '@inventarch/db';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -333,6 +343,18 @@ describe('ia author refusals, each writing nothing', () => {
       ['author', 'task', 't9', 'meaning.says=x', '--at', 'docs/task.ia', '--digest', EMPTY],
       'IA-CLI-EDIT-UNOWNED',
     );
+    // Another spelling of an existing source is judged as the volume spells it (review C-R1), on a volume that folds case.
+    if (existsSync(resolve(root, '.IA/SRC'))) {
+      const digest = createHash('sha256')
+        .update(readFileSync(resolve(root, '.ia/src/work.ia')))
+        .digest('hex');
+      const alias = await refused(
+        root,
+        ['author', 'milestone', 'm3', 'meaning.says=x', '--at', '.ia/src/WORK.ia', '--digest', digest],
+        'IA-DB-PATH-UNSAFE',
+      );
+      expect(nextArgv(alias['next'] as string)).toContain('.ia/src/work.ia');
+    }
     await refused(
       root,
       ['author', '--relate', '@milestone m1', 'requires', '@plan p1', '--digest', fake],

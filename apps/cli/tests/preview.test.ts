@@ -5,7 +5,7 @@
  * next command runs in the state that caused it.
  */
 import { createHash } from 'node:crypto';
-import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { open } from '@inventarch/db';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -328,6 +328,60 @@ describe('refusals', () => {
       expect(result.exitCode, argv.join(' ')).toBe(2);
       expect(body(result)).toMatchObject({ code: 'IA-CLI-USAGE' });
     }
+  });
+});
+
+describe('path spelling (review C-R1, C-R7)', () => {
+  const FIELDS = ['meaning.says=x', 'work.title=x', 'work.status=open', 'work.milestone=@milestone m1'];
+  /** A directory `.ia/src/restricted/` and a mandate whose covers claims it, excluding @task there. */
+  const fenced = () =>
+    workspace((at) => {
+      mkdirSync(resolve(at, '.ia/src/restricted'));
+      writeFileSync(
+        resolve(at, '.ia/src/fence.ia'),
+        '#! ia 1.0\n\n@mandate fence\n  meaning\n    says "Fixture fence."\n    answers "What may happen under restricted?"\n  governance\n    requires "Claim no host permission or execution from this mandate."\n  authority\n    participant @agent demo\n    covers [".ia/src/restricted/"]\n    excluded-words [task]\n',
+      );
+    });
+  it('judges --at as the volume spells it, so another spelling of a fenced directory refuses', async () => {
+    const root = fenced();
+    // The fence governs the path as spelled on disk.
+    await refused(root, ['task', 't9', ...FIELDS, '--at', '.ia/src/restricted/t9.ia'], 'IA-RUNTIME-MANDATE-WORD');
+    const caseless = existsSync(resolve(root, '.IA/SRC')),
+      short = existsSync(resolve(root, '.ia/src/RESTRI~1'));
+    for (const [spelled, applies] of [
+      ['.ia/src/Restricted/t9.ia', caseless],
+      ['.ia/src/RESTRI~1/t9.ia', short],
+    ] as const) {
+      if (!applies) continue;
+      const alias = body(await preview(root, ['task', 't9', ...FIELDS, '--at', spelled]));
+      expect(alias, spelled).toMatchObject({ ok: false, code: 'IA-DB-PATH-UNSAFE' });
+      expect(alias['message'], spelled).toBe(`${spelled} names .ia/src/restricted/t9.ia in another spelling`);
+      // The next command names the path as the volume spells it, and the fence then refuses it as it should.
+      const next = nextArgv(alias.next!);
+      expect(next).toContain('.ia/src/restricted/t9.ia');
+      expect(body(await run([...next, '--json']))).toMatchObject({ code: 'IA-RUNTIME-MANDATE-WORD' });
+    }
+  });
+  it('names the source as the volume spells it, never the file to move aside, for another spelling of a source', async () => {
+    const root = workspace();
+    const variants = [
+      ...(existsSync(resolve(root, '.IA/SRC')) ? ['.ia/src/Work.ia'] : []),
+      ...(existsSync(resolve(root, '.ia/src/COMPOS~1.IA')) ? ['.ia/src/COMPOS~1.IA'] : []),
+    ];
+    for (const spelled of variants) {
+      const expected = spelled.endsWith('Work.ia') ? '.ia/src/work.ia' : '.ia/src/composition.ia';
+      const alias = await refused(root, ['milestone', 'm3', 'meaning.says=x', '--at', spelled], 'IA-DB-PATH-UNSAFE');
+      expect(alias['message'], spelled).toBe(`${spelled} names ${expected} in another spelling`);
+      expect(alias['next']).not.toContain('aside');
+      expect(nextArgv(alias['next'] as string)).toContain(expected);
+    }
+  });
+  it('names a position that runs when a repository with no @workspace refuses --at', async () => {
+    const root = workspace((at) =>
+      rewrite(at, '.ia/src/workspace.ia', (text) => `#! ia 1.0\n${text.slice(text.indexOf('\n@agent demo'))}`),
+    );
+    const refusal = await refused(root, ['task', 't9', 'meaning.says=x', '--at', 'docs/t9.ia'], 'IA-CLI-EDIT-UNOWNED');
+    expect(nextArgv(refusal['next'] as string)).toEqual(['position', '--root', root]);
   });
 });
 

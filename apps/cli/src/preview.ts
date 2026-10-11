@@ -18,8 +18,8 @@
  * snapshot publishes no cache, and every path is checked link by link and its file read through an opened handle.
  */
 import { createHash } from 'node:crypto';
-import { lstatSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { lstatSync, readdirSync, realpathSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import { fieldTypeText } from '@inventarch/compliance';
 import { linked, pathKey, readWorkspaceBytes } from '@inventarch/db';
 import {
@@ -281,7 +281,8 @@ function unowned(roots: Roots, path: string): string | undefined {
 }
 /** The default file for a new `@<word>` record: `<first authored root inside .ia/src>/<word>.ia`. */
 const defaultFile = (roots: Roots, word: string): string | undefined => {
-  const root = roots.authored.find((candidate) => contains('.ia/src', candidate));
+  // A root of '' is the whole repository, which holds .ia/src (review C-N5).
+  const root = roots.authored.find((candidate) => candidate === '' || contains('.ia/src', candidate));
   return root === undefined ? undefined : `${root === '' ? '.ia/src' : root}/${word}.ia`;
 };
 
@@ -295,7 +296,13 @@ export interface Target {
  * The target file as the snapshot admitted it, confirmed byte for byte through db's opened-handle reader; or, for a path
  * no source holds, nothing there yet and no link on the way to it.
  */
-function targetFile(root: string, snapshot: Snapshot, path: string, again: string): Target {
+function targetFile(
+  root: string,
+  snapshot: Snapshot,
+  path: string,
+  again: string,
+  spelled: (path: string) => string = () => again,
+): Target {
   const source = snapshot.sources.find((candidate) => pathKey(candidate.path) === pathKey(path));
   if (source !== undefined) {
     if (source.path !== path)
@@ -304,7 +311,7 @@ function targetFile(root: string, snapshot: Snapshot, path: string, again: strin
         `${path} names the source ${source.path} in another spelling`,
         3,
         { path },
-        `Run "${again}" naming the source as ${source.path}.`,
+        `Run "${spelled(source.path)}" naming the source as ${source.path}.`,
       );
     let bytes: Uint8Array;
     try {
@@ -345,6 +352,63 @@ function targetFile(root: string, snapshot: Snapshot, path: string, again: strin
       `Move what is at ${path} aside, then run "${again}".`,
     );
   return { path, text: '', exists: false, digest: sha256('') };
+}
+
+/**
+ * Review C-R1: `path` as the volume spells it. Each component that exists is named by its directory entry, matched
+ * exactly; a component another spelling answers (a case variant on a case-insensitive volume, or an 8.3 short name) is
+ * replaced by the entry's own name, found by a case-insensitive match or the volume's real path. Components below the
+ * first one that does not exist are kept as typed. A mandate's covers and the authored roots are spelled as the volume
+ * spells them, so a path is judged only in that spelling.
+ */
+function onDisk(root: string, path: string): string {
+  const parts = path.split('/'),
+    spelled: string[] = [];
+  let directory = root;
+  for (const [index, part] of parts.entries()) {
+    let names: readonly string[];
+    try {
+      names = readdirSync(directory);
+    } catch {
+      return [...spelled, ...parts.slice(index)].join('/');
+    }
+    if (!names.includes(part)) {
+      const candidate = join(directory, part);
+      let present: boolean;
+      try {
+        present = lstatSync(candidate, { throwIfNoEntry: false }) !== undefined;
+      } catch {
+        present = true;
+      }
+      if (!present) return [...spelled, ...parts.slice(index)].join('/');
+      const folded = names.filter((name) => name.toLowerCase() === part.toLowerCase());
+      let real: string | undefined = folded.length === 1 ? folded[0] : undefined;
+      if (real === undefined)
+        try {
+          real = basename(realpathSync.native(candidate));
+        } catch {
+          real = part;
+        }
+      spelled.push(real);
+      directory = join(directory, real);
+      continue;
+    }
+    spelled.push(part);
+    directory = join(directory, part);
+  }
+  return spelled.join('/');
+}
+/** The typed path, refused when the volume spells an existing part of it otherwise (C-R1), naming that spelling (C-R7). */
+function spelledPath(run: Invocation, path: string): string {
+  const canonical = onDisk(run.root, path);
+  if (canonical === path) return path;
+  throw new Refusal(
+    'IA-DB-PATH-UNSAFE',
+    `${path} names ${canonical} in another spelling`,
+    3,
+    { path },
+    `Run "${previewAgain(run, { options: { at: [canonical] } })}" naming the path as the volume spells it.`,
+  );
 }
 
 /** The source lines `node` spans in `text`. */
@@ -560,7 +624,8 @@ function previewRecord(
 ): Candidate {
   const { word, name } = request;
   if (word === 'system') return previewSystem(run, name, mode);
-  const path = request.at ?? defaultFile(run.roots, word);
+  const typed = request.at ?? defaultFile(run.roots, word),
+    path = typed === undefined || !portable(typed) ? typed : spelledPath(run, typed);
   const profile = requireProfile({
     reader: run.snapshot,
     within: run.within,
@@ -613,7 +678,7 @@ function previewRecord(
  * `system` and `agent`, both judged for exclusion.
  */
 function previewSystem(run: Invocation, name: string, mode: EditMode): Candidate {
-  const path = systemPath(name);
+  const path = spelledPath(run, systemPath(name));
   const profile = requireProfile({
     reader: run.snapshot,
     within: run.within,
@@ -821,11 +886,15 @@ function ownedTarget(run: Invocation, word: string, path: string | undefined): T
   const elsewhere =
     fallback !== undefined && fallback !== path
       ? `Run "${previewAgain(run, { options: { at: [] } })}" to preview the default file ${fallback} instead.`
-      : `Run "ia position --seat ${run.roots.workspace ?? ''}${run.rooted}" for the roots the workspace declares.`;
+      : run.roots.workspace === undefined
+        ? `Run "ia position${run.rooted}" for the repository's position; it authors no @workspace to declare roots.`
+        : `Run "ia position --seat ${run.roots.workspace}${run.rooted}" for the roots the workspace declares.`;
   if (!portable(path)) throw new Refusal('IA-DB-PATH-UNSAFE', `Unsafe workspace path: ${path}`, 3, { path }, elsewhere);
   const reason = unowned(run.roots, path);
   if (reason !== undefined) throw new Refusal('IA-CLI-EDIT-UNOWNED', reason, 1, { path }, elsewhere);
-  return targetFile(run.root, run.snapshot, path, previewAgain(run));
+  return targetFile(run.root, run.snapshot, path, previewAgain(run), (spelled) =>
+    previewAgain(run, { options: { at: [spelled] } }),
+  );
 }
 
 /** A placeholder for one field's value in the guidance's example command. */
@@ -841,7 +910,8 @@ const placeholder = (field: SchemaField): string => {
 };
 function previewWord(run: Invocation, request: Extract<PreviewRequest, { mode: 'word' }>): WordView {
   const word = request.word,
-    path = request.at ?? defaultFile(run.roots, word);
+    typed = request.at ?? defaultFile(run.roots, word),
+    path = typed === undefined || !portable(typed) ? typed : spelledPath(run, typed);
   const profile = requireProfile({
     reader: run.snapshot,
     within: run.within,

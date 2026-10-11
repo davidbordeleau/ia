@@ -17,8 +17,9 @@ export type { DraftField, DraftSchema, SourceEditReason } from './values.js';
 
 /**
  * Minimal source serialization for a schema-backed form; admission remains a separate operation. Each value is spelled
- * as 2.0.0 spelled it (`draftValue`: text quoted, other types as given), and a value that would add a condition or a
- * comment is refused with SourceEditError, as a line break always was. The strict typed spelling is `encodeValue`.
+ * as 2.0.0 spelled it (`draftValue`: text quoted, other types as given). A line break throws a plain Error, as it did in
+ * 2.0.0; a value that would add a `when` condition or a comment, or that opens a string, prose or list it does not close,
+ * throws SourceEditError. The strict typed spelling is `encodeValue`.
  */
 export function draftSource(
   discriminator: string,

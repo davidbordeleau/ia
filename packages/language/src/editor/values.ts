@@ -142,17 +142,27 @@ export function encodeValue(field: DraftField, text: string, item = false): stri
   }
   return scalar(field, value);
 }
+/** The scanner's findings for a string, prose or list a value opens and does not close. */
+const OPEN: readonly string[] = [
+  'IA-LANG-STRING-UNTERMINATED',
+  'IA-LANG-PROSE-UNTERMINATED',
+  'IA-LANG-LIST-UNTERMINATED',
+];
 /**
  * A form value as 2.0.0's `draftSource` spelled it: text quoted, every other type written as given, so a value the
  * strict encoder refuses but the parser admits is still written and left to admission. Only what would add structure is
- * refused: a line break the scanner splits on (CR or LF), a `when` condition, or a comment. A value cannot add a field,
- * section or record without a line break.
+ * refused, with SourceEditError: a line break the scanner splits on (CR or LF), a `when` condition, a comment, or a
+ * string, prose or list it opens and does not close, which would join the rows after it into this one. Short of those, a
+ * value cannot add a field, section or record.
  */
 export function draftValue(field: DraftField, text: string): string {
   if (typeof text !== 'string' || /[\r\n]/.test(text))
     refuse('value', 'Form fields must be single-line; use the source draft for multiline prose or structure');
   if (field.type === 'text') return quotedText(text);
   const parsed = parse(PROBE(text), 'value.ia');
+  // Review C-RC2: an opener left open would join the rows after it (another value's closer, a comment) into this one.
+  if (parsed.diagnostics.some((diagnostic) => OPEN.includes(diagnostic.code)))
+    refuse('value', `${path(field)} would open a string, prose or list it does not close: ${JSON.stringify(text)}`);
   if (parsed.ast.records[0]?.head.some((row) => row.when !== undefined))
     refuse('value', `${path(field)} would gain a condition: ${JSON.stringify(text)}`);
   if (parsed.ast.trivia.some((trivia) => trivia.kind === 'comment'))

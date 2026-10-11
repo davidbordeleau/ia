@@ -156,5 +156,21 @@ describe('draftSource keeps 2.0.0 spelling', () => {
     expect(() => draftSource('task', 'bad', schema, { 'meaning/says': 'x', 'work/status': 'open\rclosed' })).toThrow(
       'single-line',
     );
+    // A line break throws a plain Error, as 2.0.0 did; only structure from a condition or comment is SourceEditError.
+    expect(() => draftSource('task', 'bad', schema, { 'meaning/says': 'first\nsecond' })).not.toThrow(SourceEditError);
+  });
+  it('refuses a value that opens a string, prose or list it does not close (review C-RC2)', () => {
+    // Across two values, an opener and a closer would swallow the rows between them and add a comment.
+    expect(() =>
+      draftSource('task', 'bad', schema, {
+        'meaning/says': 'x',
+        'work/status': '"""',
+        'work/peers': '""" # injected',
+      }),
+    ).toThrow(SourceEditError);
+    for (const value of ['"""', '"open', '[@task a', '[@task a, "b'])
+      expect(() => draftSource('task', 'bad', schema, { 'meaning/says': 'x', 'work/peers': value }), value).toThrow(
+        SourceEditError,
+      );
   });
 });

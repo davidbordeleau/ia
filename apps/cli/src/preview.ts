@@ -608,7 +608,7 @@ function compiled(
       ? JSON.stringify([
           finding.code,
           finding.identity ?? null,
-          finding.identity === undefined ? finding.message.replace(/^[^:]*:d+: /, '') : null,
+          finding.identity === undefined ? finding.message.replace(/^[^:]*:\d+: /, '') : null,
         ])
       : findingKey(finding);
   const base = new Map<string, number>();

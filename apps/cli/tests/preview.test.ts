@@ -289,6 +289,27 @@ describe('what counts against a candidate (review C-R4)', () => {
       );
     }
   });
+  it('matches an identity-less error the edit moves down the file against the base (review C2-R5)', async () => {
+    // A graph finding with no identity (an unknown severity) below the edited record: the edit shifts its line.
+    const root = workspace((at) =>
+      rewrite(
+        at,
+        '.ia/src/work.ia',
+        (text) =>
+          `${text}\n@principle pr1\n  meaning\n    says "A principle."\n    answers "Which?"\n  governance\n    severity bogus\n`,
+      ),
+    );
+    const db = open(root, { cache: false });
+    expect(db.report.findings.some((finding) => finding.severity === 'error' && finding.identity === undefined)).toBe(
+      true,
+    );
+    db.close();
+    for (const argv of [
+      ['--set', '@milestone m1', 'work.owner=Tom'],
+      ['--relate', '@milestone m2', 'requires', '@milestone m1'],
+    ])
+      expect(body(await preview(root, argv)), argv.join(' ')).toMatchObject({ clean: true, counts: { errors: 0 } });
+  });
 });
 
 describe('refusals', () => {

@@ -907,3 +907,65 @@ it('reports a changed and a foreign hook group, an unregistered hook and a recei
   expect([...hookGroups(unregistered.root).keys()]).toEqual([HOOK]);
   expect((await doctor(unregistered.root, unregistered.env)).checks).toContainEqual(noDrift());
 });
+
+it('converges after a generated-set rename apply interrupted at any of its checkpoints (H-N1)', async () => {
+  /** A workspace whose fixture records were applied and then renamed, and the payload its groups run from. */
+  const renamedWorkspace = async () => {
+    const { root, env } = await composed();
+    const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release;
+    edit(root, '.ia/src/hooks.ia', ['note-edits', 'doc-edits'], ['@agent-profile reviewer', '@agent-profile auditor']);
+    edit(
+      root,
+      '.ia/src/composition.ia',
+      ['@agent-profile reviewer', '@agent-profile auditor'],
+      ['note-review', 'doc-review'],
+    );
+    edit(root, '.ia/src/playbook.ia', ['@playbook note-review', '@playbook doc-review']);
+    return { root, env, cache: { verified: resolve(env.IA_HOST_HOME, 'hosts', release) } };
+  };
+  // Every checkpoint one uninterrupted apply passes, in order.
+  const probe = await renamedWorkspace(),
+    stages: string[] = [];
+  applyHostProjection(
+    probe.root,
+    'claude',
+    renderProjectionFor(probe.root, 'claude'),
+    (stage) => stages.push(stage),
+    undefined,
+    probe.cache,
+  );
+  expect(stages).toEqual(expect.arrayContaining(['evidence', 'guard', 'hooks', 'pending', 'complete', 'receipt']));
+  for (const stage of stages) {
+    const { root, env, cache } = await renamedWorkspace();
+    expect(
+      () =>
+        applyHostProjection(
+          root,
+          'claude',
+          renderProjectionFor(root, 'claude'),
+          (at) => {
+            if (at === stage) throw new Error(`cut at ${stage}`);
+          },
+          undefined,
+          cache,
+        ),
+      stage,
+    ).toThrow(`cut at ${stage}`);
+    // The rerun converges: the renamed agent, skill and group in place, the obsolete ones gone and listed, no drift.
+    await apply(root, env);
+    for (const path of [AGENT, SKILL]) expect(existsSync(resolve(root, path)), `${stage} ${path}`).toBe(false);
+    for (const path of ['.claude/agents/auditor.md', '.claude/skills/doc-review/SKILL.md'])
+      expect(read(root, path).split('\n'), `${stage} ${path}`).toContain(PACKET_MARKER);
+    expect([...hookGroups(root).keys()], stage).toEqual([RENAMED]);
+    const written = receipt(root);
+    // A cut after the receipt was written leaves a completed apply: the rerun is a second apply, which removed nothing.
+    if (stage === 'receipt') expect([written.removedHooks, written.removed], stage).toEqual([[], []]);
+    else {
+      expect(written.removedHooks, stage).toEqual([
+        { identity: HOOK, sha256: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      ]);
+      expect(written.removed.map((file) => file.path).sort(), stage).toEqual([AGENT, SKILL].sort());
+    }
+    expect((await doctor(root, env)).checks, stage).toContainEqual(noDrift());
+  }
+});

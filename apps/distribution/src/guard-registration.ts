@@ -353,12 +353,19 @@ export const hookStatePath = (id: string): string => `${area}/claude-hooks-${ide
 export interface HookRow {
   readonly identity: string;
   readonly tools: readonly HookTool[];
+  /**
+   * The hook's path selections as registered. The guard decides from the record; it reads these only when the record can
+   * no longer be read, to refuse no more than the last registered selection (guard review finding G-N4).
+   */
+  readonly paths: readonly string[];
 }
 /** Register exactly `hooks` against a verified cache (an empty list removes every owned group), or remove them all. */
 export type HookRequest = { readonly cache: string; readonly hooks: readonly HookRow[] } | { readonly remove: string };
 export interface OwnedHook {
   readonly hook: string;
   readonly group: Group;
+  /** The selection registered with the group (`HookRow.paths`). */
+  readonly paths: readonly string[];
 }
 export interface HookState {
   readonly format: 'ia.hook-registration-state.v1';
@@ -407,14 +414,45 @@ function hookTools(value: unknown): HookTool[] {
     fail('INPUT-INVALID', 'Hook tools must name Write, Edit or MultiEdit, each at most once');
   return HOOK_TOOLS.filter((tool) => value.includes(tool));
 }
+// Built from a string: the class names the control characters themselves.
+const CONTROL = new RegExp(
+  '[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]',
+);
+/** A registered selection: one to 64 workspace-relative `/` selections, none empty, escaping or holding a control. */
+function hookPaths(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > MAX_HOOKS ||
+    value.some(
+      (path) =>
+        typeof path !== 'string' ||
+        path.length === 0 ||
+        path.length > 512 ||
+        path.includes('\\') ||
+        path.startsWith('/') ||
+        /^[A-Za-z]:/.test(path) ||
+        CONTROL.test(path) ||
+        path
+          .split('/')
+          .some((segment, at, all) => (segment === '' && at < all.length - 1) || segment === '.' || segment === '..'),
+    )
+  )
+    fail('INPUT-INVALID', 'Hook paths must be workspace-relative selections written with /');
+  return [...value];
+}
 /** A request's rows in identity order with tools in matcher order; a repeated identity is refused. */
 function hookRows(value: unknown): HookRow[] {
   if (!Array.isArray(value) || value.length > MAX_HOOKS)
     fail('INPUT-INVALID', `Expected a list of at most ${MAX_HOOKS} hook rows`);
   const rows = value
     .map((item): HookRow => {
-      const row = object(item, ['identity', 'tools']);
-      return { identity: hookIdentity(row['identity']), tools: hookTools(row['tools']) };
+      const row = object(item, ['identity', 'tools', 'paths']);
+      return {
+        identity: hookIdentity(row['identity']),
+        tools: hookTools(row['tools']),
+        paths: hookPaths(row['paths']),
+      };
     })
     .sort((a, b) => order(a.identity, b.identity));
   if (new Set(rows.map((row) => row.identity)).size !== rows.length)
@@ -467,8 +505,9 @@ export function savedHooks(content: string | null, root: string, id: string, rem
   const launcher = join(row['cache'], 'scripts/ia.mjs');
   let previous = '';
   for (const item of row['groups'] as unknown[]) {
-    const owned = object(item, ['hook', 'group']),
+    const owned = object(item, ['hook', 'group', 'paths']),
       hook = hookIdentity(owned['hook']);
+    hookPaths(owned['paths']);
     if (hook <= previous) fail('INPUT-INVALID', 'Hook ownership rows must be unique and in identity order');
     previous = hook;
     const group = object(owned['group'], ['matcher', 'hooks']);
@@ -543,15 +582,28 @@ function planHooksWith(
     fail('HOST-UNSUPPORTED', 'Project hooks are explicitly disabled by disableAllHooks');
   const rows: unknown[] = hooks['PreToolUse'] === undefined ? [] : (hooks['PreToolUse'] as unknown[]);
   if (!Array.isArray(rows) || rows.length > 256) fail('INPUT-INVALID', 'Expected a bounded PreToolUse hook array');
-  const wanted = new Map(desired.map((row) => [row.identity, hookGroup(cache!.launcher, root, row)]));
+  const wanted = new Map(desired.map((row) => [row.identity, hookGroup(cache!.launcher, root, row)])),
+    selections = new Map(desired.map((row) => [row.identity, row.paths]));
   // Each owned group is found by exact match, exactly once. One the user already deleted, so that no group names its
   // hook any more, has only its ownership dropped, and only when the hook is no longer wanted, as the guard's removal
   // does; a changed or duplicated group refuses.
-  const owned = (prior?.groups ?? []).map(({ hook, group }) => {
+  const owned = (prior?.groups ?? []).map(({ hook, group, paths }) => {
     const at = rows.flatMap((row, index) => (json(row) === json(group) ? [index] : []));
-    const gone = at.length === 0 && !wanted.has(hook) && !rows.some((row) => guardInvocation(row) === hook);
-    if (!gone && at.length !== 1) fail('LOCAL-MODIFICATION', `Owned hook group for ${hook} changed or was duplicated`);
-    return { hook, group, at: at[0] ?? null };
+    const named = rows.some((row) => guardInvocation(row) === hook),
+      gone = at.length === 0 && !named;
+    // Guard review finding G-N2: each refusal names the way out. A group deleted by hand is restored only through the
+    // removal, which drops its ownership, and a new registration.
+    if (gone && wanted.has(hook))
+      fail(
+        'LOCAL-MODIFICATION',
+        `Owned hook group for ${hook} was deleted by hand; remove the registration ("ia host claude --remove --apply") and register it again`,
+      );
+    if (!gone && at.length !== 1)
+      fail(
+        'LOCAL-MODIFICATION',
+        `Owned hook group for ${hook} changed or was duplicated; delete only that group from ${configPath}, then remove the registration ("ia host claude --remove --apply") and register it again`,
+      );
+    return { hook, group, paths, at: at[0] ?? null };
   });
   const claimed = new Set(owned.flatMap(({ at }) => (at === null ? [] : [at])));
   for (const [hook, group] of wanted)
@@ -582,7 +634,7 @@ function planHooksWith(
             cache: cache!.directory,
             release: cache!.release,
             created,
-            groups: [...wanted].map(([hook, group]) => ({ hook, group })),
+            groups: [...wanted].map(([hook, group]) => ({ hook, group, paths: selections.get(hook)! })),
             ...(existing.length ? { existing } : {}),
           }),
   };
@@ -593,7 +645,12 @@ function planHooksWith(
       const prior = owned.find((row) => row.hook === hook);
       return {
         hook,
-        action: prior === undefined ? 'create' : json(prior.group) === json(group) ? 'unchanged' : 'update',
+        action:
+          prior === undefined
+            ? 'create'
+            : json(prior.group) === json(group) && json(prior.paths) === json(selections.get(hook))
+              ? 'unchanged'
+              : 'update',
       };
     }),
     ...owned.filter(({ hook }) => !wanted.has(hook)).map(({ hook }): HookAction => ({ hook, action: 'remove' })),

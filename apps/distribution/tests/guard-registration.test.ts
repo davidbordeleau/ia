@@ -498,7 +498,11 @@ function fixtureRows(hooks?: string): HookRow[] {
   const db = open(root, { cache: false });
   try {
     expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
-    return generateHooks(db, db.resolveScope().token, 'claude').map(({ identity, tools }) => ({ identity, tools }));
+    return generateHooks(db, db.resolveScope().token, 'claude').map(({ identity, tools, paths }) => ({
+      identity,
+      tools,
+      paths,
+    }));
   } finally {
     db.close();
   }
@@ -530,7 +534,9 @@ it("renders the fixture's @hook as one owned group, keeps every unrelated key an
   const root = temp(),
     cache = cacheV2(),
     rows = fixtureRows();
-  expect(rows).toEqual([{ identity: HOOK, tools: ['Write', 'Edit', 'MultiEdit'] }]);
+  expect(rows).toEqual([
+    { identity: HOOK, tools: ['Write', 'Edit', 'MultiEdit'], paths: ['docs/**', 'restricted/**'] },
+  ]);
   const original = pretty(
     {
       permissions: { allow: ['Bash(ls)'] },
@@ -562,7 +568,7 @@ it("renders the fixture's @hook as one owned group, keeps every unrelated key an
     cache,
     release: sha256(readFileSync(resolve(cache, 'release.json'), 'utf8')),
     created: false,
-    groups: [{ hook: HOOK, group: applied.hooks.PreToolUse[1] }],
+    groups: [{ hook: HOOK, group: applied.hooks.PreToolUse[1], paths: ['docs/**', 'restricted/**'] }],
     existing: [['hooks'], ['hooks', 'PreToolUse']],
   });
   // Re-planning changes nothing, and applying it writes nothing.
@@ -605,7 +611,13 @@ it('writes nothing authored but the identity into a group, whatever the paths an
   ).replace('"Use the participant\'s documentation mandate."', '"Use $(rm -rf ~) and `id` now."');
   expect(odd).toContain('$(rm -rf ~)');
   const rows = fixtureRows(odd);
-  expect(rows).toEqual([{ identity: HOOK, tools: ['Write', 'Edit', 'MultiEdit'] }]);
+  expect(rows).toEqual([
+    {
+      identity: HOOK,
+      tools: ['Write', 'Edit', 'MultiEdit'],
+      paths: ['docs/**', '$(touch pwned)/**', '`id`/**', '!x/**', '[ab]/**', "a'b/**"],
+    },
+  ]);
   applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }));
   const text = readFileSync(resolve(root, settings), 'utf8');
   for (const authored of ['$(', '`', '!x', '[ab]', "a'b", 'rm -rf', 'docs/**']) expect(text).not.toContain(authored);
@@ -613,9 +625,9 @@ it('writes nothing authored but the identity into a group, whatever the paths an
     { matcher: 'Write|Edit|MultiEdit', hooks: [handler(cache, root, HOOK)] },
   ]);
   // The matcher is fixed, whatever tools the hook names, and never authored text.
-  expect(hookGroup('/c/scripts/ia.mjs', '/w', { identity: HOOK, tools: ['MultiEdit'] }, 'win32').matcher).toBe(
-    'Write|Edit|MultiEdit',
-  );
+  expect(
+    hookGroup('/c/scripts/ia.mjs', '/w', { identity: HOOK, tools: ['MultiEdit'], paths: ['docs/**'] }, 'win32').matcher,
+  ).toBe('Write|Edit|MultiEdit');
 });
 
 it('refuses an owned group changed by hand, an unmanaged identical group, disabled hooks and malformed rows', () => {
@@ -629,7 +641,12 @@ it('refuses an owned group changed by hand, an unmanaged identical group, disabl
     [{ identity: HOOK, tools: [] }],
     [{ identity: HOOK, tools: ['Write', 'Write'] }],
     [...rows, ...rows],
-    [{ identity: HOOK, tools: ['Write'], paths: ['docs/**'] }],
+    [{ identity: HOOK, tools: ['Write'], paths: ['docs/**'], message: 'extra' }],
+    [{ identity: HOOK, tools: ['Write'], paths: [] }],
+    [{ identity: HOOK, tools: ['Write'], paths: ['/etc/**'] }],
+    [{ identity: HOOK, tools: ['Write'], paths: ['docs/../x'] }],
+    [{ identity: HOOK, tools: ['Write'], paths: ['docs\\x'] }],
+    [{ identity: HOOK, tools: ['Write'], paths: ['docs/\u0085x'] }],
   ])
     expect(() => planHookRegistration(root, { cache, hooks } as never), JSON.stringify(hooks)).toThrow(
       expect.objectContaining({ code: 'IA-DIST-INPUT-INVALID' }),
@@ -648,10 +665,12 @@ it('refuses an owned group changed by hand, an unmanaged identical group, disabl
   put(root, settings, json(edited));
   for (const request of [{ cache, hooks: rows }, { cache, hooks: [] }, { remove: 'workspace' }])
     expect(() => planHookRegistration(root, request), JSON.stringify(request)).toThrow(/changed or was duplicated/);
-  // A group deleted by hand: re-registering it refuses, as the retired guard's did; dropping the hook drops ownership.
+  // A group deleted by hand: re-registering it refuses, naming the removal (G-N2); dropping the hook drops ownership.
   edited.hooks.PreToolUse = [];
   put(root, settings, json(edited));
-  expect(() => planHookRegistration(root, { cache, hooks: rows })).toThrow(/changed or was duplicated/);
+  expect(() => planHookRegistration(root, { cache, hooks: rows })).toThrow(
+    /was deleted by hand; remove the registration \("ia host claude --remove --apply"\)/,
+  );
   const dropped = planHookRegistration(root, { cache, hooks: [] });
   expect(dropped.hooks).toEqual([{ hook: HOOK, action: 'remove' }]);
   expect(dropped.after).toEqual({ config: bytesOf(root, settings), state: null });
@@ -741,6 +760,7 @@ it("observes each owned hook group's drift read-only: missing, modified, duplica
   const foreign = hookGroup(join(cache, 'scripts/ia.mjs'), root, {
     identity: 'hook-authoring-system/binding/hook/stranger',
     tools: ['Write'],
+    paths: ['docs/**'],
   });
   const variants: readonly [unknown[], { hook: string; drift: string }[]][] = [
     [[], [{ hook: HOOK, drift: 'missing' }]],

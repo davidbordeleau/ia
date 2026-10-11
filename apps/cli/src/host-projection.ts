@@ -188,7 +188,7 @@ export const HOOKS_NEED_HOST =
  */
 export function planHooks(root: string, host: HostName, rendered: HostOutput | null, cache: HookCache): HookStep {
   if (host !== 'claude') return { plan: null, unregistered: [] };
-  const rows = (rendered?.hooks ?? []).map(({ identity, tools }) => ({ identity, tools }));
+  const rows = (rendered?.hooks ?? []).map(({ identity, tools, paths }) => ({ identity, tools, paths }));
   const prior = readHookRegistration(root);
   if (rows.length === 0)
     return {

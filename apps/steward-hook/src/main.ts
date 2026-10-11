@@ -270,6 +270,35 @@ function projectionOwnership(root: string): Ownership | undefined {
   }
   return { files, codex };
 }
+/**
+ * The selection a hook ownership state (`claude-hooks-<id>.json`) recorded for `hook` when its group was registered, or
+ * undefined when none records one. The state is read as the other ownership states are: a plain, unaliased, single-link,
+ * bounded file of the expected format, else this throws and the caller refuses.
+ */
+function registeredSelection(root: string, hook: string): readonly string[] | undefined {
+  const directory = hostsArea(root);
+  if (directory === undefined) return undefined;
+  for (const name of readdirSync(directory).sort()) {
+    if (!/^claude-hooks-[a-z][a-z0-9-]{0,63}\.json$/.test(name)) continue;
+    const path = resolve(directory, name),
+      stat = lstatSync(path);
+    if (!stat.isFile() || stat.nlink !== 1 || stat.size > 1024 * 1024 || !unaliased(path, physical(path)))
+      throw new Error('Unsafe hook ownership state');
+    const row: unknown = decodeDistributionJson(new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path)));
+    if (!object(row) || row['format'] !== 'ia.hook-registration-state.v1' || !Array.isArray(row['groups']))
+      throw new Error('Invalid hook ownership state');
+    for (const group of row['groups'] as unknown[])
+      if (
+        object(group) &&
+        group['hook'] === hook &&
+        Array.isArray(group['paths']) &&
+        group['paths'].length > 0 &&
+        group['paths'].every((path) => typeof path === 'string')
+      )
+        return group['paths'] as string[];
+  }
+  return undefined;
+}
 /** A bounded ownership-marker check, not registration validation or a grant of host authority. */
 interface GuardControls {
   readonly settings: boolean;
@@ -773,19 +802,37 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
       nodes = db
         .records({ within })
         .filter((node) => node.discriminator === 'hook' && node.band === 100 && node.identity === hook);
-    if (nodes.length !== 1)
+    // A registration whose hook record cannot be read refuses no more than the selection it was registered with, which
+    // the hook ownership state recorded (guard review finding G-N4): edits elsewhere, the repair of the record among
+    // them unless that selection holds it, proceed. With no recorded selection, every edit under the root is refused.
+    const unavailable = (why: string): HookOutput => {
+      let selection: readonly string[] | undefined;
+      try {
+        selection = registeredSelection(edit.base, hook);
+      } catch {
+        selection = undefined;
+      }
+      if (
+        selection !== undefined &&
+        !mandateGuardSelects({
+          hook: { identity: hook, tools: ['Write', 'Edit', 'MultiEdit'], paths: selection, message: '' },
+          tool: event.tool_name,
+          paths,
+          fold,
+        })
+      )
+        return {};
       return deny(
         'IA-HOOK-DECLARATION-UNAVAILABLE',
-        `${hook} is not an admitted authored @hook; ${reregister(edit.base)}`,
+        `${why}; ${selection === undefined ? 'no registered selection is recorded, so every edit under the root is refused' : 'this edit is under its last registered selection'}; ${reregister(edit.base)}`,
       );
+    };
+    if (nodes.length !== 1) return unavailable(`${hook} is not an admitted authored @hook`);
     let declaration: ReturnType<typeof hookDeclaration>;
     try {
       declaration = hookDeclaration(nodes[0]!);
     } catch (error) {
-      return deny(
-        'IA-HOOK-DECLARATION-UNAVAILABLE',
-        `${error instanceof Error ? error.message : String(error)}; ${reregister(edit.base)}`,
-      );
+      return unavailable(error instanceof Error ? error.message : String(error));
     }
     const request = {
       hook: declaration,

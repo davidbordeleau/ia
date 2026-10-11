@@ -411,3 +411,51 @@ it('refuses a win32 path that names an alternate data stream, in both modes, bef
     expect(code(evaluateHook(root, event(root, path))), path).toBe('IA-HOOK-PATH-UNSAFE');
   }
 });
+
+it('refuses no more than the last registered selection of a hook whose record is gone, naming commands that restore editing (G-N4, G-R7)', () => {
+  // The record of the hook the registration names is renamed: the declaration cannot be read.
+  const root = workspace({
+    '.ia/src/hooks.ia': hooks(
+      ['@hook note-edits', '@hook other-edits'],
+      ['target @hook note-edits', 'target @hook other-edits'],
+    ),
+  });
+  const commands = [
+    `ia host claude --root ${JSON.stringify(root)} --apply --yes`,
+    `ia host claude --root ${JSON.stringify(root)} --remove --apply --yes`,
+  ];
+  // No ownership state records a selection: every edit under the root is refused, each naming both commands.
+  for (const path of ['docs/guide.md', 'src/app.ts', '.ia/src/hooks.ia']) {
+    const refused = check(root, path, {}, 'Edit');
+    expect(code(refused), path).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+    expect(reason(refused), path).toContain('every edit under the root is refused');
+    for (const command of commands) expect(reason(refused), path).toContain(command);
+  }
+  // An edit outside the root is no edit this guard decides.
+  expect(evaluateMandateHook(root, HOOK, event(root, resolve(root, '..', 'elsewhere.md')))).toEqual({});
+  // The registration recorded the hook's selection: only an edit under it is refused, so the record can be repaired.
+  put(
+    root,
+    '.ia/distributions/hosts/claude-hooks-workspace.json',
+    JSON.stringify({
+      format: 'ia.hook-registration-state.v1',
+      id: 'workspace',
+      cache: resolve(root, '..', 'cache'),
+      release: 'a'.repeat(64),
+      created: true,
+      groups: [
+        { hook: HOOK, group: { matcher: 'Write|Edit|MultiEdit', hooks: [] }, paths: ['docs/**', 'restricted/**'] },
+      ],
+    }),
+  );
+  for (const path of ['src/app.ts', '.ia/src/hooks.ia']) expect(check(root, path, {}, 'Edit'), path).toEqual({});
+  for (const extra of [{}, reviewer]) {
+    const refused = check(root, 'docs/guide.md', extra);
+    expect(code(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+    expect(reason(refused)).toContain('this edit is under its last registered selection');
+    for (const command of commands) expect(reason(refused)).toContain(command);
+  }
+  // An unreadable state is no selection: refused under the root again.
+  put(root, '.ia/distributions/hosts/claude-hooks-workspace.json', '{ not json');
+  expect(code(check(root, 'src/app.ts'))).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+});

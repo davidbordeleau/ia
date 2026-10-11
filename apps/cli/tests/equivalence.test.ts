@@ -408,9 +408,7 @@ it('reports one Bindings section through ia validate --json and ia-distribution 
     expect(await both(0, 'in-workspace payload')).toEqual({
       catalog: {
         status: 'unavailable',
-        reason: expect.stringContaining(
-          "host claude's registration names a payload other than",
-        ),
+        reason: expect.stringContaining("host claude's registration names a payload other than"),
       },
       status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'unavailable' },
     });

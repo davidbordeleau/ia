@@ -7,6 +7,7 @@ import { assertCatalog } from './catalog.js';
 import type { EvaluatorCatalog } from './catalog.js';
 import {
   validateCheck,
+  validateCheckStructure,
   validateConsent,
   validateCoverage,
   validateFragments,
@@ -30,6 +31,12 @@ export interface ReportOptions {
   readonly coordinate?: Coordinate;
   /** Trusted evaluator catalog (C26). Absent: built-in-only COMP-CHECK, unchanged. */
   readonly catalog?: EvaluatorCatalog;
+  /**
+   * Which COMP-CHECK a check record gets (plan amendments C15 and C21): `strict`, the default, is validateCheck with
+   * `catalog`; `structural` is validateCheckStructure, for the admitted graph of a structural admission, whose checks
+   * are bound separately.
+   */
+  readonly checks?: 'strict' | 'structural';
 }
 export interface Report {
   readonly revision: string;
@@ -74,7 +81,10 @@ export function evaluate(graph: Graph, options: ReportOptions = {}): Report {
   for (const node of nodes) {
     assessments.push(validateGraphSchema(node, graph), validateSelectors(node), validateVariants(node));
     if (node.discriminator === 'contract') assessments.push(validateCoverage(node, graph));
-    if (node.discriminator === 'check') assessments.push(validateCheck(node, options.catalog));
+    if (node.discriminator === 'check')
+      assessments.push(
+        options.checks === 'structural' ? validateCheckStructure(node) : validateCheck(node, options.catalog),
+      );
   }
   for (const diagnostic of graph.diagnostics)
     if (diagnostic.code === 'IA-GRAPH-DIMENSION-UNKNOWN')

@@ -8,6 +8,7 @@
 import { EditorDatabase } from '@inventarch/db/editor';
 import type { EditorSnapshot } from '@inventarch/db/editor';
 import { openWorkspaceSession } from '@inventarch/distribution/services';
+import type { SessionOptions } from '@inventarch/distribution/services';
 import { Refusal, serviceNext } from './consumer.js';
 import { nearestTokens } from './commands.js';
 import { recoverCommand } from './host.js';
@@ -56,9 +57,11 @@ function openNext(error: unknown, root: string): string {
   return serviceNext(code, { command: null, root });
 }
 
-export function openSession(root: string): Session {
+/** How `ia validate` opens its session: checks admitted structurally (C21); no evidence is read (review finding B3-R4). */
+export const VALIDATING = { checks: 'structural' } as const;
+export function openSession(root: string, options: Omit<SessionOptions, 'root'> = {}): Session {
   try {
-    return openWorkspaceSession({ root });
+    return openWorkspaceSession({ root, ...options });
   } catch (error) {
     throw openRefusal(error, root);
   }

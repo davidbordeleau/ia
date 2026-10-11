@@ -43,6 +43,10 @@ interface Cache {
   host: Host | null;
   launcher: string;
   format: 1 | 2;
+  /** The verified inventory's `version`. */
+  version: string;
+  /** Every file the verified inventory lists, by path, each present with exactly these bytes and nothing else beside them. */
+  files: ReadonlyMap<string, { readonly bytes: number; readonly sha256: string }>;
 }
 /** What the pure planners need of a cache: a verified one, or the v2 payload a caller is about to materialize. */
 export type HostCacheTarget = Pick<Cache, 'directory' | 'release' | 'name' | 'host' | 'launcher'>;
@@ -270,6 +274,9 @@ export function verifyHostCache(input: string): Cache {
     folded.add(path.toLowerCase());
     expected.set(path, { bytes: file['bytes'] as number, hash: hash(file['sha256']) });
   }
+  const listed: ReadonlyMap<string, { readonly bytes: number; readonly sha256: string }> = new Map(
+    [...expected].map(([path, file]) => [path, { bytes: file.bytes, sha256: file.hash }]),
+  );
   let entries = 0;
   /**
    * One lstat per entry, not a walk to the volume root per file (LKI-33). `workspace` refused a link at `directory` and at
@@ -314,6 +321,8 @@ export function verifyHostCache(input: string): Cache {
     name,
     launcher: join(directory, 'scripts/ia.mjs'),
     format: v2 ? 2 : 1,
+    version: inventory['version'] as string,
+    files: listed,
   };
 }
 export function assertHostRegistrationIdle(root: string): void {

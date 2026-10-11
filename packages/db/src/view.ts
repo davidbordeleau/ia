@@ -8,10 +8,11 @@ import {
 } from '@inventarch/language';
 import type { CompiledRecord, Diagnostic, FrozenRegistry, Phase, Source } from '@inventarch/language';
 import { authoredRevisionOf, canonicalRoot, load, reaches, stableSerialize } from '@inventarch/graph';
-import type { Graph, RevisionSource } from '@inventarch/graph';
+import type { Graph, Node, RevisionSource } from '@inventarch/graph';
 import {
   evaluate,
   validateCheck,
+  validateCheckStructure,
   validateConsent,
   validateGraphSchema,
   validateSelectors,
@@ -20,7 +21,7 @@ import {
 } from '@inventarch/compliance';
 import type { Assessment, Report, SystemFolder } from '@inventarch/compliance';
 import type { InputSnapshot } from './inputs.js';
-import { systemMember } from './inputs.js';
+import { EVIDENCE_DIRECTORY, evidenceSource, systemMember } from './inputs.js';
 import { declaredRoots, membershipOf } from './membership.js';
 import type { DeclaredRoot, MembershipRow } from './membership.js';
 import { repositoryWorkspace } from './seat.js';
@@ -67,8 +68,186 @@ function diagnosticsOf(values: readonly Diagnostic[]): readonly Diagnostic[] {
     (a, b) => compare(a.path, b.path) || a.line - b.line || compare(a.code, b.code),
   );
 }
-export function viewBuilder(input: InputSnapshot): (location?: string, phase?: Phase) => View {
-  const parsed = input.sources.map((s) => ({ ...parse(s.text, s.path), location: s.location }));
+/** How a view admits: every existing reader takes the defaults. */
+export interface ViewOptions {
+  /**
+   * D13 (plan amendments C15 and C21): `strict`, the default, admits a `@check` only when its runner is a built-in id
+   * (compliance validateCheck), so an unknown runner is IA-COMP-CHECK-UNKNOWN and the record is not admitted, as every
+   * released reader has it; `structural` admits any check that names one evaluator (validateCheckStructure), for the
+   * validate path that binds checks against a host's catalog.
+   */
+  readonly checks?: 'strict' | 'structural';
+}
+type ParsedRecord = ReturnType<typeof parse>['ast']['records'][number];
+/** The writer's sections and fields, in its order (evidence.ts `evidenceText`); `subject` is the one optional field. */
+const EVIDENCE_SHAPE: readonly (readonly [string, readonly string[]])[] = [
+  ['meaning', ['says', 'answers']],
+  [
+    'evidence',
+    [
+      'origin',
+      'actor',
+      'observed-at',
+      'captured-at',
+      'workspace',
+      'locator',
+      'revision',
+      'bundle',
+      'digest',
+      'availability',
+      'subject',
+      'subject-revision',
+      'snapshot-revision',
+      'evaluator',
+      'move',
+      'verdict',
+    ],
+  ],
+  ['interpretation', ['applies', 'limits', 'reason', 'basis']],
+  ['retention', ['status']],
+];
+const textOf = (value: ParsedRecord['head'][number]['value']): string | undefined =>
+  value.kind === 'scalar' || value.kind === 'string' ? value.text : undefined;
+/**
+ * D14, review finding B3-R4: whether `record` is exactly an observation `evidenceText` writes for one admitted check of
+ * `root` at its authored revision: its sections and fields only, in the writer's order, with no relationships and no
+ * condition; named `<check name>-<12 hex authored revision>` after a check `root` admits outside runtime placement; and
+ * stating that check's identity as its locator, its digest as its digest and subject revision, the authored revision as
+ * its revision and snapshot revision, its own file as its bundle, and the writer's fixed values elsewhere. Anything else is
+ * not evidence, so a planted observation can neither resolve an authored reference nor add an edge.
+ */
+function writerShaped(record: ParsedRecord, root: View, path: string, checks: ReadonlyMap<string, Node>): boolean {
+  const revision = root.authoredRevision,
+    suffix = `-${revision.slice(0, 12)}`;
+  if (record.discriminator !== 'observation' || record.nested.length > 0 || record.head.length > 0) return false;
+  if (!record.name.endsWith(suffix)) return false;
+  const check = checks.get(record.name.slice(0, -suffix.length));
+  if (check === undefined || record.sections.length !== EVIDENCE_SHAPE.length) return false;
+  const fields = new Map<string, ParsedRecord['head'][number]>();
+  for (const [index, [name, keys]] of EVIDENCE_SHAPE.entries()) {
+    const section = record.sections[index]!;
+    if (section.name !== name) return false;
+    const stated = section.children.map((child) =>
+      child.kind === 'field' && child.when === undefined && child.children.length === 0 ? child : undefined,
+    );
+    if (stated.some((child) => child === undefined)) return false;
+    const order = stated.map((child) => child!.key);
+    if (order.some((key, at) => keys.indexOf(key) < 0 || (at > 0 && keys.indexOf(key) <= keys.indexOf(order[at - 1]!))))
+      return false;
+    if (keys.some((key) => key !== 'subject' && !order.includes(key))) return false;
+    for (const child of stated) fields.set(`${name}.${child!.key}`, child!);
+  }
+  const text = (key: string) => textOf(fields.get(key)!.value);
+  const subject = fields.get('evidence.subject')?.value;
+  return (
+    text('evidence.origin') === 'check' &&
+    text('evidence.actor') === 'ia validate' &&
+    text('evidence.workspace') === '.' &&
+    text('evidence.locator') === check.identity &&
+    text('evidence.revision') === revision &&
+    text('evidence.snapshot-revision') === revision &&
+    text('evidence.bundle') === path &&
+    text('evidence.digest') === check.digest &&
+    text('evidence.subject-revision') === check.digest &&
+    text('evidence.availability') === 'available' &&
+    text('evidence.move') === 'Verification' &&
+    ['success', 'refusal'].includes(text('evidence.verdict') ?? '') &&
+    text('interpretation.basis') === 'evaluation' &&
+    text('retention.status') === 'retained' &&
+    (subject === undefined ||
+      (subject.kind === 'ref' && subject.discriminator === 'check' && subject.name === check.name))
+  );
+}
+/** The evidence file at `path` when every record in it is `writerShaped` for `root`, once each; otherwise undefined. */
+function writerEvidence(source: RevisionSource, root: View): RevisionSource | undefined {
+  const { ast, diagnostics } = parse(source.text, source.path);
+  if (diagnostics.length > 0 || ast.records.length === 0) return undefined;
+  const checks = new Map(
+    [...root.graph.nodes.values()]
+      .filter((node) => node.discriminator === 'check' && node.band !== 0)
+      .map((node) => [node.name, node]),
+  );
+  const names = new Set(ast.records.map((record) => record.name));
+  return names.size === ast.records.length &&
+    ast.records.every((record) => writerShaped(record, root, source.path, checks))
+    ? source
+    : undefined;
+}
+/** What `view` admits of everything but the evidence at `path`: its findings, verdicts and refusals, revisions aside. */
+function authoredAdmission(view: View, path: string): string {
+  const evidence = new Set(
+    [...view.graph.nodes.values()].filter((node) => node.source.path === path).map((node) => node.identity),
+  );
+  return stableSerialize({
+    findings: view.report.findings.filter((finding) => finding.path !== path),
+    verdicts: view.report.verdicts
+      .filter((verdict) => !evidence.has(verdict.scope))
+      .map((verdict) => ({
+        check: verdict.check,
+        scope: verdict.scope,
+        outcome: verdict.outcome,
+        findings: verdict.findings.filter((finding) => finding.path !== path),
+      })),
+    refused: view.refused.filter((record) => record.path !== path),
+    records: [...view.graph.nodes.values()]
+      .filter((node) => !evidence.has(node.identity))
+      .map((node) => node.identity)
+      .sort(compare),
+  });
+}
+/** The runtime metadata source every view's revision hashes: the inputs' layout, which no authored file states. */
+function metadataOf(input: InputSnapshot): RevisionSource {
+  return {
+    path: '.ia/.db-inputs.json',
+    text: stableSerialize({
+      folders: input.folders,
+      floorOrigin: input.floorOrigin,
+      admissionVersion: 1,
+      ...(input.authoredRoots ? { authoredRoots: input.authoredRoots } : {}),
+      ...(input.activation ? { activation: input.activation } : {}),
+    }),
+    location: { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' },
+  };
+}
+/**
+ * The views of `input`, admitted as `options` says. With evidence listed (D14), the authored view is built first; the
+ * one file named after its authored revision, and no other, is then read (review finding B3-N10) and admitted only when
+ * every record in it is exactly one the writer makes for a check that view admits (`writerShaped`, B3-R4) and adding it
+ * changes nothing the authored records admit: their findings, verdicts, refusals and records stay as they were.
+ * Otherwise the authored view stands, as for a file that is not evidence. Evidence moves `revision`, never
+ * `authoredRevision`, and is never what a validation binds or reports admission from.
+ */
+export function viewBuilder(
+  input: InputSnapshot,
+  options: ViewOptions = {},
+): (location?: string, phase?: Phase) => View {
+  const metadata = metadataOf(input),
+    authored = views(input, options, metadata, undefined);
+  if (input.evidence === undefined || input.evidence.length === 0) return authored;
+  const root = authored(),
+    rooted =
+      (build: typeof authored, view: View): typeof authored =>
+      (location, phase) =>
+        location === undefined && phase === undefined ? view : build(location, phase);
+  const wanted = `${EVIDENCE_DIRECTORY}/${root.authoredRevision}.ia`;
+  const listed = input.evidence.find((candidate) => candidate.path === wanted),
+    read = listed === undefined ? undefined : evidenceSource(input.root, listed.path),
+    source = read === undefined ? undefined : writerEvidence(read, root);
+  if (source === undefined) return rooted(authored, root);
+  const build = views(input, options, metadata, source),
+    evidenced = build();
+  return authoredAdmission(evidenced, source.path) === authoredAdmission(root, source.path)
+    ? rooted(build, evidenced)
+    : rooted(authored, root);
+}
+function views(
+  input: InputSnapshot,
+  options: ViewOptions,
+  metadata: RevisionSource,
+  evidence: RevisionSource | undefined,
+): (location?: string, phase?: Phase) => View {
+  const inputSources = evidence === undefined ? input.sources : [...input.sources, evidence];
+  const parsed = inputSources.map((s) => ({ ...parse(s.text, s.path), location: s.location }));
   const contexts = new Map<string, Context>();
   const analyze = (location: string): Context => {
     const known = contexts.get(location);
@@ -90,7 +269,7 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
   };
   // Registry visibility can change only at a declared reach. Inspect those
   // finite contexts before authority so bands cannot conceal duplicate REQ ids.
-  for (const reach of [...new Set(['', ...input.sources.map((s) => s.location.placement.reach)])].sort(compare))
+  for (const reach of [...new Set(['', ...inputSources.map((s) => s.location.placement.reach)])].sort(compare))
     analyze(reach);
   const requirements = new Map<string, { id: string; identity: string; path: string; line: number }>();
   for (const context of contexts.values())
@@ -106,18 +285,7 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
       }
   const duplicates = requirementCollisions([...requirements.values()]);
   const duplicatePaths = new Set(duplicates.diagnostics.map((d) => d.path));
-  const metadata: RevisionSource = {
-    path: '.ia/.db-inputs.json',
-    text: stableSerialize({
-      folders: input.folders,
-      floorOrigin: input.floorOrigin,
-      admissionVersion: 1,
-      ...(input.authoredRoots ? { authoredRoots: input.authoredRoots } : {}),
-      ...(input.activation ? { activation: input.activation } : {}),
-    }),
-    location: { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' },
-  };
-  const revisionSources = [...input.sources, metadata],
+  const revisionSources = [...inputSources, metadata],
     revisionInputs = { sources: revisionSources, languageVersion: LANGUAGE_VERSION, kernelDigest: KERNEL_DIGEST };
   // D02a: the capture declares roots once, by the @workspace records the root view admits, and every view seats its
   // records by them, so a narrower root or phase never re-roots an occurrence. D02b decides the repository's own
@@ -164,7 +332,7 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
       }
       const path = systemMember(registry.systems.get(name)?.path ?? '')?.root ?? `.ia/src/systems/${name}`;
       const roots = [...new Set(sources.map((s) => systemMember(s.ast.path)!.root))];
-      return sources.length === 0 && input.sources.some((s) => systemMember(s.path)?.name === name)
+      return sources.length === 0 && inputSources.some((s) => systemMember(s.path)?.name === name)
         ? []
         : [{ name, path, roots, sources, records: [] }];
     });
@@ -260,7 +428,9 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
           validateGraphSchema(node, graph),
           validateSelectors(node),
           validateVariants(node),
-          ...(node.discriminator === 'check' ? [validateCheck(node)] : []),
+          ...(node.discriminator === 'check'
+            ? [options.checks === 'structural' ? validateCheckStructure(node) : validateCheck(node)]
+            : []),
         ];
         for (const assessment of assessments)
           if (assessment.outcome !== 'pass') {
@@ -291,6 +461,7 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
       sourceDiagnostics,
       folders: folders.filter((f) => !blockedFolders.has(f.path)),
       admission: observations,
+      ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
     });
     return Object.freeze({
       graph,

@@ -31,7 +31,7 @@ import { afterAll, expect, it, vi } from 'vitest';
 import { cleanup } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
-afterAll(cleanup);
+afterAll(cleanup, 120_000);
 
 /**
  * A seam on apps/distribution's applyProjection, which writes and deletes every projection file, so a test can fail

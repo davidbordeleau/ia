@@ -9,7 +9,18 @@
  * compared as the deliberate divergence they are rather than asserted equal: §1.4, §3 and §4.4 require the three
  * protocols to stay observably different, and decisions.md:65 forbids normalizing them.
  */
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it } from 'vitest';
 import { cleanup, DESCRIPTOR, FIXTURE, packable, repository, scratch, workspace } from './workspace-fixture.js';
@@ -19,7 +30,7 @@ const MAIN = resolve(repository, 'apps/cli/dist/main.js');
 const DISTRIBUTION = resolve(repository, 'apps/distribution/dist/cli.js');
 const DESCRIPTOR_PATH = '.ia/work/descriptor.json';
 const ID = DESCRIPTOR.id;
-afterAll(cleanup);
+afterAll(cleanup, 120_000);
 
 const spawned = (binary: string, args: readonly string[], env?: NodeJS.ProcessEnv) =>
   runBounded(process.execPath, [binary, ...args], {
@@ -276,4 +287,196 @@ it('refuses the same bad input with the same service code on both entrypoints', 
   expect(human.stdout).toBe('');
   expect(human.stderr).toContain('IA-DIST-INPUT-INVALID');
   expect(existsSync(resolve(empty, '.ia/distributions'))).toBe(false);
+});
+
+/**
+ * Every entry under `roots` and each root itself, with each directory's modification time and each file's size,
+ * modification time and digest: a write anywhere changes it, and so does creating a root that was absent (review
+ * finding B2-N4: an IA home created empty, or a file created and removed again, still shows).
+ */
+function tree(...roots: string[]): Record<string, string> {
+  const entries: Record<string, string> = {};
+  const describe = (path: string): string => {
+    const stat = statSync(path);
+    return stat.isDirectory()
+      ? `directory ${stat.mtimeMs}`
+      : `${stat.size} ${stat.mtimeMs} ${createHash('sha256').update(readFileSync(path)).digest('hex')}`;
+  };
+  for (const top of roots) {
+    entries[top] = existsSync(top) ? describe(top) : 'absent';
+    if (existsSync(top))
+      for (const entry of readdirSync(top, { recursive: true, encoding: 'utf8' }))
+        entries[resolve(top, entry)] = describe(resolve(top, entry));
+  }
+  return entries;
+}
+/** Two authored execution bindings: one names the installed captured read, one an implementation no host ships. */
+const BINDINGS = `#! ia 1.0
+
+@execution-binding read-captured-source-binding
+  meaning
+    says "Select the installed first-party captured-source read adapter."
+    answers "Which installed implementation serves captured reads here?"
+  binding
+    kind operation
+    implementation captured-source-read-v1
+
+@execution-binding missing-binding
+  meaning
+    says "Select an implementation no host ships."
+    answers "What does an implementation that is not installed bind to?"
+  binding
+    kind operation
+    implementation missing-read-v1
+`;
+interface BindingRow {
+  readonly identity: string;
+  readonly status: string;
+  readonly reason: string;
+}
+it('reports one Bindings section through ia validate --json and ia-distribution validate, and neither writes (C23, C24)', async () => {
+  const root = resolve(scratch('equivalence-bindings'), 'workspace'),
+    home = resolve(scratch('equivalence-bindings-home'), '.ia'),
+    env = { ...process.env, IA_HOME: home };
+  expect((await spawned(MAIN, ['init', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  writeFileSync(resolve(root, '.ia/src/bindings.ia'), BINDINGS);
+  // Review finding B2-R2: each validation trusts a join only through its own installation's payload. ia's is the one its
+  // bundled pin names in IA_HOME; ia-distribution's is the payload it runs from, as the payload's launcher runs it.
+  // Before any payload is materialized, the repository's own ia-distribution reports the same unjoined workspace.
+  let machineBinary = DISTRIBUTION;
+  const both = async (exitCode: number, label: string) => {
+    const before = tree(root, home);
+    const consumer = result(
+      await spawned(MAIN, ['validate', '--root', root, '--json'], env),
+      'stdout',
+      exitCode,
+      label,
+    );
+    const machine = result(await spawned(machineBinary, ['validate', '--root', root], env), 'stdout', exitCode, label);
+    // Computing and reporting bindings writes nothing anywhere: not in the workspace, not in the IA home.
+    expect(tree(root, home), label).toEqual(before);
+    expect(consumer['bindings'], label).toEqual(machine['bindings']);
+    const bindings = machine['bindings'] as { catalog: Record<string, unknown>; results: BindingRow[] };
+    return {
+      catalog: bindings.catalog,
+      status: Object.fromEntries(bindings.results.map((row) => [row.identity.split('/').at(-1), row.status])),
+    };
+  };
+  // No host has joined a catalog yet (as for an ia project-only workspace): nothing is bound, and nothing passes.
+  expect(await both(0, 'unjoined')).toEqual({
+    catalog: { status: 'unavailable', reason: expect.stringContaining('no host has joined') },
+    status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'unavailable' },
+  });
+  expect((await spawned(MAIN, ['host', 'claude', '--root', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  const state = resolve(root, '.ia/distributions/hosts/claude-workspace.json'),
+    registration = JSON.parse(readFileSync(state, 'utf8')) as { cache: string; release: string };
+  machineBinary = resolve(registration.cache, 'runtime/node_modules/@inventarch/distribution/dist/cli.js');
+  // The host's payload ships the read handler, so its binding is bound; the missing implementation stays unavailable.
+  const joined = await both(0, 'joined');
+  expect(joined).toEqual({
+    catalog: expect.objectContaining({ status: 'joined', consumer: 'claude' }),
+    status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'bound' },
+  });
+  // Shipped handler bytes altered after the build: the joined catalog fails verification, and every operation binding
+  // is revoked, which fails both runs.
+  const handler = resolve(
+    home,
+    'hosts',
+    String(joined.catalog['release']),
+    'runtime/node_modules/@inventarch/agent-composition-system/dist/installed-read.js',
+  );
+  const original = readFileSync(handler);
+  writeFileSync(handler, Buffer.concat([original, Buffer.from('\n// altered\n')]));
+  try {
+    expect(await both(1, 'altered')).toEqual({
+      catalog: expect.objectContaining({
+        status: 'damaged',
+        reason: expect.stringContaining('IA-DIST-INTEGRITY-MISMATCH'),
+      }),
+      status: { 'missing-binding': 'revoked', 'read-captured-source-binding': 'revoked' },
+    });
+  } finally {
+    writeFileSync(handler, original);
+  }
+  // A registration naming a copy of the payload inside the workspace, at the genuine release: neither validation
+  // trusts or opens it, so nothing binds (B2-R2).
+  const copy = resolve(root, '.ia/work/payload');
+  cpSync(registration.cache, copy, { recursive: true });
+  const genuine = readFileSync(state);
+  writeFileSync(state, JSON.stringify({ ...JSON.parse(genuine.toString('utf8')), cache: copy }));
+  try {
+    expect(await both(0, 'in-workspace payload')).toEqual({
+      catalog: {
+        status: 'unavailable',
+        reason: expect.stringContaining("host claude's registration names a payload other than"),
+      },
+      status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'unavailable' },
+    });
+  } finally {
+    writeFileSync(state, genuine);
+  }
+});
+
+/** Two local checks over built-in evaluators: one over the whole-workspace token, which passes, and one prose-scoped. */
+const CHECKS = `#! ia 1.0
+
+@check demo-schema-check
+  meaning
+    says "Validate every admitted record against its schema."
+    answers "Does every record have the structure its schema requires?"
+  check
+    runs COMP-SCHEMA
+    scope "*"
+  governance
+    severity blocking
+
+@check prose-check
+  meaning
+    says "Select records by prose, which selects nothing."
+    answers "Is a prose scope ever a pass?"
+  check
+    runs COMP-SCHEMA
+    scope "every admitted record"
+  governance
+    severity blocking
+`;
+it('reports one Checks result through both validation binaries, which record the same evidence (C14, C15, C23)', async () => {
+  const root = resolve(scratch('equivalence-checks'), 'workspace'),
+    home = resolve(scratch('equivalence-checks-home'), '.ia'),
+    env = { ...process.env, IA_HOME: home };
+  expect((await spawned(MAIN, ['init', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  writeFileSync(resolve(root, '.ia/src/checks.ia'), CHECKS);
+  expect((await spawned(MAIN, ['host', 'claude', '--root', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  const registration = JSON.parse(
+      readFileSync(resolve(root, '.ia/distributions/hosts/claude-workspace.json'), 'utf8'),
+    ) as { cache: string },
+    machineBinary = resolve(registration.cache, 'runtime/node_modules/@inventarch/distribution/dist/cli.js');
+  const consumer = async () =>
+      result(await spawned(MAIN, ['validate', '--root', root, '--json'], env), 'stdout', 0, 'ia validate'),
+    machine = async () =>
+      result(await spawned(machineBinary, ['validate', '--root', root], env), 'stdout', 0, 'ia-distribution validate');
+  const evidence = resolve(root, '.ia/work/evidence');
+  // Either binary first: the first records the evidence, the second finds exactly those bytes and rewrites nothing.
+  for (const [first, second] of [
+    [consumer, machine],
+    [machine, consumer],
+  ] as const) {
+    rmSync(evidence, { recursive: true, force: true });
+    const a = await first(),
+      bytes = readdirSync(evidence).map((name) => readFileSync(resolve(evidence, name), 'utf8')),
+      b = await second();
+    expect(b['checks']).toEqual(a['checks']);
+    expect(b['bindings']).toEqual(a['bindings']);
+    expect(a['evidence']).toMatchObject({ written: true, pruned: [] });
+    expect(b['evidence']).toEqual({ ...(a['evidence'] as object), written: false });
+    expect(readdirSync(evidence).map((name) => readFileSync(resolve(evidence, name), 'utf8'))).toEqual(bytes);
+    const results = (a['checks'] as { results: { name: string; outcome: string }[] }).results;
+    expect(results.map((row) => [row.name, row.outcome])).toEqual([
+      ['demo-schema-check', 'pass'],
+      ['prose-check', 'not-evaluated'],
+    ]);
+    expect((a['evidence'] as { observations: { verdict: string }[] }).observations.map((row) => row.verdict)).toEqual([
+      'success',
+    ]);
+  }
 });

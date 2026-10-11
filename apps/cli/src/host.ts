@@ -19,6 +19,12 @@
  * The plan asks the mechanisms themselves. `planHostFor` plans against the payload apply will materialize, described
  * from the pin without reading it (`expectedHostCache`), so a conflict in the preview is the service's own refusal —
  * its code and message unchanged (contract §4.1) — and is the refusal apply would raise.
+ *
+ * Milestone generation-binding (plan amendments C16 and C24, design item 9): the apply reads the join receipts before it
+ * writes anything, refusing ones it cannot read, and once every element is applied it records the host's join from the
+ * committed registration (`joinHost`): the installed-implementation catalog of the payload it names, at the workspace's
+ * authored revision. A removal drops it (`leaveHost`). The plan and the envelope do not change; `ia doctor` reports
+ * the join.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, realpathSync, statSync } from 'node:fs';
@@ -44,6 +50,7 @@ import {
   materializeHostPayload,
   readHostPin,
 } from '@inventarch/distribution/host-home';
+import { joinHost, JOINS, leaveHost, readJoins } from '@inventarch/distribution/implementations';
 import { assertIaHomeUsable } from '@inventarch/distribution/ia-home';
 import { readMaterializedPlugin } from '@inventarch/distribution/plugin-home';
 import type { ProjectionAction } from '@inventarch/distribution/projection';
@@ -728,6 +735,24 @@ export function applyHostSet(
     id,
     status: view.elements.find((element) => element.id === id)!.capability,
   });
+  /** A failure as the refusal it raises: a pending journal's recovery, the held lock's, or once anything was written, the rerun. */
+  const failure = (error: unknown): unknown => {
+    const refusal = refusalOf(error),
+      journal = pendingJournal(root);
+    if (journal !== undefined)
+      return new Refusal(
+        refusal.code,
+        refusal.message,
+        3,
+        { path: journal[0] },
+        say(view, recoverNext(view.root, journal[1])),
+      );
+    const busy = lockRefusal(error, view.root);
+    if (busy !== null) return busy;
+    if (done.length > 0)
+      return new Refusal(refusal.code, refusal.message, 3, refusal.where, say(view, `Run "${rerun}" to finish.`));
+    return error;
+  };
   const step = (id: ElementId, run: () => Omit<AppliedElement, 'id'>): void => {
     if (signal?.aborted) throw new Interrupted(say(view, `Run "${rerun}" to finish.`));
     let applied: Omit<AppliedElement, 'id'>;
@@ -735,25 +760,46 @@ export function applyHostSet(
       applied = run();
     } catch (error) {
       if (id === 'projection') throw projectionFailure(error, root, host, rerun);
-      const refusal = refusalOf(error),
-        journal = pendingJournal(root);
-      if (journal !== undefined)
-        throw new Refusal(
-          refusal.code,
-          refusal.message,
-          3,
-          { path: journal[0] },
-          say(view, recoverNext(view.root, journal[1])),
-        );
-      const busy = lockRefusal(error, view.root);
-      if (busy !== null) throw busy;
-      if (done.length > 0)
-        throw new Refusal(refusal.code, refusal.message, 3, refusal.where, say(view, `Run "${rerun}" to finish.`));
-      throw error;
+      throw failure(error);
     }
     done.push({ id, ...applied });
     checkpoint(id);
   };
+  /**
+   * Design item 9 (plan amendment C16): the host's join receipts. Receipts that cannot be read are never replaced, and a
+   * rerun alone would refuse again, so their refusal names deleting them first: they are derived, and the rerun records
+   * them again. Any other failure is `failure`'s.
+   */
+  const joinFailure = (error: unknown): unknown => {
+    if (refusedPath(error) !== JOINS || pendingJournal(root) !== undefined) return failure(error);
+    const refusal = refusalOf(error);
+    return new Refusal(
+      refusal.code,
+      refusal.message,
+      3,
+      { path: JOINS },
+      say(view, `Delete ${JOINS}, then run "${rerun}".`),
+    );
+  };
+  /**
+   * The join recorded from the committed registration (`joinHost`), or dropped after a removal (`leaveHost`), once every
+   * element is applied, so an interrupted apply leaves no join, or the previous one, which `ia doctor` reports as
+   * unavailable or drifted rather than as current. A failure here names the rerun that finishes the set.
+   */
+  const receipt = (run: () => unknown): void => {
+    try {
+      run();
+    } catch (error) {
+      throw joinFailure(error);
+    }
+  };
+  // Review finding B-N1: receipts that cannot be read refuse before anything is written, the payload included, rather
+  // than after the MCP registration (`joinHost` and `leaveHost` read them again under the host lock).
+  try {
+    readJoins(root);
+  } catch (error) {
+    throw joinFailure(error);
+  }
   const project = (rendered: HostOutput | null) => (): Omit<AppliedElement, 'id'> => {
     const { status, guard } = applyHostProjection(root, host, rendered);
     return { status, guard };
@@ -763,10 +809,13 @@ export function applyHostSet(
     const mcp = replan(view, 'mcp', MCP_PATH[host], () => planHost(root, host, cache));
     // Review C3-N2: the rendering the plan's gated session made, re-planned against the files as they are now.
     const { rendered } = view;
+    // Only a removal's view carries no rendering (collectHost); an apply always has the one its gated plan made.
+    if (rendered === null) throw new Error('A host apply view carries no rendering');
     replanProjection(root, host, rendered, (conflict) => refusalFor(view, 'projection', conflict));
     step('mcp', () => ({ status: applyHost(mcp).status }));
     done.push(skipped('context'));
     step('projection', project(rendered));
+    receipt(() => joinHost(root, host, rendered.receipt.revision));
     return { status: 'host-registered', elements: done, observed: false };
   }
   // A removal plans only what the view found owned; `none` means there is nothing of that element to remove.
@@ -778,6 +827,7 @@ export function applyHostSet(
   step('projection', project(null));
   done.push(skipped('context'));
   step('mcp', () => ({ status: mcp === null ? 'absent' : applyHost(mcp).status }));
+  receipt(() => leaveHost(root, host));
   return { status: 'host-removed', elements: done, observed: false };
 }
 

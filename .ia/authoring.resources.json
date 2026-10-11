@@ -171,8 +171,8 @@
     },
     {
       "path": ".ia/src/systems/authoring-system/reference/check.md",
-      "bytes": 1118,
-      "sha256": "1ea6dbe2bcc1dd1e241e6858cb46d8e58710cd067076d4824f87baf66837d126",
+      "bytes": 1467,
+      "sha256": "1336c061ee2f2356d275a82a3d3bda27228afef746a0f3b7ce39d4151b0143b7",
       "mediaType": "text/markdown",
       "encoding": "utf8"
     },

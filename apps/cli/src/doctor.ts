@@ -22,6 +22,11 @@
  * `stateRepair` and `modifiedRepair`, so the two verbs cannot disagree, and every `ia host` or `ia project` command
  * printed carries `--root` when doctor was given one.
  *
+ * Milestone generation-binding (plan amendments C16 and C24, design item 9) adds an `implementations` row for the
+ * installed-implementation catalog of the payload this installation pins, read through its release pins and checked
+ * against the handler bytes the payload ships, and a `join-<host>` row per join receipt `ia host` recorded, compared
+ * with the catalog of the payload that host's registration names. Both only read; no handler is imported or run.
+ *
  * The support row compares an observed platform and version against the declaration at
  * docs/reports/open-source-v1/2026-09-30/decisions.md:13. It says "matches the declared target", never "qualified", because
  * that declaration says the minimum must be validated before being advertised. A platform outside it is `warn`,
@@ -50,9 +55,24 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathKey, within } from '@inventarch/db';
 import { decodeDistributionJson, INSTALL_PATHS } from '@inventarch/db/distribution';
 import type { DistributionLock } from '@inventarch/db/distribution';
-import { verifyHostCache } from '@inventarch/distribution/host';
 import { hostPayloadPath, legacyHostHome } from '@inventarch/distribution/host-home';
 import { resolveIaHome } from '@inventarch/distribution/ia-home';
+import type {
+  ImplementationJoin,
+  InstalledCatalog,
+  InstalledImplementations,
+} from '@inventarch/distribution/implementations';
+import {
+  INSTALLED_IMPLEMENTATIONS,
+  JOINS,
+  readInstalledImplementations,
+  readJoins,
+  registrationUntrusted,
+  trustedPayload,
+} from '@inventarch/distribution/implementations';
+import type { HostTrust } from '@inventarch/distribution/implementations';
+import { hostVerifier } from '@inventarch/distribution/host-observe';
+import type { HostVerifier } from '@inventarch/distribution/host-observe';
 import { observeProjection } from '@inventarch/distribution/projection';
 import { registryChooser, registryLocation } from '@inventarch/distribution/registry';
 import type { HostObservation } from '@inventarch/distribution/services';
@@ -370,16 +390,15 @@ function parses(root: string, path: string): boolean {
 }
 
 /**
- * `launcher-unverified` covers two different facts, told apart here by verifying once more: a payload that fails
- * verification, and one that verifies as another release than the state recorded. Only a stale row pays for it.
+ * `launcher-unverified` covers two different facts: a payload that fails verification, and one that verifies as another
+ * release than the state recorded. `verify` is the report's one shared verification (`hostVerifier`, a memo), so it
+ * answers exactly what observation saw without scanning the payload again (review finding B2-N9): its failure, or the
+ * release it verified as, which observation found differs from the recorded one.
  */
-function unverified(cache: string | null, recorded: string | null): string {
+function unverified(cache: string | null, recorded: string | null, verify: HostVerifier): string {
   if (cache === null) return 'the payload fails verification';
   try {
-    const found = verifyHostCache(cache).release;
-    return found === recorded
-      ? `the payload at ${cache} did not verify when observed`
-      : `the payload at ${cache} verifies, but as release ${short(found)} rather than the recorded ${short(recorded)}`;
+    return `the payload at ${cache} verifies, but as release ${short(verify(cache).release)} rather than the recorded ${short(recorded)}`;
   } catch (error) {
     return `the payload at ${cache} fails verification (${codeOf(error, 'unreadable')})`;
   }
@@ -431,7 +450,7 @@ function repairOf(root: string, observed: HostObservation): string {
 }
 
 /** A stale host: each reason as a fact, then the repair that works first, where the remedy alone would refuse. */
-function staleDetail(root: string, observed: HostObservation, pinned: Pinned): string {
+function staleDetail(root: string, observed: HostObservation, pinned: Pinned, verify: HostVerifier): string {
   const facts = observed.reasons.map((reason): string => {
     switch (reason) {
       case 'release':
@@ -439,7 +458,7 @@ function staleDetail(root: string, observed: HostObservation, pinned: Pinned): s
       case 'launcher-missing':
         return `launcher ${observed.launcher} is missing`;
       case 'launcher-unverified':
-        return unverified(observed.cache, observed.release);
+        return unverified(observed.cache, observed.release, verify);
       case 'mcp-modified':
         return `${MCP_PATH[observed.host]} does not hold the ia-workspace entry ia host writes for this registration`;
       case 'guard-modified':
@@ -460,7 +479,13 @@ function staleDetail(root: string, observed: HostObservation, pinned: Pinned): s
   return `stale (${observed.reasons.join(', ')}): ${facts.join('; ')}.${repair === '' ? '' : ` ${repair}`}`;
 }
 
-function hostRow(root: string, observed: HostObservation, pinned: Pinned, commands: Commands): Check {
+function hostRow(
+  root: string,
+  observed: HostObservation,
+  pinned: Pinned,
+  commands: Commands,
+  verify: HostVerifier,
+): Check {
   const host = observed.host;
   // Written is all doctor can know: it never starts a server, so it never says one answered (spec §7).
   if (observed.status === 'registered')
@@ -471,7 +496,7 @@ function hostRow(root: string, observed: HostObservation, pinned: Pinned, comman
       `registered (${observed.elements.join(', ')}); written; not observed answering; cache ${observed.cache}`,
       null,
     );
-  const detail = commands.prose(host, staleDetail(root, observed, pinned));
+  const detail = commands.prose(host, staleDetail(root, observed, pinned, verify));
   return installation(`host-${host}`, `Host ${host}`, 'fail', detail, commands.apply(host));
 }
 
@@ -625,6 +650,7 @@ function hostRows(
   observed: readonly HostObservation[],
   pinned: Pinned,
   commands: Commands,
+  verify: HostVerifier,
 ): readonly Check[] {
   const projected = projectedHosts(root)
     .filter((host) => !observed.some((row) => row.host === host))
@@ -638,7 +664,7 @@ function hostRows(
   }
   return [
     ...observed.flatMap((host) => [
-      hostRow(root, host, pinned, commands),
+      hostRow(root, host, pinned, commands, verify),
       ...(host.elements.includes('projection') ? projectionRows(root, host.host, commands) : []),
     ]),
     ...projected,
@@ -672,6 +698,233 @@ function movedRows(request: DoctorRequest, observed: readonly HostObservation[],
           ),
         ],
   );
+}
+
+// ---- Installed implementations: plan amendments C16 and C24, design item 9 -------------------------------------
+
+/** One read of a payload's catalog: the catalog, or the refusal that kept it from being read. */
+type CatalogRead =
+  | { readonly ok: true; readonly value: InstalledCatalog }
+  | { readonly ok: false; readonly error: unknown };
+/**
+ * Reads each payload's catalog once per report: the catalog row and a join row usually name the same payload, and the
+ * payload is verified through `verify`, the one verification the host rows share (review finding B-N7).
+ */
+function catalogReader(verify: HostVerifier): (directory: string, release: string) => CatalogRead {
+  const seen = new Map<string, CatalogRead>();
+  return (directory, release) => {
+    const key = `${release}\u0000${directory}`;
+    let read = seen.get(key);
+    if (read === undefined) {
+      try {
+        read = { ok: true, value: readInstalledImplementations(directory, release, verify) };
+      } catch (error) {
+        read = { ok: false, error };
+      }
+      seen.set(key, read);
+    }
+    return read;
+  };
+}
+const refusalText = (error: unknown): string =>
+  `${codeOf(error, 'IA-CLI-FAILED')}: ${error instanceof Error ? error.message : String(error)}`;
+/** A present catalog's operations in words: each with its handler and shipped bytes, or why it is unavailable or revoked. */
+function operationFacts(catalog: InstalledImplementations): string {
+  if (catalog.operations.length === 0) return 'no installed operations';
+  return catalog.operations
+    .map((operation) =>
+      operation.status === 'available'
+        ? `${operation.id} available (handler ${operation.handler}, shipped bytes ${short(operation.digest)})`
+        : `${operation.id} ${operation.status} (${operation.reason})`,
+    )
+    .join('; ');
+}
+
+/**
+ * C16 and C24: the installed-implementation catalog of the payload this installation pins, as the IA home holds it.
+ * Present is `ok`, or `warn` when it lists an operation unavailable or revoked; a payload that carries no catalog (one built
+ * before the catalog existed) is an `info` note, and so is one not materialized yet. A payload that fails host
+ * verification (a file its inventory does not list, a missing or changed one, a link), or a catalog whose pins disagree
+ * with it, is `fail`, as its host row is: the payload is damaged, and its repair deletes the payload directory so the
+ * remedy materializes it again. Never throws, and only reads: no handler is imported or run.
+ */
+function catalogRow(
+  request: DoctorRequest,
+  pinned: Pinned,
+  read: ReturnType<typeof catalogReader>,
+  observed: readonly HostObservation[],
+  commands: Commands,
+): Check {
+  const id = 'implementations',
+    title = 'Implementations';
+  if (pinned.release === null)
+    return installation(id, title, 'info', 'Not checked; this installation carries no host payload', null);
+  let home: string;
+  try {
+    home = resolveIaHome(request.env, request.home ?? homedir()).home;
+  } catch (error) {
+    return installation(
+      id,
+      title,
+      'unknown',
+      `Not checked; ${codeOf(error, 'the IA home could not be resolved')}`,
+      null,
+    );
+  }
+  const payload = hostPayloadPath(home, pinned.release);
+  if (!directory(payload))
+    return installation(
+      id,
+      title,
+      'info',
+      `Release ${short(pinned.release)} is not materialized; ia host materializes it, with its installed-implementation catalog, on apply`,
+      null,
+    );
+  const result = read(payload, pinned.release);
+  if (!result.ok) {
+    const host = observed[0]?.host ?? 'claude';
+    return installation(
+      id,
+      title,
+      'fail',
+      commands.prose(
+        host,
+        `${INSTALLED_IMPLEMENTATIONS} in ${payload} fails verification (${refusalText(result.error)}). Delete ${payload}, then run "ia host ${host} --apply" to materialize it again.`,
+      ),
+      commands.apply(host),
+    );
+  }
+  const catalog = result.value;
+  if (catalog.status === 'unavailable')
+    return installation(id, title, 'info', `Unavailable in release ${short(pinned.release)}: ${catalog.reason}`, null);
+  const degraded = catalog.operations.some((operation) => operation.status !== 'available');
+  return installation(
+    id,
+    title,
+    degraded ? 'warn' : 'ok',
+    `Catalog ${short(catalog.digest)} in release ${short(catalog.release)} (${catalog.version}): ${operationFacts(catalog)}; ` +
+      `${catalog.evaluators.entries.length} installed evaluators beside the built-ins; listed, nothing run`,
+    null,
+  );
+}
+
+/**
+ * The trust `ia validate` binds a join through (review finding B2-RC1): the payload this installation pins, in the IA home
+ * the request resolves; null when it pins none or the home cannot be resolved.
+ */
+function doctorTrust(request: DoctorRequest, pinned: Pinned): HostTrust | null {
+  if (pinned.release === null) return null;
+  try {
+    return { home: resolveIaHome(request.env, request.home ?? homedir()).home, release: pinned.release };
+  } catch {
+    return null;
+  }
+}
+/**
+ * Design item 9: one row per consumer join `.ia/distributions/hosts/joins.json` records, compared with the catalog of the
+ * payload this installation pins, as `ia validate` binds through it (review finding B2-RC1): a registration of another
+ * release or naming another directory, or another spelling of it, is `warn` with the apply that registers this
+ * installation's payload, and nothing it names is opened. `ok` (present) when the join names that catalog, digest and release;
+ * `warn` (drifted) when it names another, when that payload carries none, or when the consumer is not registered, each
+ * naming the apply that records or drops the join; `unknown` when the registration or its catalog cannot be read, which
+ * the host row reports. A registered host with no join is an `info` row (unavailable) naming the apply that records
+ * one. Receipts that cannot be read are `fail`, repaired by deleting them. Never throws, and only reads.
+ */
+function joinRows(
+  root: string,
+  observed: readonly HostObservation[],
+  read: ReturnType<typeof catalogReader>,
+  commands: Commands,
+  trust: HostTrust | null,
+): readonly Check[] {
+  const trusted = trust === null ? null : trustedPayload(trust);
+  let joins: readonly ImplementationJoin[];
+  try {
+    joins = readJoins(root) ?? [];
+  } catch (error) {
+    const host = observed[0]?.host ?? 'claude';
+    return [
+      installation(
+        'joins',
+        'Joins',
+        'fail',
+        commands.prose(
+          host,
+          `${JOINS} cannot be read (${refusalText(error)}). Delete ${JOINS}, then run "ia host ${host} --apply".`,
+        ),
+        commands.apply(host),
+      ),
+    ];
+  }
+  const rows: Check[] = joins.map((join): Check => {
+    const id = `join-${join.consumer}`,
+      title = `Join ${join.consumer}`,
+      joined = `${join.implementation} ${join.version} (catalog ${short(join.digest)}, release ${short(join.release)}) at consumer revision ${short(join.consumerRevision)}`;
+    const host = observed.find((row) => row.host === join.consumer);
+    if (host === undefined) {
+      const remove = `ia host ${join.consumer} --remove --apply`;
+      return installation(
+        id,
+        title,
+        'warn',
+        commands.prose(
+          join.consumer,
+          `drifted: joined ${joined}, but host ${join.consumer} is not registered; "${remove}" drops the join`,
+        ),
+        commands.apply(join.consumer, remove),
+      );
+    }
+    if (host.cache === null || host.release === null)
+      return installation(
+        id,
+        title,
+        'unknown',
+        `Not compared; joined ${joined}; the registration cannot be read`,
+        null,
+      );
+    if (trusted === null)
+      return installation(
+        id,
+        title,
+        'unknown',
+        `Not compared; joined ${joined}; this installation pins no host payload, so it trusts no registration`,
+        null,
+      );
+    const untrusted = registrationUntrusted(trusted, host.host, { cache: host.cache, release: host.release }, null);
+    if (untrusted !== null)
+      return installation(id, title, 'warn', `drifted: joined ${joined}; ${untrusted}`, commands.apply(join.consumer));
+    const result = read(trusted.payload, trusted.release);
+    if (!result.ok)
+      return installation(
+        id,
+        title,
+        'unknown',
+        `Not compared; joined ${joined}; the registered payload's catalog cannot be verified (${codeOf(result.error, 'unreadable')})`,
+        null,
+      );
+    const current = result.value;
+    const drift =
+      current.status === 'unavailable'
+        ? `the registered payload carries none: ${current.reason}`
+        : current.digest !== join.digest || current.release !== join.release
+          ? `the registered payload carries catalog ${short(current.digest)} in release ${short(current.release)}`
+          : null;
+    return drift === null
+      ? installation(id, title, 'ok', `present: joined ${joined}, the catalog the registered payload carries`, null)
+      : installation(id, title, 'warn', `drifted: joined ${joined}; ${drift}`, commands.apply(join.consumer));
+  });
+  for (const host of observed)
+    if (!joins.some((join) => join.consumer === host.host))
+      rows.push(
+        installation(
+          `join-${host.host}`,
+          `Join ${host.host}`,
+          'info',
+          `unavailable: no join recorded for host ${host.host}; the remedy records one when its payload carries a catalog`,
+          commands.apply(host.host),
+        ),
+      );
+  return rows;
 }
 
 // ---- Registry rows: registry spec §4 ---------------------------------------------------------------------------
@@ -759,6 +1012,8 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
   });
   const pending = usable && existsSync(resolve(root, INSTALL_PATHS.pending));
   const pinned = pinnedRelease(request.packageRoot);
+  // One verification per payload directory for the whole report: host, catalog and join rows share it (B-N7).
+  const verify = hostVerifier();
   // The observed hosts, or the code that kept the installed state from being read; undefined until it is read.
   let observed: readonly HostObservation[] | string | undefined;
   const unchecked = (id: string, section: Section, title: string, why: string): Check => ({
@@ -811,7 +1066,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
     else {
       try {
         // Spec §7: hosts are observed against this installation's pin; without one, the release comparison is skipped.
-        const installed = readInstalledState({ root, hosts: true, hostRelease: pinned.release });
+        const installed = readInstalledState({ root, hosts: true, hostRelease: pinned.release, verify });
         observed = installed.hosts ?? [];
         checks.push({
           id: 'generation',
@@ -873,13 +1128,17 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
   else if (pending) checks.push(unchecked('host', 'Installation', 'Host', 'installation recovery is required first'));
   else if (observed === undefined || typeof observed === 'string')
     checks.push(unchecked('host', 'Installation', 'Host', observed ?? 'the installed state was not read'));
-  else
+  else {
+    const read = catalogReader(verify);
     checks.push(
       payloadRow(request, pinned),
+      catalogRow(request, pinned, read, observed, commandsFor(supplied)),
       ...hostTransactionRows(root),
-      ...hostRows(root, observed, pinned, commandsFor(supplied)),
+      ...hostRows(root, observed, pinned, commandsFor(supplied), verify),
+      ...joinRows(root, observed, read, commandsFor(supplied), doctorTrust(request, pinned)),
       ...movedRows(request, observed, commandsFor(supplied)),
     );
+  }
 
   // Host plugin distribution spec §7.3 and §8.2: rows that exist with or without a workspace, and the briefing. One
   // report has one root. Without --root it was discovered upward from the cwd, which is how the §8.1 hook runs doctor.

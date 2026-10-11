@@ -43,7 +43,7 @@ const fixture = graphOf([
       `@convention path-convention\n${meaning}\n  governance\n    severity advisory\n  subject\n    covers ["src/**/*.ts"]`,
       `@spec path-spec\n${meaning}\n  work\n    title "t"\n    status draft\n    covers ["src/billing/invoice.ts"]`,
       `@hook path-hook\n${meaning}\n  hook\n    event PreToolUse\n    tools [Edit]\n    paths ["src/billing/**"]\n    message "m"`,
-      `@check path-check\n${meaning}\n  check\n    runs COMP-SCHEMA\n    scope "src/billing/*.ts"\n  governance\n    severity advisory`,
+      `@check path-check\n${meaning}\n  check\n    runs COMP-SCHEMA\n    scope "src/billing/*.ts"\n    covers ["src/**"]\n  governance\n    severity advisory`,
       `@playbook path-playbook\n${meaning}\n  subject\n    covers ["src/**"]\n  meaning-extra\n    covers ["never/**"]`,
     ].join('\n'),
   },
@@ -137,8 +137,9 @@ describe('the path selection dialect (G06c)', () => {
 
 describe('the claimant index (G06c)', () => {
   it('names the claimant fields', () => {
-    // A @check's `check.scope` is required prose, not a path selection (decision check-scope-claims).
-    expect(CLAIM_FIELDS).toEqual(['authority.covers', 'subject.covers', 'work.covers', 'hook.paths']);
+    // A @check claims paths through `check.covers` (plan amendment C17); its `check.scope` stays text that selects
+    // verdicts and is never a path selection (decision check-scope-claims, C22).
+    expect(CLAIM_FIELDS).toEqual(['authority.covers', 'subject.covers', 'work.covers', 'hook.paths', 'check.covers']);
     expect(Object.isFrozen(CLAIM_FIELDS)).toBe(true);
   });
 
@@ -148,6 +149,7 @@ describe('the claimant index (G06c)', () => {
     expect(probed.map((c) => [c.from, c.field, c.selection])).toEqual([
       [mandate, 'authority.covers', 'src/**'],
       [mandate, 'authority.covers', 'docs/'],
+      [check, 'check.covers', 'src/**'],
       [playbook, 'subject.covers', 'src/**'],
       [convention, 'subject.covers', 'src/**/*.ts'],
       [adoptedLaw, 'subject.covers', 'src/'],
@@ -156,9 +158,12 @@ describe('the claimant index (G06c)', () => {
       [spec, 'work.covers', 'src/billing/invoice.ts'],
     ]);
     // A ref item, a nested `covers`, a `covers` outside a claimant section and a check's scope, even one that reads as
-    // a path, are not claims.
+    // a path, are not claims: the check claims only what its `check.covers` states.
     expect(graph.claims.some((c) => c.selection === 'nested/**' || c.selection === 'never/**')).toBe(false);
-    expect(graph.claims.some((c) => c.from === check || c.field === 'check.scope')).toBe(false);
+    expect(graph.claims.some((c) => c.field === 'check.scope' || c.selection === 'src/billing/*.ts')).toBe(false);
+    expect(graph.claims.filter((c) => c.from === check).map((c) => [c.field, c.selection])).toEqual([
+      ['check.covers', 'src/**'],
+    ]);
     expect(graph.claims.find((c) => c.from === spec)).toEqual({
       from: spec,
       field: 'work.covers',
@@ -196,6 +201,7 @@ describe('claimants of a path (G06c)', () => {
     // The band-90 law sorts after every band-100 claimant, although its identity precedes the band-100 law's.
     expect(brief('src/billing/invoice.ts')).toEqual([
       [mandate, 100, ['authority.covers src/**']],
+      [check, 100, ['check.covers src/**']],
       [playbook, 100, ['subject.covers src/**']],
       [convention, 100, ['subject.covers src/**/*.ts']],
       [law, 100, ['subject.covers **']],
@@ -209,6 +215,12 @@ describe('claimants of a path (G06c)', () => {
       [law, 100, ['subject.covers **']],
     ]);
     expect(brief('README.md')).toEqual([[law, 100, ['subject.covers **']]]);
+  });
+
+  it('names a check whose covers selects a path as its claimant, and never its prose scope (C17, C22)', () => {
+    // Exit evidence: `covers ["src/**"]` claims src/x.ts; the scope, which reads as a path, claims nothing.
+    expect(brief('src/x.ts').find(([identity]) => identity === check)).toEqual([check, 100, ['check.covers src/**']]);
+    expect(brief('docs/a.md').some(([identity]) => identity === check)).toBe(false);
   });
 
   it('prunes holders outside the scope, and selects nothing outside the workspace', () => {

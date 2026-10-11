@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import {
   canonicalDistributionJson,
+  checkInstalledImplementations,
   compareVersions,
   decodeActivationPointer,
   decodeBundleManifest,
@@ -223,4 +224,70 @@ it('binds generation identity to every byte and keeps activation counters separa
   expect(() =>
     decodeGenerationInputs({ ...inputs, systems: [{ ...inputs.systems[0], selected: 'test/other' }] }),
   ).toThrow();
+});
+
+it('shapes an installed-implementation catalog once for its reader and its binders (review finding B-N9)', () => {
+  const available = {
+    id: 'captured-source-read-v1',
+    status: 'available',
+    version: 1,
+    operation: 'authoring-system/binding/operation/read-captured-source',
+    handler: 'ia.captured-source.read.v1',
+    input: 'captured-source-read-input-v1',
+    output: 'captured-source-read-output-v1',
+    module: 'runtime/node_modules/@inventarch/agent-composition-system/dist/installed-read.js',
+    digest: 'c'.repeat(64),
+    packages: ['@inventarch/agent-composition-system', '@inventarch/db'],
+  };
+  const catalog = (operations: unknown[]) => ({
+    format: 'ia.installed-implementations.v1',
+    evaluators: { format: 'ia-evaluator-catalog/1.0', entries: [] },
+    operations,
+  });
+  const revoked = { id: 'withdrawn-v1', status: 'revoked', reason: 'withdrawn by its producer' },
+    unavailable = { id: 'zeta-v1', status: 'unavailable', reason: 'not shipped' };
+  const checked = checkInstalledImplementations(catalog([available, revoked, unavailable]));
+  expect(checked.ok && checked.value.operations.map((row) => row.status)).toEqual([
+    'available',
+    'revoked',
+    'unavailable',
+  ]);
+  for (const [bad, reason] of [
+    [catalog([{ ...available, closure: 'f'.repeat(64) }]), 'Invalid available installed operation'],
+    [
+      catalog([{ ...available, module: 'runtime/node_modules/@inventarch/db/../x.js' }]),
+      'Invalid available installed operation',
+    ],
+    [
+      catalog([{ ...available, module: 'runtime/node_modules/@inventarch/db\\x.js' }]),
+      'Invalid available installed operation',
+    ],
+    [catalog([{ ...available, module: 'runtime/node_modules/other/index.js' }]), 'lies outside its package closure'],
+    [
+      catalog([{ ...available, packages: ['@inventarch/db', '@inventarch/agent-composition-system'] }]),
+      'Invalid available',
+    ],
+    [catalog([{ ...revoked, reason: '' }]), 'Invalid revoked installed operation'],
+    [catalog([{ ...available, status: 'pending' }]), 'available, unavailable or revoked'],
+    [catalog([unavailable, available]), 'sorted by id and unique'],
+    [{ ...catalog([]), format: 'ia.installed-implementations.v2' }, 'Unknown installed-implementation catalog format'],
+    [
+      { ...catalog([]), evaluators: { format: 'ia-evaluator-catalog/2.0', entries: [] } },
+      'not an ia-evaluator-catalog/1.x',
+    ],
+  ] as const)
+    expect(checkInstalledImplementations(bad)).toEqual({ ok: false, reason: expect.stringContaining(reason) });
+  // Review finding B2-N11: the checked value is a frozen plain-data copy, so a later change to the input, or an
+  // accessor that answers differently when read again, cannot alter what was checked.
+  const input = catalog([{ ...available }]),
+    copy = checkInstalledImplementations(input);
+  expect(copy.ok && Object.isFrozen(copy.value.operations[0])).toBe(true);
+  (input.operations[0] as { id: string }).id = 'changed-v1';
+  expect(copy.ok && copy.value.operations[0]!.id).toBe('captured-source-read-v1');
+  const shifting = catalog([]);
+  Object.defineProperty(shifting, 'operations', { enumerable: true, get: () => [] });
+  expect(checkInstalledImplementations(shifting)).toEqual({
+    ok: false,
+    reason: 'The installed-implementation catalog is not plain, acyclic, bounded data',
+  });
 });

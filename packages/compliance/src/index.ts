@@ -15,6 +15,7 @@ export {
   validateCoverage,
   validateSelectors,
   validateCheck,
+  validateCheckStructure,
   validateParse,
   validateConsent,
   validateIdentity,

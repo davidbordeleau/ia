@@ -1041,7 +1041,9 @@
       "project": "apps/cli",
       "files": [
         "tests/author.test.ts",
+        "tests/bindings.test.ts",
         "tests/capture.test.ts",
+        "tests/check-admission.test.ts",
         "tests/consumer.test.ts",
         "tests/decline.test.ts",
         "tests/distribution-verbs.test.ts",
@@ -1053,6 +1055,7 @@
         "tests/project.test.ts",
         "tests/read.test.ts",
         "tests/refusal-next.test.ts",
+        "tests/validate-checks.test.ts",
         "tests/workspace-verbs.test.ts"
       ],
       "profile": "installed",
@@ -1157,6 +1160,7 @@
         "tests/host.test.ts",
         "tests/hosts.test.ts",
         "tests/ia-home.test.ts",
+        "tests/implementations.test.ts",
         "tests/installation-core.test.ts",
         "tests/installed.test.ts",
         "tests/inventory.test.ts",
@@ -1618,6 +1622,7 @@
       "project": "packages/db",
       "files": [
         "tests/acceptance.test.ts",
+        "tests/check-evidence.test.ts",
         "tests/complete-scope.test.ts",
         "tests/descriptors.test.ts",
         "tests/distribution-contracts.test.ts",
@@ -2057,6 +2062,7 @@
         "tests/authoring-lifecycle.test.ts",
         "tests/authoring-shipped.test.ts",
         "tests/authoring.test.ts",
+        "tests/bind.test.ts",
         "tests/boundary.test.ts",
         "tests/generate-agent-profile.test.ts",
         "tests/installed-catalog.test.ts",
@@ -2438,6 +2444,7 @@
       "mode": "source",
       "inputProfile": "workspace-records",
       "dependsOn": [
+        "agent-composition-system:build",
         "language-base:generate",
         "distribution:build",
         "cli:build",
@@ -3226,6 +3233,7 @@
       "mode": "source",
       "inputProfile": "repository-inventory",
       "dependsOn": [
+        "agent-composition-system:build",
         "language-base:generate",
         "cli:build",
         "distribution:build",

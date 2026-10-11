@@ -4,15 +4,39 @@
  * Admission is whole-workspace by construction, so positionals restrict reporting and never admission: the
  * summary always states the true total and the exit class is computed from the unfiltered finding set.
  *
- * Acquisition and presentation are separated so that §7's reference blocks can be produced by this verb's own
- * renderer over this verb's own captured data — tools/docs/cli-examples.ts calls `collectValidation` and
- * `renderValidation` rather than recomposing the report from renderer primitives. The only value that tool
- * supplies of its own is the display root, which §2.5 already defines as a CLI-resolved value and which is the
- * one part of this output that differs between machines.
+ * Acquisition and presentation are separated (review finding B2-N9): `collectValidation` is the only part of this
+ * verb that touches a workspace, and `renderValidation` and `validationEnvelope` render only the view it captured,
+ * so the human report and the JSON envelope describe one acquisition and a test can render a captured view without
+ * opening a workspace. The display root is the one value the view carries that differs between machines (§2.5).
+ *
+ * Task execution-binding-host-entry (plan amendment C24): the report also carries the workspace's execution bindings,
+ * each joined against the installed-implementation catalog its host joined, through the same distribution service
+ * `ia-distribution validate` reports (`WorkspaceSession.bindings`). A revoked binding is an error and fails the run;
+ * an unavailable one is never a pass. Computing them writes nothing and executes nothing (C23; milestone 7 runs
+ * operations); the evidence below is the one write this verb makes. With no `@execution-binding` record the human
+ * report is unchanged.
+ *
+ * Review finding B2-R2: a join binds only through this installation's own payload (`validationTrust`), the one its
+ * bundled pin names in the IA home it materializes payloads in; a registration of any other payload is unavailable.
+ *
+ * Task check-runner-join-validate (plan amendments C14, C15, C21, C22 and C23): `ia validate` is the validate request.
+ * Its session admits checks structurally (an unknown evaluator is admitted and reported, not refused) and reads no
+ * evidence (review finding B3-R4), so its findings, counts, checks and exit are the authored view's alone and its
+ * `revision` is the one every other reader reports (B3-N4); it binds every `@check` (`WorkspaceSession.checks`, through the same trust) and records the
+ * evidence of the bound ones that passed or failed through `recordValidation`, the one writer of evidence, which
+ * `ia-distribution validate` calls too. A revoked check is an error; an unavailable or not-evaluated one is never a
+ * pass. With no `@check` record the human report is unchanged.
  */
-import type { Context, Result } from './consumer.js';
-import { requireRoot } from './consumer.js';
-import type { Capabilities, ErrorElements, Token } from './render.js';
+import { EVIDENCE_DIRECTORY } from '@inventarch/db';
+import type { EvidenceWrite } from '@inventarch/db';
+import { readHostPin } from '@inventarch/distribution/host-home';
+import { installationTrust } from '@inventarch/distribution/implementations';
+import type { HostTrust } from '@inventarch/distribution/implementations';
+import { recordValidation } from '@inventarch/distribution/services';
+import type { ValidationBindings, ValidationChecks } from '@inventarch/distribution/services';
+import type { Context, Host, Result } from './consumer.js';
+import { iaHomeOf, Refusal, requireRoot } from './consumer.js';
+import type { Capabilities, ErrorElements, SymbolName, Token } from './render.js';
 import {
   atom,
   blockSymbolWidth,
@@ -21,6 +45,7 @@ import {
   entry,
   errorBlock,
   headerLine,
+  quote,
   sectionLabel,
   statusSymbol,
   truncateDigest,
@@ -28,7 +53,7 @@ import {
 } from './render.js';
 import { sessionGate } from './profile.js';
 import type { SessionGate } from './profile.js';
-import { openSession } from './session.js';
+import { codeOf, openSession, VALIDATING } from './session.js';
 import type { Session } from './session.js';
 
 type Admission = ReturnType<Session['admission']>;
@@ -91,12 +116,20 @@ export interface ValidationView {
   /** The path the CLI resolved, never the runtime's own `result.root`, which is always empty (§2.5). */
   readonly root: string;
   readonly revision: string;
+  /** The authored revision, which names the evidence this request records (review finding B3-N4). */
+  readonly authoredRevision: string;
   readonly status: 'admitted' | 'refused';
   readonly outcome: ReportOutcome;
   readonly records: number;
   /** Every finding, unfiltered: the counts and the exit class are computed from this. */
   readonly findings: readonly Finding[];
   readonly checks: ReadonlyMap<string, string>;
+  /** Every admitted `@execution-binding` joined against the catalog this workspace's host joined, unfiltered. */
+  readonly bindings: ValidationBindings;
+  /** Every admitted `@check` bound, unfiltered (C15, C22). */
+  readonly checkBindings: ValidationChecks;
+  /** What this validate request recorded as evidence (C14). */
+  readonly evidence: EvidenceWrite;
 }
 export interface ValidationOptions {
   readonly filters: readonly string[];
@@ -104,27 +137,103 @@ export interface ValidationOptions {
   readonly limit: number;
 }
 export const DEFAULT_OPTIONS: ValidationOptions = { filters: [], severity: 'warning', limit: 50 };
-export const validationExit = (view: ValidationView): 0 | 1 => (countsOf(view.findings).errors === 0 ? 0 : 1);
+const bindingCounts = (bindings: ValidationBindings) => ({
+  bound: bindings.results.filter((binding) => binding.status === 'bound').length,
+  unavailable: bindings.results.filter((binding) => binding.status === 'unavailable').length,
+  revoked: bindings.results.filter((binding) => binding.status === 'revoked').length,
+});
+/** The checks naming an evaluator that is not built in, which only a structural admission admits (C21). */
+const structurallyAdmitted = (checks: ValidationChecks): readonly string[] =>
+  checks.results
+    .filter((check) => check.runner !== null && check.implementation !== 'built-in')
+    .map((check) => check.identity);
+/** `identities` as one phrase: `a`, `a and b`, `a, b and c`. */
+const listed = (identities: readonly string[]): string =>
+  identities.length <= 1 ? (identities[0] ?? '') : `${identities.slice(0, -1).join(', ')} and ${identities.at(-1)}`;
+const checkCounts = (checks: ValidationChecks) => ({
+  revoked: checks.results.filter((check) => check.status === 'revoked').length,
+  /** Checks naming an evaluator that is not built in, which only a structural admission admits (C21). */
+  structural: structurallyAdmitted(checks).length,
+  notEvaluated: checks.results.filter((check) => check.status !== 'revoked' && check.outcome === 'not-evaluated')
+    .length,
+});
+/** 1 when admission has an error or a binding or check is revoked, an error too; unavailable and not-evaluated are not. */
+export const validationExit = (view: ValidationView): 0 | 1 =>
+  countsOf(view.findings).errors === 0 &&
+  bindingCounts(view.bindings).revoked === 0 &&
+  checkCounts(view.checkBindings).revoked === 0
+    ? 0
+    : 1;
+/**
+ * The refusal for evidence that could not be recorded (C14): located at the path the service names, with the repair. The
+ * validation it reports is discarded, as a refused effect's report is.
+ */
+function evidenceRefusal(error: unknown, root: string): Refusal {
+  const code = codeOf(error, 'IA-CLI-FAILED'),
+    message = error instanceof Error ? error.message : String(error),
+    located =
+      error !== null && typeof error === 'object' && 'path' in error && typeof error.path === 'string'
+        ? error.path
+        : EVIDENCE_DIRECTORY;
+  const rerun = `ia validate --root ${quote(root)}`;
+  return new Refusal(
+    code,
+    message,
+    3,
+    { path: located },
+    code === 'IA-DB-PATH-UNSAFE'
+      ? `Replace ${located}, a link, junction or entry of the wrong kind, with a directory of this workspace, then run "${rerun}".`
+      : `Make ${EVIDENCE_DIRECTORY} writable, then run "${rerun}".`,
+  );
+}
 
 /**
- * Opens the workspace, reads its admission and closes it. The only part of this verb that touches a workspace. `gate`,
- * when given, judges the session before admission is read (review C2-N3).
+ * The installation a validation trusts a join through (review finding B2-R2): the release this package's bundled host
+ * payload pin names, materialized in the IA home `env` resolves. Run from inside a host payload, whose copy of this
+ * package carries no pin, it is that payload (`installationTrust`). Null, so nothing binds, when there is neither or
+ * the IA home cannot be resolved.
  */
-export function collectValidation(root: string, gate?: SessionGate): ValidationView {
-  const session: Session = openSession(root);
+export function validationTrust(host: Pick<Host, 'env' | 'packageRoot'>): HostTrust | null {
+  let release: string;
+  try {
+    release = readHostPin(host.packageRoot).pin.release;
+  } catch {
+    return installationTrust();
+  }
+  const home = iaHomeOf(host.env);
+  return home === undefined ? null : { home, release };
+}
+/**
+ * Opens the workspace, reads its admission, binds its checks, records their evidence and closes it. The only part of this
+ * verb that touches a workspace, and the evidence it records is the one write it makes. `gate`, when given, judges the
+ * session before admission is read or any evidence is recorded, so a refused profile writes nothing (review C2-N3).
+ */
+export function collectValidation(root: string, trust: HostTrust | null, gate?: SessionGate): ValidationView {
+  const session: Session = openSession(root, VALIDATING);
   try {
     gate?.(session);
     // The distribution's one validation service, which `ia-distribution validate` reports as well: admission's findings
     // and the warnings for db D02a/D02b declarations that declare nothing.
-    const admission = session.validation();
+    const admission = session.validation(),
+      checkBindings = session.checks(trust);
+    let evidence: EvidenceWrite;
+    try {
+      evidence = recordValidation(session, checkBindings);
+    } catch (error) {
+      throw evidenceRefusal(error, root);
+    }
     return {
       root,
       revision: admission.revision,
+      authoredRevision: admission.authoredRevision,
       status: admission.status,
       outcome: session.reader.report.outcome,
       records: admission.records,
       findings: admission.findings,
       checks: checkNames(session.reader.report.verdicts),
+      bindings: session.bindings(trust),
+      checkBindings,
+      evidence,
     };
   } finally {
     session.close();
@@ -154,13 +263,99 @@ export function validationEnvelope(view: ValidationView, options: ValidationOpti
     version: 1,
     root: view.root,
     revision: view.revision,
+    authoredRevision: view.authoredRevision,
     status: view.status,
     reportOutcome: view.outcome,
     counts: countsOf(view.findings),
     findings: shown,
     truncated: shown.length < reported.length,
+    bindings: view.bindings,
+    checks: view.checkBindings,
+    evidence: view.evidence,
   };
 }
+const CHECK_SYMBOL = (check: ValidationChecks['results'][number]): SymbolName =>
+  check.status === 'revoked' || check.outcome === 'fail'
+    ? 'error'
+    : check.status === 'bound' && check.outcome === 'pass'
+      ? 'success'
+      : 'unknown';
+interface ResultRow {
+  readonly symbol: SymbolName;
+  readonly identity: string;
+  readonly result: string;
+  readonly reason: string;
+}
+/**
+ * One entry per binding or check (review finding B2-N3): the identity on the symbol's line, then the result and the
+ * reason each on a line of its own at the entry's content column, so a long identity never squeezes them into a narrow
+ * value column.
+ */
+const resultRows = (rows: readonly ResultRow[], caps: Capabilities): readonly string[] => {
+  const symbolWidth = blockSymbolWidth(
+    rows.map((row) => row.symbol),
+    caps.ascii,
+  );
+  return rows.flatMap((row) =>
+    entry(
+      [[atom(row.identity, null, 0)], words(row.result), words(row.reason, 'dim')],
+      { depth: 1, symbol: row.symbol, symbolWidth },
+      caps,
+    ),
+  );
+};
+/** The Checks section: the catalog any non-built-in check binds against, one entry per check, then what was recorded. */
+const checksSection = (view: ValidationView, caps: Capabilities): readonly string[] => {
+  const { catalog, results } = view.checkBindings,
+    recorded = view.evidence;
+  const rows: ResultRow[] = results.map((check) => ({
+    symbol: CHECK_SYMBOL(check),
+    identity: check.identity,
+    result: `${check.runner ?? 'no evaluator'}: ${check.status}, ${check.outcome}`,
+    reason: check.reason,
+  }));
+  const evidence =
+    recorded.path === null
+      ? view.status === 'refused'
+        ? 'No evidence recorded: admission was refused, so nothing is recorded or pruned.'
+        : 'No evidence recorded: no bound check passed or failed.'
+      : `Recorded ${recorded.observations.length} ${recorded.observations.length === 1 ? 'observation' : 'observations'} in ${recorded.path}${recorded.written ? '' : ', unchanged'}.`;
+  return [
+    sectionLabel('Checks', caps),
+    ...(catalog === null ? [] : entry([words(catalogLine(catalog, caps.ascii))], { depth: 1, symbol: 'info' }, caps)),
+    ...resultRows(rows, caps),
+    ...entry([words(evidence)], { depth: 1, symbol: 'info' }, caps),
+  ];
+};
+
+const BINDING_SYMBOL: Readonly<Record<ValidationBindings['results'][number]['status'], SymbolName>> = {
+  bound: 'success',
+  unavailable: 'unknown',
+  revoked: 'error',
+};
+/** Where the bindings' catalog came from, in one sentence. */
+function catalogLine(catalog: NonNullable<ValidationBindings['catalog']>, ascii: boolean): string {
+  if (catalog.status === 'unavailable') return `No installed-implementation catalog: ${catalog.reason}.`;
+  if (catalog.status === 'damaged')
+    return `The catalog host ${catalog.consumer} joined failed verification: ${catalog.reason}.`;
+  return `Catalog ${truncateDigest(catalog.digest, ascii)} in release ${truncateDigest(catalog.release, ascii)} (${catalog.version}), joined by host ${catalog.consumer}. Nothing is executed.`;
+}
+/** The Bindings section: where the catalog came from, then one entry per binding with its result and reason. */
+const bindingsSection = (bindings: ValidationBindings, caps: Capabilities): readonly string[] => {
+  const rows: ResultRow[] = bindings.results.map((binding) => ({
+    symbol: BINDING_SYMBOL[binding.status],
+    identity: binding.identity,
+    result: `${binding.implementation ?? 'no implementation'}: ${binding.status}`,
+    reason: binding.reason,
+  }));
+  return [
+    sectionLabel('Bindings', caps),
+    ...(bindings.catalog === null
+      ? []
+      : entry([words(catalogLine(bindings.catalog, caps.ascii))], { depth: 1, symbol: 'info' }, caps)),
+    ...resultRows(rows, caps),
+  ];
+};
 
 const element = (view: ValidationView, finding: Finding, width: number): ErrorElements => {
   const location = locationOf(finding);
@@ -231,8 +426,37 @@ const severitySection = (view: ValidationView, rows: readonly Finding[], caps: C
   return lines;
 };
 
+/**
+ * The closing next action. Review finding B2-N8: a run that fails only because a binding or check is revoked names the
+ * repair rather than errors it does not list: deleting the payload that failed verification and re-applying the host
+ * that joined it, or replacing what the intact catalog revokes. A not-evaluated check is never a pass.
+ */
+function closing(view: ValidationView, errors: number, revoked: number, notEvaluated: number): string {
+  const damaged = [view.bindings.catalog, view.checkBindings.catalog].find((catalog) => catalog?.status === 'damaged'),
+    structural = structurallyAdmitted(view.checkBindings),
+    revokedChecks = view.checkBindings.results
+      .filter((check) => check.status === 'revoked')
+      .map((check) => check.identity);
+  if (errors > 0) return 'Fix the errors above and run "ia validate" again.';
+  // Review finding B3-R3: ia host admits strictly, so it refuses a workspace holding a check only this structural
+  // admission admits; the repair names that check first, so the host's own remedy lands somewhere actionable.
+  if (damaged?.status === 'damaged')
+    return structural.length > 0
+      ? `Remove or replace ${listed(structural)}, which only ia validate admits and ia host refuses, then delete ${damaged.payload}, the host payload that failed verification, and run "ia host ${damaged.consumer} --root ${quote(view.root)} --apply".`
+      : `Delete ${damaged.payload}, the host payload that failed verification, then run "ia host ${damaged.consumer} --root ${quote(view.root)} --apply".`;
+  if (revokedChecks.length > 0)
+    return `Remove or replace ${listed(revokedChecks)}, whose evaluator the installed catalog revokes, then run "ia validate --root ${quote(view.root)}" again.`;
+  if (revoked > 0)
+    return 'Replace each implementation the installed catalog revokes above with one it does not, then run "ia validate" again.';
+  if (view.outcome === 'not-evaluated')
+    return 'A not-evaluated result is not a pass. Supply the named evaluator to obtain one.';
+  if (notEvaluated > 0) return 'A not-evaluated check is not a pass; each check above says why it was not evaluated.';
+  return 'Every declared structural obligation is satisfied at this revision.';
+}
 export function renderValidation(view: ValidationView, options: ValidationOptions, caps: Capabilities): string {
-  const total = countsOf(view.findings);
+  const total = countsOf(view.findings),
+    bound = bindingCounts(view.bindings),
+    checked = checkCounts(view.checkBindings);
   const { reported, shown, hiddenBySeverity, hiddenByPath } = select(view, options);
   const summary: (readonly Token[])[] = [
     words(
@@ -247,6 +471,39 @@ export function renderValidation(view: ValidationView, options: ValidationOption
         `${hiddenByPath} ${hiddenByPath === 1 ? 'finding' : 'findings'} elsewhere in the workspace hidden by the path filter; admission is whole-workspace and the counts above are unfiltered.`,
       ),
     );
+  if (bound.revoked > 0)
+    summary.push(
+      words(
+        `${bound.revoked} execution ${bound.revoked === 1 ? 'binding is' : 'bindings are'} revoked, which is an error.`,
+      ),
+    );
+  if (bound.unavailable > 0)
+    summary.push(
+      words(
+        `${bound.unavailable} execution ${bound.unavailable === 1 ? 'binding is' : 'bindings are'} not bound; an unbound binding is not a pass.`,
+      ),
+    );
+  if (checked.revoked > 0)
+    summary.push(
+      words(`${checked.revoked} ${checked.revoked === 1 ? 'check is' : 'checks are'} revoked, which is an error.`),
+    );
+  if (checked.notEvaluated > 0)
+    summary.push(
+      words(
+        `${checked.notEvaluated} ${checked.notEvaluated === 1 ? 'check was' : 'checks were'} not evaluated; a not-evaluated check is not a pass.`,
+      ),
+    );
+  if (checked.structural > 0) {
+    // Review finding B3-R3: named, so the refusal ia host, ia capture or ia project gives for them has a place to land.
+    const named = listed(structurallyAdmitted(view.checkBindings));
+    summary.push(
+      words(
+        checked.structural === 1
+          ? `1 check names an evaluator that is not built in (${named}): ia validate admits it to bind it, but every other reader of the admitted graph still refuses it as IA-COMP-CHECK-UNKNOWN, so remove or replace it before ia host, ia capture or ia project.`
+          : `${checked.structural} checks name evaluators that are not built in (${named}): ia validate admits them to bind them, but every other reader of the admitted graph still refuses them as IA-COMP-CHECK-UNKNOWN, so remove or replace them before ia host, ia capture or ia project.`,
+      ),
+    );
+  }
   if (view.outcome === 'not-evaluated')
     summary.push(
       words(
@@ -260,7 +517,11 @@ export function renderValidation(view: ValidationView, options: ValidationOption
       [{ text: `revision ${truncateDigest(view.revision, caps.ascii)}`, column: 50 }],
       caps,
     ),
-    entry(summary, { depth: 1, symbol: total.errors === 0 ? 'success' : 'error' }, caps),
+    entry(
+      summary,
+      { depth: 1, symbol: total.errors === 0 && bound.revoked === 0 && checked.revoked === 0 ? 'success' : 'error' },
+      caps,
+    ),
   ];
   for (const group of [
     { label: 'Errors', severity: 'error' as const },
@@ -283,18 +544,15 @@ export function renderValidation(view: ValidationView, options: ValidationOption
         caps,
       ),
     );
+  if (view.checkBindings.results.length > 0) blocks.push(checksSection(view, caps));
+  if (view.bindings.results.length > 0) blocks.push(bindingsSection(view.bindings, caps));
   blocks.push(
     entry(
-      [
-        words(
-          total.errors > 0
-            ? 'Fix the errors above and run "ia validate" again.'
-            : view.outcome === 'not-evaluated'
-              ? 'A not-evaluated result is not a pass. Supply the named evaluator to obtain one.'
-              : 'Every declared structural obligation is satisfied at this revision.',
-        ),
-      ],
-      { depth: 0, symbol: 'step' },
+      [words(closing(view, total.errors, bound.revoked + checked.revoked, checked.notEvaluated))],
+      {
+        depth: 0,
+        symbol: 'step',
+      },
       caps,
     ),
   );
@@ -305,8 +563,8 @@ export function runValidate(context: Context): Result {
   const { args, caps, json } = context;
   const root = requireRoot(context);
   // The validate mode (Verification) under the participant's mandate profile, judged on the validation's own session
-  // before it reads anything.
-  const view = collectValidation(root, sessionGate(context, 'validate'));
+  // before it reads anything or records evidence.
+  const view = collectValidation(root, validationTrust(context.host), sessionGate(context, 'validate'));
   const options: ValidationOptions = {
     filters: args.positionals,
     severity: (args.value('severity') ?? 'warning') as Severity,

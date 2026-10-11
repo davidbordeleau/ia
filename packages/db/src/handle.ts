@@ -32,12 +32,20 @@ import type { Readiness, RetainedSnapshot, Staleness } from './retention.js';
 import { seatOf } from './seat.js';
 import type { SeatResolution } from './seat.js';
 import { occurrenceKey, viewBuilder } from './view.js';
+import type { ViewOptions } from './view.js';
 import type { RefusedRecord, View } from './view.js';
 import { previewInputs } from './preview.js';
 import type { DraftChange, DraftPreview } from './preview.js';
 
 export interface OpenOptions extends InputOptions {
   readonly cache?: boolean;
+  /**
+   * D13: how `@check` records are admitted (`ViewOptions.checks`). `strict`, the default, keeps every existing reader's
+   * admission; `structural` is for the validate path that binds checks, and `preview` drafts under it too. A handle
+   * opened `structural` or with `evidence` never reads or writes the cache, whatever `cache` says (review finding
+   * B3-N5), so `.ia/.iadb/graph.json` only ever holds a strict, evidence-free graph.
+   */
+  readonly checks?: 'strict' | 'structural';
 }
 export interface ReadOptions {
   readonly root?: string;
@@ -128,11 +136,11 @@ function scopeRoot(value: string): string {
 
 /** Internal observation seam: production supplies readInputs, tests can prove
  * the bounded retry and no-publication invariant with real captured inputs. */
-export function stableState(read: () => InputSnapshot, cache: boolean): State {
+export function stableState(read: () => InputSnapshot, cache: boolean, view: ViewOptions = {}): State {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const inputs = read(),
-        build = viewBuilder(inputs),
+        build = viewBuilder(inputs, view),
         rootView = build();
       if (read().fingerprint !== inputs.fingerprint) continue;
       return {
@@ -158,12 +166,19 @@ const rootSnapshot = (state: State): RetainedSnapshot =>
 export class Reader {
   readonly root: string;
   #locations: Readonly<Record<string, import('@inventarch/language').Location>>;
+  /** How `preview` admits a draft: as this reader's view does (`OpenOptions.checks`). */
+  #view: ViewOptions;
   #state: State;
   #closed = false;
   #generation = 0;
   #scopes = new Map<string, BoundScope>();
-  constructor(state: State, locations: Readonly<Record<string, import('@inventarch/language').Location>> = {}) {
+  constructor(
+    state: State,
+    locations: Readonly<Record<string, import('@inventarch/language').Location>> = {},
+    view: ViewOptions = {},
+  ) {
     this.#locations = locations;
+    this.#view = view;
     this.#state = state;
     this.root = state.inputs.root;
   }
@@ -339,7 +354,7 @@ export class Reader {
   }
   preview(changes: readonly DraftChange[]): DraftPreview {
     this.#assertOpen();
-    return previewInputs(this.#state.inputs, this.revision, changes, this.#locations);
+    return previewInputs(this.#state.inputs, this.revision, changes, this.#locations, this.#view);
   }
   get(identity: string, options: ReadOptions = {}): Node | undefined {
     return this.#admit(identity, options).view.graph.nodes.get(identity);
@@ -507,8 +522,12 @@ export class Reader {
 export class Handle extends Reader {
   #options: OpenOptions;
   constructor(root: string, options: OpenOptions = {}) {
-    const selected = Object.freeze({ ...inputOptions(options), cache: options.cache ?? true });
-    const state = stableState(() => readInputs(root, selected), selected.cache),
+    const selected = Object.freeze({
+      ...inputOptions(options),
+      cache: options.checks === 'structural' || options.evidence === true ? false : (options.cache ?? true),
+      ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
+    });
+    const state = stableState(() => readInputs(root, selected), selected.cache, selected),
       canonical = state.inputs.root,
       current = rootSnapshot(state),
       seed = once(() => readCapture(canonical, current));
@@ -523,13 +542,14 @@ export class Handle extends Reader {
         },
       },
       selected.locations,
+      selected.checks === 'structural' ? { checks: 'structural' } : {},
     );
     this.#options = selected;
     Object.freeze(this);
   }
   refresh(): Snapshot {
     const held = this.retention,
-      next = stableState(() => readInputs(this.root, this.#options), this.#options.cache!),
+      next = stableState(() => readInputs(this.root, this.#options), this.#options.cache!, this.#options),
       root = next.inputs.root,
       current = rootSnapshot(next);
     // D08 rotation (`rotate`) without reading the pair: a changed authored revision makes the held root snapshot

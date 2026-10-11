@@ -12,6 +12,7 @@ import {
   realpathSync,
   statSync,
 } from 'node:fs';
+import type { Stats } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BAND_OF, KERNEL_SOURCES, isPlacementKind, isProvenance } from '@inventarch/language';
 import type { Location } from '@inventarch/language';
@@ -43,6 +44,12 @@ export interface InputOptions {
   readonly adopted?: readonly AdoptedSource[];
   /** Host-selected project instance targets; adopted definitions remain read-only. */
   readonly writableSystems?: readonly string[];
+  /**
+   * D14: list the runtime evidence files under `.ia/work/evidence` as candidates, of which a view reads and admits only
+   * the one named after its own authored revision. Absent or false, as for every existing reader, none is listed. A
+   * reader opened with it never writes a cache (`open`).
+   */
+  readonly evidence?: boolean;
 }
 export interface InputSnapshot {
   readonly authoredRoots?: readonly string[];
@@ -53,7 +60,70 @@ export interface InputSnapshot {
   readonly sources: readonly RevisionSource[];
   readonly folders: readonly string[];
   readonly floorOrigin: 'explicit' | 'local' | 'embedded';
+  /**
+   * D14: the evidence files listed when `evidence` was asked for, by path, size and modification time; never in
+   * `sources`, and none is read here (review finding B3-N10): a view reads only its own authored revision's file.
+   */
+  readonly evidence?: readonly EvidenceCandidate[];
   readonly fingerprint: string;
+}
+/** D14: where the validate effect writes runtime evidence, one file per authored revision. */
+export const EVIDENCE_DIRECTORY = '.ia/work/evidence';
+/** D14: an evidence file's name, `<authored revision>.ia`; anything else in the directory is not evidence. */
+export const EVIDENCE_FILE = /^[0-9a-f]{64}\.ia$/;
+const EVIDENCE_BYTES = 4 * 1024 * 1024;
+/** One listed evidence file: its path, and the size and modification time the fingerprint covers. */
+export interface EvidenceCandidate {
+  readonly path: string;
+  readonly bytes: number;
+  readonly mtimeMs: number;
+}
+const RUNTIME = Object.freeze({
+  placement: Object.freeze({ kind: 'runtime' as const, band: 0 as const, reach: '' }),
+  provenance: 'runtime' as const,
+});
+/**
+ * D14: the evidence files at `.ia/work/evidence`, listed and never read. Nothing is ever listed or read through a link:
+ * the directories from the root are contained the D01 way, and a link, junction or entry of the wrong kind at `.ia`,
+ * `.ia/work` or the directory itself means there is no evidence, as a missing one does; evidence is optional, so a
+ * workspace a released reader validated is never refused for its `.ia/work`. A link, a hard-linked file or anything but
+ * a regular file is not listed. The writer refuses where it would have to write through any of these.
+ */
+function evidenceSources(root: string): readonly EvidenceCandidate[] {
+  for (const directory of ['.ia', '.ia/work', EVIDENCE_DIRECTORY]) {
+    let stat: Stats | undefined;
+    try {
+      stat = lstatSync(safePath(root, directory), { throwIfNoEntry: false });
+    } catch (error) {
+      if (error instanceof DbError && error.code === 'IA-DB-PATH-UNSAFE') return [];
+      throw error;
+    }
+    if (stat === undefined || !stat.isDirectory()) return [];
+  }
+  const found: EvidenceCandidate[] = [];
+  for (const name of readdirSync(safePath(root, EVIDENCE_DIRECTORY)).sort(compare)) {
+    if (!EVIDENCE_FILE.test(name)) continue;
+    const path = `${EVIDENCE_DIRECTORY}/${name}`,
+      stat = lstatSync(safePath(root, path), { throwIfNoEntry: false });
+    if (stat?.isFile() === true && stat.nlink === 1)
+      found.push(Object.freeze({ path, bytes: stat.size, mtimeMs: stat.mtimeMs }));
+  }
+  return Object.freeze(found);
+}
+/**
+ * D14: the listed evidence file at `path` as a source at runtime placement band 0, read through `readWorkspaceBytes`
+ * (so a link, hard link or nonregular file is refused) within its bound; undefined for one that cannot be read or is not
+ * exact UTF-8, which is then not evidence.
+ */
+export function evidenceSource(root: string, path: string): RevisionSource | undefined {
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+      readWorkspaceBytes(root, path, EVIDENCE_BYTES),
+    );
+    return Object.freeze({ path, text, location: RUNTIME });
+  } catch {
+    return undefined;
+  }
 }
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 export { pathKey };
@@ -297,6 +367,7 @@ export function inputOptions(options: InputOptions): InputOptions {
     throw new DbError('IA-DB-PATH-UNSAFE', 'Duplicate floor source aliases');
   return Object.freeze({
     locations: Object.freeze(locations),
+    ...(options.evidence === true ? { evidence: true } : {}),
     ...(authoredRoots === undefined ? {} : { authoredRoots: Object.freeze(authoredRoots) }),
     ...(candidateInstallation === undefined ? {} : { candidateInstallation }),
     ...(floor === undefined ? {} : { floor: Object.freeze(floor) }),
@@ -627,6 +698,8 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
   sources.sort((a, b) => compare(a.path, b.path));
   const activation = installed ? { activation: installed.pointer } : {};
   const authored = options.authoredRoots === undefined ? {} : { authoredRoots: options.authoredRoots };
+  // D14: only a reader that asks reads evidence, and its fingerprint then covers it, so a concurrent write is seen.
+  const evidence = options.evidence === true ? { evidence: evidenceSources(canonical) } : {};
   return Object.freeze({
     root: canonical,
     sources: Object.freeze(sources),
@@ -634,9 +707,10 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
     floorOrigin,
     ...activation,
     ...authored,
+    ...evidence,
     ...(installed ? { installed: installed.lock.packages } : {}),
     fingerprint: createHash('sha256')
-      .update(stableSerialize({ sources, folders, floorOrigin, ...activation, ...authored }))
+      .update(stableSerialize({ sources, folders, floorOrigin, ...activation, ...authored, ...evidence }))
       .digest('hex'),
   });
 }

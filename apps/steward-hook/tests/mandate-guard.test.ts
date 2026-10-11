@@ -198,6 +198,9 @@ it('refuses the main session with no default actor or an ambiguous one wherever 
   expect(code(ambiguous)).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
   expect(reason(ambiguous)).toContain('2 participants');
   expect(reason(ambiguous)).toContain(`Next: ia position --seat ${DEMO} --shape governance`);
+  // The main session's refusal also names the shell command that lifts every hook (G-N1); a subagent's does not.
+  expect(reason(ambiguous)).toContain(`ia host claude --root ${JSON.stringify(two)} --remove --apply --yes`);
+  expect(reason(check(none, 'docs/guide.md', stranger))).not.toContain('--remove --apply');
   // The reviewer subagent is established all the same, and reviewer-mandate grants it docs/.
   expect(check(two, 'docs/guide.md', reviewer)).toEqual({});
 });

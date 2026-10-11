@@ -214,33 +214,111 @@ export function planGuardFor(rootInput: string, expected: HostCacheTarget): Guar
   assertHostRegistrationIdle(root);
   return planGuardWith(root, expected, null);
 }
-function planGuardWith(root: string, cache: HostCacheTarget | null, removeId: string | null): GuardPlan {
+/** What a registration plan reads before it decides (`readSettings`). */
+interface SettingsRead<T> {
+  readonly id: string;
+  readonly before: Side;
+  /** The ownership state, as its validator reads it, or null. */
+  readonly prior: T | null;
+  /** `.claude/settings.local.json`'s PreToolUse groups, bounded. */
+  readonly rows: unknown[];
+  readonly projectText: string | null;
+}
+/**
+ * The preamble the retired steward guard's plan (removal, and the 1.x registration its fixtures still make) and the hook
+ * groups' plan share (guard review finding G-N9): a Claude-compatible cache outside the root, the settings and the
+ * ownership state read once, a removal refused when nothing is owned, hooks explicitly disabled refused when the plan
+ * would register a group, and a bounded PreToolUse array.
+ */
+function readSettings<T>(
+  root: string,
+  cache: HostCacheTarget | null,
+  removeId: unknown,
+  what: 'Guard' | 'Hook',
+  stateOf: (id: string) => string,
+  validate: (content: string | null, id: string, removal: boolean) => T | null,
+  writing: boolean,
+): SettingsRead<T> {
   if (cache && cache.host !== null && cache.host !== 'claude')
-    fail('HOST-UNSUPPORTED', 'Guard registration requires a Claude-compatible cache');
+    fail('HOST-UNSUPPORTED', `${what} registration requires a Claude-compatible cache`);
   if (cache) {
     const path = relative(cache.directory, root);
     if (!isAbsolute(path) && path !== '..' && !path.startsWith('..' + sep))
       fail('PATH-UNSAFE', 'Consumer root cannot be inside its immutable host cache');
   }
-  const id = cache ? HOST_REGISTRATION : identity(removeId);
+  const id = cache ? HOST_REGISTRATION : identity(removeId),
+    stateFile = stateOf(id);
   const before: Side = {
       config: read(root, configPath),
-      state: locate(statePath(id), () => read(root, statePath(id))),
+      state: locate(stateFile, () => read(root, stateFile)),
     },
-    prior = locate(statePath(id), () => saved(before.state, root, id, cache === null));
-  if (!cache && !prior) fail('INPUT-INVALID', 'Guard registration is not owned');
+    prior = locate(stateFile, () => validate(before.state, id, cache === null));
+  if (!cache && !prior) fail('INPUT-INVALID', `${what} registration is not owned`);
   const config = before.config === null ? {} : plain(decodeDistributionJson(before.config)),
     hooks = config['hooks'] === undefined ? {} : plain(config['hooks']);
   const projectText = read(root, projectPath),
     project = projectText === null ? {} : plain(decodeDistributionJson(projectText));
   if (
-    cache &&
+    writing &&
     (config['disableAllHooks'] === true ||
       (config['disableAllHooks'] === undefined && project['disableAllHooks'] === true))
   )
     fail('HOST-UNSUPPORTED', 'Project hooks are explicitly disabled by disableAllHooks');
   const rows: unknown[] = hooks['PreToolUse'] === undefined ? [] : (hooks['PreToolUse'] as unknown[]);
   if (!Array.isArray(rows) || rows.length > 256) fail('INPUT-INVALID', 'Expected a bounded PreToolUse hook array');
+  return { id, before, prior, rows, projectText };
+}
+/**
+ * The journaled publication both registrations share (G-N9), under the host lock the caller holds: the journal first
+ * (`guard-pending.json`, which every host write waits on), the settings, then the ownership state (the commit), then
+ * the journal cleared; a concurrent change of either file, the project settings or the cache refuses.
+ */
+function publish(
+  root: string,
+  plan: {
+    readonly id: string;
+    readonly request: { readonly cache: string } | { readonly remove: string };
+    readonly release: string | null;
+    readonly before: { readonly projectConfig: string | null };
+    readonly after: Side;
+  },
+  stateFile: string,
+  pendingFormat: string,
+  what: 'Guard' | 'Hook',
+  checkpoint: (stage: string) => void,
+): void {
+  const now = (): Side => ({ config: read(root, configPath), state: read(root, stateFile) });
+  const unchanged = (side: Side): void => {
+    if (json(now()) !== json(side))
+      fail('LOCAL-MODIFICATION', `${what} configuration or ownership changed during publication`);
+  };
+  const before = now();
+  write(root, pendingPath, json({ format: pendingFormat, id: plan.id, before, after: plan.after }));
+  checkpoint('pending');
+  unchanged(before);
+  write(root, configPath, plan.after.config);
+  checkpoint('config');
+  unchanged({ ...before, config: plan.after.config });
+  if (
+    pin(read(root, projectPath)) !== plan.before.projectConfig ||
+    ('cache' in plan.request && verifyHostCache(plan.request.cache).release !== plan.release)
+  )
+    fail('PLAN-STALE', 'Project settings or host cache changed before registration commit');
+  write(root, stateFile, plan.after.state);
+  checkpoint('state');
+  write(root, pendingPath, null);
+  checkpoint('complete');
+}
+function planGuardWith(root: string, cache: HostCacheTarget | null, removeId: string | null): GuardPlan {
+  const { id, before, prior, rows, projectText } = readSettings(
+    root,
+    cache,
+    removeId,
+    'Guard',
+    statePath,
+    (content, owner, removal) => saved(content, root, owner, removal),
+    cache !== null,
+  );
   const matching = prior
     ? rows.map((row, at) => (json(row) === json(prior.group) ? at : -1)).filter((at) => at >= 0)
     : [];
@@ -285,14 +363,6 @@ function planGuardWith(root: string, cache: HostCacheTarget | null, removeId: st
   };
   return { ...body, digest: digest(body) };
 }
-const current = (root: string, id: string): Side => ({
-  config: read(root, configPath),
-  state: read(root, statePath(id)),
-});
-function same(root: string, id: string, side: Side): void {
-  if (json(current(root, id)) !== json(side))
-    fail('LOCAL-MODIFICATION', 'Guard configuration or ownership changed during publication');
-}
 const write = (root: string, path: string, content: string | null): void =>
   replace(root, path, content === null ? null : Buffer.from(content));
 export function applyGuardRegistration(
@@ -307,26 +377,7 @@ export function applyGuardRegistration(
   try {
     const plan = planGuardRegistration(root, row['request'] as GuardRequest);
     if (json(plan) !== json(input)) fail('PLAN-STALE', 'Guard plan no longer matches its current inputs');
-    const before = current(root, plan.id);
-    write(
-      root,
-      pendingPath,
-      json({ format: 'ia.guard-registration-pending.v1', id: plan.id, before, after: plan.after }),
-    );
-    checkpoint('pending');
-    same(root, plan.id, before);
-    write(root, configPath, plan.after.config);
-    checkpoint('config');
-    same(root, plan.id, { ...before, config: plan.after.config });
-    if (
-      pin(read(root, projectPath)) !== plan.before.projectConfig ||
-      ('cache' in plan.request && verifyHostCache(plan.request.cache).release !== plan.release)
-    )
-      fail('PLAN-STALE', 'Project settings or host cache changed before registration commit');
-    write(root, statePath(plan.id), plan.after.state);
-    checkpoint('state');
-    write(root, pendingPath, null);
-    checkpoint('complete');
+    publish(root, plan, statePath(plan.id), 'ia.guard-registration-pending.v1', 'Guard', checkpoint);
     return { status: 'cache' in plan.request ? 'guard-registered' : 'guard-removed', id: plan.id };
   } finally {
     unlock();
@@ -555,33 +606,15 @@ function planHooksWith(
   desired: readonly HookRow[],
   removeId: unknown,
 ): HookPlan {
-  if (cache && cache.host !== null && cache.host !== 'claude')
-    fail('HOST-UNSUPPORTED', 'Hook registration requires a Claude-compatible cache');
-  if (cache) {
-    const path = relative(cache.directory, root);
-    if (!isAbsolute(path) && path !== '..' && !path.startsWith('..' + sep))
-      fail('PATH-UNSAFE', 'Consumer root cannot be inside its immutable host cache');
-  }
-  const id = cache ? HOST_REGISTRATION : identity(removeId),
-    stateFile = hookStatePath(id);
-  const before: Side = {
-      config: read(root, configPath),
-      state: locate(stateFile, () => read(root, stateFile)),
-    },
-    prior = locate(stateFile, () => savedHooks(before.state, root, id, cache === null));
-  if (!cache && !prior) fail('INPUT-INVALID', 'Hook registration is not owned');
-  const config = before.config === null ? {} : plain(decodeDistributionJson(before.config)),
-    hooks = config['hooks'] === undefined ? {} : plain(config['hooks']);
-  const projectText = read(root, projectPath),
-    project = projectText === null ? {} : plain(decodeDistributionJson(projectText));
-  if (
-    desired.length > 0 &&
-    (config['disableAllHooks'] === true ||
-      (config['disableAllHooks'] === undefined && project['disableAllHooks'] === true))
-  )
-    fail('HOST-UNSUPPORTED', 'Project hooks are explicitly disabled by disableAllHooks');
-  const rows: unknown[] = hooks['PreToolUse'] === undefined ? [] : (hooks['PreToolUse'] as unknown[]);
-  if (!Array.isArray(rows) || rows.length > 256) fail('INPUT-INVALID', 'Expected a bounded PreToolUse hook array');
+  const { id, before, prior, rows, projectText } = readSettings(
+    root,
+    cache,
+    removeId,
+    'Hook',
+    hookStatePath,
+    (content, owner, removal) => savedHooks(content, root, owner, removal),
+    desired.length > 0,
+  );
   const wanted = new Map(desired.map((row) => [row.identity, hookGroup(cache!.launcher, root, row)])),
     selections = new Map(desired.map((row) => [row.identity, row.paths]));
   // Each owned group is found by exact match, exactly once. One the user already deleted, so that no group names its
@@ -732,32 +765,7 @@ export function applyHookRegistration(
     if (json(plan) !== json(input)) fail('PLAN-STALE', 'Hook plan no longer matches its current inputs');
     if (pin(plan.after.config) === plan.before.config && pin(plan.after.state) === plan.before.state)
       return { status: 'hooks-unchanged', id: plan.id };
-    const stateFile = hookStatePath(plan.id),
-      now = (): Side => ({ config: read(root, configPath), state: read(root, stateFile) });
-    const unchanged = (side: Side): void => {
-      if (json(now()) !== json(side))
-        fail('LOCAL-MODIFICATION', 'Hook configuration or ownership changed during publication');
-    };
-    const before = now();
-    write(
-      root,
-      pendingPath,
-      json({ format: 'ia.hook-registration-pending.v1', id: plan.id, before, after: plan.after }),
-    );
-    checkpoint('pending');
-    unchanged(before);
-    write(root, configPath, plan.after.config);
-    checkpoint('config');
-    unchanged({ ...before, config: plan.after.config });
-    if (
-      pin(read(root, projectPath)) !== plan.before.projectConfig ||
-      ('cache' in plan.request && verifyHostCache(plan.request.cache).release !== plan.release)
-    )
-      fail('PLAN-STALE', 'Project settings or host cache changed before registration commit');
-    write(root, stateFile, plan.after.state);
-    checkpoint('state');
-    write(root, pendingPath, null);
-    checkpoint('complete');
+    publish(root, plan, hookStatePath(plan.id), 'ia.hook-registration-pending.v1', 'Hook', checkpoint);
     return { status: plan.after.state === null ? 'hooks-removed' : 'hooks-registered', id: plan.id };
   } finally {
     unlock();

@@ -113,26 +113,15 @@ export function capabilityClosure(
   return [...reached.values()];
 }
 
-// The field readers mirror runtime's private ones (packet.ts's `fieldsAt`, `valuesAt`, `textsAt` and `stated`), which
-// runtime does not export: a fix to either copy belongs in both.
+// The field readers are runtime's (packet.ts on `./internal/packet`): one copy for the packet and the generators.
+import { stated, textsAt, valuesAt } from '@inventarch/runtime/internal/packet';
+export { stated, textsAt, valuesAt };
 /** The unconditional fields of `record`'s `section`, in authored order. */
 export const fieldsOf = (record: CompiledRecord, section: string): readonly CompiledField[] =>
   record.sections
     .filter((s) => s.name === section)
     .flatMap((s) => s.fields)
     .filter((f): f is CompiledField => 'key' in f && f.when === undefined);
-/** The fields `record` states unconditionally at `field`, a `section.key` path. */
-const fieldsAt = (record: CompiledRecord, field: string): readonly CompiledField[] => {
-  const [section = '', key] = field.split('.');
-  return fieldsOf(record, section).filter((f) => f.key === key);
-};
-/** The values `record` states unconditionally at `field`, a list's items one by one. */
-export const valuesAt = (record: CompiledRecord, field: string): readonly CompiledValue[] =>
-  fieldsAt(record, field).flatMap((f) => (f.value.kind === 'list' ? f.value.items : [f.value]));
-export const textsAt = (record: CompiledRecord, field: string): readonly string[] =>
-  valuesAt(record, field).flatMap((value) => ('text' in value ? [value.text] : []));
-/** Whether `record` states `field` at all: a declared empty list is stated, an absent key is not. */
-export const stated = (record: CompiledRecord, field: string): boolean => fieldsAt(record, field).length > 0;
 
 // Built from strings: the class names the control characters themselves.
 const CONTROLS = new RegExp(

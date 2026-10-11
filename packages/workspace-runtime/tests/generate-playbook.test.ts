@@ -458,6 +458,11 @@ it('generates authored hooks only and reports tools and selections outside the e
   for (const [text, why] of [
     [hooks.replace('[Write, Edit, MultiEdit]', '[Bash]'), 'hook.tools must name Write, Edit or MultiEdit'],
     [hooks.replace('"docs/**"', '"../docs/**"'), 'hook.paths must hold workspace-relative path selections'],
+    // A backslash is no separator in the dialect: the selection must be written with /.
+    [
+      hooks.replace('"docs/**"', '"docs\\\\**"'),
+      'hook.paths must hold workspace-relative path selections written with /',
+    ],
     [hooks.replace('event PreToolUse', 'event Stop'), 'event Stop is not PreToolUse'],
     // A hook that selects no path could never deny: it is reported, never registered as a guard that guards nothing.
     [hooks.replace('["docs/**", "restricted/**"]', '[]'), 'hook.paths selects no path'],

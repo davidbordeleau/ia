@@ -9,7 +9,7 @@
  * workspace, whose steward it is) and the `reviewer` `@agent-profile`. The corpus adds its own `sample-mandate`
  * (agent-steward; Observation, Verification; covers `docs/**`) and `agent-steward-profile`.
  */
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -207,6 +207,35 @@ it('folds path case where the volume folds names, for hook.paths and authority.c
   // Where names fold, the demo participant is allowed under docs/ only because Docs/ covers it; elsewhere sample-mandate
   // (docs/**) governs docs/x.md alone and binds agent-steward, so the main session is not allowed there.
   expect(code(check(covers, 'docs/x.md'))).toBe(folds ? undefined : 'IA-HOOK-NOT-MANDATED');
+});
+
+it('decides a typed path by its on-disk name: a case variant is the same path, and an 8.3 alias is refused, never matched', () => {
+  const folds = process.platform === 'win32' || process.platform === 'darwin';
+  const root = workspace({
+    'docs/secret.md': 'x\n',
+    'restricted/plan.md': 'x\n',
+    'src/longdirectory/app.ts': 'x\n',
+  });
+  // Where the volume folds names, another case of an existing folder resolves to it: the hook selects it and the
+  // mandates that cover it govern, so the reviewer is refused and the demo participant allowed, as under docs/.
+  for (const path of ['Docs/secret.md', 'DOCS/secret.md', 'DOCS/new/deep.md']) {
+    expect(code(check(root, path, reviewer)), path).toBe(folds ? 'IA-HOOK-NOT-MANDATED' : undefined);
+    expect(check(root, path), path).toEqual({});
+  }
+  expect(code(check(root, 'Restricted/plan.md'))).toBe(folds ? 'IA-HOOK-NOT-MANDATED' : undefined);
+  expect(code(check(root, '.IA/SRC/hooks.ia', reviewer))).toBe(folds ? 'IA-HOOK-NOT-MANDATED' : undefined);
+  // A Windows 8.3 short name spells an existing folder or file another way than by case: the on-disk name is selected,
+  // and the typed spelling is refused as an alias rather than matched or decided. Where the volume keeps no short
+  // names, there is no such spelling to test.
+  const short = (name: string): boolean => process.platform === 'win32' && existsSync(resolve(root, name));
+  if (short('RESTRI~1'))
+    for (const extra of [{}, reviewer])
+      expect(code(check(root, 'RESTRI~1/plan.md', extra)), JSON.stringify(extra)).toBe('IA-HOOK-PATH-UNSAFE');
+  if (short('.ia/src/COMPOS~1.IA'))
+    for (const extra of [{}, reviewer])
+      expect(code(check(root, '.ia/src/COMPOS~1.IA', extra)), JSON.stringify(extra)).toBe('IA-HOOK-PATH-UNSAFE');
+  // A short name of a folder the hook does not select is no edit it decides.
+  if (short('src/LONGDI~1')) expect(check(root, 'src/LONGDI~1/app.ts', reviewer)).toEqual({});
 });
 
 it('matches selections in the G06c dialect, where !, [ and shell metacharacters are literal', () => {

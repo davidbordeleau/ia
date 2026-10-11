@@ -726,8 +726,11 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     return deny('IA-HOOK-PATH-UNSAFE', error instanceof Error ? error.message : String(error));
   }
   if (edit.rule?.projection) return deny('IA-HOOK-PROJECTION-MANAGED', MANAGED);
-  // Folded root-relative spellings, the physical one first; selections and claims fold too (`fold`), so where the volume
-  // folds names `DOCS/x.md` is under `docs/**` and `Docs/**` alike, and elsewhere each case is its own path.
+  // Folded root-relative spellings, the physical one first: its existing components are the names on disk (the deepest
+  // existing ancestor through realpathSync.native, which also expands a Windows 8.3 short name), its missing tail as
+  // typed. Selections and claims fold too (`fold`), so where the volume folds names `DOCS/x.md` is under `docs/**` and
+  // `Docs/**` alike, and elsewhere each case is its own path. A selected file typed any other way than its on-disk name
+  // but by case (an 8.3 short name) fails the alias check below and is refused, never decided as typed.
   const paths = [...new Set([edit.spellings[1], edit.spellings[0], ...edit.spellings.slice(2)])].filter(
     (spelling): spelling is string => spelling !== undefined,
   );

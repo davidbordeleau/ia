@@ -50,6 +50,7 @@ import {
   applyHookRegistration,
   assertRetirableGuard,
   hookGroupDigest,
+  hooksDisabledBy,
   planGuardRegistration,
   planHookRegistration,
   planHooksFor,
@@ -190,6 +191,18 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
     return {
       plan: prior === null ? null : planHookRegistration(root, { remove: HOST_REGISTRATION }),
       unregistered: [],
+    };
+  // Hooks turned off by disableAllHooks: no group is registered, each declared hook is reported, and every other part of
+  // the host applies as it does without hooks (review finding H-N12). Groups already owned stay as they are.
+  const disabled = hooksDisabledBy(root);
+  if (disabled !== null)
+    return {
+      plan: null,
+      unregistered: rows.map((row) => ({
+        identity: row.identity,
+        word: 'hook' as const,
+        reason: `Not registered: hooks are disabled by disableAllHooks in ${disabled}`,
+      })),
     };
   if (cache !== null && 'expected' in cache)
     return { plan: planHooksFor(root, cache.expected, rows), unregistered: [] };

@@ -230,6 +230,25 @@ interface SettingsRead<T> {
   readonly projectText: string | null;
 }
 /**
+ * The settings file whose `disableAllHooks: true` turns Claude Code's hooks off for this workspace, as registration
+ * reads it (`.claude/settings.local.json` first, then `.claude/settings.json` when the local file does not set it), or
+ * null when hooks are on or a file cannot be read, which the plan itself then refuses (review finding H-N12).
+ */
+export function hooksDisabledBy(rootInput: string): string | null {
+  const root = workspace(rootInput);
+  try {
+    const local = read(root, configPath),
+      config = local === null ? {} : plain(decodeDistributionJson(local));
+    if (config['disableAllHooks'] === true) return configPath;
+    if (config['disableAllHooks'] !== undefined) return null;
+    const shared = read(root, projectPath),
+      project = shared === null ? {} : plain(decodeDistributionJson(shared));
+    return project['disableAllHooks'] === true ? projectPath : null;
+  } catch {
+    return null;
+  }
+}
+/**
  * The preamble the retired steward guard's plan (removal, and the 1.x registration its fixtures still make) and the hook
  * groups' plan share (guard review finding G-N9): a Claude-compatible cache outside the root, the settings and the
  * ownership state read once, a removal refused when nothing is owned, hooks explicitly disabled refused when the plan

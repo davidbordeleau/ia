@@ -822,3 +822,22 @@ it('refuses an install before any install write when its refresh would refuse th
   );
   expect(read(root, '.ia/distributions.lock.json')).toBe(lock);
 });
+
+it('applies the host without registering hooks where disableAllHooks turns them off, naming the file (H-N12)', async () => {
+  for (const file of ['.claude/settings.json', SETTINGS]) {
+    const { root, env } = await composed();
+    put(root, file, `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
+    const element = projection((await apply(root, env)).stdout);
+    expect(element.hooks).toEqual([]);
+    expect(element.unsupported).toEqual([
+      { identity: HOOK, word: 'hook', reason: `Not registered: hooks are disabled by disableAllHooks in ${file}` },
+    ]);
+    // The packet, the agent, the skill and the MCP entry apply as they do without hooks.
+    for (const path of [...PACKET, AGENT, SKILL, '.mcp.json']) expect(existsSync(resolve(root, path)), path).toBe(true);
+    expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+    expect(existsSync(resolve(root, SETTINGS)) ? hookGroups(root).size : 0).toBe(0);
+    expect(receipt(root).unsupported.map((row) => row.reason)).toEqual([
+      `Not registered: hooks are disabled by disableAllHooks in ${file}`,
+    ]);
+  }
+});

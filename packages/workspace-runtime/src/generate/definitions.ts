@@ -19,8 +19,8 @@ import { generateHookSet } from './hook.js';
  * Everything a host generates from the workspace's authored records, computed once (milestone generation-binding task
  * host-consumes-generated-set): the agent and skill files, the hook declarations it registers, a row for each authored
  * record it does not render or register, and the operation and harness definitions, whose harness registration sets
- * select only from these files and hooks. The projection writer applies exactly this set and its receipt lists it, so
- * what is applied and what a harness says it registers cannot disagree.
+ * select only from these files and hooks. The projection writer applies exactly this set, and its receipt lists each
+ * harness's registrations as that apply left them (a hook it registered no group for is not listed; review finding H-R7).
  */
 export interface HostSet {
   /** The generated agent files, then the skills, each group by identity. */

@@ -31,6 +31,8 @@ import {
   sha256,
 } from '@inventarch/db/distribution';
 import { buildArchive, verifyArchive } from '@inventarch/distribution/archive';
+import { applyHookRegistration, planHookRegistration } from '@inventarch/distribution/guard-registration';
+import { materializeHostPayload, readHostPin } from '@inventarch/distribution/host-home';
 import { applyInstallation, cacheArchive, planInstallation } from '@inventarch/distribution/install';
 import { resolveReleases } from '@inventarch/distribution/resolve';
 import { readInstalledState, resolveCatalog } from '@inventarch/distribution/services';
@@ -1516,4 +1518,39 @@ it('refreshes completed migration host notes after capture repair while preservi
     }
     expect(existsSync(resolve(root, '.ia/migration.json'))).toBe(false);
   }
+});
+
+it('refuses a migration whose projection effect would refuse a hook group changed by hand, before anything is written (H-R3)', async () => {
+  const { root, env } = await legacyWorkspace();
+  await registered(root, env);
+  // A hook group registered against the materialized payload, then changed in the settings by hand.
+  const bundled = readHostPin(cli),
+    cache = materializeHostPayload({ home: env.IA_HOST_HOME, archive: bundled.archive(), pin: bundled.pin }).directory;
+  applyHookRegistration(
+    planHookRegistration(realpathSync(root), {
+      cache,
+      hooks: [{ identity: 'hook-authoring-system/binding/hook/note-edits', tools: ['Write'], paths: ['docs/**'] }],
+    }),
+  );
+  const settings = JSON.parse(read(root, '.claude/settings.local.json')) as {
+    hooks: { PreToolUse: { hooks: { args?: string[] }[] }[] };
+  };
+  for (const group of settings.hooks.PreToolUse)
+    for (const handler of group.hooks)
+      if (handler.args?.includes('--hook')) (handler as Record<string, unknown>)['timeout'] = 99;
+  writeFileSync(resolve(root, '.claude/settings.local.json'), `${JSON.stringify(settings, null, 2)}\n`);
+  const before = tree(root);
+  const refused = await apply(root, [], env);
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  expect(json(refused)).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    next: `Run "ia host claude --root ${quote(root)}" for its projection plan, which names each file it refuses.`,
+  });
+  expect(tree(root)).toEqual(before);
+  // The plan it names shows the conflict with the recovery doctor names.
+  const plan = json(await host(root, env, 'claude'));
+  expect(plan.plan.elements.find((element: { id: string }) => element.id === 'projection').conflict).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    path: '.claude/settings.local.json',
+  });
 });

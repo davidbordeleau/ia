@@ -81,6 +81,7 @@ import {
   applyHostProjection,
   ownsGuard,
   planRetirement,
+  preflightHooks,
   preflightReceipt,
   renderProjectionFor,
 } from './host-projection.js';
@@ -498,7 +499,9 @@ export const registeredProjections = (root: string, operation: Operation): reado
  * A file the mechanism cannot read — an unreadable ownership state, an aliased or oversized managed file — would
  * refuse the refresh too, so it is refused here, located at that file, with the repair `ia host` names for it. So is
  * a steward-guard registration the refresh's retirement (B11) would refuse: an unreadable guard state, or a guard
- * group changed by hand; a pending host journal that refuses the retirement's plan names its own recovery.
+ * group changed by hand; a pending host journal that refuses the retirement's plan names its own recovery. So is the
+ * hook step the refresh runs (`preflightHooks`, review finding H-R3): an owned hook group deleted, changed or
+ * duplicated by hand, or a recorded payload a change of hooks would need, with the repair `ia host` names.
  */
 export function requireProjectionsClean(root: string, hosts: readonly HostName[], rooted: boolean): void {
   for (const host of hosts) {
@@ -507,6 +510,8 @@ export function requireProjectionsClean(root: string, hosts: readonly HostName[]
     try {
       planRetirement(root, host);
       preflightReceipt(root, host);
+      // The hook step the refresh runs, so a group changed by hand or a payload a change needs refuses here (H-R3).
+      preflightHooks(root, host);
       drifts = observeProjection({ root, host, artifacts: null, marker: PACKET_MARKER });
     } catch (error) {
       throw projectionFailure(error, root, host, rerun);
@@ -520,6 +525,18 @@ export function requireProjectionsClean(root: string, hosts: readonly HostName[]
         { path: changed.path },
         hostNext(projectionRepair(host, changed.path, rerun), host, root, rooted),
       );
+  }
+}
+
+/**
+ * The files the refresh would render for `host`, by the current records: a generated agent among them is written, never
+ * previewed as a 1.x file to remove (review finding H-N7). None when the records do not render; the refresh then refuses.
+ */
+function renderedPaths(root: string, host: HostName): readonly string[] {
+  try {
+    return renderProjectionFor(root, host).files.map((file) => file.path);
+  } catch {
+    return [];
   }
 }
 
@@ -787,7 +804,10 @@ export async function collectPlan(request: PlanRequest): Promise<PlanView> {
     invocation: request.invocation,
     planOut,
     refresh,
-    projectionFiles: refresh.map((host) => ({ host, files: legacyProjectionActions(root, host, PACKET_MARKER) })),
+    projectionFiles: refresh.map((host) => ({
+      host,
+      files: legacyProjectionActions(root, host, PACKET_MARKER, renderedPaths(root, host)),
+    })),
     retire: refresh.filter((host) => ownsGuard(root, host)),
     retired: [],
     rooted: request.rooted ?? false,

@@ -5,7 +5,16 @@
  * launcher exactly as Claude Code runs it; and renames and removals of the records take the obsolete agent, skill and
  * group away again, leaving unrelated settings and unmarked files alone.
  */
-import { cpSync, existsSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { PACKET_MARKER } from '@inventarch/runtime';
@@ -691,4 +700,125 @@ it('lists a removed hook group in the receipt even when the apply that removed i
   await apply(root, env);
   expect(receipt(root).removedHooks).toEqual([{ identity: HOOK, sha256: hookGroupDigest(old) }]);
   expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([RENAMED]);
+});
+
+/** A catalog and request set that reinstall the bundled base, so an install commits and refreshes the projections. */
+function baseInstall(root: string): string[] {
+  const pin = JSON.parse(readFileSync(resolve(cli, 'assets/base.json'), 'utf8')) as {
+    id: string;
+    version: string;
+    archive: string;
+  };
+  mkdirSync(resolve(root, '.ia/work/dist'), { recursive: true });
+  copyFileSync(resolve(cli, `assets/base/${pin.archive}.ia.tgz`), resolve(root, '.ia/work/dist/base.ia.tgz'));
+  put(root, '.ia/work/catalog.json', `${JSON.stringify([{ path: '.ia/work/dist/base.ia.tgz', withdrawn: false }])}\n`);
+  put(root, '.ia/work/requests.json', `${JSON.stringify([{ id: pin.id, range: pin.version }])}\n`);
+  return ['install', '--requests', '.ia/work/requests.json', '--catalog', '.ia/work/catalog.json', '--root', root];
+}
+/** The fixture's hook narrowed to docs/** and its profile renamed auditor, as a record change between applies. */
+function narrowedAndRenamed(root: string): void {
+  edit(
+    root,
+    '.ia/src/hooks.ia',
+    ['paths ["docs/**", "restricted/**"]', 'paths ["docs/**"]'],
+    ['@agent-profile reviewer', '@agent-profile auditor'],
+  );
+  edit(root, '.ia/src/composition.ia', ['@agent-profile reviewer', '@agent-profile auditor']);
+}
+const harnessRegistrations = (root: string): unknown =>
+  receipt(root).definitions.find((row) => row.word === 'harness')!.definition['registrations'];
+const recordedPaths = (root: string): unknown =>
+  JSON.parse(read(root, HOOK_STATE)).groups.map((group: { paths: string[] }) => group.paths);
+
+it('applies the generated set through ia project: hooks unregistered without ia host, kept in step after it (H-R6, H-R7)', async () => {
+  const { root, env } = await composed();
+  const projected = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+  expect(projected.exitCode, projected.stdout).toBe(0);
+  const envelope = JSON.parse(projected.stdout) as {
+    plan: {
+      files: { path: string; action: string }[];
+      hooks: unknown[];
+      unsupported: { identity: string; reason: string }[];
+    };
+  };
+  expect(envelope.plan.files.filter((file) => [AGENT, SKILL].includes(file.path))).toEqual([
+    { path: AGENT, action: 'create' },
+    { path: SKILL, action: 'create' },
+  ]);
+  expect(envelope.plan.hooks).toEqual([]);
+  expect(envelope.plan.unsupported).toEqual([
+    expect.objectContaining({ identity: HOOK, reason: expect.stringContaining('Not registered') }),
+  ]);
+  for (const path of [AGENT, SKILL]) expect(read(root, path).split('\n'), path).toContain(PACKET_MARKER);
+  expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+  // The harness lists what this apply applied: the agent and the skill, and no hook, since none was registered (H-R7).
+  expect(receipt(root).hooks).toEqual([]);
+  expect(receipt(root).unsupported.map((row) => row.identity)).toEqual([HOOK]);
+  expect(harnessRegistrations(root)).toEqual({
+    agents: [{ identity: PROFILE, path: AGENT }],
+    skills: [{ identity: PLAYBOOK, path: SKILL }],
+    hooks: [],
+  });
+  // After ia host registers the hook, ia project keeps its group in step with the records and renames the agent.
+  await apply(root, env);
+  expect(harnessRegistrations(root)).toMatchObject({ hooks: [expect.objectContaining({ identity: HOOK })] });
+  narrowedAndRenamed(root);
+  const kept = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+  expect(kept.exitCode, kept.stdout).toBe(0);
+  expect((JSON.parse(kept.stdout) as { plan: { hooks: unknown[] } }).plan.hooks).toEqual([
+    { hook: HOOK, action: 'update' },
+  ]);
+  expect(recordedPaths(root)).toEqual([['docs/**']]);
+  expect(existsSync(resolve(root, AGENT))).toBe(false);
+  expect(read(root, '.claude/agents/auditor.md').split('\n')).toContain(PACKET_MARKER);
+});
+
+it('refreshes the generated set and the hook group after an install, and previews a generated agent as written (H-R6, H-N7)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  const install = baseInstall(root);
+  // The preview lists no 1.x removal: the generated agent is the refresh's to write.
+  const planned = await run([...install, '--json'], { env });
+  expect(planned.exitCode, planned.stdout).toBe(0);
+  expect(JSON.parse(planned.stdout)).toMatchObject({
+    refresh: ['claude'],
+    projectionFiles: [{ host: 'claude', files: [] }],
+  });
+  // A record change, then the install: its refresh rewrites the agent and keeps the group in step.
+  narrowedAndRenamed(root);
+  const installed = await run([...install, '--apply', '--yes', '--json'], { env });
+  expect(installed.exitCode, installed.stdout).toBe(0);
+  expect(JSON.parse(installed.stdout)).toMatchObject({ applied: { status: 'installed' }, refresh: ['claude'] });
+  expect(recordedPaths(root)).toEqual([['docs/**']]);
+  expect(existsSync(resolve(root, AGENT))).toBe(false);
+  expect(receipt(root).generated.map((row) => row.path)).toEqual(['.claude/agents/auditor.md', SKILL]);
+  expect((await doctor(root, env)).checks).toContainEqual(noDrift());
+});
+
+it('refuses an install before any install write when its refresh would refuse the hook step, naming the repair (H-R3)', async () => {
+  const { root, env } = await composed();
+  const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release;
+  const install = baseInstall(root),
+    lock = read(root, '.ia/distributions.lock.json');
+  // A group deleted by hand: refused before the lock is touched, naming the removal, which works.
+  withoutHookGroups(root);
+  const refused = await run([...install, '--apply', '--yes', '--json'], { env });
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  const body = JSON.parse(refused.stdout) as { code: string; next: string };
+  expect(body).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    next: `Run "ia host claude --root ${quote(root)} --remove --apply", which drops the registration of the hook group deleted by hand, then register again with ia host.`,
+  });
+  expect(read(root, '.ia/distributions.lock.json')).toBe(lock);
+  await follow(body.next, env);
+  await apply(root, env);
+  // A changed selection with the recorded payload gone: refused at the payload, naming ia host.
+  rmSync(resolve(env.IA_HOST_HOME, 'hosts', release), { recursive: true, force: true });
+  edit(root, '.ia/src/hooks.ia', ['paths ["docs/**", "restricted/**"]', 'paths ["docs/**"]']);
+  const gone = await run([...install, '--apply', '--yes', '--json'], { env });
+  expect(gone.exitCode, gone.stdout).toBe(3);
+  expect(JSON.parse(gone.stdout).next).toBe(
+    `Run "ia host claude --root ${quote(root)} --apply" to materialize this release's payload and register the workspace's hooks against it.`,
+  );
+  expect(read(root, '.ia/distributions.lock.json')).toBe(lock);
 });

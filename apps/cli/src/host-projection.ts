@@ -37,6 +37,7 @@ import type {
   HostFile,
   HostHookDeclaration,
   HostOutput,
+  PacketDefinition,
   PacketReceipt,
   RemovedHookRow,
   UnsupportedRow,
@@ -203,8 +204,12 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
     // nothing is written and that payload is not read, so its absence never blocks an unrelated apply; a change needs it,
     // and a payload gone or changed refuses there, naming `ia host`, which materializes one and registers against it.
     const owned = new Map(prior.groups.map((group) => [group.hook, json(group.paths)]));
-    if (owned.size === rows.length && rows.every((row) => owned.get(row.identity) === json(row.paths)))
+    if (owned.size === rows.length && rows.every((row) => owned.get(row.identity) === json(row.paths))) {
+      // Still a group deleted, changed or duplicated by hand refuses, as a registration would (H-R1, H-R3).
+      const drift = observeHookRegistration(root).find((row) => row.drift !== 'foreign');
+      if (drift !== undefined) throw handEdited(drift);
       return { plan: null, unregistered: [] };
+    }
     try {
       verifyHostCache(directory);
     } catch (error) {
@@ -566,6 +571,9 @@ export function applyHostProjection(
                 removedHooks: (evidence.removedHooks ?? []).filter((row) => !registered.has(row.identity)),
               }
             : {}),
+          ...(rendered.receipt.definitions === undefined
+            ? {}
+            : { definitions: appliedDefinitions(rendered.receipt.definitions, rendered.receipt.files, registered) }),
           unsupported: [...(rendered.receipt.unsupported ?? []), ...registration.unregistered],
           writtenAt: new Date().toISOString(),
         };
@@ -583,6 +591,33 @@ export function applyHostProjection(
   };
 }
 
+/**
+ * The definitions as this apply left them (review finding H-R7): each harness registers only the agent and skill files
+ * the receipt lists and the hook groups the workspace owns after the apply, so a hook an apply did not register (no host
+ * payload known, or disabled hooks) is never listed as registered.
+ */
+function appliedDefinitions(
+  definitions: readonly PacketDefinition[],
+  files: readonly { readonly path: string }[],
+  registered: ReadonlySet<string>,
+): readonly PacketDefinition[] {
+  const written = new Set(files.map((file) => file.path));
+  return definitions.map((row) =>
+    row.word !== 'harness'
+      ? row
+      : {
+          ...row,
+          definition: {
+            ...row.definition,
+            registrations: {
+              agents: row.definition.registrations.agents.filter((agent) => written.has(agent.path)),
+              skills: row.definition.registrations.skills.filter((skill) => written.has(skill.path)),
+              hooks: row.definition.registrations.hooks.filter((hook) => registered.has(hook.identity)),
+            },
+          },
+        },
+  );
+}
 /** `planHooks`, a refusal it does not locate at a file located at the settings the hook groups live in. */
 export function planHookStep(root: string, host: HostName, rendered: HostOutput | null, cache: HookCache): HookStep {
   try {
@@ -601,6 +636,41 @@ export function planHookStep(root: string, host: HostName, rendered: HostOutput 
     }
     throw error;
   }
+}
+/** An owned hook group's drift as the hook planner refuses it, with the planner's own wording (guard review G-N2). */
+function handEdited(drift: ReturnType<typeof observeHookRegistration>[number]): DistributionError {
+  return new DistributionError(
+    'IA-DIST-LOCAL-MODIFICATION',
+    drift.drift === 'missing'
+      ? `Owned hook group for ${drift.hook} was deleted by hand; remove the registration ("ia host claude --remove --apply") and register it again`
+      : `Owned hook group for ${drift.hook} changed or was duplicated; delete only that group from ${SETTINGS}, then remove the registration ("ia host claude --remove --apply") and register it again`,
+  );
+}
+/**
+ * What the hook step of a later apply would refuse, found before anything is written (review finding H-R3): an install,
+ * update or remove checks it before its first install write, and a migration before it plans. With a hook registration
+ * owned, the step is planned against the workspace's current records when they render: a group deleted, changed or
+ * duplicated by hand refuses with the recovery doctor names, and so does a recorded payload a change of hooks would need.
+ * When the records do not render, only a changed or duplicated group is refused, since a removal refuses it too.
+ */
+export function preflightHooks(root: string, host: HostName): void {
+  if (host !== 'claude' || readHookRegistration(root) === null) return;
+  let rendered: HostOutput | null;
+  try {
+    rendered = renderProjectionFor(root, host);
+  } catch {
+    // Records that do not render refuse the refresh itself, with their own next action.
+    rendered = null;
+  }
+  if (rendered !== null) {
+    planHookStep(root, host, rendered, null);
+    return;
+  }
+  const changed = observeHookRegistration(root).find((row) => row.drift === 'modified');
+  if (changed !== undefined)
+    throw Object.assign(new DistributionError('IA-DIST-LOCAL-MODIFICATION', handEdited(changed).message, SETTINGS), {
+      repair: hookRepair(root),
+    });
 }
 /**
  * The recovery for an owned hook group the user deleted, changed or duplicated by hand, which apply refuses to put back

@@ -198,13 +198,20 @@ function agentActions(
   return actions;
 }
 /** Deletion/foreign preview independent of the live files an install re-renders afterwards. */
-export function legacyProjectionActions(rootInput: string, host: Host, marker: string): ProjectionAction[] {
+export function legacyProjectionActions(
+  rootInput: string,
+  host: Host,
+  marker: string,
+  written: readonly string[] = [],
+): ProjectionAction[] {
   const root = workspace(rootInput);
+  // `written`: the paths the caller's render writes, so a generated agent there is no legacy removal (H-N7).
   return agentActions(
     root,
     host,
     locate(statePath(host), () => owned(root, host)),
     marker,
+    new Set(written),
   ).sort((a, b) => (a.path < b.path ? -1 : 1));
 }
 /** Spec §6.3: a marked `.claude/agents/*.md` file neither rendered nor owned is reported, never touched. Claude only. */

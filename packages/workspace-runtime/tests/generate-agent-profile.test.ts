@@ -81,9 +81,9 @@ Binds the reviewer to a bounded host contract under the demo mandate.
 ## Mandate
 
 - \`agent-system/policy/mandate/demo-mandate\`
-- participant \`agent-system/binding/agent/demo\`
-- moves Observation, Verification, Synthesis, Delegation, Execution
-- scope \`workspace-system/definition/workspace/demo\`
+  - participant \`agent-system/binding/agent/demo\`
+  - moves Observation, Verification, Synthesis, Delegation, Execution
+  - scope \`workspace-system/definition/workspace/demo\`
 
 ## Voice
 
@@ -121,14 +121,87 @@ it("renders the fixture profile as one claude agent file naming its mandate and 
   expect(lines.filter((line) => line === PACKET_MARKER)).toHaveLength(1);
 });
 
-it('falls back to the default participant mandate when the profile names none', () => {
-  const { db, within } = fixture({
-      '.ia/src/composition.ia': composition((text) => text.replace('    mandate @mandate demo-mandate\n', '')),
-    }),
-    [file, ...rest] = claude(db, within);
-  expect(rest).toEqual([]);
-  expect(file!.text).toContain('agent-system/policy/mandate/demo-mandate');
-  expect(file!.text).not.toContain('reviewer-docs');
+/** The fixture's composition records with the profile's own mandate removed, and `extra` records appended. */
+const unmandated = (extra = ''): string =>
+  composition((text) => text.replace('    mandate @mandate demo-mandate\n', '') + extra);
+/** The Mandate section of an agent file, up to the next section. */
+const mandateSection = (text: string): string => text.split('\n## Mandate\n\n')[1]!.split('\n\n## ')[0]!;
+const FALLBACK =
+  "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these.";
+
+it("falls back to the authored mandates that bind the profile's agent, as the guard judges a subagent (A-R8)", () => {
+  // The reviewer subagent acts as the reviewer @agent (OD4): reviewer-docs binds it; demo-mandate and docs-mandate bind
+  // the demo participant, the workspace's default actor, and are not the reviewer's.
+  const { db, within } = fixture({ '.ia/src/composition.ia': unmandated() }),
+    set = rendered(db, within);
+  expect(set.unsupported).toEqual([]);
+  expect(mandateSection(set.files[0]!.text)).toBe(
+    [
+      FALLBACK,
+      '',
+      '- `agent-system/policy/mandate/reviewer-docs`',
+      '  - participant `agent-system/binding/agent/reviewer`',
+      '  - moves Observation',
+      '  - covers `restricted/`',
+    ].join('\n'),
+  );
+});
+
+it('includes a participant-less mandate in the fallback, one group per mandate, and says when none binds (A-R8)', () => {
+  const wide =
+    '\n@mandate workspace-wide\n  meaning\n    says "Everyone here."\n    answers "Who?"\n  governance\n    requires "None."\n  authority\n    scope [@workspace demo]\n    excluded-words [hook]\n';
+  const { db, within } = fixture({ '.ia/src/composition.ia': unmandated(wide) });
+  expect(mandateSection(claude(db, within)[0]!.text)).toBe(
+    [
+      FALLBACK,
+      '',
+      '- `agent-system/policy/mandate/reviewer-docs`',
+      '  - participant `agent-system/binding/agent/reviewer`',
+      '  - moves Observation',
+      '  - covers `restricted/`',
+      '- `agent-system/policy/mandate/workspace-wide`',
+      '  - scope `workspace-system/definition/workspace/demo`',
+      '  - excluded words hook',
+    ].join('\n'),
+  );
+  // Without reviewer-docs, no authored mandate binds the reviewer.
+  const none = fixture({
+    '.ia/src/composition.ia': unmandated(),
+    '.ia/src/hooks.ia': readFileSync(resolve(FIXTURE, 'hooks.ia'), 'utf8').replace(
+      'participant @agent reviewer',
+      'participant @agent demo',
+    ),
+  });
+  expect(mandateSection(claude(none.db, none.within)[0]!.text)).toBe(
+    "This profile names no mandate. Fallback: no authored mandate binds its agent `agent-system/binding/agent/reviewer`; wherever a mandate governs, the edit guard and the CLI's mandate profile refuse it.",
+  );
+});
+
+it('resolves the fallback only for a profile that needs it, and says when it is unavailable rather than failing (A-R7)', () => {
+  // An admitted mandate whose empty move list C1 cannot read: a profile that names its own mandate, and a workspace with
+  // no profile, never read it; a profile that needs the fallback says it is unavailable, and every profile still renders.
+  const empty =
+    '\n@mandate empty-moves\n  meaning\n    says "No moves."\n    answers "Which?"\n  governance\n    requires "None."\n  authority\n    participant @agent reviewer\n    moves []\n';
+  const named = fixture({ '.ia/src/composition.ia': composition((text) => text + empty) });
+  expect(claude(named.db, named.within).map((file) => file.text)).toEqual([AGENT_FILE]);
+  const bare = fixture({
+    '.ia/src/hooks.ia': null,
+    '.ia/src/composition.ia': composition((text) => text.replace(/\n@agent-profile reviewer[\s\S]*$/, '\n') + empty),
+  });
+  expect(rendered(bare.db, bare.within)).toEqual({ files: [], unsupported: [] });
+  const fallback = fixture({ '.ia/src/composition.ia': unmandated(empty) });
+  const set = rendered(fallback.db, fallback.within);
+  expect(set.unsupported).toEqual([]);
+  expect(mandateSection(set.files[0]!.text)).toBe(
+    'This profile names no mandate. Fallback unavailable: IA-RUNTIME-REQUEST-INVALID: agent-system/policy/mandate/empty-moves: authority.moves must name at least one kernel move',
+  );
+  // A profile whose agent no admitted record answers has no agent to bind.
+  const ghost = fixture({
+    '.ia/src/composition.ia': unmandated().replace('    agent @agent reviewer\n', '    agent @agent ghost\n'),
+  });
+  expect(mandateSection(claude(ghost.db, ghost.within)[0]!.text)).toBe(
+    'This profile names no mandate. Fallback unavailable: its composition.agent is not an admitted @agent in this scope.',
+  );
 });
 
 it('renders every bound the named mandate states: participant, moves, scope, excluded words, covers and limits', () => {
@@ -162,13 +235,13 @@ it('renders every bound the named mandate states: participant, moves, scope, exc
       '## Mandate',
       '',
       '- `agent-system/policy/mandate/reviewer-mandate`',
-      '- participant `agent-system/binding/agent/reviewer`',
-      '- moves Observation, Verification',
-      '- scope `workspace-system/definition/workspace/demo`',
-      '- excluded words mandate, workspace',
-      '- covers `docs/`, `notes/**`',
-      '- limit-steps 12',
-      '- limit-model-calls 3',
+      '  - participant `agent-system/binding/agent/reviewer`',
+      '  - moves Observation, Verification',
+      '  - scope `workspace-system/definition/workspace/demo`',
+      '  - excluded words mandate, workspace',
+      '  - covers `docs/`, `notes/**`',
+      '  - limit-steps 12',
+      '  - limit-model-calls 3',
       '',
       '## Voice',
     ].join('\n'),
@@ -561,4 +634,41 @@ it('never writes authored text as a marker line or an open HTML comment, and kee
   );
   expect(file!.text).not.toContain('PROACTIVELY');
   expect(file!.text).toContain('\n- tone: &lt;!-- everything after this is hidden\n');
+});
+
+it("follows capability includes, once each and through a cycle, for the agent's tools (A-R9)", () => {
+  // note-reading includes note-indexing, which includes note-reading again: the cycle ends there. Only note-indexing
+  // allows read, so the profile's tools come through the include.
+  const included = [
+    '',
+    '@capability note-indexing',
+    '  meaning',
+    '    says "Indexes the notes it reads."',
+    '    answers "Which capability indexes notes?"',
+    '  composition',
+    '    includes [@capability note-reading]',
+    '  execution',
+    '    effects [read]',
+    '',
+  ].join('\n');
+  const { db, within } = fixture({
+      '.ia/src/composition.ia': composition(
+        (text) =>
+          text
+            .replace(
+              '    playbooks [@playbook note-review]\n',
+              '    playbooks [@playbook note-review]\n    includes [@capability note-indexing]\n',
+            )
+            .replace('  execution\n    effects [read]\n', '  execution\n    effects [write]\n') + included,
+      ),
+    }),
+    [file] = claude(db, within);
+  expect(file!.text.split('\n').filter((line) => line.startsWith('tools: '))).toEqual(['tools: "Read, Glob, Grep"']);
+  expect(file!.text.split('\n## Tools\n\n')[1]).toBe(
+    [
+      `- \`${CAPABILITY}\`: operations \`authoring-system/binding/operation/read-note\`; effects write; host tools none`,
+      '- `agent-composition-system/definition/capability/note-indexing`: operations none; effects read; host tools Read, Glob, Grep',
+      '',
+    ].join('\n'),
+  );
 });

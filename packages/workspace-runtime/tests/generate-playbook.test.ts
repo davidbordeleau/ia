@@ -302,6 +302,115 @@ it('renders operation and harness definitions without importing a handler or val
   ]);
 });
 
+it('selects the skills of included capabilities, and only what its own profiles and bindings name (A-R9)', () => {
+  const extra = [
+    '#! ia 1.0',
+    '',
+    '@playbook other-review',
+    '  meaning',
+    '    says "Unrelated playbook."',
+    '    answers "Which playbook is unrelated?"',
+    '  cognition',
+    '    orient',
+    '      primary Memory',
+    '      Memory means "Recall."',
+    '',
+    '@playbook included-review',
+    '  meaning',
+    '    says "Included playbook."',
+    '    answers "Which playbook is included?"',
+    '  cognition',
+    '    orient',
+    '      primary Memory',
+    '      Memory means "Recall."',
+    '',
+    '@capability inner',
+    '  meaning',
+    '    says "Inner."',
+    '    answers "Which inner?"',
+    '  composition',
+    '    playbooks [@playbook included-review]',
+    '    includes [@capability outer]',
+    '  execution',
+    '    effects [read]',
+    '',
+    '@capability outer',
+    '  meaning',
+    '    says "Outer."',
+    '    answers "Which outer?"',
+    '  composition',
+    '    includes [@capability inner]',
+    '  execution',
+    '    effects [read]',
+    '',
+    '@agent-profile scribe',
+    '  meaning',
+    '    says "Scribe."',
+    '    answers "Which scribe?"',
+    '  composition',
+    '    agent @agent reviewer',
+    '    capabilities [@capability outer]',
+    '  execution',
+    '    role scribe',
+    '    outcomes scribe-v1',
+    '    mandate-contract review-v1',
+    '',
+    '@harness scribe-only',
+    '  meaning',
+    '    says "Only the scribe."',
+    '    answers "Which harness holds only the scribe?"',
+    '  composition',
+    '    workspace @workspace demo',
+    '    profiles [@agent-profile scribe]',
+    '    bindings []',
+    '  execution',
+    '    host-profile claude-prose',
+    '',
+  ].join('\n');
+  const { db, within } = fixture({ '.ia/src/extra.ia': extra });
+  const scribe = 'agent-composition-system/binding/agent-profile/scribe';
+  // outer includes inner (and inner outer, a cycle): the scribe selects inner's playbook through outer, and neither the
+  // fixture's reviewer, its playbook and hook, nor the unrelated playbook.
+  expect(
+    harnesses(generateDefinitions(db, within, 'claude')).find((row) => row.definition.name === 'scribe-only')!
+      .definition,
+  ).toEqual({
+    name: 'scribe-only',
+    description: 'Only the scribe.',
+    workspace: 'workspace-system/definition/workspace/demo',
+    hostProfile: 'claude-prose',
+    profiles: [scribe],
+    bindings: [],
+    registrations: {
+      agents: [{ identity: scribe, path: '.claude/agents/scribe.md' }],
+      skills: [
+        {
+          identity: 'governance-system/definition/procedure/included-review',
+          path: '.claude/skills/included-review/SKILL.md',
+        },
+      ],
+      hooks: [],
+    },
+  });
+  // The fixture's own harness selects as before.
+  expect(
+    harnesses(generateDefinitions(db, within, 'claude')).find((row) => row.identity === HARNESS)!.definition
+      .registrations,
+  ).toEqual({
+    agents: [{ identity: PROFILE, path: '.claude/agents/reviewer.md' }],
+    skills: [{ identity: IDENTITY, path: '.claude/skills/note-review/SKILL.md' }],
+    hooks: [
+      {
+        identity: HOOK,
+        event: 'PreToolUse',
+        tools: ['Write', 'Edit', 'MultiEdit'],
+        paths: ['docs/**', 'restricted/**'],
+        message: "Use the participant's documentation mandate.",
+      },
+    ],
+  });
+});
+
 it('generates authored hooks only and reports tools and selections outside the edit guard contract', () => {
   const hooks = readFileSync(resolve(FIXTURE, 'hooks.ia'), 'utf8');
   const authored = fixture();

@@ -13,7 +13,8 @@ import { frozen } from '../resource-format.js';
 /**
  * What the host generators share (milestone generation-binding): the generated file and the unsupported row they
  * return, the per-record rendering that reports a record instead of failing the others, the host and name checks, the
- * authored records they render, and the field readers and text helpers their bodies are written with.
+ * authored records they render, the capability closure, and the field readers and text helpers their bodies are written
+ * with.
  */
 
 /** The words a generator renders records of. */
@@ -90,6 +91,26 @@ export function perRecord(
     }
   return frozen({ files, unsupported });
 }
+/**
+ * A profile's capabilities and every capability they include, through `composition.includes`, each once, in first-reached
+ * order; a reference no admitted `@capability` answers is left out, and a cycle ends where it meets a capability already
+ * reached. The composition compiler reads the same closure.
+ */
+export function capabilityClosure(
+  roots: readonly CompiledValue[],
+  target: (value: CompiledValue) => Node | undefined,
+): readonly Node[] {
+  const reached = new Map<string, Node>();
+  const visit = (value: CompiledValue): void => {
+    const node = target(value);
+    if (node === undefined || node.discriminator !== 'capability' || reached.has(node.identity)) return;
+    reached.set(node.identity, node);
+    for (const included of valuesAt(node, 'composition.includes')) visit(included);
+  };
+  for (const root of roots) visit(root);
+  return [...reached.values()];
+}
+
 // The field readers mirror runtime's private ones (packet.ts's `fieldsAt`, `valuesAt`, `textsAt` and `stated`), which
 // runtime does not export: a fix to either copy belongs in both.
 /** The unconditional fields of `record`'s `section`, in authored order. */

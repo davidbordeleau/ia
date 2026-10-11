@@ -2055,6 +2055,7 @@
         "tests/authoring-lifecycle.test.ts",
         "tests/authoring-shipped.test.ts",
         "tests/authoring.test.ts",
+        "tests/bind.test.ts",
         "tests/boundary.test.ts",
         "tests/generate-agent-profile.test.ts",
         "tests/installed-catalog.test.ts",

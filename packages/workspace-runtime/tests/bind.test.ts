@@ -1,27 +1,120 @@
-import { expect, it } from 'vitest';
-import { open } from '@inventarch/db';
-import type { Node } from '@inventarch/graph';
+// Task execution-binding-host-entry (plan amendments C16 and C24): an `@execution-binding` joined against the installed
+// catalog's operation rows. Only an available, shipped implementation of the binding's own operation is bound; nothing
+// is ever executed.
 import { resolve } from 'node:path';
-import { bindExecution } from '../src/bind.js';
+import { open } from '@inventarch/db';
+import { afterAll, expect, it } from 'vitest';
+import { bindExecution, executionBindings } from '../src/bind.js';
+import type { BindingCatalog, BindingCatalogOperation, ExecutionBinding } from '../src/bind.js';
 
-const reader = open(resolve(import.meta.dirname, '../../../examples/conformance/native'), { cache: false });
-// This fixture lives as a source tree; explicitly select its authored sources through an editor-free corpus instead.
-reader.close();
-const binding = (implementation: string, kind = 'operation') => ({
-  discriminator: 'execution-binding', identity: 'agent-composition-system/binding/execution-binding/probe',
-  sections: [{ name: 'binding', fields: [
-    { key: 'implementation', value: { kind: 'scalar', text: implementation } },
-    { key: 'kind', value: { kind: 'scalar', text: kind } },
-  ] }],
-}) as unknown as Node;
-const operation = { id: 'captured-source-read-v1', version: 1, digest: 'a'.repeat(64), handler: 'ia.captured-source.read.v1', input: 'read-input', output: 'read-output' };
-it('binds a declared operation without executing it, and never passes a missing implementation', () => {
-  expect(bindExecution(binding(operation.id), { operations: [operation] })).toMatchObject({ status: 'bound', implementation: operation.id });
-  expect(bindExecution(binding('missing-v1'), { operations: [operation] })).toMatchObject({ status: 'unavailable' });
-  expect(bindExecution(binding(operation.id, 'hook'), { operations: [operation] })).toMatchObject({ status: 'unavailable' });
+const READ = 'authoring-system/binding/operation/read-captured-source';
+const available: BindingCatalogOperation = {
+  id: 'captured-source-read-v1',
+  status: 'available',
+  version: 1,
+  operation: READ,
+  handler: 'ia.captured-source.read.v1',
+  digest: 'c'.repeat(64),
+};
+const present = (...operations: BindingCatalogOperation[]): BindingCatalog => ({ status: 'present', operations });
+const binding = (fields: Partial<ExecutionBinding> = {}): ExecutionBinding => ({
+  identity: 'agent-composition-system/binding/execution-binding/probe',
+  kind: 'operation',
+  implementation: 'captured-source-read-v1',
+  target: READ,
+  ...fields,
 });
-it('reports unavailable and revoked installed descriptions distinctly', () => {
-  for (const status of ['unavailable', 'revoked'] as const)
-    expect(bindExecution(binding(operation.id), { operations: [{ ...operation, availability: { status, reason: 'withdrawn' } }] }))
-      .toMatchObject({ status, message: expect.stringContaining('withdrawn') });
+
+it('binds an available shipped implementation of the binding’s own operation, and executes nothing', () => {
+  expect(bindExecution(binding(), present(available))).toEqual({
+    identity: 'agent-composition-system/binding/execution-binding/probe',
+    implementation: 'captured-source-read-v1',
+    status: 'bound',
+    reason: `captured-source-read-v1 ships handler ia.captured-source.read.v1 (bytes ${'c'.repeat(12)}); nothing was executed`,
+    handler: 'ia.captured-source.read.v1',
+    digest: 'c'.repeat(64),
+    version: 1,
+  });
+  // A binding that names no target binds the implementation the catalog lists under its id.
+  expect(bindExecution(binding({ target: null }), present(available)).status).toBe('bound');
+});
+
+it('reports every binding without a bound implementation as unavailable, never as bound', () => {
+  const cases: [ExecutionBinding, BindingCatalog, string][] = [
+    [binding({ implementation: 'missing-read-v1' }), present(available), 'lists no implementation missing-read-v1'],
+    // A metadata-only declaration and missing handler bytes both reach the binder as an unavailable row.
+    [
+      binding(),
+      present({
+        id: 'captured-source-read-v1',
+        status: 'unavailable',
+        reason: 'its handler module is not in the inventory',
+      }),
+      'unavailable on this host: its handler module is not in the inventory',
+    ],
+    [binding(), { status: 'unavailable', reason: 'no host has joined a catalog' }, 'no host has joined a catalog'],
+    [binding({ kind: 'entry' }), present(available), 'none of kind entry'],
+    [binding({ kind: null }), present(available), 'none of kind (none stated)'],
+    [binding({ implementation: null }), present(available), 'names no implementation'],
+    [
+      binding({ target: 'acme/binding/operation/other' }),
+      present(available),
+      `serves ${READ}, not acme/binding/operation/other`,
+    ],
+  ];
+  for (const [subject, catalog, reason] of cases)
+    expect(bindExecution(subject, catalog)).toEqual({
+      identity: subject.identity,
+      implementation: subject.implementation,
+      status: 'unavailable',
+      reason: expect.stringContaining(reason),
+    });
+});
+
+it('reports a revoked implementation and a catalog that failed verification as revoked, distinctly', () => {
+  expect(
+    bindExecution(
+      binding(),
+      present({ id: 'captured-source-read-v1', status: 'revoked', reason: 'withdrawn by its producer' }),
+    ),
+  ).toMatchObject({
+    status: 'revoked',
+    reason: 'the installed catalog revokes captured-source-read-v1: withdrawn by its producer',
+  });
+  expect(
+    bindExecution(binding(), { status: 'damaged', reason: 'IA-DIST-INTEGRITY-MISMATCH: Shipped handler bytes differ' }),
+  ).toMatchObject({
+    status: 'revoked',
+    reason: expect.stringContaining('failed verification: IA-DIST-INTEGRITY-MISMATCH'),
+  });
+  // The kind decides first: a binding no catalog section provides is unavailable, not revoked, even then.
+  expect(bindExecution(binding({ kind: 'entry' }), { status: 'damaged', reason: 'x' }).status).toBe('unavailable');
+});
+
+const repository = resolve(import.meta.dirname, '../../..'),
+  reader = open(repository, { cache: false });
+afterAll(() => reader.close());
+it('reads the repository’s execution bindings with their targets resolved, and binds the read adapter’s', () => {
+  const bindings = executionBindings(reader);
+  expect(bindings).toEqual(
+    expect.arrayContaining([
+      {
+        identity: 'agent-composition-system/binding/execution-binding/read-captured-source-binding',
+        kind: 'operation',
+        implementation: 'captured-source-read-v1',
+        target: READ,
+      },
+      expect.objectContaining({
+        identity: 'agent-composition-system/binding/execution-binding/example-entry',
+        kind: 'entry',
+        implementation: 'example-entry-v1',
+      }),
+    ]),
+  );
+  expect(bindings.map((row) => row.identity)).toEqual([...bindings.map((row) => row.identity)].sort());
+  const read = bindings.find((row) => row.implementation === 'captured-source-read-v1')!;
+  expect(bindExecution(read, present(available)).status).toBe('bound');
+  expect(bindExecution(read, present({ ...available, operation: 'acme/binding/operation/other' })).status).toBe(
+    'unavailable',
+  );
 });

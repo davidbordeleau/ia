@@ -105,6 +105,11 @@
       "types": "./dist/publication.d.ts",
       "default": "./dist/publication.js"
     },
+    "./bind": {
+      "development": "./src/bind.ts",
+      "types": "./dist/bind.d.ts",
+      "default": "./dist/bind.js"
+    },
     "./internal/adapters": {
       "types": "./dist/adapters.d.ts",
       "default": "./dist/adapters.js"
@@ -128,6 +133,10 @@
     "./internal/authoring": {
       "types": "./dist/authoring.d.ts",
       "default": "./dist/authoring.js"
+    },
+    "./internal/bind": {
+      "types": "./dist/bind.d.ts",
+      "default": "./dist/bind.js"
     },
     "./internal/candidate": {
       "types": "./dist/candidate.d.ts",
@@ -344,6 +353,10 @@
         "types": "./dist/publication.d.ts",
         "default": "./dist/publication.js"
       },
+      "./bind": {
+        "types": "./dist/bind.d.ts",
+        "default": "./dist/bind.js"
+      },
       "./internal/adapters": {
         "types": "./dist/adapters.d.ts",
         "default": "./dist/adapters.js"
@@ -367,6 +380,10 @@
       "./internal/authoring": {
         "types": "./dist/authoring.d.ts",
         "default": "./dist/authoring.js"
+      },
+      "./internal/bind": {
+        "types": "./dist/bind.d.ts",
+        "default": "./dist/bind.js"
       },
       "./internal/candidate": {
         "types": "./dist/candidate.d.ts",

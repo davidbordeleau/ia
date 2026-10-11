@@ -44,7 +44,9 @@ import { afterAll, expect, it, vi } from 'vitest';
 import { cleanup } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
-afterAll(cleanup);
+// Every case materializes a host payload of some 1,400 files in its own IA home (it carries the installed read handler
+// since milestone generation-binding), so removing them all can outlast the default 10 s hook timeout on Windows.
+afterAll(cleanup, 120_000);
 
 /**
  * A seam on apps/distribution's applyProjection, which writes and deletes every projection file, so a test can fail

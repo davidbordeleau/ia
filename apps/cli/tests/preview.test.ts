@@ -739,5 +739,26 @@ describe('the portable path rule (review C-N9)', () => {
       }
       expect(portable(path), path).toBe(!unsafe);
     }
+    // Review C-RC4, a deliberate difference: the CLI also refuses DEL, a C1 control, the line and paragraph separators
+    // and the bidirectional controls, which db's reader admits.
+    for (const code of [0x7f, 0x85, 0x9b, 0x2028, 0x2029, 0x202e, 0x2066]) {
+      const path = `.ia/src/x${String.fromCharCode(code)}y.ia`;
+      let unsafe = false;
+      try {
+        readWorkspaceBytes(root, path, 1024);
+      } catch (error) {
+        unsafe = (error as { readonly code?: string }).code === 'IA-DB-PATH-UNSAFE';
+      }
+      expect(unsafe, `db: U+${code.toString(16)}`).toBe(false);
+      expect(portable(path), `cli: U+${code.toString(16)}`).toBe(false);
+    }
+  });
+  it('refuses an --at path holding a control db admits, naming a path that runs (review C-RC4)', async () => {
+    const root = workspace();
+    const path = `.ia/src/x${String.fromCharCode(0x202e)}y.ia`;
+    await refused(root, ['task', 't9', '--at', path], 'IA-DB-PATH-UNSAFE');
+    const human = await run(['preview', 'task', 't9', '--at', path, '--root', root]);
+    expect(human.exitCode).toBe(3);
+    expect(human.stderr).not.toContain(String.fromCharCode(0x202e));
   });
 });

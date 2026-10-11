@@ -905,7 +905,9 @@ export function invocationOf(context: Context, root: string, editor: Editor): In
 
 /**
  * A canonical workspace-relative path: what `reader.preview` and the opened-handle reader accept. db keeps its rule private,
- * so this copy is held to it by a parity test (review C-N9, tests/preview.test.ts).
+ * so this copy is held to it by a parity test (review C-N9, tests/preview.test.ts). The CLI also refuses DEL, the C1
+ * controls, the Unicode line and paragraph separators and the bidirectional controls, which db admits, so an `--at` path
+ * a terminal or a line scanner could misread is never written (review C-RC4); the parity test states that difference.
  */
 export function portable(path: string): boolean {
   return (
@@ -913,6 +915,7 @@ export function portable(path: string): boolean {
     path === path.normalize('NFC') &&
     path.length <= 1024 &&
     !/[\\\u0000-\u001f<>:"|?*]/.test(path) &&
+    !/[\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/.test(path) &&
     path
       .split('/')
       .every(

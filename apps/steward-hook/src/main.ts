@@ -12,10 +12,11 @@ import {
   type Stats,
 } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { evaluateSteward, isEntry, openDatabase } from '@inventarch/runtime';
+import { evaluateMandateGuard, evaluateSteward, isEntry, mandateGuardSelects, openDatabase } from '@inventarch/runtime';
 import type { HookCode } from '@inventarch/runtime';
 import { pathKey, sameFile, unaliased } from '@inventarch/db';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
+import { hookDeclaration, registrableHook } from '@inventarch/workspace-runtime/internal/generate';
 
 export interface HookOutput {
   readonly hookSpecificOutput?: {
@@ -29,9 +30,23 @@ export function deny(code: HookCode, message: string): HookOutput {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
-      permissionDecisionReason: `${code}: ${message}`,
+      permissionDecisionReason: printable(`${code}: ${message}`),
     },
   };
+}
+// Built from strings: the classes name the control characters themselves.
+const ESCAPES = new RegExp('\\u001b(?:\\[[0-?]*[ -/]*[@-~]|\\][^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)?|[@-_])', 'g'),
+  CONTROLS = new RegExp(
+    '[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]',
+    'g',
+  );
+/**
+ * A refusal as the host may display it: authored text (a `@hook`'s message) and paths reach the reason, so terminal
+ * escape sequences are removed and every other C0 or C1 control, line or paragraph separator and bidirectional control
+ * becomes a space; the reason is bounded.
+ */
+export function printable(text: string): string {
+  return text.replace(ESCAPES, '').replace(CONTROLS, ' ').slice(0, 4096);
 }
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -144,12 +159,14 @@ function legacySteward(target: string): boolean {
 
 /**
  * `ownership` is undefined in a legacy workspace (no projection state) and is read only when a candidate path needs it;
- * `steward` says whether the edited file, at a legacy-mode agent path, is still a 1.x steward file.
+ * `steward` says whether the edited file, at a legacy-mode agent path, is still a 1.x steward file. `systems` locates the
+ * retired steward rule's system folders, which only the legacy mode enforces.
  */
 function protection(
   path: string | undefined,
   ownership: () => Ownership | undefined,
   steward: () => boolean,
+  systems = true,
 ): Rule | undefined {
   if (path === undefined) return undefined;
   if (installation(path)) return { projection: true };
@@ -162,7 +179,7 @@ function protection(
     const owned = ownership();
     if (owned === undefined ? steward() : owned.files.has(path)) return { projection: true };
   }
-  if (path === '.ia/src/systems' || path.startsWith('.ia/src/systems/')) {
+  if (systems && (path === '.ia/src/systems' || path.startsWith('.ia/src/systems/'))) {
     const system = path.split('/')[3];
     return system !== undefined && /^[a-z][a-z0-9-]*$/.test(system) ? { system } : { invalid: true };
   }
@@ -271,8 +288,9 @@ function contextSettingsManaged(root: string, includeContext = true): GuardContr
     const match = /^claude-context-([a-z][a-z0-9-]{0,63})\.json$/.exec(fold(name)),
       pending = fold(name) === 'lifecycle-pending.json';
     const guard = /^claude-guard-([a-z][a-z0-9-]{0,63})\.json$/.exec(fold(name)),
-      guardPending = fold(name) === 'guard-pending.json';
-    if (!guard && !guardPending && (!includeContext || (!match && !pending))) continue;
+      guardPending = fold(name) === 'guard-pending.json',
+      hooks = /^claude-hooks-([a-z][a-z0-9-]{0,63})\.json$/.exec(fold(name));
+    if (!guard && !guardPending && !hooks && (!includeContext || (!match && !pending))) continue;
     const path = resolve(directory, name),
       stat = lstatSync(path),
       limit = pending || guardPending ? 8 * 1024 * 1024 : 1024 * 1024;
@@ -305,9 +323,12 @@ function contextSettingsManaged(root: string, includeContext = true): GuardContr
           throw new Error('Invalid pending context bytes');
       }
     } else if (guardPending) {
+      // One journal serves the retired steward guard's registration and the `@hook` groups' (distribution
+      // guard-registration.ts): each names its own state format.
+      const hookJournal = row['format'] === 'ia.hook-registration-pending.v1';
       if (
         Object.keys(row).sort().join('|') !== 'after|before|format|id' ||
-        row['format'] !== 'ia.guard-registration-pending.v1'
+        (row['format'] !== 'ia.guard-registration-pending.v1' && !hookJournal)
       )
         throw new Error('Invalid pending guard ownership');
       for (const key of ['before', 'after']) {
@@ -323,7 +344,7 @@ function contextSettingsManaged(root: string, includeContext = true): GuardContr
           const state: unknown = decodeDistributionJson(side['state']);
           if (
             !object(state) ||
-            state['format'] !== 'ia.guard-registration-state.v1' ||
+            state['format'] !== (hookJournal ? 'ia.hook-registration-state.v1' : 'ia.guard-registration-state.v1') ||
             state['id'] !== row['id'] ||
             typeof state['cache'] !== 'string' ||
             !isAbsolute(state['cache'])
@@ -332,6 +353,27 @@ function contextSettingsManaged(root: string, includeContext = true): GuardContr
           launchers.push(resolve(state['cache'], 'scripts/ia.mjs'));
         }
       }
+    } else if (hooks) {
+      // The `@hook` groups' ownership state (plan amendment C9): the settings that hold them, and the launcher they run,
+      // are managed as the retired guard's were.
+      if (
+        Object.keys(row)
+          .filter((key) => key !== 'existing')
+          .sort()
+          .join('|') !== 'cache|created|format|groups|id|release' ||
+        (row['existing'] !== undefined && !Array.isArray(row['existing'])) ||
+        row['format'] !== 'ia.hook-registration-state.v1' ||
+        row['id'] !== hooks[1] ||
+        typeof row['cache'] !== 'string' ||
+        !isAbsolute(row['cache']) ||
+        typeof row['created'] !== 'boolean' ||
+        !Array.isArray(row['groups']) ||
+        typeof row['release'] !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(row['release'])
+      )
+        throw new Error('Invalid hook ownership state');
+      guardManaged = true;
+      launchers.push(resolve(row['cache'] as string, 'scripts/ia.mjs'));
     } else if (guard) {
       if (
         Object.keys(row)
@@ -513,20 +555,40 @@ function anchored(root: string, target: string): string | undefined {
     current = parent;
   }
 }
-export function evaluateHook(root: string, event: unknown, actorsPath?: string): HookOutput {
-  if (
-    !object(event) ||
-    event['hook_event_name'] !== 'PreToolUse' ||
-    !['Write', 'Edit', 'MultiEdit'].includes(String(event['tool_name'])) ||
-    !object(event['tool_input']) ||
-    typeof event['tool_input']['file_path'] !== 'string' ||
-    !event['tool_input']['file_path'].trim() ||
-    event['tool_input']['file_path'].includes('\0') ||
-    (event['tool_name'] === 'MultiEdit' && !Array.isArray(event['tool_input']['edits']))
-  )
-    return deny('IA-HOOK-INPUT-INVALID', 'Expected a PreToolUse file edit event');
+/** A PreToolUse event for one file edit, as both modes accept it. */
+interface EditEvent extends Record<string, unknown> {
+  readonly tool_name: 'Write' | 'Edit' | 'MultiEdit';
+  readonly tool_input: Record<string, unknown> & { readonly file_path: string };
+}
+function editEvent(event: unknown): event is EditEvent {
+  return (
+    object(event) &&
+    event['hook_event_name'] === 'PreToolUse' &&
+    ['Write', 'Edit', 'MultiEdit'].includes(String(event['tool_name'])) &&
+    object(event['tool_input']) &&
+    typeof event['tool_input']['file_path'] === 'string' &&
+    !!event['tool_input']['file_path'].trim() &&
+    !event['tool_input']['file_path'].includes('\0') &&
+    !(event['tool_name'] === 'MultiEdit' && !Array.isArray(event['tool_input']['edits']))
+  );
+}
+/** Where an edit lands: the fixed root, the target as spelled and as the volume resolves it, and its root-relative spellings. */
+interface EditTarget {
+  readonly base: string;
+  readonly target: string;
+  readonly actual: string;
+  /** The folded root-relative spellings (`local`), the typed one first; undefined where one does not lie under the root. */
+  readonly spellings: readonly (string | undefined)[];
+  readonly rule: Rule | undefined;
+}
+/**
+ * The path safety and managed-state protection both modes share. Throws, for IA-HOOK-PATH-UNSAFE, on an unusable root,
+ * a relative path without a cwd inside it, unreadable ownership, and a protected path reached through an alias. With
+ * `systems`, the retired steward rule's `.ia/src/systems/<name>/` folders are located too (the legacy mode only).
+ */
+function editTarget(root: string, event: EditEvent, systems: boolean): EditTarget {
   let rule: Rule | undefined, base: string;
-  try {
+  {
     if (!isAbsolute(root)) throw new Error('Binding requires an absolute fixed project root');
     // The registered root as the volume stores it: another case or normalization of the same directory is the same
     // project, and every rule below compares against this spelling; a link or junction anywhere in it is still refused.
@@ -567,7 +629,7 @@ export function evaluateHook(root: string, event: unknown, actorsPath?: string):
       return owned;
     };
     rule = spellings.reduce<Rule | undefined>(
-      (found, spelling) => found ?? protection(spelling, ownership, () => legacySteward(actual)),
+      (found, spelling) => found ?? protection(spelling, ownership, () => legacySteward(actual), systems),
       undefined,
     );
     const localSettings = spellings.includes('.claude/settings.local.json'),
@@ -596,14 +658,22 @@ export function evaluateHook(root: string, event: unknown, actorsPath?: string):
     if (rule !== undefined && !unaliased(target, actual))
       throw new Error('Protected path has an aliased ancestor or target');
     if (rule?.invalid) throw new Error('Cannot identify the owning system');
+    return { base, target, actual, spellings, rule };
+  }
+}
+const MANAGED =
+  'Use the owning command for generated state. Guard settings require a trusted operator edit outside intercepted assistant tools, preserving the guard, followed by registration qualification';
+/** The legacy guard: managed-state protection and the retired steward rule for `.ia/src/systems/<name>/`. */
+export function evaluateHook(root: string, event: unknown, actorsPath?: string): HookOutput {
+  if (!editEvent(event)) return deny('IA-HOOK-INPUT-INVALID', 'Expected a PreToolUse file edit event');
+  let edit: EditTarget;
+  try {
+    edit = editTarget(root, event, true);
   } catch (error) {
     return deny('IA-HOOK-PATH-UNSAFE', error instanceof Error ? error.message : String(error));
   }
-  if (rule?.projection)
-    return deny(
-      'IA-HOOK-PROJECTION-MANAGED',
-      'Use the owning command for generated state. Guard settings require a trusted operator edit outside intercepted assistant tools, preserving the guard, followed by registration qualification',
-    );
+  const { base, rule } = edit;
+  if (rule?.projection) return deny('IA-HOOK-PROJECTION-MANAGED', MANAGED);
   if (rule?.system === undefined) return {};
   try {
     const db = openDatabase(base, { cache: false });
@@ -633,19 +703,96 @@ export function evaluateHook(root: string, event: unknown, actorsPath?: string):
     return deny('IA-HOOK-STEWARD-UNAVAILABLE', error instanceof Error ? error.message : String(error));
   }
 }
+const REREGISTER =
+  'restore the record, or register the workspace\'s current hooks again with "ia host claude --apply" ("ia project claude --apply" for a projection written without a registration)';
+/**
+ * The `@mandate` guard (milestone generation-binding, plan amendments C9 and C10): one authored `@hook`'s group runs
+ * `guard --root <root> --hook <identity>`. The same input checks, path safety and managed-state protection as the legacy
+ * guard run first, so no hook leaves the guard's own registration, the installation state or the owned projection open
+ * (the retired steward rule is not one of them). Then the admitted authored `@hook` the registration names is read as
+ * hook generation declares it, and runtime's evaluateMandateGuard decides the edit: allowed unless the hook selects it
+ * (its tools and paths, or the authored `.ia/src` tree) and the actor holds no governing mandate that grants Synthesis
+ * there. A selected path reached through an alias is refused. What cannot be read refuses with a code; nothing is
+ * allowed because something was unreadable once the hook is known to select the edit, and a registration whose hook
+ * cannot be read refuses every edit it receives, since what it selects is unknown.
+ */
+export function evaluateMandateHook(root: string, hook: string, event: unknown): HookOutput {
+  if (!editEvent(event)) return deny('IA-HOOK-INPUT-INVALID', 'Expected a PreToolUse file edit event');
+  if (!registrableHook(hook)) return deny('IA-HOOK-INPUT-INVALID', 'Expected --hook <canonical @hook identity>');
+  let edit: EditTarget;
+  try {
+    edit = editTarget(root, event, false);
+  } catch (error) {
+    return deny('IA-HOOK-PATH-UNSAFE', error instanceof Error ? error.message : String(error));
+  }
+  if (edit.rule?.projection) return deny('IA-HOOK-PROJECTION-MANAGED', MANAGED);
+  // Folded root-relative spellings, the physical one first; selections and claims fold too (`fold`), so where the volume
+  // folds names `DOCS/x.md` is under `docs/**` and `Docs/**` alike, and elsewhere each case is its own path.
+  const paths = [...new Set([edit.spellings[1], edit.spellings[0], ...edit.spellings.slice(2)])].filter(
+    (spelling): spelling is string => spelling !== undefined,
+  );
+  if (paths.length === 0) return {};
+  let db: ReturnType<typeof openDatabase>;
+  try {
+    db = openDatabase(edit.base, { cache: false });
+  } catch (error) {
+    return deny(
+      'IA-HOOK-MANDATE-UNAVAILABLE',
+      `The workspace's records cannot be read: ${error instanceof Error ? error.message : String(error)}. Next: ia validate`,
+    );
+  }
+  try {
+    const within = db.resolveScope().token,
+      nodes = db
+        .records({ within })
+        .filter((node) => node.discriminator === 'hook' && node.band === 100 && node.identity === hook);
+    if (nodes.length !== 1)
+      return deny('IA-HOOK-DECLARATION-UNAVAILABLE', `${hook} is not an admitted authored @hook; ${REREGISTER}`);
+    let declaration: ReturnType<typeof hookDeclaration>;
+    try {
+      declaration = hookDeclaration(nodes[0]!);
+    } catch (error) {
+      return deny(
+        'IA-HOOK-DECLARATION-UNAVAILABLE',
+        `${error instanceof Error ? error.message : String(error)}; ${REREGISTER}`,
+      );
+    }
+    const request = {
+      hook: declaration,
+      tool: event.tool_name,
+      paths,
+      agentId: event['agent_id'],
+      agentType: event['agent_type'],
+      fold,
+    };
+    if (!mandateGuardSelects(request)) return {};
+    if (!unaliased(edit.target, edit.actual))
+      return deny('IA-HOOK-PATH-UNSAFE', 'Selected path has an aliased ancestor or target');
+    const decision = evaluateMandateGuard(db, within, request);
+    return decision.allowed ? {} : deny(decision.code!, decision.message);
+  } catch (error) {
+    return deny(
+      'IA-HOOK-MANDATE-UNAVAILABLE',
+      `The records that decide this edit cannot be read: ${error instanceof Error ? error.message : String(error)}. Next: ia validate`,
+    );
+  } finally {
+    db.close();
+  }
+}
+const USAGE =
+  'Usage: steward-hook --root <fixed absolute root> [--actors <trusted absolute mapping> | --hook <@hook identity>] (input limit 1 MiB)';
 export function runHook(args: readonly string[], input: string): HookOutput {
   try {
+    const mode = args.length === 4 ? args[2] : undefined;
     if (
-      !(args.length === 2 || (args.length === 4 && args[2] === '--actors' && args[3])) ||
+      !(args.length === 2 || ((mode === '--actors' || mode === '--hook') && args[3])) ||
       args[0] !== '--root' ||
       !args[1] ||
       Buffer.byteLength(input) > 1024 * 1024
     )
-      return deny(
-        'IA-HOOK-INPUT-INVALID',
-        'Usage: steward-hook --root <fixed absolute root> [--actors <trusted absolute mapping>] (input limit 1 MiB)',
-      );
-    return evaluateHook(args[1], JSON.parse(input) as unknown, args[3]);
+      return deny('IA-HOOK-INPUT-INVALID', USAGE);
+    const event = JSON.parse(input) as unknown;
+    return mode === '--hook' ? evaluateMandateHook(args[1], args[3]!, event) : evaluateHook(args[1], event, args[3]);
   } catch {
     return deny('IA-HOOK-INPUT-INVALID', 'Invalid JSON input');
   }

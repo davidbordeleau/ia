@@ -31,8 +31,9 @@ export const HOST_MODES: readonly HostMode[] = Object.freeze(
     },
     {
       mode: 'guard',
-      arguments: '--root <absolute workspace> [--actors <absolute file>]',
-      meaning: 'Evaluate one PreToolUse event on stdin against the steward guard',
+      arguments: '--root <absolute workspace> [--actors <absolute file> | --hook <@hook identity>]',
+      meaning:
+        "Evaluate one PreToolUse event on stdin against the steward guard, or with --hook against that authored @hook's governing mandates",
     },
     { mode: 'claude-guard', arguments: '', meaning: 'The guard with the root taken from CLAUDE_PROJECT_DIR' },
     {

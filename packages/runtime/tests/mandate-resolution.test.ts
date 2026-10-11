@@ -310,6 +310,26 @@ it('reads for a path alone the closure of the workspace position seats it in, th
   expect(identities(db, { path: own, workspace: demo })).toEqual([mandate('demo-mandate')]);
 });
 
+it('folds a path and each covers selection with `fold`, as the edit guard does where the volume folds names', () => {
+  const db = database(
+    freshInit(
+      `${records}${authorized('docs-mandate', ['participant @agent demo', 'moves [Synthesis]', 'covers ["Docs/"]'])}`,
+    ),
+  );
+  expect(errors(db)).toEqual([]);
+  const lower = (text: string): string => text.toLowerCase();
+  // Without `fold` the dialect matches case-sensitively: `Docs/` claims neither `docs/x.md` nor `DOCS/x.md`.
+  for (const path of ['docs/x.md', 'DOCS/x.md']) expect(identities(db, { path }), path).toEqual([]);
+  expect(identities(db, { path: 'Docs/x.md' })).toEqual([mandate('docs-mandate')]);
+  // With it, every spelling the key folds alike is claimed, and `binds` is still the actor's.
+  for (const path of ['docs/x.md', 'DOCS/x.md', 'Docs/x.md'])
+    expect(bound(db, { path, fold: lower, actor: participant }), path).toEqual([[mandate('docs-mandate'), true]]);
+  expect(identities(db, { path: 'documents/x.md', fold: lower })).toEqual([]);
+  expect(() => governingMandates(db, token(db), { path: 'docs/x.md', fold: 'lower' as never })).toThrow(
+    'fold must be a function',
+  );
+});
+
 it('governs wherever its participant acts a mandate that states neither scope nor covers, with or without a steward', () => {
   const located = records.replace(SCOPE, '').replace(ALL_MOVES, 'moves [Observation]'),
     loose = authorized('loose-mandate', ['moves [Observation]']);

@@ -18,8 +18,8 @@ it('executes native graph, all language fixtures, all refusal-code boundaries an
   expect(fixtures).toBe(179);
   // IA-COMP-PROJECTION-INVALID retired with the projection renderers (milestone position-packet task replace-renderers);
   // the mandate resolver adds the default-actor and two profile refusals (milestone generation-binding task
-  // mandate-resolution).
-  expect(boundaries).toBe(116);
+  // mandate-resolution), and the `@mandate` guard its three hook refusals (task generation-hook-governance).
+  expect(boundaries).toBe(119);
   expect(qualification).toEqual({
     platform: process.platform,
     deferredPlatformCodes:

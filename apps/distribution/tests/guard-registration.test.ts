@@ -5,17 +5,25 @@ import { afterEach, expect, it } from 'vitest';
 import { runBounded } from '@tools/testing/subprocess.js';
 import { findNodeAtLocation, parseTree } from 'jsonc-parser';
 import { json, sha256 } from '../src/files.js';
+import { open } from '@inventarch/db';
+import { generateHooks } from '@inventarch/workspace-runtime/internal/generate';
 import {
   applyGuardRegistration,
+  applyHookRegistration,
+  assertRetirableGuard,
   currentGuardForm,
   FAIL_CLOSED,
   FAIL_CLOSED_ACCEPTED,
   guardGroup,
   guardNode,
+  hookGroup,
   planGuardFor,
   planGuardRegistration,
+  planHookRegistration,
+  planHooksFor,
   recoverGuardRegistration,
 } from '../src/guard-registration.js';
+import type { HookRow } from '../src/guard-registration.js';
 import { doorServer, expectedHostCache, nodeCommand, recoverHost } from '../src/host.js';
 import { recoverLifecycleRegistration } from '../src/lifecycle-registration.js';
 import { runNative } from '../src/native-command.js';
@@ -463,3 +471,252 @@ it('removes an exact recorded old-root guard after a workspace move, while regis
   expect(JSON.parse(readFileSync(resolve(moved, settings), 'utf8'))).toEqual({ permissions: { allow: ['Bash(ls)'] } });
   expect(existsSync(resolve(moved, '.ia/distributions/hosts/claude-guard-workspace.json'))).toBe(false);
 });
+
+/*
+ * Milestone generation-binding plan amendment C9: each authored `@hook` becomes exactly one owned PreToolUse group that
+ * runs `guard --root <root> --hook <identity>`. The rows come from the composition fixture's records (apps/cli's
+ * fixture over the conformance corpus), rendered by workspace-runtime's hook generation as the projection will.
+ */
+const repository = resolve(import.meta.dirname, '../../..'),
+  HOOK = 'hook-authoring-system/binding/hook/note-edits',
+  hookState = '.ia/distributions/hosts/claude-hooks-workspace.json';
+const FIXTURE_HOOKS = readFileSync(
+  resolve(repository, 'apps/cli/tests/fixtures/composition-workspace/.ia/src/hooks.ia'),
+  'utf8',
+);
+/** The composition fixture's authored hooks as registration rows, `hooks` replacing its hooks.ia when given. */
+function fixtureRows(hooks?: string): HookRow[] {
+  const root = temp();
+  cpSync(resolve(repository, 'examples/conformance/native'), resolve(root, '.ia/src'), { recursive: true });
+  cpSync(resolve(repository, 'apps/cli/tests/fixtures/composition-workspace/.ia/src'), resolve(root, '.ia/src'), {
+    recursive: true,
+  });
+  if (hooks !== undefined) put(root, '.ia/src/hooks.ia', hooks);
+  const db = open(root, { cache: false });
+  try {
+    expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    return generateHooks(db, db.resolveScope().token, 'claude').map(({ identity, tools }) => ({ identity, tools }));
+  } finally {
+    db.close();
+  }
+}
+/** One more authored hook, appended to the fixture's. */
+const extraHook = (name: string, tools = '[Write]'): string =>
+  `\n@hook ${name}\n  meaning\n    says "Fixture hook ${name}."\n    answers "What does ${name} guard?"\n  hook\n    event PreToolUse\n    tools ${tools}\n    paths ["notes/**"]\n    message "Fixture hook ${name}."\n`;
+const fixed = (cache: string, root: string, hook: string): string[] => [
+  join(cache, 'scripts/ia.mjs'),
+  'guard',
+  '--root',
+  root,
+  '--hook',
+  hook,
+];
+const handler = (cache: string, root: string, hook: string) =>
+  process.platform === 'win32'
+    ? { type: 'command', command: nodeCommand(), args: fixed(cache, root, hook), timeout: 10 }
+    : {
+        type: 'command',
+        command: '/bin/sh',
+        args: ['-c', FAIL_CLOSED, nodeCommand(), ...fixed(cache, root, hook)],
+        timeout: 10,
+      };
+const bytesOf = (root: string, path: string): string | null =>
+  existsSync(resolve(root, path)) ? readFileSync(resolve(root, path), 'utf8') : null;
+
+it("renders the fixture's @hook as one owned group, keeps every unrelated key and group, re-plans as a no-op and removes only its group", () => {
+  const root = temp(),
+    cache = cacheV2(),
+    rows = fixtureRows();
+  expect(rows).toEqual([{ identity: HOOK, tools: ['Write', 'Edit', 'MultiEdit'] }]);
+  const original = pretty(
+    {
+      permissions: { allow: ['Bash(ls)'] },
+      hooks: {
+        PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo' }] }],
+        PostToolUse: [{ matcher: 'Write', hooks: [{ type: 'command', command: 'fmt' }] }],
+      },
+      env: { A: '1' },
+    },
+    2,
+    '\n',
+  );
+  put(root, settings, original);
+  const plan = planHookRegistration(root, { cache, hooks: rows });
+  expect(plan.hooks).toEqual([{ hook: HOOK, action: 'create' }]);
+  expect(applyHookRegistration(plan)).toEqual({ status: 'hooks-registered', id: 'workspace' });
+  const applied = JSON.parse(readFileSync(resolve(root, settings), 'utf8'));
+  expect(applied.permissions).toEqual({ allow: ['Bash(ls)'] });
+  expect(applied.env).toEqual({ A: '1' });
+  expect(applied.hooks.PostToolUse).toEqual([{ matcher: 'Write', hooks: [{ type: 'command', command: 'fmt' }] }]);
+  expect(applied.hooks.PreToolUse).toEqual([
+    { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo' }] },
+    // Exactly the fixed launcher, verb, root and identity: nothing authored but the identity and tools reaches it.
+    { matcher: 'Write|Edit|MultiEdit', hooks: [handler(cache, root, HOOK)] },
+  ]);
+  expect(JSON.parse(readFileSync(resolve(root, hookState), 'utf8'))).toEqual({
+    format: 'ia.hook-registration-state.v1',
+    id: 'workspace',
+    cache,
+    release: sha256(readFileSync(resolve(cache, 'release.json'), 'utf8')),
+    created: false,
+    groups: [{ hook: HOOK, group: applied.hooks.PreToolUse[1] }],
+    existing: [['hooks'], ['hooks', 'PreToolUse']],
+  });
+  // Re-planning changes nothing, and applying it writes nothing.
+  const registered = [bytesOf(root, settings), bytesOf(root, hookState)];
+  const again = planHookRegistration(root, { cache, hooks: fixtureRows() });
+  expect(again.hooks).toEqual([{ hook: HOOK, action: 'unchanged' }]);
+  expect([again.after.config, again.after.state]).toEqual(registered);
+  expect(applyHookRegistration(again).status).toBe('hooks-unchanged');
+  expect([bytesOf(root, settings), bytesOf(root, hookState)]).toEqual(registered);
+  // A second hook appends its own group; removing the first hook's record removes only that group.
+  const both = fixtureRows(FIXTURE_HOOKS + extraHook('note-writes')),
+    other = 'hook-authoring-system/binding/hook/note-writes';
+  expect(both.map((row) => row.identity)).toEqual([HOOK, other]);
+  applyHookRegistration(planHookRegistration(root, { cache, hooks: both }));
+  const second = JSON.parse(readFileSync(resolve(root, settings), 'utf8')).hooks.PreToolUse[2];
+  expect(second).toEqual({ matcher: 'Write', hooks: [handler(cache, root, other)] });
+  const removal = planHookRegistration(root, { cache, hooks: both.slice(1) });
+  expect(removal.hooks).toEqual([
+    { hook: HOOK, action: 'remove' },
+    { hook: other, action: 'unchanged' },
+  ]);
+  applyHookRegistration(removal);
+  expect(JSON.parse(readFileSync(resolve(root, settings), 'utf8')).hooks.PreToolUse).toEqual([
+    { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo' }] },
+    second,
+  ]);
+  // No hook left: the settings come back byte for byte and the ownership state goes.
+  expect(applyHookRegistration(planHookRegistration(root, { cache, hooks: [] })).status).toBe('hooks-removed');
+  expect(readFileSync(resolve(root, settings), 'utf8')).toBe(original);
+  expect(existsSync(resolve(root, hookState))).toBe(false);
+});
+
+it('writes nothing authored but the identity into a group, whatever the paths and message hold', () => {
+  const root = temp(),
+    cache = cacheV2();
+  const odd = FIXTURE_HOOKS.replace(
+    '["docs/**", "restricted/**"]',
+    '["docs/**", "$(touch pwned)/**", "`id`/**", "!x/**", "[ab]/**", "a\'b/**"]',
+  ).replace('"Use the participant\'s documentation mandate."', '"Use $(rm -rf ~) and `id` now."');
+  expect(odd).toContain('$(rm -rf ~)');
+  const rows = fixtureRows(odd);
+  expect(rows).toEqual([{ identity: HOOK, tools: ['Write', 'Edit', 'MultiEdit'] }]);
+  applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }));
+  const text = readFileSync(resolve(root, settings), 'utf8');
+  for (const authored of ['$(', '`', '!x', '[ab]', "a'b", 'rm -rf', 'docs/**']) expect(text).not.toContain(authored);
+  expect(JSON.parse(text).hooks.PreToolUse).toEqual([
+    { matcher: 'Write|Edit|MultiEdit', hooks: [handler(cache, root, HOOK)] },
+  ]);
+  // The tools name a matcher in a fixed order, never authored text.
+  expect(hookGroup('/c/scripts/ia.mjs', '/w', { identity: HOOK, tools: ['MultiEdit', 'Write'] }, 'win32').matcher).toBe(
+    'Write|MultiEdit',
+  );
+});
+
+it('refuses an owned group changed by hand, an unmanaged identical group, disabled hooks and malformed rows', () => {
+  const root = temp(),
+    cache = cacheV2(),
+    rows = fixtureRows();
+  for (const hooks of [
+    [{ identity: 'Not An Identity', tools: ['Write'] }],
+    [{ identity: `${HOOK}/extra`, tools: ['Write'] }],
+    [{ identity: HOOK, tools: ['Bash'] }],
+    [{ identity: HOOK, tools: [] }],
+    [{ identity: HOOK, tools: ['Write', 'Write'] }],
+    [...rows, ...rows],
+    [{ identity: HOOK, tools: ['Write'], paths: ['docs/**'] }],
+  ])
+    expect(() => planHookRegistration(root, { cache, hooks } as never), JSON.stringify(hooks)).toThrow(
+      expect.objectContaining({ code: 'IA-DIST-INPUT-INVALID' }),
+    );
+  expect(() => planHookRegistration(root, { remove: 'workspace' })).toThrow(/not owned/);
+  // The group the plan would write already sits there unmanaged: it is never adopted.
+  put(root, settings, json({ hooks: { PreToolUse: [hookGroup(join(cache, 'scripts/ia.mjs'), root, rows[0]!)] } }));
+  expect(() => planHookRegistration(root, { cache, hooks: rows })).toThrow(/unmanaged identical hook group/);
+  rmSync(resolve(root, settings));
+  put(root, '.claude/settings.json', json({ disableAllHooks: true }));
+  expect(() => planHookRegistration(root, { cache, hooks: rows })).toThrow(/disableAllHooks/);
+  rmSync(resolve(root, '.claude/settings.json'));
+  applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }));
+  const edited = JSON.parse(readFileSync(resolve(root, settings), 'utf8'));
+  edited.hooks.PreToolUse[0].hooks[0].timeout = 99;
+  put(root, settings, json(edited));
+  for (const request of [{ cache, hooks: rows }, { cache, hooks: [] }, { remove: 'workspace' }])
+    expect(() => planHookRegistration(root, request), JSON.stringify(request)).toThrow(/changed or was duplicated/);
+  // A group deleted by hand: re-registering it refuses, as the retired guard's did; dropping the hook drops ownership.
+  edited.hooks.PreToolUse = [];
+  put(root, settings, json(edited));
+  expect(() => planHookRegistration(root, { cache, hooks: rows })).toThrow(/changed or was duplicated/);
+  const dropped = planHookRegistration(root, { cache, hooks: [] });
+  expect(dropped.hooks).toEqual([{ hook: HOOK, action: 'remove' }]);
+  expect(dropped.after).toEqual({ config: bytesOf(root, settings), state: null });
+  applyHookRegistration(dropped);
+  expect(existsSync(resolve(root, hookState))).toBe(false);
+});
+
+it('leaves the retired steward guard and the hook groups each to their own owner', () => {
+  const root = temp(),
+    cache = cacheV2(),
+    rows = fixtureRows();
+  applyGuardRegistration(planGuardRegistration(root, { cache }));
+  applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }));
+  // B11's retirement check recognizes only the guard's own group, so a hook group never blocks the projection apply.
+  expect(() => assertRetirableGuard(root)).not.toThrow();
+  applyGuardRegistration(planGuardRegistration(root, { remove: 'workspace' }));
+  expect(JSON.parse(readFileSync(resolve(root, settings), 'utf8')).hooks.PreToolUse).toEqual([
+    { matcher: 'Write|Edit|MultiEdit', hooks: [handler(cache, root, HOOK)] },
+  ]);
+  expect(planHookRegistration(root, { cache, hooks: rows }).hooks).toEqual([{ hook: HOOK, action: 'unchanged' }]);
+  expect(applyHookRegistration(planHookRegistration(root, { remove: 'workspace' })).status).toBe('hooks-removed');
+  // The guard created the file and the containers the hook groups joined, so they stay, emptied, as the hooks found them.
+  expect(JSON.parse(readFileSync(resolve(root, settings), 'utf8'))).toEqual({ hooks: { PreToolUse: [] } });
+});
+
+it("plans against an expected payload as against the verified one, and removes a moved workspace's groups", () => {
+  const root = temp(),
+    built = cacheV2(),
+    home = temp(),
+    release = sha256(readFileSync(resolve(built, 'release.json'), 'utf8')),
+    target = resolve(home, 'hosts', release),
+    rows = fixtureRows();
+  const expected = planHooksFor(root, expectedHostCache(target, release), rows);
+  mkdirSync(dirname(target), { recursive: true });
+  cpSync(built, target, { recursive: true });
+  expect(planHookRegistration(root, { cache: target, hooks: rows })).toEqual(expected);
+  applyHookRegistration(planHookRegistration(root, { cache: target, hooks: rows }));
+  const moved = temp();
+  cpSync(root, moved, { recursive: true });
+  expect(() => planHookRegistration(moved, { cache: target, hooks: rows })).toThrow(/differs from its fixed root/);
+  applyHookRegistration(planHookRegistration(moved, { remove: 'workspace' }));
+  expect(existsSync(resolve(moved, settings))).toBe(false);
+  expect(existsSync(resolve(moved, hookState))).toBe(false);
+});
+
+it.each(['pending', 'config', 'state', 'complete'])(
+  'recovers the %s hook checkpoint through recover-guard and converges byte for byte on rerun',
+  (boundary) => {
+    const root = temp(),
+      cache = cacheV2(),
+      rows = fixtureRows(),
+      original = json({ permissions: { allow: ['Read'] } });
+    put(root, settings, original);
+    const bytes = () => [bytesOf(root, settings), bytesOf(root, hookState)];
+    applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }));
+    const reference = bytes();
+    applyHookRegistration(planHookRegistration(root, { remove: 'workspace' }));
+    expect(() =>
+      applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }), (stage) => {
+        if (stage === boundary) throw Error('interrupted');
+      }),
+    ).toThrow('interrupted');
+    expect(existsSync(resolve(root, '.ia/distributions/hosts/guard-pending.json'))).toBe(boundary !== 'complete');
+    if (boundary !== 'complete')
+      expect(() => planHookRegistration(root, { cache, hooks: rows })).toThrow(/recover-guard/);
+    expect(recoverGuardRegistration(root).status).toBe(boundary === 'complete' ? 'current' : 'guard-recovered');
+    expect(bytes()).toEqual(['state', 'complete'].includes(boundary) ? reference : [original, null]);
+    applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }));
+    expect(bytes()).toEqual(reference);
+    expect(existsSync(resolve(root, '.ia/distributions/hosts/lock.json'))).toBe(false);
+  },
+);

@@ -1,7 +1,7 @@
 import type { CompiledField, CompiledRecord, CompiledValue } from '@inventarch/language';
 import { MOVES as KERNEL_MOVES } from '@inventarch/language';
 import type { ReadHandle } from '@inventarch/db';
-import { reaches } from '@inventarch/graph';
+import { reaches, selects } from '@inventarch/graph';
 import { RUNTIME_CODES, RuntimeError } from './errors.js';
 import type { RuntimeCode } from './errors.js';
 import { freeze } from './types.js';
@@ -121,6 +121,20 @@ function statesValue(record: CompiledRecord, section: string, key: string): bool
     );
 }
 
+/** The text values `record` states at `authority.covers`, a list's items one by one, as db's G06c claimant index reads them. */
+function coversOf(record: CompiledRecord): readonly string[] {
+  return record.sections
+    .filter((section) => section.name === 'authority')
+    .flatMap((section) => section.fields)
+    .flatMap((child) =>
+      'key' in child && child.key === 'covers'
+        ? (child.value.kind === 'list' ? child.value.items : [child.value]).flatMap((value) =>
+            'text' in value ? [value.text] : [],
+          )
+        : [],
+    );
+}
+
 /** Read the authority a compiled `@mandate` declares; a non-mandate or a malformed field is IA-RUNTIME-REQUEST-INVALID. */
 export function mandateAuthorityOf(record: CompiledRecord): MandateAuthority {
   if (record.discriminator !== 'mandate') invalid(`${record.identity} is not a @mandate`);
@@ -199,6 +213,13 @@ export interface GoverningOptions {
    * read; without it, that of the workspace position seats `path` in, or with no path the repository's own.
    */
   readonly workspace?: string;
+  /**
+   * A key applied to `path` and to each `authority.covers` selection before they are matched, for a volume that folds
+   * names (db `pathKey`, which the edit guard passes): a mandate then claims the path when the G06c dialect selects
+   * `fold(path)` with `fold(selection)`, so `DOCS/x.md` is under `covers ["docs/"]` where the volume opens them as one
+   * file. Absent, the claims are db's G06c claimants, matched case-sensitively as the dialect defines them.
+   */
+  readonly fold?: (text: string) => string;
 }
 /**
  * One authored `@mandate` that governs, its authority as mandateAuthorityOf reads it with the references resolved;
@@ -358,20 +379,28 @@ export function governingMandates(
   options: GoverningOptions = {},
 ): readonly GoverningMandate[] {
   const { read, nodes, targets, admit, closure, workspaceOf } = admitted(reader, within),
-    { actor, path, workspace } = options;
+    { actor, path, workspace, fold } = options;
   if (actor !== undefined) admit(actor, 'agent');
   if (workspace !== undefined) admit(workspace, 'workspace');
+  if (fold !== undefined && typeof fold !== 'function') invalid('fold must be a function');
   // Without `workspace`, the closure is the one position reads for the path's location seat, or for no seat.
   const resolution = path === undefined ? undefined : reader.resolveSeat(path, read),
     inside = closure(workspace ?? workspaceOf(resolution?.seat)),
     located = workspace !== undefined || path !== undefined;
   const claiming = new Set(resolution?.claimants.map((claimant) => claimant.identity));
+  // With `fold`, a claim is read from the record as db's claimant index reads it (each text value of `authority.covers`)
+  // and matched on both sides folded.
+  const claims = (node: CompiledRecord): boolean =>
+    fold === undefined
+      ? claiming.has(node.identity)
+      : path !== undefined &&
+        coversOf(node).some((selection) => selects(fold(selection), fold(resolution?.path ?? path)));
   const governs = (node: CompiledRecord): boolean => {
     if (!located) return true;
     if (statesValue(node, 'authority', 'scope') || statesValue(node, 'authority', 'covers'))
       return (
         (workspace !== undefined && targets(node.identity, 'authority.scope', 'workspace').includes(workspace)) ||
-        claiming.has(node.identity)
+        claims(node)
       );
     return actor === undefined
       ? states(node, 'authority', 'participant')

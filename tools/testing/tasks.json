@@ -1342,7 +1342,8 @@
         "tests/context-guard.test.ts",
         "tests/context-inventory.test.ts",
         "tests/context.test.ts",
-        "tests/hook.test.ts"
+        "tests/hook.test.ts",
+        "tests/mandate-guard.test.ts"
       ],
       "profile": "installed",
       "platforms": [

@@ -717,7 +717,7 @@ it('reads only in validation, bindings and checks; recordValidation is the one w
       .replace('scope "package"', 'scope "*"'),
   );
   const before = snapshot(root);
-  const session = openWorkspaceSession({ root, checks: 'structural', evidence: true });
+  const session = openWorkspaceSession({ root, checks: 'structural' });
   try {
     expect(session.validation().status).toBe('admitted');
     session.bindings(null);

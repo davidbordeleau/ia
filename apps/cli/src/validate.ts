@@ -20,8 +20,9 @@
  * bundled pin names in the IA home it materializes payloads in; a registration of any other payload is unavailable.
  *
  * Task check-runner-join-validate (plan amendments C14, C15, C21, C22 and C23): `ia validate` is the validate request.
- * Its session admits checks structurally (an unknown evaluator is admitted and reported, not refused) and reads the
- * current evidence; it binds every `@check` (`WorkspaceSession.checks`, through the same trust) and records the
+ * Its session admits checks structurally (an unknown evaluator is admitted and reported, not refused) and reads no
+ * evidence (review finding B3-R4), so its findings, counts, checks and exit are the authored view's alone and its
+ * `revision` is the one every other reader reports (B3-N4); it binds every `@check` (`WorkspaceSession.checks`, through the same trust) and records the
  * evidence of the bound ones that passed or failed through `recordValidation`, the one writer of evidence, which
  * `ia-distribution validate` calls too. A revoked check is an error; an unavailable or not-evaluated one is never a
  * pass. With no `@check` record the human report is unchanged.
@@ -113,6 +114,8 @@ export interface ValidationView {
   /** The path the CLI resolved, never the runtime's own `result.root`, which is always empty (§2.5). */
   readonly root: string;
   readonly revision: string;
+  /** The authored revision, which names the evidence this request records (review finding B3-N4). */
+  readonly authoredRevision: string;
   readonly status: 'admitted' | 'refused';
   readonly outcome: ReportOutcome;
   readonly records: number;
@@ -137,10 +140,18 @@ const bindingCounts = (bindings: ValidationBindings) => ({
   unavailable: bindings.results.filter((binding) => binding.status === 'unavailable').length,
   revoked: bindings.results.filter((binding) => binding.status === 'revoked').length,
 });
+/** The checks naming an evaluator that is not built in, which only a structural admission admits (C21). */
+const structurallyAdmitted = (checks: ValidationChecks): readonly string[] =>
+  checks.results
+    .filter((check) => check.runner !== null && check.implementation !== 'built-in')
+    .map((check) => check.identity);
+/** `identities` as one phrase: `a`, `a and b`, `a, b and c`. */
+const listed = (identities: readonly string[]): string =>
+  identities.length <= 1 ? (identities[0] ?? '') : `${identities.slice(0, -1).join(', ')} and ${identities.at(-1)}`;
 const checkCounts = (checks: ValidationChecks) => ({
   revoked: checks.results.filter((check) => check.status === 'revoked').length,
   /** Checks naming an evaluator that is not built in, which only a structural admission admits (C21). */
-  structural: checks.results.filter((check) => check.runner !== null && check.implementation !== 'built-in').length,
+  structural: structurallyAdmitted(checks).length,
   notEvaluated: checks.results.filter((check) => check.status !== 'revoked' && check.outcome === 'not-evaluated')
     .length,
 });
@@ -210,6 +221,7 @@ export function collectValidation(root: string, trust: HostTrust | null): Valida
     return {
       root,
       revision: admission.revision,
+      authoredRevision: admission.authoredRevision,
       status: admission.status,
       outcome: session.reader.report.outcome,
       records: admission.records,
@@ -247,6 +259,7 @@ export function validationEnvelope(view: ValidationView, options: ValidationOpti
     version: 1,
     root: view.root,
     revision: view.revision,
+    authoredRevision: view.authoredRevision,
     status: view.status,
     reportOutcome: view.outcome,
     counts: countsOf(view.findings),
@@ -299,7 +312,9 @@ const checksSection = (view: ValidationView, caps: Capabilities): readonly strin
   }));
   const evidence =
     recorded.path === null
-      ? 'No evidence recorded: no bound check passed or failed.'
+      ? view.status === 'refused'
+        ? 'No evidence recorded: admission was refused, so nothing is recorded or pruned.'
+        : 'No evidence recorded: no bound check passed or failed.'
       : `Recorded ${recorded.observations.length} ${recorded.observations.length === 1 ? 'observation' : 'observations'} in ${recorded.path}${recorded.written ? '' : ', unchanged'}.`;
   return [
     sectionLabel('Checks', caps),
@@ -413,12 +428,22 @@ const severitySection = (view: ValidationView, rows: readonly Finding[], caps: C
  * that joined it, or replacing what the intact catalog revokes. A not-evaluated check is never a pass.
  */
 function closing(view: ValidationView, errors: number, revoked: number, notEvaluated: number): string {
-  const damaged = [view.bindings.catalog, view.checkBindings.catalog].find((catalog) => catalog?.status === 'damaged');
+  const damaged = [view.bindings.catalog, view.checkBindings.catalog].find((catalog) => catalog?.status === 'damaged'),
+    structural = structurallyAdmitted(view.checkBindings),
+    revokedChecks = view.checkBindings.results
+      .filter((check) => check.status === 'revoked')
+      .map((check) => check.identity);
   if (errors > 0) return 'Fix the errors above and run "ia validate" again.';
+  // Review finding B3-R3: ia host admits strictly, so it refuses a workspace holding a check only this structural
+  // admission admits; the repair names that check first, so the host's own remedy lands somewhere actionable.
   if (damaged?.status === 'damaged')
-    return `Delete ${damaged.payload}, the host payload that failed verification, then run "ia host ${damaged.consumer} --root ${quote(view.root)} --apply".`;
+    return structural.length > 0
+      ? `Remove or replace ${listed(structural)}, which only ia validate admits and ia host refuses, then delete ${damaged.payload}, the host payload that failed verification, and run "ia host ${damaged.consumer} --root ${quote(view.root)} --apply".`
+      : `Delete ${damaged.payload}, the host payload that failed verification, then run "ia host ${damaged.consumer} --root ${quote(view.root)} --apply".`;
+  if (revokedChecks.length > 0)
+    return `Remove or replace ${listed(revokedChecks)}, whose evaluator the installed catalog revokes, then run "ia validate --root ${quote(view.root)}" again.`;
   if (revoked > 0)
-    return 'Replace each implementation or evaluator the installed catalog revokes above with one it does not, then run "ia validate" again.';
+    return 'Replace each implementation the installed catalog revokes above with one it does not, then run "ia validate" again.';
   if (view.outcome === 'not-evaluated')
     return 'A not-evaluated result is not a pass. Supply the named evaluator to obtain one.';
   if (notEvaluated > 0) return 'A not-evaluated check is not a pass; each check above says why it was not evaluated.';
@@ -464,14 +489,17 @@ export function renderValidation(view: ValidationView, options: ValidationOption
         `${checked.notEvaluated} ${checked.notEvaluated === 1 ? 'check was' : 'checks were'} not evaluated; a not-evaluated check is not a pass.`,
       ),
     );
-  if (checked.structural > 0)
+  if (checked.structural > 0) {
+    // Review finding B3-R3: named, so the refusal ia host, ia capture or ia project gives for them has a place to land.
+    const named = listed(structurallyAdmitted(view.checkBindings));
     summary.push(
       words(
         checked.structural === 1
-          ? '1 check names an evaluator that is not built in: ia validate admits it to bind it, but every other reader of the admitted graph still refuses it as IA-COMP-CHECK-UNKNOWN.'
-          : `${checked.structural} checks name evaluators that are not built in: ia validate admits them to bind them, but every other reader of the admitted graph still refuses them as IA-COMP-CHECK-UNKNOWN.`,
+          ? `1 check names an evaluator that is not built in (${named}): ia validate admits it to bind it, but every other reader of the admitted graph still refuses it as IA-COMP-CHECK-UNKNOWN, so remove or replace it before ia host, ia capture or ia project.`
+          : `${checked.structural} checks name evaluators that are not built in (${named}): ia validate admits them to bind them, but every other reader of the admitted graph still refuses them as IA-COMP-CHECK-UNKNOWN, so remove or replace them before ia host, ia capture or ia project.`,
       ),
     );
+  }
   if (view.outcome === 'not-evaluated')
     summary.push(
       words(

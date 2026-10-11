@@ -6,7 +6,7 @@
  * tests/equivalence.test.ts holds the two validation binaries to one result and one evidence file.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { chmodSync, existsSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -15,6 +15,9 @@ import { doctor, host, initialized, put } from './host-fixture.js';
 import { cleanup, repository, run } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 240_000 });
+// Every node:fs export calls through; a test can make one unlink fail as a file the process may not remove would.
+vi.mock('node:fs', { spy: true });
+const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
 afterAll(cleanup, 120_000);
 
 const EVIDENCE = '.ia/work/evidence',
@@ -137,7 +140,7 @@ it('binds every check, reports one Checks section, and records the passing one a
   expect(human.exitCode).toBe(0);
   expect(human.text).toContain(`✔ ${ID('demo-schema-check')} COMP-SCHEMA: bound, pass built-in COMP-SCHEMA: `);
   expect(human.text).toContain(
-    '1 check names an evaluator that is not built in: ia validate admits it to bind it, but every other reader of the admitted graph still refuses it as IA-COMP-CHECK-UNKNOWN.',
+    `1 check names an evaluator that is not built in (${ID('typing-check')}): ia validate admits it to bind it, but every other reader of the admitted graph still refuses it as IA-COMP-CHECK-UNKNOWN, so remove or replace it before ia host, ia capture or ia project.`,
   );
   expect(human.text).toContain(
     `${ID('prose-check')} COMP-SCHEMA: bound, not-evaluated check.scope "every admitted record"`,
@@ -265,4 +268,84 @@ it('keeps one whole evidence file when several validates run at once', async () 
   } finally {
     db.close();
   }
+});
+
+it('binds and reports from the authored view alone, so planted evidence changes nothing validate says (B3-R4, B3-N4)', async () => {
+  const { root, env } = await initialized();
+  put(
+    root,
+    '.ia/src/checks.ia',
+    `#! ia 1.0\n\n${check('demo-schema-check', 'COMP-SCHEMA', '*')}\n${check('consent-check', 'COMP-CONSENT', 'graph')}`,
+  );
+  const first = await json(root, env),
+    template = readFileSync(resolve(root, first.envelope.evidence.path), 'utf8'),
+    start = template.indexOf('@observation '),
+    end = template.indexOf('\n\n@observation', start),
+    block = template.slice(start, end < 0 ? undefined : end + 1);
+  // An authored observation citing one no source authors: a dangling reference validate reports as a warning.
+  put(
+    root,
+    '.ia/src/authored.ia',
+    `#! ia 1.0\n\n${block.replace(/^@observation \S+/, '@observation authored-one').trimEnd()}\n  relationships\n    cites @observation forged-one\n`,
+  );
+  const before = await json(root, env),
+    path = resolve(root, before.envelope.evidence.path);
+  expect(before.envelope.findings.map((finding: { code: string }) => finding.code)).toContain(
+    'IA-GRAPH-TARGET-MISSING',
+  );
+  // Planted into this authored revision's evidence file: the observation the dangling reference names, with edges.
+  const planted = `${readFileSync(path, 'utf8')}\n${block.replace(/^@observation \S+/, '@observation forged-one').trimEnd()}\n  relationships\n    supersedes @check demo-schema-check\n`;
+  actualFs.writeFileSync(path, planted);
+  const after = await json(root, env);
+  expect(after.exitCode).toBe(before.exitCode);
+  for (const key of ['revision', 'authoredRevision', 'status', 'counts', 'findings', 'checks'])
+    expect(after.envelope[key], key).toEqual(before.envelope[key]);
+  // The revision is the evidence-free one every other reader reports for the workspace (2.0.0 readers included).
+  const strict = open(root, { cache: false });
+  try {
+    expect(after.envelope.revision).toBe(strict.revision);
+    expect(after.envelope.authoredRevision).toBe(strict.authoredRevision);
+  } finally {
+    strict.close();
+  }
+  // The writer replaces the planted file with exactly what it records.
+  expect(readFileSync(path, 'utf8')).not.toContain('forged-one');
+  expect(after.envelope.evidence.observations).toEqual(before.envelope.evidence.observations);
+});
+
+it('prunes best effort, so a file it may not remove never refuses validate, and records nothing when refused (B3-R1, B3-N11)', async () => {
+  const { root, env } = await initialized();
+  const stalePath = `${EVIDENCE}/${'3'.repeat(64)}.ia`,
+    stale = resolve(root, stalePath);
+  put(root, stalePath, '#! ia 1.0\n');
+  const undeletable = Object.assign(new Error('EPERM: operation not permitted, unlink'), { code: 'EPERM' });
+  vi.mocked(unlinkSync).mockImplementation((target) => {
+    if (String(target).endsWith(`${'3'.repeat(64)}.ia`)) throw undeletable;
+    actualFs.unlinkSync(target);
+  });
+  try {
+    // No check at all: nothing to record, and the stale file it may not remove is skipped.
+    expect((await json(root, env)).exitCode).toBe(0);
+    put(root, '.ia/src/checks.ia', BUILT_IN);
+    const recorded = await json(root, env);
+    expect(recorded.exitCode).toBe(0);
+    expect(recorded.envelope.evidence).toMatchObject({ written: true, pruned: [] });
+    // Unchanged bytes: nothing to write, and still no refusal.
+    const unchanged = await json(root, env);
+    expect(unchanged.exitCode).toBe(0);
+    expect(unchanged.envelope.evidence).toMatchObject({ written: false, pruned: [] });
+    expect(existsSync(stale)).toBe(true);
+  } finally {
+    vi.mocked(unlinkSync).mockImplementation(actualFs.unlinkSync);
+  }
+  // A refused admission records and prunes nothing.
+  const evidenceBefore = readdirSync(resolve(root, EVIDENCE)).sort();
+  put(root, '.ia/src/broken.ia', '#! ia 1.0\n\n@check broken-check\n  meaning\n    says "x"\n    answers "y"\n');
+  const refused = await json(root, env);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.envelope.status).toBe('refused');
+  expect(refused.envelope.evidence).toEqual({ path: null, written: false, pruned: [], observations: [] });
+  expect(readdirSync(resolve(root, EVIDENCE)).sort()).toEqual(evidenceBefore);
+  const human = await validate(root, env);
+  expect(human.text).toContain('No evidence recorded: admission was refused, so nothing is recorded or pruned.');
 });

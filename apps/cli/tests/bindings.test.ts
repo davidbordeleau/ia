@@ -43,6 +43,20 @@ const TARGETED = `#! ia 1.0
     target @operation read-captured-source
     implementation captured-source-read-v1
 `;
+/** A check naming a catalog evaluator, which only structural admission admits. */
+const TYPING = `#! ia 1.0
+
+@check typing-check
+  meaning
+    says "Run an evaluator the host catalog would list."
+    answers "Which evaluator checks typing?"
+  check
+    runs acme-strict-typing
+    scope "package"
+  governance
+    severity blocking
+`;
+const TYPING_ID = 'compliance-system/check/gate/typing-check';
 const READ = 'agent-composition-system/binding/execution-binding/read-captured-source-binding',
   MISSING = 'agent-composition-system/binding/execution-binding/missing-binding',
   TARGETED_ID = 'agent-composition-system/binding/execution-binding/targeted-read-binding';
@@ -109,6 +123,21 @@ it('prints the Bindings section: unbound is never a pass, bound names the shippe
     });
     // Revocation is the bindings' own error: admission's findings and their counts are unchanged.
     expect(JSON.parse((await validate(root, env, '--json')).stdout).counts).toEqual(envelope.counts);
+    // Review findings B3-R2 and B3-R3: a check naming a catalog evaluator is revoked by the same damaged catalog and
+    // fails the run on its own; since ia host refuses the check, the repair names it before the payload.
+    put(root, '.ia/src/typing.ia', TYPING);
+    const checked = await validate(root, env, '--json'),
+      body = JSON.parse(checked.stdout);
+    expect(checked.exitCode).toBe(1);
+    expect(body.checks.results).toEqual([
+      expect.objectContaining({ identity: TYPING_ID, status: 'revoked', outcome: 'not-evaluated' }),
+    ]);
+    const repair = (await validate(root, env)).text;
+    expect(repair).toContain('1 check is revoked, which is an error.');
+    expect(repair).toContain(
+      `Remove or replace ${TYPING_ID}, which only ia validate admits and ia host refuses, then delete ${resolve(env.IA_HOST_HOME, 'hosts', envelope.bindings.catalog.release)}, the host payload that failed verification, and run "ia host claude --root ${root} --apply".`,
+    );
+    rmSync(resolve(root, '.ia/src/typing.ia'));
   } finally {
     writeFileSync(handler, original);
   }

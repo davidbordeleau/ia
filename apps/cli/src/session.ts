@@ -53,8 +53,8 @@ function openNext(error: unknown, root: string): string {
   return serviceNext(code, { command: null, root });
 }
 
-/** How `ia validate` opens its session: checks admitted structurally and evidence read (C14, C21). */
-export const VALIDATING = { checks: 'structural', evidence: true } as const;
+/** How `ia validate` opens its session: checks admitted structurally (C21); no evidence is read (review finding B3-R4). */
+export const VALIDATING = { checks: 'structural' } as const;
 export function openSession(root: string, options: Omit<SessionOptions, 'root'> = {}): Session {
   try {
     return openWorkspaceSession({ root, ...options });

@@ -398,6 +398,12 @@ export function packToDirectory(request: PackRequest): PackedArchive {
 export interface WorkspaceAdmission {
   readonly status: 'admitted' | 'refused';
   readonly revision: string;
+  /**
+   * The authored revision (db `authoredRevision`): `revision` without runtime-placed sources, which names the
+   * evidence a validation records. Review finding B3-N4: a session reads no evidence, so `revision` is the one every
+   * other reader reports for the same workspace.
+   */
+  readonly authoredRevision: string;
   readonly findings: Findings;
   readonly records: number;
 }
@@ -435,23 +441,28 @@ export interface ValidationChecks {
   readonly catalog: ValidationBindings['catalog'];
   readonly results: readonly CheckBinding[];
 }
-/** How a session admits and reads. Every existing caller takes the defaults; the validate request asks for both. */
+/**
+ * How a session admits. Every existing caller takes the default; the validate request asks for structural admission. A
+ * session never reads evidence (review finding B3-R4): what a validation admits, binds and reports is the authored
+ * view's alone, and the evidence file is read only for the times an unchanged observation keeps.
+ */
 export interface SessionOptions {
   readonly root: string;
   /** C21: `structural` admits a check whatever evaluator it names, for binding; `strict`, the default, is unchanged. */
   readonly checks?: 'strict' | 'structural';
-  /** C14: read the current authored revision's evidence file at runtime placement; off by default. */
-  readonly evidence?: boolean;
 }
 export interface WorkspaceSession {
   readonly reader: Handle;
+  /** When the session read its inputs (ms since the epoch); evidence written after it is not this session's to prune. */
+  readonly openedAt: number;
   /** The complete disclosed workspace scope; refuses while admission has errors. */
   within(): string;
   admission(): WorkspaceAdmission;
   /**
    * The admission as a validation reports it: admission's findings and an `IA-COMP-FIELD-VALUE` warning for each
    * declaration that declares nothing (db `inertDeclarations`), in the report's order (path, line, code, message). Status, revision and record count are admission's, since the warnings refuse
-   * nothing. `ia validate`, `ia capture` and `ia-distribution validate` all report this one finding set.
+   * nothing. `ia validate` and `ia-distribution validate` report this one finding set from a structural session; `ia
+   * capture` reports it from a strict one, so a check naming an evaluator that is not built in is a finding only there.
    */
   validation(): WorkspaceAdmission;
   /**
@@ -493,8 +504,9 @@ export function openWorkspaceSession(options: SessionOptions): WorkspaceSession 
     reader = open(root, {
       cache: false,
       ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
-      ...(options.evidence === true ? { evidence: true } : {}),
-    });
+    }),
+    // B3-N2: evidence a validation of another revision writes after this session read its inputs is never pruned by it.
+    openedAt = Date.now();
   // One read of the joined catalog per session and trust, shared by execution and check bindings.
   const joined = new Map<string, ReturnType<typeof joinedCatalog>>();
   const joinedOnce = (trust: HostTrust | null): ReturnType<typeof joinedCatalog> => {
@@ -524,12 +536,14 @@ export function openWorkspaceSession(options: SessionOptions): WorkspaceSession 
     return {
       status: findings.some((f) => f.severity === 'error') ? 'refused' : 'admitted',
       revision: reader.revision,
+      authoredRevision: reader.authoredRevision,
       findings,
       records: reader.records().length,
     };
   };
   return {
     reader,
+    openedAt,
     within: (): string => {
       if (errors().length) fail('CLOSURE-INCOMPLETE', 'Workspace admission failed; run validate for diagnostics');
       return reader.resolveScope().token;
@@ -628,20 +642,25 @@ export function formatSource(request: FormatRequest): FormatOutcome {
 
 /**
  * Plan amendments C14 and C23: the validate request, the one service that records evidence. `ia validate` and
- * `ia-distribution validate` both call it, with the session they validated (opened `structural` with `evidence`) and
- * the checks it bound, so the two write the same file. It records each bound check whose selected verdicts passed or
+ * `ia-distribution validate` both call it, with the session they validated (opened `structural`, reading no evidence)
+ * and the checks it bound, so the two write the same file. When admission is refused it records and prunes nothing
+ * (review finding B3-N11). It records each bound check whose selected verdicts passed or
  * failed as an `@observation` in `.ia/work/evidence/<authored revision>.ia` (db `evidenceText`, `writeEvidence`):
  * an observation recorded again unchanged keeps the time it was first made, so validating twice at one authored revision
  * writes the same bytes; a revision with nothing to record keeps no file; files of other revisions are pruned. A
  * workspace whose vocabulary has no `@observation` word records nothing. Nothing else writes evidence: a session's
  * `validation`, `bindings` and `checks` only read, and doctor, capture and every other command never call this.
- * A link, junction or misplaced entry on the way refuses with the db's IA-DB-PATH-UNSAFE; a directory or file the
- * process cannot write refuses as IA-DIST-EVIDENCE-UNWRITABLE, located at the evidence directory, and leaves what it found.
+ * Only writing this revision's file can refuse (review finding B3-R1): a link, junction or misplaced entry on the way
+ * refuses with the db's IA-DB-PATH-UNSAFE, and a directory or file the process cannot write as
+ * IA-DIST-EVIDENCE-UNWRITABLE, located at the evidence directory, before anything is pruned; pruning other revisions'
+ * files is best effort and never refuses.
  */
 export function recordValidation(session: WorkspaceSession, checks: ValidationChecks): EvidenceWrite {
   const root = session.reader.root,
     revision = session.reader.authoredRevision,
     records = session.reader.records();
+  if (session.admission().status === 'refused')
+    return Object.freeze({ path: null, written: false, pruned: Object.freeze([]), observations: Object.freeze([]) });
   const vocabulary = records.some((record) => record.discriminator === 'schema' && record.name === CHECK_EVIDENCE_WORD);
   try {
     const path = `${EVIDENCE_DIRECTORY}/${revision}.ia`,
@@ -653,7 +672,10 @@ export function recordValidation(session: WorkspaceSession, checks: ValidationCh
             prior: readEvidence(root, path),
           })
         : { text: null, observations: [] };
-    return { ...writeEvidence(root, revision, built.text), observations: built.observations };
+    return {
+      ...writeEvidence(root, revision, built.text, { pruneBefore: session.openedAt }),
+      observations: built.observations,
+    };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code;
     if (typeof code === 'string' && ['EACCES', 'EPERM', 'EROFS', 'EBUSY', 'ENOSPC', 'EISDIR', 'ENOTDIR'].includes(code))

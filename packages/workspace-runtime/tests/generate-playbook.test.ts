@@ -302,6 +302,31 @@ it('renders operation and harness definitions without importing a handler or val
   ]);
 });
 
+it("renders this repository's read-captured-source operation as a definition row with its handler and I/O ids (R3 exit)", () => {
+  // The milestone's exit row: the handler and validators are catalog keys, copied as authored and never imported.
+  const db = open(repository, { cache: false });
+  handles.push(db);
+  const within = db.resolveScope().token;
+  expect(
+    generateDefinitions(db, within, 'claude').filter(
+      (row) => row.identity === 'authoring-system/binding/operation/read-captured-source',
+    ),
+  ).toEqual([
+    {
+      identity: 'authoring-system/binding/operation/read-captured-source',
+      word: 'operation',
+      definition: {
+        name: 'read-captured-source',
+        description: 'Read one exact captured native source through the first-party adapter.',
+        handler: 'captured-source-read-v1',
+        input: 'captured-source-read-input-v1',
+        output: 'captured-source-read-output-v1',
+        effects: ['read-only'],
+      },
+    },
+  ]);
+});
+
 it('selects the skills of included capabilities, and only what its own profiles and bindings name (A-R9)', () => {
   const extra = [
     '#! ia 1.0',

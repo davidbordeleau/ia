@@ -969,3 +969,36 @@ it('converges after a generated-set rename apply interrupted at any of its check
     expect((await doctor(root, env)).checks, stage).toContainEqual(noDrift());
   }
 });
+
+it('refuses a generated skill at a populated folder it does not own, naming the files to move, and the next works (A-F2)', async () => {
+  // A folder the user holds under the skill's own name, and, where the volume folds names, under a case variant of it.
+  const folds = process.platform === 'win32' || process.platform === 'darwin';
+  for (const folder of ['.claude/skills/note-review', '.claude/skills/Note-Review']) {
+    const { root, env } = await composed();
+    put(root, `${folder}/reference.md`, 'my own skill notes\n');
+    const result = await host(root, env, 'claude', '--apply', '--yes');
+    if (folder !== '.claude/skills/note-review' && !folds) {
+      // A case variant is another folder where names do not fold: nothing collides.
+      expect(result.exitCode, result.stdout).toBe(0);
+      continue;
+    }
+    expect(result.exitCode, result.stdout).toBe(3);
+    const body = JSON.parse(result.stdout) as { code: string; where: { path: string }; next: string };
+    expect(body.code).toBe('IA-DIST-LOCAL-MODIFICATION');
+    expect(body.where.path).toBe('.claude/skills/note-review');
+    expect(body.next).toBe(
+      `Move the files out of .claude/skills/note-review, or rename the @playbook that renders it, then run "ia host claude --root ${quote(root)} --apply".`,
+    );
+    // ia project names the same files to move.
+    const project = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+    expect(JSON.parse(project.stdout).next).toBe(
+      `Move the files out of .claude/skills/note-review, or rename the @playbook that renders it, then run "ia project claude --root ${quote(root)}".`,
+    );
+    // Follow it: the files go elsewhere, and the rerun it names writes the skill.
+    const moved = resolve(root, '..', `kept-${folder.endsWith('Review') ? 'variant' : 'lower'}.md`);
+    writeFileSync(moved, read(root, '.claude/skills/note-review/reference.md'));
+    rmSync(resolve(root, '.claude/skills/note-review/reference.md'));
+    await follow(body.next, env);
+    expect(read(root, SKILL).split('\n')).toContain(PACKET_MARKER);
+  }
+});

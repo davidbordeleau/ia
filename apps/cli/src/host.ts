@@ -96,6 +96,8 @@ export interface Conflict {
   readonly reason: string;
   /** What a hook-registration refusal needs to name its own recovery (`hookRepair`). */
   readonly hook?: HookRefusal;
+  /** The user's skill folder a generated skill would move into (`folderRepair`). */
+  readonly folder?: string;
 }
 export interface Element {
   readonly id: ElementId;
@@ -370,6 +372,14 @@ export const projectionRepair = (host: HostName, path: string, rerun: string, co
 export type HookRefusal =
   | { readonly drift: 'missing' | 'modified'; readonly hook: string }
   | { readonly payload: string };
+/** The populated skill folder a projection refusal names (distribution's `skillFolder`, review finding A-F2), if any. */
+export const skillFolderOf = (error: unknown): string | undefined =>
+  error !== null && typeof error === 'object' && 'skillFolder' in error && typeof error.skillFolder === 'string'
+    ? error.skillFolder
+    : undefined;
+/** The repair for a generated skill refused at a folder that holds the user's files: those files go, or the name changes. */
+export const folderRepair = (folder: string, rerun: string): string =>
+  `Move the files out of ${folder}, or rename the @playbook that renders it, then run "${rerun}".`;
 /** The hook refusal an error carries (`hookRefusal`), if any. */
 export const hookRefusalOf = (error: unknown): HookRefusal | undefined =>
   error !== null && typeof error === 'object' && 'hookRefusal' in error
@@ -403,9 +413,11 @@ export function projectionFailure(error: unknown, root: string, host: HostName, 
       3,
       { path },
       rootedNext(
-        hookRefusalOf(error) === undefined
-          ? projectionRepair(host, path, rerun, refusal.code)
-          : hookRepair(hookRefusalOf(error)!),
+        skillFolderOf(error) !== undefined
+          ? folderRepair(skillFolderOf(error)!, rerun)
+          : hookRefusalOf(error) === undefined
+            ? projectionRepair(host, path, rerun, refusal.code)
+            : hookRepair(hookRefusalOf(error)!),
         host,
         root,
       ),
@@ -467,8 +479,15 @@ function conflictOf(error: unknown, path: string): Conflict {
   const at =
     refusedPath(error) ??
     (typeof raw?.path === 'string' ? (raw.path.endsWith('.tmp') ? dirname(raw.path) : raw.path) : path);
-  const hook = hookRefusalOf(error);
-  return { code: refusal.code, path: at, reason: refusal.message, ...(hook === undefined ? {} : { hook }) };
+  const hook = hookRefusalOf(error),
+    folder = skillFolderOf(error);
+  return {
+    code: refusal.code,
+    path: at,
+    reason: refusal.message,
+    ...(hook === undefined ? {} : { hook }),
+    ...(folder === undefined ? {} : { folder }),
+  };
 }
 const pin = (text: string | null): string | null =>
   text === null ? null : createHash('sha256').update(text).digest('hex');
@@ -691,9 +710,11 @@ function conflictNext(view: HostView, id: ElementId, conflict: Conflict): string
       : `Remove that entry, then run "ia host ${view.host} --apply".`;
   }
   if (id === 'projection')
-    return conflict.hook === undefined
-      ? projectionRepair(view.host, conflict.path, rerun, conflict.code)
-      : hookRepair(conflict.hook);
+    return conflict.folder !== undefined
+      ? folderRepair(conflict.folder, rerun)
+      : conflict.hook === undefined
+        ? projectionRepair(view.host, conflict.path, rerun, conflict.code)
+        : hookRepair(conflict.hook);
   return `Fix ${conflict.path}, then run "${rerun}".`;
 }
 const refusalFor = (view: HostView, id: ElementId, conflict: Conflict): Refusal =>

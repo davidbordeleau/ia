@@ -3,6 +3,7 @@ import { decodeDistributionJson } from '@inventarch/db/distribution';
 import {
   bytes,
   contained,
+  DistributionError,
   digest,
   fail,
   json,
@@ -279,9 +280,15 @@ export function planProjection(input: {
           !Object.keys(files).some((path) => path.startsWith(`${folder}/`)) &&
           folderEntries(root, folder).length > 0
         )
-          fail(
-            'LOCAL-MODIFICATION',
-            `Refusing to write a generated skill into ${folder}, a folder this projection does not own that already holds files; move them, or rename the @playbook, then rerun`,
+          // Located at the folder and named as such (`skillFolder`), so the caller's repair names the files to move
+          // rather than the absent SKILL.md (review finding A-F2).
+          throw Object.assign(
+            new DistributionError(
+              'IA-DIST-LOCAL-MODIFICATION',
+              `Refusing to write a generated skill into ${folder}, a folder this projection does not own that already holds files; move them, or rename the @playbook, then rerun`,
+              folder,
+            ),
+            { skillFolder: folder },
           );
         actions.push({ path: artifact.path, action: 'create' });
         return;

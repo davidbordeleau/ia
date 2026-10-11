@@ -41,6 +41,7 @@ import {
   requireIdle,
   requireInitialized,
   rootedNext,
+  folderRepair,
   hookRepair,
   STATE,
   unsupportedRows,
@@ -89,6 +90,7 @@ const conflictNext = (view: ProjectView, conflict: Conflict): string => {
     return view.given === undefined
       ? hookRepair(conflict.hook)
       : rootedNext(hookRepair(conflict.hook), view.host, view.given);
+  if (conflict.folder !== undefined) return folderRepair(conflict.folder, view.invocation);
   return projectionRepair(view.host, conflict.path, view.invocation, conflict.code);
 };
 const conflictRefusal = (view: ProjectView, conflict: Conflict): Refusal =>

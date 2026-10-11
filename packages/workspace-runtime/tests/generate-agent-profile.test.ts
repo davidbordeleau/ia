@@ -19,6 +19,7 @@ const repository = resolve(import.meta.dirname, '../../..'),
   NATIVE = resolve(repository, 'examples/conformance/native'),
   COMPOSITION = readFileSync(resolve(FIXTURE, 'composition.ia'), 'utf8'),
   PROFILE = 'agent-composition-system/binding/agent-profile/reviewer',
+  CAPABILITY = 'agent-composition-system/definition/capability/note-reading',
   temporary = mkdtempSync(join(tmpdir(), 'ia-generate-')),
   handles: Handle[] = [];
 afterEach(() => {
@@ -63,6 +64,7 @@ const claude = (db: Handle, within: string): readonly GeneratedFile[] => generat
 const AGENT_FILE = `---
 name: "reviewer"
 description: "Reviews the demo workspace's notes and reports what it finds."
+tools: "Read, Glob, Grep"
 ---
 
 ${PACKET_MARKER}
@@ -101,15 +103,17 @@ it("renders the fixture profile as one claude agent file naming its mandate and 
     { path: '.claude/agents/reviewer.md', text: AGENT_FILE, identity: PROFILE, word: 'agent-profile' },
   ]);
   expect(Object.isFrozen(files) && Object.isFrozen(files[0])).toBe(true);
-  // Frontmatter first, describing the profile's agent rather than the profile; the marker next, on its own line.
+  // Frontmatter first, describing the profile's agent rather than the profile and giving it only the host tools its
+  // capability's effects allow; the marker next, on its own line.
   const lines = files[0]!.text.split('\n');
-  expect(lines.slice(0, 4)).toEqual([
+  expect(lines.slice(0, 5)).toEqual([
     '---',
     'name: "reviewer"',
     `description: ${JSON.stringify("Reviews the demo workspace's notes and reports what it finds.")}`,
+    'tools: "Read, Glob, Grep"',
     '---',
   ]);
-  expect(lines.slice(4, 7)).toEqual(['', PACKET_MARKER, '']);
+  expect(lines.slice(5, 8)).toEqual(['', PACKET_MARKER, '']);
   expect(lines.filter((line) => line === PACKET_MARKER)).toHaveLength(1);
 });
 
@@ -167,8 +171,8 @@ it('renders every bound the named mandate states: participant, moves, scope, exc
   );
 });
 
-/** A profile of the fixture's agent with no mandate, no voice and no capability. */
-const bareProfile = (name: string, says: string): string =>
+/** A profile of the fixture's agent with no mandate and no voice, composing `capabilities`, the fixture's by default. */
+const bareProfile = (name: string, says: string, capabilities = '[@capability note-reading]'): string =>
   [
     '',
     `@agent-profile ${name}`,
@@ -177,7 +181,7 @@ const bareProfile = (name: string, says: string): string =>
     `    answers "Which profile is ${name}?"`,
     '  composition',
     '    agent @agent reviewer',
-    '    capabilities []',
+    `    capabilities ${capabilities}`,
     '  execution',
     `    role ${name}`,
     `    outcomes ${name}-findings-v1`,
@@ -215,13 +219,37 @@ it('renders one line per delegate in authored order and each authored profile as
       ].join('\n'),
     ),
   ).toBe(true);
-  // A profile with no mandate, no voice and no capability still renders, its agent describing it.
+  // A profile with no mandate and no voice still renders, its agent describing it.
   expect(files[0]!.text).toContain(`description: "Reviews the demo workspace's notes and reports what it finds."`);
   expect(files[0]!.text).toContain(
-    '\n## Mandate\n\nThis profile names no mandate.\n\n## Tools\n\nThis profile composes no capability.\n',
+    '\n## Mandate\n\nThis profile names no mandate.\n\n## Tools\n\n- `agent-composition-system/definition/capability/note-reading`: ',
   );
   expect(files[0]!.text).not.toContain('## Voice');
   expect(files[0]!.text).not.toContain('## Delegates');
+});
+
+it('renders no agent for a profile whose capabilities allow no host tool', () => {
+  // Claude gives an agent with no tool list every tool, so a profile allowed none has no file to name its tools in.
+  const filing = [
+    '',
+    '@capability note-filing',
+    '  meaning',
+    '    says "Files a reviewed note."',
+    '    answers "Which operation files a note?"',
+    '  execution',
+    '    effects [write, network]',
+    '',
+  ].join('\n');
+  const { db, within } = fixture({
+    '.ia/src/composition.ia': composition(
+      (text) =>
+        text +
+        bareProfile('archivist', 'Files what the reviewer finds.', '[@capability note-filing]') +
+        bareProfile('scribe', 'Writes up what the reviewer finds.', '[]') +
+        filing,
+    ),
+  });
+  expect(claude(db, within).map((file) => file.identity)).toEqual([PROFILE]);
 });
 
 it('renders one tools line per capability in authored order, an effect no host tool covers naming none', () => {
@@ -256,7 +284,9 @@ it('renders one tools line per capability in authored order, an effect no host t
     [file] = claude(db, within);
   const capability = 'agent-composition-system/definition/capability',
     operation = '`authoring-system/binding/operation/read-note`';
-  // `read` alone maps host tools, once per line however often it is listed; `write` and `network` map none.
+  // `read` alone maps host tools, once per line however often it is listed; `write` and `network` map none. The
+  // frontmatter gives the agent their union, each tool once.
+  expect(file!.text.split('\n').filter((line) => line.startsWith('tools: '))).toEqual(['tools: "Read, Glob, Grep"']);
   expect(
     file!.text.endsWith(
       [
@@ -292,14 +322,15 @@ it('prints a multi-paragraph value on one line', () => {
 });
 
 it('prints a reference no admitted record answers as authored, saying so where its fields would be read', () => {
-  // Narrowed to the profile alone, the scope admits none of the records it references; the description is the
-  // profile's own.
+  // Narrowed to the profile and its capability, the scope admits none of the other records they reference; the
+  // description is the profile's own.
   const { db } = fixture(),
-    [file, ...rest] = claude(db, db.resolveScope({ identities: [PROFILE] }).token);
+    [file, ...rest] = claude(db, db.resolveScope({ identities: [PROFILE, CAPABILITY] }).token);
   expect(rest).toEqual([]);
   expect(file!.text).toBe(`---
 name: "reviewer"
 description: "Binds the reviewer to a bounded host contract under the demo mandate."
+tools: "Read, Glob, Grep"
 ---
 
 ${PACKET_MARKER}
@@ -321,8 +352,10 @@ Binds the reviewer to a bounded host contract under the demo mandate.
 
 ## Tools
 
-- \`@capability note-reading\`: not admitted in this scope
+- \`${CAPABILITY}\`: operations \`@operation read-note\`; effects read; host tools Read, Glob, Grep
 `);
+  // Narrowed to the profile alone, its capability is not admitted, so its effects allow no tool and no file renders.
+  expect(claude(db, db.resolveScope({ identities: [PROFILE] }).token)).toEqual([]);
   // Under the whole workspace, an agent no record answers says so too, and the rest still resolves.
   const ghost = fixture({
       '.ia/src/composition.ia': composition((text) =>

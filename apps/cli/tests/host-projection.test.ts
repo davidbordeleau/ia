@@ -79,10 +79,10 @@ it('renders a consumer workspace for claude as its position packet, with no agen
   expect(receipt.entries).toBe(37);
 });
 
-it('admits the composition fixture over the bundled base, and renders no agent for its profile until it is wired', async () => {
+it('admits the composition fixture over the bundled base, and renders no agent or skill for its records until they are wired', async () => {
   // Milestone generation-binding plan amendment C7: the fixture is this initialization's starter and descriptor, byte
-  // for byte, with an authored @agent-profile, its @agent, @voice and @capability, and the @operation that capability
-  // names.
+  // for byte, with an authored @agent-profile, its @agent, @voice and @capability, the @operation that capability
+  // names, and an authored @playbook with cells in all four phases.
   const root = await initialized(),
     fixture = resolve(cli, 'tests/fixtures/composition-workspace');
   for (const path of ['.ia/src/workspace.ia', '.ia/release.json'])
@@ -91,7 +91,8 @@ it('admits the composition fixture over the bundled base, and renders no agent f
   const validated = await run(['validate', '--root', root, '--json']);
   expect(validated.exitCode, validated.stdout).toBe(0);
   expect(JSON.parse(validated.stdout)).toMatchObject({ status: 'admitted', counts: { errors: 0 } });
-  // workspace-runtime's generateAgentProfiles renders the profile; task host-consumes-generated-set applies it.
+  // workspace-runtime's generateAgentProfiles and generatePlaybookSkills render the profile and the playbook; task
+  // host-consumes-generated-set applies them.
   expect(renderProjectionFor(root, 'claude').files.map((file) => file.path)).toEqual([
     '.claude/rules/ia-workspace.md',
     '.claude/skills/ia-authoring/SKILL.md',

@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { open } from '@inventarch/db';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Result } from '../src/consumer.js';
 import { cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
@@ -434,10 +435,10 @@ describe('the mandate profile', () => {
         `#! ia 1.0\n${MANDATE('empty-mandate', ['participant @agent demo', 'moves []', 'scope [@workspace demo]'])}`,
       ),
     );
-    // Admission accepts `moves []`; the runtime's mandate reader does not.
-    expect(JSON.parse((await run(['validate', '--root', root, '--json'])).stdout)).toMatchObject({
-      counts: { errors: 0 },
-    });
+    // Admission accepts `moves []`; the runtime's mandate reader does not (`ia validate` is gated now, so db is asked).
+    const db = open(root, { cache: false });
+    expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    db.close();
     const refusal = await refused(root, ['task'], 'IA-RUNTIME-REQUEST-INVALID');
     expect(refusal['message']).toBe(
       `The mandate profile cannot be read: ${mandate('empty-mandate')}: authority.moves must name at least one kernel move`,

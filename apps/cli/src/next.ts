@@ -28,6 +28,7 @@ import {
   truncateDigest,
   words,
 } from './render.js';
+import { requireProfile } from './profile.js';
 import { nearestNext, openSession } from './session.js';
 import type { Session } from './session.js';
 
@@ -283,6 +284,8 @@ export function runNext(context: Context): Result {
   const session = openSession(root);
   let got: DeliveryResult;
   try {
+    // The read mode (Observation) under the participant's mandate profile, before the view is read.
+    requireProfile({ reader: session.reader, within: session.reader.resolveScope().token, context, mode: 'read' });
     got = deliveryView(session.reader, session.reader.resolveScope().token, args.value('seat'));
     // Refused while the workspace is open, so the seat is told apart by what it admits and refuses.
     if (!got.ok) throw nextRefusal(got, context, root, session.reader);

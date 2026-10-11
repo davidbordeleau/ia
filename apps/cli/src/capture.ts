@@ -51,6 +51,7 @@ import {
   truncateDigest,
   words,
 } from './render.js';
+import { gateMode } from './profile.js';
 import { codeOf, openSession } from './session.js';
 import type { Session } from './session.js';
 import { NOT_EVALUATED } from './validate.js';
@@ -494,6 +495,8 @@ export function runCapture(context: Context): Result {
   const { caps, json: machine } = context;
   const root = requireRoot(context),
     preview = context.args.flag('preview');
+  // The effect mode (Execution) under the participant's mandate profile, a preview included, before anything is admitted.
+  gateMode(context, root, 'effect');
   let view: CaptureView | CapturePreview;
   try {
     view = (preview ? previewCapture : collectCapture)(root, context.args.value('root'));

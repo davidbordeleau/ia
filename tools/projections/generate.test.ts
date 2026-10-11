@@ -137,8 +137,8 @@ it('renders this repository as its position packet: CLAUDE.md and both skills, n
     '- `agent-system/binding/agent/language-participant`: The IDE agent operating in the language workspace, any vendor.',
   ]);
   expect(claude).not.toContain('Host note');
-  // Plan amendment B1 with plan amendment C3's catalog (C = 8, `ia preview` added): 1 participant, 1 mandate, the
-  // seat, 11 system lines, 22 tallies, 5 intent rows, 4 phase rows, 8 commands, provenance and 3 SPEC lines. The file
+  // Plan amendment B1 with plan amendment C3's catalog (C = 9, `ia preview` and `ia author` added): 1 participant, 1
+  // mandate, the seat, 11 system lines, 22 tallies, 5 intent rows, 4 phase rows, 9 commands, provenance and 3 SPEC lines. The file
   // renders one entry per list item and table row, and the provenance line.
   const db = open(root, { cache: false });
   try {
@@ -147,8 +147,8 @@ it('renders this repository as its position packet: CLAUDE.md and both skills, n
       [packet.participants, packet.mandates, packet.systems, packet.tallies, packet.commands].map(
         (rows) => rows.length,
       ),
-    ).toEqual([1, 1, 11, 22, 8]);
-    expect(entryCount(packet)).toBe(57);
+    ).toEqual([1, 1, 11, 22, 9]);
+    expect(entryCount(packet)).toBe(58);
   } finally {
     db.close();
   }
@@ -157,7 +157,7 @@ it('renders this repository as its position packet: CLAUDE.md and both skills, n
       (line, index) => line.startsWith('| ') && !line.startsWith('| ---') && !lines[index + 1]?.startsWith('| ---'),
     );
   expect(lines.filter((line) => line.startsWith('- ') || line.startsWith('ia-generated ')).length + rows.length).toBe(
-    57,
+    58,
   );
   expect(rows).toContain(
     '| `ia project` | effect | Execution | a file without the generated marker at a path it writes, which its plan names; --apply writes nothing | `ia project <host>` |',

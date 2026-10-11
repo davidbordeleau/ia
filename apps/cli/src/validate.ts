@@ -26,6 +26,7 @@ import {
   truncateDigest,
   words,
 } from './render.js';
+import { gateMode } from './profile.js';
 import { openSession } from './session.js';
 import type { Session } from './session.js';
 
@@ -297,7 +298,10 @@ export function renderValidation(view: ValidationView, options: ValidationOption
 
 export function runValidate(context: Context): Result {
   const { args, caps, json } = context;
-  const view = collectValidation(requireRoot(context));
+  const root = requireRoot(context);
+  // The validate mode (Verification) under the participant's mandate profile, before the validation reads anything.
+  gateMode(context, root, 'validate');
+  const view = collectValidation(root);
   const options: ValidationOptions = {
     filters: args.positionals,
     severity: (args.value('severity') ?? 'warning') as Severity,

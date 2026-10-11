@@ -319,7 +319,7 @@ export const recoverNext = (root: string, command: string): string =>
  */
 export const rootedNext = (next: string, host: HostName, root: string): string =>
   next.replace(
-    new RegExp(`"ia (?:host ${host}|project ${host}|validate)(?! --root\\b)`, 'g'),
+    new RegExp(`"ia (?:host ${host}|project ${host}|validate)(?![^"]*\\s--root\\b)`, 'g'),
     (command) => `${command} --root ${quote(root)}`,
   );
 /** A next action as printed: with `--root` given, each `ia host <host>` command in it carries the root. */

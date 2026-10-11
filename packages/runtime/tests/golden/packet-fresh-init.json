@@ -420,6 +420,13 @@
       "next": "ia position --seat <mandate> --shape governance"
     },
     {
+      "command": "ia author",
+      "mode": "author",
+      "move": "Synthesis",
+      "refuses": "a stale digest",
+      "next": "ia preview <form>"
+    },
+    {
       "command": "ia capture",
       "mode": "effect",
       "move": "Execution",

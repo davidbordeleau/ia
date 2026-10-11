@@ -34,7 +34,7 @@ import {
 } from '@inventarch/runtime/editor';
 import type { Arguments } from './args.js';
 import { UsageError } from './args.js';
-import { nearestTokens } from './commands.js';
+import { findCommand, nearestTokens } from './commands.js';
 import type { Context, Result } from './consumer.js';
 import { Refusal, requireRoot, respell } from './consumer.js';
 import { repositoryWorkspace, requireProfile } from './profile.js';
@@ -53,7 +53,9 @@ import {
   truncateDigest,
   words,
 } from './render.js';
+import { isSystemName, starterSystem, systemPath } from './init.js';
 import { identityNext, openEditor } from './session.js';
+import type { Editor } from './session.js';
 
 type Snapshot = ReturnType<typeof openEditor>['snapshot'];
 type Node = ReturnType<Snapshot['records']>[number];
@@ -87,7 +89,7 @@ const IDENTITY = '[a-z][a-z0-9-]*/[a-z][a-z0-9-]*/[a-z][a-z0-9-]*/[A-Za-z0-9][A-
 const ASSIGNMENT = /^([A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z][A-Za-z0-9-]*)?)(\+?=)([\s\S]*)$/;
 /** The bytes a source may hold for its opened-handle read; the db has already read it whole. */
 const SOURCE_LIMIT = 16 * 1024 * 1024;
-const sha256 = (bytes: string | Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
+export const sha256 = (bytes: string | Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 
 /**
  * One record named across one positional or two: a canonical identity, `@word name` given as one argument, or `@word`
@@ -161,6 +163,13 @@ export function previewRequest(args: Arguments): PreviewRequest {
   if (name === undefined) return { mode: 'word', word, ...(at === undefined ? {} : { at }) };
   if (!NAME.test(name))
     throw new UsageError(`Expected <name> to begin with a letter, then letters, digits or hyphens; got ${name}`);
+  // Plan amendment C20: a system is init's starter system, at its own path, with no field to set.
+  if (word === 'system' && (rest.length > 0 || at !== undefined))
+    throw new UsageError(
+      `A new @system is the starter system at ${systemPath('<name>')}; it takes no field and no --at`,
+    );
+  if (word === 'system' && !isSystemName(name))
+    throw new UsageError(`A system name is lowercase letters, digits and hyphens, at most 64; got ${name}`);
   const fields: { key: string; append: boolean; value: string }[] = [];
   for (const token of rest) {
     const set = assignment(token);
@@ -178,6 +187,15 @@ export interface RecordDigest {
   readonly identity: string;
   readonly before: string | null;
   readonly after: string | null;
+}
+/** The modes a candidate is judged for: `ia preview`'s validate (Verification) or `ia author`'s (Synthesis). */
+export type EditMode = 'validate' | 'author';
+/** One form's candidate: what the preview reports, the whole new file and its target, and the record as `@word name`. */
+export interface Candidate {
+  readonly view: PreviewView;
+  readonly text: string;
+  readonly target: Target;
+  readonly reference: string;
 }
 /** What a preview reports of its edit: the envelope's and the renderer's one input. */
 export interface PreviewView {
@@ -213,6 +231,8 @@ export interface WordView {
     readonly sources: readonly string[] | '*';
   }[];
   readonly file: { readonly path: string; readonly exists: boolean; readonly digest: string } | null;
+  /** For `system`, whose new record goes to a file of its own: that file's path, `<name>` in it. */
+  readonly template?: string;
   readonly example: string | null;
   readonly profile: Profile;
 }
@@ -265,7 +285,7 @@ const defaultFile = (roots: Roots, word: string): string | undefined => {
   return root === undefined ? undefined : `${root === '' ? '.ia/src' : root}/${word}.ia`;
 };
 
-interface Target {
+export interface Target {
   readonly path: string;
   readonly text: string;
   readonly exists: boolean;
@@ -347,7 +367,7 @@ const afterLines = (before: string, after: string, node: Pick<Node, 'source'>): 
 const findingKey = (finding: Finding): string =>
   JSON.stringify([finding.code, finding.path, finding.line, finding.message]);
 
-interface Invocation {
+export interface Invocation {
   readonly context: Context;
   readonly root: string;
   readonly rooted: string;
@@ -356,6 +376,12 @@ interface Invocation {
   readonly registry: Registry;
   readonly roots: Roots;
 }
+/**
+ * The preview of this invocation's form, `changes` applied: what a refusal of either verb names to rerun, since an
+ * author form run again would need a digest the preview prints first.
+ */
+const previewAgain = (run: Invocation, changes: Parameters<typeof respell>[1] = {}): string =>
+  respell({ command: findCommand('preview')!, args: run.context.args }, changes);
 const invalid = (message: string, next: string, where: Refusal['where'] = null): Refusal =>
   new Refusal('IA-CLI-EDIT-INVALID', message, 1, where, next);
 const guidance = (run: Invocation, word: string): string =>
@@ -473,7 +499,7 @@ function compiled(
       error instanceof Error ? error.message : String(error),
       3,
       { path: target.path },
-      `Run "${respell(run.context, { options: { at: [] } })}" to preview the default file instead.`,
+      `Run "${previewAgain(run, { options: { at: [] } })}" to preview the default file instead.`,
     );
   }
   const key = pathKey(target.path),
@@ -497,8 +523,9 @@ function compiled(
   const records = [...new Set([...before.keys(), ...after.keys()])]
     .sort()
     .map((id) => ({ identity: id, before: before.get(id) ?? null, after: after.get(id) ?? null }));
+  // A file absent before holds only what the edit writes (a starter system and its steward, say).
   const beyond = [...new Set([...before.keys(), ...after.keys()])]
-    .filter((id) => before.get(id) !== after.get(id) && id !== identity)
+    .filter((id) => target.exists && before.get(id) !== after.get(id) && id !== identity)
     .sort();
   if (beyond.length > 0)
     throw invalid(
@@ -526,14 +553,19 @@ function compiled(
   };
 }
 
-function previewRecord(run: Invocation, request: Extract<PreviewRequest, { mode: 'record' }>): PreviewView {
+function previewRecord(
+  run: Invocation,
+  request: Extract<PreviewRequest, { mode: 'record' }>,
+  mode: EditMode,
+): Candidate {
   const { word, name } = request;
+  if (word === 'system') return previewSystem(run, name, mode);
   const path = request.at ?? defaultFile(run.roots, word);
   const profile = requireProfile({
     reader: run.snapshot,
     within: run.within,
     context: run.context,
-    mode: 'validate',
+    mode,
     words: [word],
     ...(path === undefined || !portable(path) ? {} : { path }),
   });
@@ -553,30 +585,90 @@ function previewRecord(run: Invocation, request: Extract<PreviewRequest, { mode:
   const identity = `${registration.system}/${registration.kind}/${registration.facets[0]}/${name.toLowerCase()}`;
   const result = compiled(run, target, text, { identity, word, name });
   return {
-    mode: 'record',
-    root: run.root,
-    path: target.path,
-    digest: target.digest,
-    exists: target.exists,
-    identity: result.identity,
-    admitted: result.admitted,
-    records: result.records,
-    before: null,
-    after: draft.replace(/^#! ia [^\n]*\n/, '').trim(),
-    baseRevision: run.snapshot.revision,
-    revision: result.revision,
-    findings: result.findings,
-    clean: result.clean,
-    profile,
+    view: {
+      mode: 'record',
+      root: run.root,
+      path: target.path,
+      digest: target.digest,
+      exists: target.exists,
+      identity: result.identity,
+      admitted: result.admitted,
+      records: result.records,
+      before: null,
+      after: draft.replace(/^#! ia [^\n]*\n/, '').trim(),
+      baseRevision: run.snapshot.revision,
+      revision: result.revision,
+      findings: result.findings,
+      clean: result.clean,
+      profile,
+    },
+    text,
+    target,
+    reference: `@${word} ${name}`,
   };
 }
-function previewEdit(run: Invocation, request: Extract<PreviewRequest, { mode: 'relate' | 'set' }>): PreviewView {
+/**
+ * Plan amendment C20: a new local system is `ia init --system`'s starter system, `@system <name>` and its steward
+ * `@agent <name>-steward`, in `.ia/src/systems/<name>/system.ia`, a file no source may hold yet. Its words are the floor's
+ * `system` and `agent`, both judged for exclusion.
+ */
+function previewSystem(run: Invocation, name: string, mode: EditMode): Candidate {
+  const path = systemPath(name);
+  const profile = requireProfile({
+    reader: run.snapshot,
+    within: run.within,
+    context: run.context,
+    mode,
+    words: ['system', 'agent'],
+    path,
+  });
+  if (run.registry.systems.has(name))
+    throw invalid(
+      `A system named ${name} is already in force here`,
+      `Run "ia position --seat floor/definition/system/${name}${run.rooted}" for where that system sits.`,
+    );
+  const target = ownedTarget(run, 'system', path);
+  if (target.exists)
+    throw invalid(`${path} already holds a source`, `Run "ia validate${run.rooted}" for what that source admits.`, {
+      path,
+    });
+  const text = starterSystem(name),
+    identity = `floor/definition/system/${name}`;
+  const result = compiled(run, target, text, { identity, word: 'system', name });
+  return {
+    view: {
+      mode: 'record',
+      root: run.root,
+      path,
+      digest: target.digest,
+      exists: false,
+      identity: result.identity,
+      admitted: result.admitted,
+      records: result.records,
+      before: null,
+      after: text.replace(/^#! ia [^\n]*\n/, '').trim(),
+      baseRevision: run.snapshot.revision,
+      revision: result.revision,
+      findings: result.findings,
+      clean: result.clean,
+      profile,
+    },
+    text,
+    target,
+    reference: `@system ${name}`,
+  };
+}
+function previewEdit(
+  run: Invocation,
+  request: Extract<PreviewRequest, { mode: 'relate' | 'set' }>,
+  mode: EditMode,
+): Candidate {
   const node = recordNamed(run, request.owned);
   const profile = requireProfile({
     reader: run.snapshot,
     within: run.within,
     context: run.context,
-    mode: 'validate',
+    mode,
     words: node === undefined ? [] : [node.discriminator],
     ...(node === undefined ? {} : { path: node.source.path }),
   });
@@ -599,13 +691,13 @@ function previewEdit(run: Invocation, request: Extract<PreviewRequest, { mode: '
         { path, identity: node.identity },
         `Run "ia preview ${word}${run.rooted}" for the relationships @${word} may state and the consent each system gives them.`,
       );
-    const target = targetFile(run.root, run.snapshot, path, respell(run.context));
+    const target = targetFile(run.root, run.snapshot, path, previewAgain(run));
     text = edited(run, word, path, () => addRelationship(target.text, reference, request.spelling, request.target));
     return finish(run, request.mode, target, text, node, profile);
   }
   const schema = schemaOf(run, word, registrationOf(run, word).schema);
   const field = schemaField(run, schema, word, request.assignment.key);
-  const target = targetFile(run.root, run.snapshot, path, respell(run.context));
+  const target = targetFile(run.root, run.snapshot, path, previewAgain(run));
   text = edited(run, word, path, () =>
     setField(
       target.text,
@@ -625,24 +717,53 @@ function finish(
   text: string,
   node: Node,
   profile: Profile,
-): PreviewView {
+): Candidate {
   const result = compiled(run, target, text, { identity: node.identity, word: node.discriminator, name: node.name });
   return {
-    mode,
-    root: run.root,
-    path: target.path,
-    digest: target.digest,
-    exists: target.exists,
-    identity: node.identity,
-    admitted: result.admitted,
-    records: result.records,
-    before: linesOf(target.text, node),
-    after: afterLines(target.text, text, node),
-    baseRevision: run.snapshot.revision,
-    revision: result.revision,
-    findings: result.findings,
-    clean: result.clean,
-    profile,
+    view: {
+      mode,
+      root: run.root,
+      path: target.path,
+      digest: target.digest,
+      exists: target.exists,
+      identity: node.identity,
+      admitted: result.admitted,
+      records: result.records,
+      before: linesOf(target.text, node),
+      after: afterLines(target.text, text, node),
+      baseRevision: run.snapshot.revision,
+      revision: result.revision,
+      findings: result.findings,
+      clean: result.clean,
+      profile,
+    },
+    text,
+    target,
+    reference: `@${node.discriminator} ${node.displayName}`,
+  };
+}
+
+/** The candidate one record, relate or set form compiles to, judged for `mode`: preview's validate or author's. */
+export function candidateOf(
+  run: Invocation,
+  request: Exclude<PreviewRequest, { mode: 'word' }>,
+  mode: EditMode,
+): Candidate {
+  return request.mode === 'record' ? previewRecord(run, request, mode) : previewEdit(run, request, mode);
+}
+/** The invocation a preview or an author form runs through: one editor snapshot of the workspace at `root`. */
+export function invocationOf(context: Context, root: string, editor: Editor): Invocation {
+  const snapshot = editor.snapshot,
+    within = snapshot.resolveScope().token,
+    supplied = context.args.value('root');
+  return {
+    context,
+    root,
+    rooted: supplied === undefined ? '' : ` --root ${quote(supplied)}`,
+    snapshot,
+    within,
+    registry: snapshot.inspect().graph.registry,
+    roots: rootsOf(snapshot, within, repositoryWorkspace(snapshot, within)),
   };
 }
 
@@ -699,12 +820,12 @@ function ownedTarget(run: Invocation, word: string, path: string | undefined): T
     );
   const elsewhere =
     fallback !== undefined && fallback !== path
-      ? `Run "${respell(run.context, { options: { at: [] } })}" to preview the default file ${fallback} instead.`
+      ? `Run "${previewAgain(run, { options: { at: [] } })}" to preview the default file ${fallback} instead.`
       : `Run "ia position --seat ${run.roots.workspace ?? ''}${run.rooted}" for the roots the workspace declares.`;
   if (!portable(path)) throw new Refusal('IA-DB-PATH-UNSAFE', `Unsafe workspace path: ${path}`, 3, { path }, elsewhere);
   const reason = unowned(run.roots, path);
   if (reason !== undefined) throw new Refusal('IA-CLI-EDIT-UNOWNED', reason, 1, { path }, elsewhere);
-  return targetFile(run.root, run.snapshot, path, respell(run.context));
+  return targetFile(run.root, run.snapshot, path, previewAgain(run));
 }
 
 /** A placeholder for one field's value in the guidance's example command. */
@@ -746,6 +867,19 @@ function previewWord(run: Invocation, request: Extract<PreviewRequest, { mode: '
         .map((row) => ({ system, predicate: row.predicate, targets: row.targets, sources: row.sources })),
     )
     .sort((a, b) => Number(b.system === registration.system) - Number(a.system === registration.system));
+  // Plan amendment C20: a system has a file of its own, `ia author system <name>` writes it, and it takes no field.
+  if (word === 'system')
+    return {
+      root: run.root,
+      word,
+      registration,
+      schema,
+      consent,
+      file: null,
+      template: systemPath('<name>'),
+      example: 'ia preview system <name>',
+      profile,
+    };
   const file = path === undefined ? null : ownedTarget(run, word, path);
   const required = (schema?.fields ?? []).filter((field) => field.must);
   return {
@@ -835,6 +969,7 @@ export function wordEnvelope(view: WordView): unknown {
           },
     consent: view.consent,
     file: view.file,
+    ...(view.template === undefined ? {} : { template: view.template }),
     example: view.example,
     profile: profileEnvelope(view.profile),
   };
@@ -940,9 +1075,11 @@ export function renderWord(view: WordView, caps: Capabilities): string {
         {
           label: 'file',
           value: words(
-            view.file === null
-              ? 'none: the workspace declares no authored root inside .ia/src'
-              : `${view.file.path} (${view.file.exists ? 'existing' : 'new'}), sha256 ${view.file.digest}`,
+            view.template !== undefined
+              ? `${view.template}, a new file for each system`
+              : view.file === null
+                ? 'none: the workspace declares no authored root inside .ia/src'
+                : `${view.file.path} (${view.file.exists ? 'existing' : 'new'}), sha256 ${view.file.digest}`,
           ),
         },
         { label: 'actor', value: actorRow(view.profile) },
@@ -992,29 +1129,16 @@ export function runPreview(context: Context): Result {
   const { args, caps, json } = context;
   const request = previewRequest(args);
   const root = requireRoot(context);
-  const supplied = args.value('root'),
-    rooted = supplied === undefined ? '' : ` --root ${quote(supplied)}`;
   const editor = openEditor(root);
   try {
-    const snapshot = editor.snapshot,
-      within = snapshot.resolveScope().token;
-    const workspace = repositoryWorkspace(snapshot, within);
-    const run: Invocation = {
-      context,
-      root,
-      rooted,
-      snapshot,
-      within,
-      registry: snapshot.inspect().graph.registry,
-      roots: rootsOf(snapshot, within, workspace),
-    };
+    const run = invocationOf(context, root, editor);
     if (request.mode === 'word') {
       const view = previewWord(run, request);
       return json
         ? { exitCode: 0, stdout: JSON.stringify(wordEnvelope(view)) + '\n', stderr: '' }
         : { exitCode: 0, stdout: renderWord(view, caps), stderr: '' };
     }
-    const view = request.mode === 'record' ? previewRecord(run, request) : previewEdit(run, request);
+    const { view } = candidateOf(run, request, 'validate');
     const exitCode = view.clean ? 0 : 1;
     return json
       ? { exitCode, stdout: JSON.stringify(previewEnvelope(view)) + '\n', stderr: '' }

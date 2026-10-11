@@ -74,9 +74,10 @@ it('renders a consumer workspace for claude as its position packet, with no agen
   // Plan amendment B1 on a fresh init: P = M = 1, the seat, N systems, T = 3 tallies, 5 intents, 4 phases, C catalog
   // rows, provenance and 3 SPEC lines.
   expect(receipt.entries).toBe(1 + 1 + 1 + systems.length + 3 + 5 + 4 + packetCatalog().length + 1 + 3);
-  // Milestone generation-binding plan amendment C3 adds `ia preview` (C = 8), so a fresh init renders B1's 27 + N = 38.
-  expect(packetCatalog()).toHaveLength(8);
-  expect(receipt.entries).toBe(38);
+  // Milestone generation-binding plan amendment C3 adds `ia preview` and `ia author` (C = 9), so a fresh init renders
+  // B1's 28 + N = 39.
+  expect(packetCatalog()).toHaveLength(9);
+  expect(receipt.entries).toBe(39);
 });
 
 it('admits the composition fixture over the bundled base, and renders no agent for its profile until it is wired', async () => {

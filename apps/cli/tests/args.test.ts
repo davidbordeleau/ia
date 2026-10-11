@@ -148,6 +148,8 @@ it('tags the agent commands for the packet catalog in table order, each naming o
     ['ia validate', 'validate', 'Verification'],
     // Milestone generation-binding plan amendment C3: the eighth row.
     ['ia preview', 'validate', 'Verification'],
+    // Plan amendment C3: the ninth row, with C19's author form.
+    ['ia author', 'author', 'Synthesis'],
     ['ia capture', 'effect', 'Execution'],
     ['ia read', 'read', 'Observation'],
     ['ia position', 'read', 'Observation'],

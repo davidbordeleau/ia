@@ -14,13 +14,46 @@
  * mandates allow it, or the governance position of the mandate or workspace concerned. `ia position` is never gated,
  * so a position is always a command that runs. With no governing mandate nothing is restricted and the profile carries
  * the runtime's notice instead.
+ *
+ * Read (`ia read`, `ia next`), validate (`ia validate`, `ia preview`), author (`ia author`) and effect (`ia capture`, its
+ * `ia compile` alias, `ia project`) are gated; `ia position` is not, and neither is a command outside those modes. A gated
+ * command's profile stays on the invocation's gate, so a refusal it raises later names only a command the same actor may
+ * run there (`gatedNext`): one the profile refuses is replaced by the governance position, and one that needs the
+ * actor named by `--actor` carries it.
  */
 import type { ReadHandle } from '@inventarch/db';
-import { defaultActor, governingMandates, profileRefusal, RuntimeError } from '@inventarch/runtime';
-import type { Mode, ProfileVerdict } from '@inventarch/runtime';
+import { defaultActor, governingMandates, MODE_MOVES, profileRefusal, RuntimeError } from '@inventarch/runtime';
+import type { GoverningMandate, Mode, ProfileVerdict } from '@inventarch/runtime';
 import type { Context } from './consumer.js';
 import { Refusal, respell } from './consumer.js';
 import { quote } from './render.js';
+import { openSession } from './session.js';
+
+/** The gated commands and their modes; every other command, `ia position` included, is never gated. */
+export const GATED_MODES: Readonly<Record<string, Mode>> = Object.freeze({
+  read: 'read',
+  next: 'read',
+  validate: 'validate',
+  preview: 'validate',
+  author: 'author',
+  capture: 'effect',
+  compile: 'effect',
+  project: 'effect',
+});
+/** What a gated command's profile leaves on its invocation for the refusals it raises later. */
+export interface GateState {
+  readonly workspace?: string;
+  readonly actor?: string;
+  readonly by?: Profile['by'];
+  /** The mandates that govern at the workspace for the actor, whatever path the command targets. */
+  readonly mandates: readonly GoverningMandate[];
+  /** ` --root <root>` as the invocation gave it, or nothing. */
+  readonly rooted: string;
+}
+/** One invocation's gate: empty until a gated command's profile allows it. */
+export interface Gate {
+  state?: GateState;
+}
 
 export interface Profile {
   /** The repository's `@workspace`, when the workspace authors one. */
@@ -31,6 +64,8 @@ export interface Profile {
   readonly by?: 'actor' | 'steward' | 'participant';
   /** The governing mandates the profile judged, by identity. */
   readonly mandates: readonly string[];
+  /** The first governing mandate that binds the actor and grants the mode's move, by identity; absent when none governs. */
+  readonly grantedBy?: string;
   /** Present when no mandate governs, so nothing is restricted. */
   readonly notice?: string;
 }
@@ -40,7 +75,7 @@ export interface ProfileRequest {
   /** A scope token of the whole workspace; it need not be clean. */
   readonly within: string;
   /** The invocation, so a next command carries what it supplied (design row 27). */
-  readonly context: Pick<Context, 'command' | 'args'>;
+  readonly context: Pick<Context, 'command' | 'args' | 'gate'>;
   readonly mode: Mode;
   /** The words the command authors or previews: excluded words apply to them. */
   readonly words?: readonly string[];
@@ -118,13 +153,15 @@ export function requireProfile(request: ProfileRequest): Profile {
     words = request.words ?? [],
     rooted = rootedOf(context),
     workspace = repositoryWorkspace(reader, within);
-  const judge = (actor: string | undefined): { mandates: readonly string[]; verdict: ProfileVerdict } => {
-    const mandates = governingMandates(reader, within, {
+  const governing = (actor: string | undefined, path: string | undefined): readonly GoverningMandate[] =>
+    governingMandates(reader, within, {
       ...(actor === undefined ? {} : { actor }),
       ...(workspace === undefined ? {} : { workspace }),
-      ...(request.path === undefined ? {} : { path: request.path }),
+      ...(path === undefined ? {} : { path }),
     });
-    return { mandates: mandates.map((mandate) => mandate.identity), verdict: profileRefusal(mandates, mode, words) };
+  const judge = (actor: string | undefined): { mandates: readonly GoverningMandate[]; verdict: ProfileVerdict } => {
+    const mandates = governing(actor, request.path);
+    return { mandates, verdict: profileRefusal(mandates, mode, words) };
   };
   /** The next command after an open or refused actor choice: this one as the first participant allowed to run it. */
   const choose = (participants: readonly string[]): string => {
@@ -185,11 +222,24 @@ export function requireProfile(request: ProfileRequest): Profile {
           : `Run "ia position --seat ${seat} --shape governance${rooted}" for the mandates that govern here and what they allow.`,
       );
     }
+    const move = MODE_MOVES[mode],
+      granted = mandates.find(
+        (mandate) => mandate.binds !== false && (mandate.moves === undefined || mandate.moves.includes(move)),
+      );
+    if (context.gate !== undefined)
+      context.gate.state = Object.freeze({
+        ...(workspace === undefined ? {} : { workspace }),
+        ...(actor === undefined ? {} : { actor }),
+        ...(by === undefined ? {} : { by }),
+        mandates: request.path === undefined ? mandates : governing(actor, undefined),
+        rooted,
+      });
     return Object.freeze({
       ...(workspace === undefined ? {} : { workspace }),
       ...(actor === undefined ? {} : { actor }),
       ...(by === undefined ? {} : { by }),
-      mandates,
+      mandates: mandates.map((mandate) => mandate.identity),
+      ...(granted === undefined ? {} : { grantedBy: granted.identity }),
       ...(verdict.notice === undefined ? {} : { notice: verdict.notice }),
     });
   } catch (error) {
@@ -197,4 +247,68 @@ export function requireProfile(request: ProfileRequest): Profile {
       throw unreadable(error, reader, within, workspace, rooted);
     throw error;
   }
+}
+
+/**
+ * A gated command's profile for a mode, read through a session of its own: for a command whose workspace reads happen
+ * inside services that open their own session, so the profile is judged before any of them.
+ */
+export function gateMode(context: Context, root: string, mode: Mode): Profile {
+  const session = openSession(root);
+  try {
+    return requireProfile({ reader: session.reader, within: session.reader.resolveScope().token, context, mode });
+  } finally {
+    session.close();
+  }
+}
+
+const ARGUMENT = /"(?:[^"\\]|\\.)*"|[^\s"]+/g;
+const QUOTED = /"(ia(?: (?:"(?:[^"\\]|\\.)*"|[^\s"]+))*)"/;
+/**
+ * Design row 27 under the profile: the refusal a gated command raised, its next command judged by the profile that let
+ * the command run. A next command of a gated mode the profile refuses (its move, or for `ia preview` and `ia author` the
+ * word it names) becomes the governance position, which is never gated; one the profile allows carries `--actor` when the
+ * command named its actor so. A refusal raised before any profile, or naming an ungated command, is returned as it is.
+ */
+export function gatedNext(refusal: Refusal, gate: Gate | undefined): Refusal {
+  const state = gate?.state;
+  if (state === undefined || refusal.next === null) return refusal;
+  const match = QUOTED.exec(refusal.next);
+  if (match === null) return refusal;
+  const argv = [...match[1]!.matchAll(ARGUMENT)].map((token) =>
+    token[0].startsWith('"') ? (JSON.parse(token[0]) as string) : token[0],
+  );
+  const verb = argv[1] ?? '',
+    mode = GATED_MODES[verb];
+  if (mode === undefined) return refusal;
+  const word =
+    (verb === 'preview' || verb === 'author') && !argv.includes('--relate') && !argv.includes('--set')
+      ? argv.slice(2).find((token) => !token.startsWith('-'))
+      : undefined;
+  const verdict = profileRefusal(state.mandates, mode, word === undefined ? [] : [word]);
+  if (verdict.refusal !== undefined) {
+    const seat = seatOf(verdict.refusal.next) ?? state.workspace;
+    const why = `${verb} needs ${MODE_MOVES[mode]}${word === undefined ? '' : ` and @${word}`}, which they do not grant${state.actor === undefined ? '' : ` ${state.actor}`}`;
+    return new Refusal(
+      refusal.code,
+      refusal.message,
+      refusal.exit,
+      refusal.where,
+      seat === undefined
+        ? `Run "ia position${state.rooted}" for the repository's position and the mandates that govern it; ${why}.`
+        : `Run "ia position --seat ${seat} --shape governance${state.rooted}" for what the mandates that govern here allow; ${why}.`,
+      refusal.at,
+    );
+  }
+  if (state.by !== 'actor' || state.actor === undefined || argv.includes('--actor')) return refusal;
+  const actor = ` --actor ${quote(state.actor)}`;
+  const command = match[1]!.includes(' -- ') ? match[1]!.replace(' -- ', `${actor} -- `) : `${match[1]}${actor}`;
+  return new Refusal(
+    refusal.code,
+    refusal.message,
+    refusal.exit,
+    refusal.where,
+    refusal.next.replace(match[0], `"${command}"`),
+    refusal.at,
+  );
 }

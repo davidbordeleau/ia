@@ -98,7 +98,15 @@ it('prints the Bindings section: unbound is never a pass, bound names the shippe
     expect(revoked.text).toContain('2 execution bindings are revoked, which is an error.');
     expect(revoked.text).toContain('The catalog host claude joined failed verification: IA-DIST-INTEGRITY-MISMATCH');
     expect(revoked.text).toContain(`${READ} captured-source-read-v1: revoked`);
-    expect(revoked.text).toContain('Fix the errors above and run "ia validate" again.');
+    // Review finding B2-N8: no admission error is listed, so the closing names the repair instead.
+    expect(revoked.text).not.toContain('Fix the errors above');
+    expect(revoked.text).toContain(
+      `Delete ${resolve(env.IA_HOST_HOME, 'hosts', envelope.bindings.catalog.release)}, the host payload that failed verification, then run "ia host claude --root ${root} --apply".`,
+    );
+    expect(JSON.parse((await validate(root, env, '--json')).stdout).bindings.catalog).toMatchObject({
+      status: 'damaged',
+      payload: resolve(env.IA_HOST_HOME, 'hosts', envelope.bindings.catalog.release),
+    });
     // Revocation is the bindings' own error: admission's findings and their counts are unchanged.
     expect(JSON.parse((await validate(root, env, '--json')).stdout).counts).toEqual(envelope.counts);
   } finally {

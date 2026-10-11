@@ -301,7 +301,14 @@ export type JoinedCatalog =
       readonly catalog: InstalledImplementations;
     }
   | { readonly status: 'unavailable'; readonly reason: string }
-  | { readonly status: 'damaged'; readonly consumer: WorkspaceHost; readonly release: string; readonly reason: string };
+  | {
+      readonly status: 'damaged';
+      readonly consumer: WorkspaceHost;
+      readonly release: string;
+      /** The payload directory that failed verification, `<home>/hosts/<release>`: deleting it is the repair. */
+      readonly payload: string;
+      readonly reason: string;
+    };
 const failure = (error: unknown): { readonly code: string; readonly text: string } => {
   const code =
       error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
@@ -437,7 +444,7 @@ export function joinedCatalog(rootInput: string, trust: HostTrust | null): Joine
             };
       }
     if (catalog.status === 'damaged')
-      return { status: 'damaged', consumer: host, release: trust.release, reason: catalog.reason };
+      return { status: 'damaged', consumer: host, release: trust.release, payload: expected, reason: catalog.reason };
     if (catalog.status === 'unavailable') {
       reasons.push(`host ${host}'s payload carries no catalog: ${catalog.reason}`);
       continue;

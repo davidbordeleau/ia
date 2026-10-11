@@ -1,7 +1,15 @@
 import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
-import { open } from '@inventarch/db';
-import type { Handle } from '@inventarch/db';
+import {
+  bindChecks,
+  CHECK_EVIDENCE_WORD,
+  EVIDENCE_DIRECTORY,
+  evidenceText,
+  open,
+  readEvidence,
+  writeEvidence,
+} from '@inventarch/db';
+import type { CheckBinding, CheckCatalog, EvidenceWrite, Handle } from '@inventarch/db';
 import {
   decodeDistributionJson,
   decodeDistributionLock,
@@ -34,7 +42,18 @@ import type { InstallationPlan } from './install.js';
 import { packDistribution } from './pack.js';
 import type { PackedDistribution } from './snapshot.js';
 import type { ReleaseCandidate } from './resolve.js';
-import { bytes, contained, createFile, fail, locate, object, portable, utf8, workspace } from './files.js';
+import {
+  bytes,
+  contained,
+  createFile,
+  DistributionError,
+  fail,
+  locate,
+  object,
+  portable,
+  utf8,
+  workspace,
+} from './files.js';
 import { observeHosts } from './host-observe.js';
 import type { HostObservation, HostVerifier } from './host-observe.js';
 import { joinedCatalog } from './implementations.js';
@@ -397,9 +416,32 @@ export interface ValidationBindings {
         readonly digest: string;
       }
     | { readonly status: 'unavailable'; readonly reason: string }
-    | { readonly status: 'damaged'; readonly consumer: string; readonly release: string; readonly reason: string }
+    | {
+        readonly status: 'damaged';
+        readonly consumer: string;
+        readonly release: string;
+        readonly payload: string;
+        readonly reason: string;
+      }
     | null;
   readonly results: readonly BindingResult[];
+}
+/**
+ * Plan amendments C15 and C22: every admitted `@check` bound at validate (`bindChecks` in db) against the evaluator
+ * catalog this workspace's host joined (`joinedCatalog`, as for execution bindings), with where that catalog came from.
+ * `catalog` is null when every check names a built-in evaluator, which needs no catalog, and then none is read.
+ */
+export interface ValidationChecks {
+  readonly catalog: ValidationBindings['catalog'];
+  readonly results: readonly CheckBinding[];
+}
+/** How a session admits and reads. Every existing caller takes the defaults; the validate request asks for both. */
+export interface SessionOptions {
+  readonly root: string;
+  /** C21: `structural` admits a check whatever evaluator it names, for binding; `strict`, the default, is unchanged. */
+  readonly checks?: 'strict' | 'structural';
+  /** C14: read the current authored revision's evidence file at runtime placement; off by default. */
+  readonly evidence?: boolean;
 }
 export interface WorkspaceSession {
   readonly reader: Handle;
@@ -420,6 +462,11 @@ export interface WorkspaceSession {
    * binds, and with null nothing does.
    */
   bindings(trust: HostTrust | null): ValidationBindings;
+  /**
+   * Every admitted `@check` bound as a validation reports it (`ValidationChecks`), a catalog evaluator through the
+   * same `trust` and the same joined catalog as `bindings`. Reads only; never writes.
+   */
+  checks(trust: HostTrust | null): ValidationChecks;
   close(): void;
 }
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -441,9 +488,31 @@ function inertFindings(reader: Handle): Findings {
     }`,
   }));
 }
-export function openWorkspaceSession(options: { readonly root: string }): WorkspaceSession {
+export function openWorkspaceSession(options: SessionOptions): WorkspaceSession {
   const root = workspace(options.root),
-    reader = open(root, { cache: false });
+    reader = open(root, {
+      cache: false,
+      ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
+      ...(options.evidence === true ? { evidence: true } : {}),
+    });
+  // One read of the joined catalog per session and trust, shared by execution and check bindings.
+  const joined = new Map<string, ReturnType<typeof joinedCatalog>>();
+  const joinedOnce = (trust: HostTrust | null): ReturnType<typeof joinedCatalog> => {
+    const key = trust === null ? '' : `${trust.home}\u0000${trust.release}`;
+    let catalog = joined.get(key);
+    if (catalog === undefined) joined.set(key, (catalog = joinedCatalog(root, trust)));
+    return catalog;
+  };
+  const source = (catalog: ReturnType<typeof joinedCatalog>): NonNullable<ValidationBindings['catalog']> =>
+    catalog.status === 'joined'
+      ? {
+          status: 'joined',
+          consumer: catalog.consumer,
+          release: catalog.release,
+          version: catalog.version,
+          digest: catalog.digest,
+        }
+      : catalog;
   // Nothing is captured. formatSource refreshes this same handle, and reader.report is a live getter
   // over the state refresh() replaces, so a captured verdict beside a live revision could report an
   // admitted status next to error findings. The scope token is minted per call for the same reason:
@@ -482,24 +551,26 @@ export function openWorkspaceSession(options: { readonly root: string }): Worksp
     bindings: (trust: HostTrust | null): ValidationBindings => {
       const bindings = executionBindings(reader);
       if (bindings.length === 0) return { catalog: null, results: [] };
-      const joined = joinedCatalog(root, trust);
+      const joined = joinedOnce(trust);
       const catalog: BindingCatalog =
         joined.status === 'joined'
           ? { status: 'present', operations: joined.catalog.operations }
           : { status: joined.status, reason: joined.reason };
-      return {
-        catalog:
-          joined.status === 'joined'
-            ? {
-                status: 'joined',
-                consumer: joined.consumer,
-                release: joined.release,
-                version: joined.version,
-                digest: joined.digest,
-              }
-            : joined,
-        results: bindings.map((binding) => bindExecution(binding, catalog)),
-      };
+      return { catalog: source(joined), results: bindings.map((binding) => bindExecution(binding, catalog)) };
+    },
+    checks: (trust: HostTrust | null): ValidationChecks => {
+      const records = reader.records(),
+        report = reader.report;
+      // Built-in evaluators are implicit: a workspace whose checks all name one binds without reading any catalog.
+      const builtIn = bindChecks(records, report, { status: 'unavailable', reason: '' });
+      if (builtIn.every((binding) => binding.runner === null || binding.implementation === 'built-in'))
+        return { catalog: null, results: builtIn };
+      const joined = joinedOnce(trust);
+      const catalog: CheckCatalog =
+        joined.status === 'joined'
+          ? { status: 'present', evaluators: joined.catalog.evaluators }
+          : { status: joined.status, reason: joined.reason };
+      return { catalog: source(joined), results: bindChecks(records, report, catalog) };
     },
     close: (): void => reader.close(),
   };
@@ -553,4 +624,44 @@ export function formatSource(request: FormatRequest): FormatOutcome {
     candidateRevision: formatted.candidateRevision,
     findings: formatted.evidence.findings,
   };
+}
+
+/**
+ * Plan amendments C14 and C23: the validate request, the one service that records evidence. `ia validate` and
+ * `ia-distribution validate` both call it, with the session they validated (opened `structural` with `evidence`) and
+ * the checks it bound, so the two write the same file. It records each bound check whose selected verdicts passed or
+ * failed as an `@observation` in `.ia/work/evidence/<authored revision>.ia` (db `evidenceText`, `writeEvidence`):
+ * an observation recorded again unchanged keeps the time it was first made, so validating twice at one authored revision
+ * writes the same bytes; a revision with nothing to record keeps no file; files of other revisions are pruned. A
+ * workspace whose vocabulary has no `@observation` word records nothing. Nothing else writes evidence: a session's
+ * `validation`, `bindings` and `checks` only read, and doctor, capture and every other command never call this.
+ * A link, junction or misplaced entry on the way refuses with the db's IA-DB-PATH-UNSAFE; a directory or file the
+ * process cannot write refuses as IA-DIST-EVIDENCE-UNWRITABLE, located at the evidence directory, and leaves what it found.
+ */
+export function recordValidation(session: WorkspaceSession, checks: ValidationChecks): EvidenceWrite {
+  const root = session.reader.root,
+    revision = session.reader.authoredRevision,
+    records = session.reader.records();
+  const vocabulary = records.some((record) => record.discriminator === 'schema' && record.name === CHECK_EVIDENCE_WORD);
+  try {
+    const path = `${EVIDENCE_DIRECTORY}/${revision}.ia`,
+      built = vocabulary
+        ? evidenceText({
+            authoredRevision: revision,
+            bindings: checks.results,
+            records,
+            prior: readEvidence(root, path),
+          })
+        : { text: null, observations: [] };
+    return { ...writeEvidence(root, revision, built.text), observations: built.observations };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    if (typeof code === 'string' && ['EACCES', 'EPERM', 'EROFS', 'EBUSY', 'ENOSPC', 'EISDIR', 'ENOTDIR'].includes(code))
+      throw new DistributionError(
+        'IA-DIST-EVIDENCE-UNWRITABLE',
+        `Evidence cannot be written under ${EVIDENCE_DIRECTORY} (${code})`,
+        EVIDENCE_DIRECTORY,
+      );
+    throw error;
+  }
 }

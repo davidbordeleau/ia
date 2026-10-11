@@ -17,6 +17,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -415,5 +416,69 @@ it('reports one Bindings section through ia validate --json and ia-distribution 
     });
   } finally {
     writeFileSync(state, genuine);
+  }
+});
+
+/** Two local checks over built-in evaluators: one over the whole-workspace token, which passes, and one prose-scoped. */
+const CHECKS = `#! ia 1.0
+
+@check demo-schema-check
+  meaning
+    says "Validate every admitted record against its schema."
+    answers "Does every record have the structure its schema requires?"
+  check
+    runs COMP-SCHEMA
+    scope "*"
+  governance
+    severity blocking
+
+@check prose-check
+  meaning
+    says "Select records by prose, which selects nothing."
+    answers "Is a prose scope ever a pass?"
+  check
+    runs COMP-SCHEMA
+    scope "every admitted record"
+  governance
+    severity blocking
+`;
+it('reports one Checks result through both validation binaries, which record the same evidence (C14, C15, C23)', async () => {
+  const root = resolve(scratch('equivalence-checks'), 'workspace'),
+    home = resolve(scratch('equivalence-checks-home'), '.ia'),
+    env = { ...process.env, IA_HOME: home };
+  expect((await spawned(MAIN, ['init', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  writeFileSync(resolve(root, '.ia/src/checks.ia'), CHECKS);
+  expect((await spawned(MAIN, ['host', 'claude', '--root', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  const registration = JSON.parse(
+      readFileSync(resolve(root, '.ia/distributions/hosts/claude-workspace.json'), 'utf8'),
+    ) as { cache: string },
+    machineBinary = resolve(registration.cache, 'runtime/node_modules/@inventarch/distribution/dist/cli.js');
+  const consumer = async () =>
+      result(await spawned(MAIN, ['validate', '--root', root, '--json'], env), 'stdout', 0, 'ia validate'),
+    machine = async () =>
+      result(await spawned(machineBinary, ['validate', '--root', root], env), 'stdout', 0, 'ia-distribution validate');
+  const evidence = resolve(root, '.ia/work/evidence');
+  // Either binary first: the first records the evidence, the second finds exactly those bytes and rewrites nothing.
+  for (const [first, second] of [
+    [consumer, machine],
+    [machine, consumer],
+  ] as const) {
+    rmSync(evidence, { recursive: true, force: true });
+    const a = await first(),
+      bytes = readdirSync(evidence).map((name) => readFileSync(resolve(evidence, name), 'utf8')),
+      b = await second();
+    expect(b['checks']).toEqual(a['checks']);
+    expect(b['bindings']).toEqual(a['bindings']);
+    expect(a['evidence']).toMatchObject({ written: true, pruned: [] });
+    expect(b['evidence']).toEqual({ ...(a['evidence'] as object), written: false });
+    expect(readdirSync(evidence).map((name) => readFileSync(resolve(evidence, name), 'utf8'))).toEqual(bytes);
+    const results = (a['checks'] as { results: { name: string; outcome: string }[] }).results;
+    expect(results.map((row) => [row.name, row.outcome])).toEqual([
+      ['demo-schema-check', 'pass'],
+      ['prose-check', 'not-evaluated'],
+    ]);
+    expect((a['evidence'] as { observations: { verdict: string }[] }).observations.map((row) => row.verdict)).toEqual([
+      'success',
+    ]);
   }
 });

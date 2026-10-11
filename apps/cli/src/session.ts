@@ -6,6 +6,7 @@
  * own code is carried through unchanged (§4.1); only the next action is the CLI's.
  */
 import { openWorkspaceSession } from '@inventarch/distribution/services';
+import type { SessionOptions } from '@inventarch/distribution/services';
 import { Refusal, serviceNext } from './consumer.js';
 import { nearestTokens } from './commands.js';
 import { recoverCommand } from './host.js';
@@ -52,9 +53,11 @@ function openNext(error: unknown, root: string): string {
   return serviceNext(code, { command: null, root });
 }
 
-export function openSession(root: string): Session {
+/** How `ia validate` opens its session: checks admitted structurally and evidence read (C14, C21). */
+export const VALIDATING = { checks: 'structural', evidence: true } as const;
+export function openSession(root: string, options: Omit<SessionOptions, 'root'> = {}): Session {
   try {
-    return openWorkspaceSession({ root });
+    return openWorkspaceSession({ root, ...options });
   } catch (error) {
     throw new Refusal(
       codeOf(error, 'IA-DB-ROOT-INVALID'),

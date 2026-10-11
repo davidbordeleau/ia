@@ -7,9 +7,11 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -29,6 +31,7 @@ import {
   readInstalledImplementations,
   readJoins,
 } from '../src/implementations.js';
+import { openWorkspaceSession, recordValidation } from '../src/services.js';
 
 // Spies that keep the real behaviour, so a test can count how often a payload is verified.
 vi.mock('../src/host.js', { spy: true });
@@ -438,6 +441,7 @@ it('reports a joined payload whose handler bytes no longer match their pins as d
     status: 'damaged',
     consumer: 'claude',
     release,
+    payload: cache,
     reason: 'IA-DIST-INTEGRITY-MISMATCH: Unexpected host payload',
   });
   rmSync(cache, { recursive: true });
@@ -533,6 +537,7 @@ it('reports the trusted payload damaged whichever host joined it, in either cons
       status: 'damaged',
       consumer: trusted,
       release: genuine.release,
+      payload: genuine.root,
       reason: expect.stringContaining('IA-DIST-INTEGRITY-MISMATCH'),
     });
   }
@@ -553,6 +558,7 @@ it('reports a release.json that no longer hashes to its pin as damaged, parseabl
       status: 'damaged',
       consumer: 'claude',
       release: genuine.release,
+      payload: genuine.root,
       reason: 'IA-DIST-INTEGRITY-MISMATCH: Host release differs from its pin',
     });
   }
@@ -600,4 +606,126 @@ it('verifies a payload once for every read of one report that shares a verifier 
   for (let read = 0; read < 2; read++)
     expect(() => readInstalledImplementations(cache, release, again)).toThrow(code('IA-DIST-INTEGRITY-MISMATCH'));
   expect(vi.mocked(verifyHostCache)).toHaveBeenCalledTimes(1);
+});
+
+const NATIVE = resolve(import.meta.dirname, '../../../examples/conformance/native');
+const TYPING = `#! ia 1.0
+
+@check typing-check
+  meaning
+    says "Run an evaluator the payload catalog would have to list."
+    answers "Which evaluator checks typing?"
+  check
+    runs acme-strict-typing
+    scope "package"
+  governance
+    severity blocking
+  relationships
+    enforces @contract foundation-authoring-contract
+`;
+/** The native corpus (its learning-system authors the `@observation` word) with a check naming a foreign evaluator. */
+function checked(): string {
+  const root = temp();
+  cpSync(NATIVE, resolve(root, '.ia/src'), { recursive: true });
+  put(root, '.ia/src/systems/compliance-system/checks/typing-check.ia', TYPING);
+  return root;
+}
+/** Every entry under `root` with its size, mtime and bytes: what a write anywhere would change. */
+const snapshot = (root: string) =>
+  readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .sort()
+    .map((entry) => {
+      const stat = statSync(resolve(root, entry));
+      return `${entry} ${stat.mtimeMs} ${stat.isFile() ? sha256(readFileSync(resolve(root, entry))) : 'directory'}`;
+    });
+
+it('binds checks through the joined catalog, so a payload without one leaves catalog checks unavailable (C15)', () => {
+  const root = checked(),
+    old = installed({ catalog: false });
+  const checks = (trust: { home: string; release: string } | null) => {
+    const session = openWorkspaceSession({ root, checks: 'structural' });
+    try {
+      return session.checks(trust);
+    } finally {
+      session.close();
+    }
+  };
+  const byName = (result: ReturnType<typeof checks>) =>
+    Object.fromEntries(result.results.map((row) => [row.name, row]));
+  // A host registered with a payload that carries no catalog, as 2.0.0's does, records no join: unavailable, never
+  // damaged, and the built-in check still binds.
+  registered(root, 'claude', old.root, old.release);
+  expect(joinHost(root, 'claude', REVISION).status).toBe('unavailable');
+  const unjoined = checks(old.trust);
+  expect(unjoined.catalog).toEqual({ status: 'unavailable', reason: expect.stringContaining('no host has joined') });
+  expect(byName(unjoined)['typing-check']).toMatchObject({ status: 'unavailable', outcome: 'not-evaluated' });
+  expect(byName(unjoined)['instance-schema-check']).toMatchObject({ status: 'bound', implementation: 'built-in' });
+  // A receipt naming that payload anyway finds no catalog in it: still unavailable, not revoked.
+  put(
+    root,
+    JOINS,
+    json({
+      format: 'ia.host-joins.v1',
+      joins: [
+        {
+          consumer: 'claude',
+          implementation: 'installed-implementations',
+          version: '2.0.0',
+          digest: 'e'.repeat(64),
+          release: old.release,
+          consumerRevision: REVISION,
+        },
+      ],
+    }),
+  );
+  const listed = checks(old.trust);
+  expect(listed.catalog).toEqual({ status: 'unavailable', reason: expect.stringContaining('carries no catalog') });
+  expect(byName(listed)['typing-check']).toMatchObject({ status: 'unavailable' });
+  // The current payload's catalog lists no evaluator: unavailable, with the reason. Damaged, it revokes the check.
+  const current = installed();
+  registered(root, 'claude', current.root, current.release);
+  rmSync(resolve(root, JOINS));
+  joinHost(root, 'claude', REVISION);
+  expect(byName(checks(current.trust))['typing-check']).toMatchObject({
+    status: 'unavailable',
+    reason: 'the installed evaluator catalog lists no evaluator acme-strict-typing',
+  });
+  writeFileSync(resolve(current.root, MODULE), readFileSync(resolve(current.root, MODULE), 'utf8') + '// altered\n');
+  expect(byName(checks(current.trust))['typing-check']).toMatchObject({ status: 'revoked' });
+  // No trust: nothing binds through any join.
+  expect(checks(null).catalog).toMatchObject({ status: 'unavailable' });
+});
+
+it('reads only in validation, bindings and checks; recordValidation is the one writer of evidence (C23)', () => {
+  const root = checked();
+  put(
+    root,
+    '.ia/src/systems/compliance-system/checks/whole-schema-check.ia',
+    TYPING.replaceAll('typing-check', 'whole-schema-check')
+      .replace('runs acme-strict-typing', 'runs COMP-SCHEMA')
+      .replace('scope "package"', 'scope "*"'),
+  );
+  const before = snapshot(root);
+  const session = openWorkspaceSession({ root, checks: 'structural', evidence: true });
+  try {
+    expect(session.validation().status).toBe('admitted');
+    session.bindings(null);
+    const checks = session.checks(null);
+    expect(snapshot(root)).toEqual(before);
+    const written = recordValidation(session, checks);
+    expect(written).toMatchObject({ written: true, observations: [{ verdict: 'success' }] });
+    expect(existsSync(resolve(root, written.path!))).toBe(true);
+  } finally {
+    session.close();
+  }
+  // A session opened as every other command opens one reads no evidence and admits the unknown runner strictly.
+  const plain = openWorkspaceSession({ root });
+  try {
+    expect(plain.validation().findings.map((finding) => finding.code)).toContain('IA-COMP-CHECK-UNKNOWN');
+    expect(plain.reader.records().some((record) => record.band === 0 && record.discriminator === 'observation')).toBe(
+      false,
+    );
+  } finally {
+    plain.close();
+  }
 });

@@ -546,6 +546,37 @@ describe('ia author refusals, each writing nothing', () => {
       'IA-CLI-EDIT-MANDATE',
     );
   });
+  it('holds a restricting mandate against its own participant when it excludes workspace, agent and mandate (review C3-R1)', async () => {
+    // The documented recipe: a mandate that should hold against its own participant excludes the words that would let it
+    // move the mandate out of the closure, add a participant with a broader mandate, or name a new steward.
+    const root = workspace((at) => {
+      moves(at, 'Observation, Verification, Synthesis');
+      rewrite(at, '.ia/src/workspace.ia', (text) =>
+        text.replace(
+          '    scope [@workspace demo]\n',
+          '    scope [@workspace demo]\n    excluded-words [workspace, agent, mandate]\n',
+        ),
+      );
+    });
+    const digest = createHash('sha256')
+      .update(readFileSync(resolve(root, '.ia/src/workspace.ia')))
+      .digest('hex');
+    const attempts: readonly (readonly [string, readonly string[], string])[] = [
+      // (a) moving its mandate out of the workspace's closure by changing the authored roots.
+      ['a', ['--set', '@workspace demo', 'composition.sources=["elsewhere/"]', '--digest', digest], 'workspace'],
+      // (b) a second participant, then a broader mandate for it to act as.
+      ['b', ['agent', 'b', 'meaning.says=A second participant.', '--digest', EMPTY], 'agent'],
+      ['b', ['mandate', 'b-mandate', 'meaning.says=x', 'authority.participant=@agent b', '--digest', EMPTY], 'mandate'],
+      // (c) a participant-less mandate, a new agent, and that agent named as steward.
+      ['c', ['mandate', 'open', 'meaning.says=x', 'authority.moves=[Execution]', '--digest', EMPTY], 'mandate'],
+      ['c', ['agent', 'free', 'meaning.says=Unbound.', '--digest', EMPTY], 'agent'],
+      ['c', ['--set', '@workspace demo', 'composition.steward=@agent free', '--digest', digest], 'workspace'],
+    ];
+    for (const [route, argv, word] of attempts) {
+      const refusal = await refused(root, ['author', ...argv], 'IA-RUNTIME-MANDATE-WORD');
+      expect(refusal['message'], `(${route}) ${argv.join(' ')}`).toBe(`${mandate('demo-mandate')} excludes ${word}`);
+    }
+  });
   it('judges the profile before a missing or malformed digest, so the preview it names runs (review C2-R4)', async () => {
     const form = ['--set', '@milestone m1', 'work.owner=Tom'];
     // An open actor choice is refused before the digest.

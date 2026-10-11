@@ -6,6 +6,7 @@ export { cursorContext, projectSource, lineRange } from '@inventarch/language/ed
 // the language package (the CLI's `ia preview`).
 export {
   addRelationship,
+  annotateRecord,
   appendRecord,
   draftSource,
   encodeValue,

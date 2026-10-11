@@ -199,6 +199,33 @@ export function setField(
   return finish(lines);
 }
 
+/**
+ * Put the one-line comment `comment` (`# <text>`) directly above the top-level record `identity` (`@word name`), in
+ * place of a comment there that starts with the same first word (`# authored-by`, say), so an attribution is replaced,
+ * not stacked. A comment is trivia, so no record's digest moves; every other line keeps its bytes. A comment that is not
+ * one `#` line of plain text is refused.
+ */
+export function annotateRecord(text: string, identity: string, comment: string): string {
+  if (
+    typeof comment !== 'string' ||
+    !/^# \S[^\r\n\u2028\u2029]*$/.test(comment) ||
+    /[\u0000-\u0008\u000b-\u001f\u007f]/.test(comment)
+  )
+    refuse('value', `Expected one comment line # <text>; got ${JSON.stringify(comment)}`);
+  const file = normalized(text),
+    record = recordAt(file, identity),
+    lines = [...file.lines],
+    header = record.span.line - 1,
+    first = comment.split(' ')[1]!;
+  const above = file.ast.trivia.find(
+    (trivia) => trivia.kind === 'comment' && trivia.line === record.span.line - 1 && !trivia.trailing,
+  );
+  if (above !== undefined && (above as { readonly text: string }).text.split(' ')[1] === first)
+    lines.splice(header - 1, 1, `${indentOf(lines[header]!)}${comment}`);
+  else lines.splice(header, 0, `${indentOf(lines[header]!)}${comment}`);
+  return finish(lines);
+}
+
 /** What `relationshipConsent` finds for one relationship row. */
 export interface RelationshipConsent {
   readonly predicate: Predicate;

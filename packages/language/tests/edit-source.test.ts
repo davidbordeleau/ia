@@ -323,6 +323,26 @@ describe('setField', () => {
   });
 });
 
+describe('annotateRecord', () => {
+  it('puts one comment above the record, replacing one with the same first word, and moves no digest', () => {
+    const line = '# authored-by @agent demo under @mandate demo-mandate at abc';
+    const once = editor.annotateRecord(source, '@task two', line);
+    expect(once).toContain(`# keep this comment\n${line}\n@task two\n`);
+    expect(digests(once)).toEqual(digests(source));
+    expect(format(once, 'x.ia').text).toBe(once);
+    // A second attribution replaces the first; another comment above stays where it is.
+    const twice = editor.annotateRecord(once, '@task two', '# authored-by @agent ops under @mandate ops at def');
+    expect(twice).toContain('# keep this comment\n# authored-by @agent ops under @mandate ops at def\n@task two\n');
+    expect(twice).not.toContain(line);
+    const first = editor.annotateRecord(source, '@task one', line);
+    expect(first.startsWith(`#! ia 1.0\n\n${line}\n@task one\n`)).toBe(true);
+    expect(slices(first).get('@task two')).toBe(slices(source).get('@task two'));
+    for (const bad of ['authored-by x', '# ', '# two\n# lines', '# bell\u0007'])
+      refusedWith('value', () => editor.annotateRecord(source, '@task one', bad));
+    refusedWith('identity', () => editor.annotateRecord(source, '@task nine', line));
+  });
+});
+
 describe('relationshipConsent', () => {
   const AUTHORED: Location = { placement: { kind: 'authored', band: 100, reach: '' }, provenance: 'workspace' };
   const system = `#! ia 1.0

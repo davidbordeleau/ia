@@ -10,7 +10,7 @@ import type { Token } from '../scanner/tokens.js';
 import { encodeValue } from './values.js';
 import type { DraftSchema } from './values.js';
 export { format, checkFormatPreservation } from '../formatter.js';
-export { appendRecord, addRelationship, relationshipConsent, setField } from './edit-source.js';
+export { annotateRecord, appendRecord, addRelationship, relationshipConsent, setField } from './edit-source.js';
 export type { RelationshipConsent } from './edit-source.js';
 export { encodeValue, SourceEditError } from './values.js';
 export type { DraftField, DraftSchema, SourceEditReason } from './values.js';

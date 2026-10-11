@@ -389,7 +389,10 @@ const RERUN = 'run "ia host claude --apply"';
  * `directory` (case and separators folded). Each watched export of node:fs is wrapped, `.native` included, and the
  * wrappers reach every named import through `syncBuiltinESMExports`; an empty list means `directory` was never touched.
  */
-function watched<T>(directory: string, run: () => T): { readonly result: T; readonly calls: readonly string[] } {
+function watched<T>(
+  directory: string,
+  run: (calls: readonly string[]) => T,
+): { readonly result: T; readonly calls: readonly string[] } {
   const fold = (value: unknown) => String(value).toLowerCase().replaceAll('/', '\\');
   const needle = fold(directory),
     calls: string[] = [],
@@ -423,7 +426,7 @@ function watched<T>(directory: string, run: () => T): { readonly result: T; read
   }
   syncBuiltinESMExports();
   try {
-    return { result: run(), calls };
+    return { result: run(calls), calls };
   } finally {
     for (const [name, original] of originals) target[name] = original as (typeof target)[string];
     syncBuiltinESMExports();
@@ -843,4 +846,24 @@ it('binds a deleted handler as unavailable and a catalog-declared revocation as 
       reason: 'the installed catalog revokes read-v1: withdrawn by its producer',
     }),
   ]);
+});
+
+it('takes a session open time before it reads any input, so it never prunes what another run touched since (B4-RC3, F3)', () => {
+  const root = checked(),
+    clock = Date.now.bind(Date);
+  let readsBefore = -1;
+  const now = vi.spyOn(Date, 'now');
+  try {
+    const { result: session } = watched(root, (calls) => {
+      now.mockImplementation(() => {
+        if (readsBefore < 0) readsBefore = calls.length;
+        return clock();
+      });
+      return openWorkspaceSession({ root, checks: 'structural' });
+    });
+    session.close();
+    expect(readsBefore).toBe(0);
+  } finally {
+    now.mockRestore();
+  }
 });

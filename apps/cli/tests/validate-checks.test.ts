@@ -355,9 +355,19 @@ it('keeps prior times only from a file the writer itself would write (B4-RC2)', 
   put(root, '.ia/src/checks.ia', BUILT_IN);
   const first = await json(root, env),
     path = resolve(root, first.envelope.evidence.path),
-    planted = readFileSync(path, 'utf8').replace(/(observed|captured)-at "[^"]+"/g, '$1-at "2001-01-01T00:00:00Z"');
+    genuine = readFileSync(path, 'utf8');
+  // Review finding F3: times in the writer's exact stamp, observed and captured together and long past, which the
+  // writer would keep from a file it wrote; beside a forged reason, this file is not one it wrote.
+  const planted = genuine
+    .replace(/(observed|captured)-at "[^"]+"/g, '$1-at "2001-01-01T00:00:00.000Z"')
+    .replace(/reason "built-in COMP-SCHEMA[^"]*"/, 'reason "planted: an auditor passed it"');
+  expect(planted).not.toBe(genuine);
   actualFs.writeFileSync(path, planted);
   const second = await json(root, env);
   expect(second.envelope.evidence).toMatchObject({ written: true });
-  expect(readFileSync(path, 'utf8')).not.toContain('2001-01-01');
+  const rewritten = readFileSync(path, 'utf8');
+  expect(rewritten).not.toContain('2001-01-01');
+  expect(rewritten).not.toContain('planted');
+  // The writer's own file, by contrast, lends its times: a third validate writes nothing.
+  expect((await json(root, env)).envelope.evidence).toMatchObject({ written: false });
 });

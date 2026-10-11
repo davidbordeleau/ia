@@ -687,8 +687,9 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
     expect(nextArgv(nextOf('ia preview task --root $(id)'))).toEqual(FALLBACK);
     // A value with a space is quoted, but `$()` stays live in double quotes, so it is never repeated.
     expect(nextArgv(nextOf('ia preview task "a $(id)" --root C:/ws'))).toEqual(FALLBACK);
-    // A bare token opening a comment, a PowerShell splat or a tilde expansion is repeated quoted.
-    for (const token of ['#x', '@milestone', '~/x']) {
+    // A bare token opening a comment, a PowerShell splat or a tilde expansion is repeated quoted, and so is one holding a
+    // comma (a PowerShell array) or a tilde anywhere (review C3-N1).
+    for (const token of ['#x', '@milestone', '~/x', 'a,b', 'work.peers=x,y', 'x~y', 'k=~/x']) {
       const next = nextOf(`ia preview task ${token} --root C:/ws`);
       expect(next, token).toBe(`Run "ia preview task ${JSON.stringify(token)} --root C:/ws" again.`);
       expect(nextArgv(next)).toEqual(['preview', 'task', token, '--root', 'C:/ws']);

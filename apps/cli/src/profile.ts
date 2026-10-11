@@ -306,11 +306,12 @@ export const sessionGate =
 const INERT = /^[A-Za-z0-9@+=:,./_~#\- ]*$/;
 /**
  * Review C2-R8: a token as a printed command spells it. One with a space, or one opening a comment (`#`), a PowerShell
- * splat (`@`) or a tilde expansion (`~`), is double-quoted, which keeps those literal in sh, PowerShell and cmd; INERT has
- * already kept every character double quotes leave live out of it. The quotes are JSON's, as `quote()` spells every
- * printed argument, so the command parses as design row 27's other commands do.
+ * splat (`@`) or a tilde expansion (`~`), is double-quoted, which keeps those literal in sh, PowerShell and cmd; so is one
+ * holding a comma (a PowerShell array) or a tilde anywhere (an expansion after `=` or `:` in some shells; review C3-N1).
+ * INERT has already kept every character double quotes leave live out of it. The quotes are JSON's, as `quote()` spells
+ * every printed argument, so the command parses as design row 27's other commands do.
  */
-const spelled = (token: string): string => (/^[#@~]/.test(token) ? JSON.stringify(token) : quote(token));
+const spelled = (token: string): string => (/^[#@]|[,~]/.test(token) ? JSON.stringify(token) : quote(token));
 /** The word a preview or author form names: a new record's word, or the owned record's `@word` or identity facet. */
 function wordOf(args: Context['args']): string | undefined {
   const first = args.positionals[0] ?? '';

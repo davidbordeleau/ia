@@ -640,3 +640,26 @@ it('refuses no more than the last registered selection when the records cannot o
     expect(await lifted(root, env, refused)).toBe(0);
   }
 });
+
+it('keeps unchanged hook groups without the payload their registration recorded, and names ia host when a change needs it (H-R4)', async () => {
+  const { root, env } = await composed();
+  const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release,
+    payload = resolve(env.IA_HOST_HOME, 'hosts', release);
+  rmSync(payload, { recursive: true, force: true });
+  // Nothing about the hooks changed: ia project writes no group and never reads the missing payload.
+  const unchanged = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+  expect(unchanged.exitCode, unchanged.stdout).toBe(0);
+  // A narrowed selection needs the payload: refused at it, naming ia host, which materializes it and registers.
+  edit(root, '.ia/src/hooks.ia', ['paths ["docs/**", "restricted/**"]', 'paths ["docs/**"]']);
+  const refused = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  const body = JSON.parse(refused.stdout) as { where: { path: string }; next: string };
+  expect(body.where.path).toBe(payload);
+  expect(body.next).toBe(
+    `Run "ia host claude --root ${quote(root)} --apply" to materialize this release's payload and register the workspace's hooks against it.`,
+  );
+  await follow(body.next, env);
+  expect(JSON.parse(read(root, HOOK_STATE)).groups.map((group: { paths: string[] }) => group.paths)).toEqual([
+    ['docs/**'],
+  ]);
+});

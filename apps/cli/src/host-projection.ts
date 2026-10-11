@@ -59,6 +59,7 @@ import {
   acquireHostRegistrationLock,
   assertHostRegistrationIdle,
   HOST_REGISTRATION,
+  verifyHostCache,
 } from '@inventarch/distribution/host';
 import type { WorkspaceHost } from '@inventarch/distribution/hosts';
 import type { ProjectionPlan } from '@inventarch/distribution/projection';
@@ -196,6 +197,28 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
       plan: null,
       unregistered: rows.map((row) => ({ identity: row.identity, word: 'hook' as const, reason: HOOKS_NEED_HOST })),
     };
+  if (cache === null && prior !== null) {
+    // Against the payload the registration recorded (review finding H-R4): with the same hooks and selections owned,
+    // nothing is written and that payload is not read, so its absence never blocks an unrelated apply; a change needs it,
+    // and a payload gone or changed refuses there, naming `ia host`, which materializes one and registers against it.
+    const owned = new Map(prior.groups.map((group) => [group.hook, json(group.paths)]));
+    if (owned.size === rows.length && rows.every((row) => owned.get(row.identity) === json(row.paths)))
+      return { plan: null, unregistered: [] };
+    try {
+      verifyHostCache(directory);
+    } catch (error) {
+      throw Object.assign(
+        new DistributionError(
+          codeOf(error, 'IA-DIST-ARTIFACT-UNAVAILABLE'),
+          `The host payload the hook registration recorded cannot be used: ${error instanceof Error ? error.message : String(error)}`,
+          directory,
+        ),
+        {
+          repair: `Run "ia host claude --apply" to materialize this release's payload and register the workspace's hooks against it.`,
+        },
+      );
+    }
+  }
   return { plan: planHookRegistration(root, { cache: directory, hooks: rows }), unregistered: [] };
 }
 /**

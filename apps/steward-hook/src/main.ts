@@ -709,8 +709,13 @@ export function evaluateHook(root: string, event: unknown, actorsPath?: string):
     return deny('IA-HOOK-STEWARD-UNAVAILABLE', error instanceof Error ? error.message : String(error));
   }
 }
-const REREGISTER =
-  'restore the record, or register the workspace\'s current hooks again with "ia host claude --apply" ("ia project claude --apply" for a projection written without a registration)';
+/**
+ * The commands that bring a registration whose hook cannot be read back in step, both runnable from a shell in that very
+ * state: re-registering the workspace's current hooks (which removes a group whose record is gone), or removing the
+ * host registration, which restores editing.
+ */
+const reregister = (root: string): string =>
+  `run "ia host claude --root ${JSON.stringify(root)} --apply --yes" from a shell to register the workspace's current hooks, or "ia host claude --root ${JSON.stringify(root)} --remove --apply --yes" to remove the registration and restore editing`;
 /**
  * The `@mandate` guard (milestone generation-binding, plan amendments C9 and C10): one authored `@hook`'s group runs
  * `guard --root <root> --hook <identity>`. The same input checks, path safety and managed-state protection as the legacy
@@ -756,14 +761,17 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
         .records({ within })
         .filter((node) => node.discriminator === 'hook' && node.band === 100 && node.identity === hook);
     if (nodes.length !== 1)
-      return deny('IA-HOOK-DECLARATION-UNAVAILABLE', `${hook} is not an admitted authored @hook; ${REREGISTER}`);
+      return deny(
+        'IA-HOOK-DECLARATION-UNAVAILABLE',
+        `${hook} is not an admitted authored @hook; ${reregister(edit.base)}`,
+      );
     let declaration: ReturnType<typeof hookDeclaration>;
     try {
       declaration = hookDeclaration(nodes[0]!);
     } catch (error) {
       return deny(
         'IA-HOOK-DECLARATION-UNAVAILABLE',
-        `${error instanceof Error ? error.message : String(error)}; ${REREGISTER}`,
+        `${error instanceof Error ? error.message : String(error)}; ${reregister(edit.base)}`,
       );
     }
     const request = {

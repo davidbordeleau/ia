@@ -295,7 +295,8 @@ it('refuses malformed input, unsafe paths and an unreadable declaration or manda
   for (const path of ['docs/guide.md', 'src/app.ts']) {
     const absent = check(root, path, {}, 'Write', 'hook-authoring-system/binding/hook/absent');
     expect(refused(absent)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
-    expect(reason(absent)).toContain('ia host claude --apply');
+    expect(reason(absent)).toContain(`ia host claude --root ${JSON.stringify(root)} --apply --yes`);
+    expect(reason(absent)).toContain(`ia host claude --root ${JSON.stringify(root)} --remove --apply --yes`);
   }
   const stop = workspace({ '.ia/src/hooks.ia': hooks(['event PreToolUse', 'event Stop']) });
   expect(refused(check(stop, 'src/app.ts'))).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');

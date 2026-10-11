@@ -47,16 +47,18 @@ import {
 import { assertIaHomeUsable } from '@inventarch/distribution/ia-home';
 import { readMaterializedPlugin } from '@inventarch/distribution/plugin-home';
 import type { ProjectionAction } from '@inventarch/distribution/projection';
-import type { HostOutput } from '@inventarch/runtime';
+import type { HookAction } from '@inventarch/distribution/guard-registration';
+import type { HostOutput, UnsupportedRow } from '@inventarch/runtime';
 import { UsageError } from './args.js';
 import { homeSrcRemedy, hostHome, located } from './home-remedy.js';
 import type { Context, Result } from './consumer.js';
 import { confirm, Interrupted, Refusal, refusalOf, requireRoot } from './consumer.js';
-import type { HostName } from './host-projection.js';
+import type { HookCache, HostName } from './host-projection.js';
 import {
   applyHostProjection,
   checkAdmitted,
   planFiles,
+  planHookStep,
   planRetirement,
   renderProjectionFor,
 } from './host-projection.js';
@@ -111,6 +113,10 @@ export interface Element {
   readonly files?: readonly ProjectionAction[];
   /** The projection's B11 step: `retire` when the apply first removes a steward-guard registration this workspace owns. */
   readonly guard?: 'retire' | 'none';
+  /** The projection's hook groups (claude): what the apply does to each authored `@hook`'s group (plan amendment C9). */
+  readonly hooks?: readonly HookAction[];
+  /** The authored records the host does not take, each with the reason (an unregistered hook included). */
+  readonly unsupported?: readonly UnsupportedRow[];
 }
 export interface HostView {
   readonly root: string;
@@ -143,9 +149,9 @@ export const USER_PLUGIN_MISSING = `The user-level plugin is not installed; run 
 /** §5.3's sentence, verbatim, per host. Every element — the projection included — is machine-local. */
 export const MACHINE_LOCAL: Readonly<Record<HostName, string>> = {
   claude:
-    'These files are machine-local: .mcp.json, .claude/settings.local.json, .claude/rules/ia-workspace.md, .claude/skills/ia-authoring/ and .ia/distributions/. Do not commit them.',
+    'These files are machine-local: .mcp.json, .claude/settings.local.json, .claude/rules/ia-workspace.md, .claude/skills/ia-authoring/, the agents and skills generated from authored records under .claude/agents/ and .claude/skills/, and .ia/distributions/. Do not commit them.',
   codex:
-    'These files are machine-local: .codex/config.toml, AGENTS.md, .agents/skills/ia-authoring/ and .ia/distributions/. Do not commit them.',
+    'These files are machine-local: .codex/config.toml, AGENTS.md, .agents/skills/ia-authoring/, the skills generated from authored records under .agents/skills/, and .ia/distributions/. Do not commit them.',
 };
 /** §5.4: the MCP element's one fixed addition, from §2.3's host facts. */
 export const MCP_APPROVAL = 'Claude Code asks for approval before starting a project MCP server.';
@@ -154,7 +160,7 @@ export const MCP_APPROVAL = 'Claude Code asks for approval before starting a pro
  * 2026-09-23 ("narrow + disclose") said what it refused: the guard is retired, so nothing it refused is refused now.
  */
 export const GUARD_SCOPE =
-  'ia host registers no steward guard, and applying the projection retires one an earlier release registered: with no per-system steward subagents left, it would deny every edit under .ia/src/systems/<name>/. Until a later release re-keys the guard to @mandate scope, nothing blocks those edits.';
+  'ia host registers one guard group per authored @hook, which refuses an edit its paths (or .ia/src) select unless the acting agent holds a governing @mandate granting Synthesis there; it registers no per-system steward guard, and applying the projection retires one an earlier release registered.';
 /** §5.1's files, exported once so `ia doctor` names the same ones. */
 export const MCP_PATH: Readonly<Record<HostName, string>> = { claude: '.mcp.json', codex: '.codex/config.toml' };
 export const SETTINGS = '.claude/settings.local.json';
@@ -468,7 +474,12 @@ const contextElement = (host: HostName): Element => ({
  * finds only a guard registration or a receipt removes them. `ia project` plans with it, and both verbs' applies
  * re-plan with it (`replanProjection`), so no two of them can plan the projection differently.
  */
-export function projectionElement(root: string, host: HostName, rendered: HostOutput | null): Element {
+export function projectionElement(
+  root: string,
+  host: HostName,
+  rendered: HostOutput | null,
+  cache: HookCache = null,
+): Element {
   const refused = (conflict: Conflict): Element => ({
     id: 'projection',
     action: 'refused',
@@ -476,16 +487,19 @@ export function projectionElement(root: string, host: HostName, rendered: HostOu
     capability: 'refused',
     conflict,
   });
-  let guard: 'retire' | 'none';
+  let guard: 'retire' | 'none', hooks: readonly HookAction[], unregistered: readonly UnsupportedRow[];
   try {
     guard = planRetirement(root, host) === null ? 'none' : 'retire';
+    const step = planHookStep(root, host, rendered, cache);
+    hooks = step.plan?.hooks ?? [];
+    unregistered = step.unregistered;
   } catch (error) {
     return refused(conflictOf(error, SETTINGS));
   }
   try {
     const files = planFiles(root, host, rendered).actions;
     const touched = files.filter((file) => file.action !== 'foreign'),
-      changes = guard === 'retire',
+      changes = guard === 'retire' || hooks.some((hook) => hook.action !== 'unchanged'),
       receipt = existsSync(resolve(root, STATE.receipt(host)));
     const action: Element['action'] =
       rendered === null
@@ -505,6 +519,8 @@ export function projectionElement(root: string, host: HostName, rendered: HostOu
       conflict: null,
       files,
       guard,
+      ...(host === 'claude' ? { hooks } : {}),
+      unsupported: [...(rendered?.receipt.unsupported ?? []), ...unregistered],
     };
   } catch (error) {
     return refused(conflictOf(error, STATE.projection(host)));
@@ -592,7 +608,7 @@ export function collectHost(context: Context): HostView {
     remove,
     release: bundled.release,
     home,
-    elements: [mcp, contextElement(name), projectionElement(root, name, rendered)],
+    elements: [mcp, contextElement(name), projectionElement(root, name, rendered, remove ? null : { expected })],
     undo: `ia host ${name} --remove --apply`,
     invocation: invocationOf(context, name, remove),
     owned,
@@ -660,8 +676,9 @@ export function replanProjection(
   host: HostName,
   rendered: HostOutput | null,
   refuse: (conflict: Conflict) => Refusal,
+  cache: HookCache = null,
 ): void {
-  const { conflict } = projectionElement(root, host, rendered);
+  const { conflict } = projectionElement(root, host, rendered, cache);
   if (conflict !== null) throw refuse(conflict);
 }
 /**
@@ -744,18 +761,21 @@ export function applyHostSet(
     done.push({ id, ...applied });
     checkpoint(id);
   };
-  const project = (rendered: HostOutput | null) => (): Omit<AppliedElement, 'id'> => {
-    const { status, guard } = applyHostProjection(root, host, rendered);
+  const project = (rendered: HostOutput | null, cache: HookCache) => (): Omit<AppliedElement, 'id'> => {
+    const { status, guard } = applyHostProjection(root, host, rendered, undefined, undefined, cache);
     return { status, guard };
   };
   if (!view.remove) {
     const cache = materialize(view, packageRoot);
     const mcp = replan(view, 'mcp', MCP_PATH[host], () => planHost(root, host, cache));
     const rendered = renderProjectionFor(root, host);
-    replanProjection(root, host, rendered, (conflict) => refusalFor(view, 'projection', conflict));
+    // The hook groups run the guard in the payload just materialized and verified (plan amendment C9).
+    replanProjection(root, host, rendered, (conflict) => refusalFor(view, 'projection', conflict), {
+      verified: cache,
+    });
     step('mcp', () => ({ status: applyHost(mcp).status }));
     done.push(skipped('context'));
-    step('projection', project(rendered));
+    step('projection', project(rendered, { verified: cache }));
     return { status: 'host-registered', elements: done, observed: false };
   }
   // A removal plans only what the view found owned; `none` means there is nothing of that element to remove.
@@ -764,7 +784,7 @@ export function applyHostSet(
   const mcp = absent('mcp')
     ? null
     : replan(view, 'mcp', MCP_PATH[host], () => planHost(root, host, null, HOST_REGISTRATION));
-  step('projection', project(null));
+  step('projection', project(null, null));
   done.push(skipped('context'));
   step('mcp', () => ({ status: mcp === null ? 'absent' : applyHost(mcp).status }));
   return { status: 'host-removed', elements: done, observed: false };
@@ -844,13 +864,51 @@ export const projectionFileRows = (
       caps,
     ),
   );
-/** Each projected file, nested at the elements block's content column (§6.4 rule 3), under the element it belongs to. */
-const fileBlock = (view: HostView, caps: Capabilities): readonly string[] =>
-  projectionFileRows(
-    view.elements.find((element) => element.id === 'projection')?.files ?? [],
-    indentOf(1) + blockSymbolWidth(view.elements.map(elementSymbol), caps.ascii) + 2,
-    caps,
+const HOOK_SYMBOL: Readonly<Record<HookAction['action'], SymbolName>> = {
+  create: 'added',
+  update: 'updated',
+  unchanged: 'info',
+  remove: 'removed',
+};
+/** Each authored `@hook`'s group with its action (plan amendment C9), worded alike by `ia host` and `ia project`. */
+export const projectionHookRows = (
+  hooks: readonly HookAction[],
+  column: number,
+  caps: Capabilities,
+): readonly string[] =>
+  hooks.flatMap((hook) =>
+    entry(
+      [[atom(hook.hook, 'cyan', 0), ...words(`hook group ${hook.action}`, null, 2)]],
+      { column, symbol: HOOK_SYMBOL[hook.action] },
+      caps,
+    ),
   );
+/** Each authored record the host does not take, with the reason, worded alike by `ia host` and `ia project`. */
+export const unsupportedRows = (
+  rows: readonly UnsupportedRow[],
+  column: number,
+  caps: Capabilities,
+): readonly string[] =>
+  rows.flatMap((row) =>
+    entry(
+      [[atom(row.identity, 'cyan', 0), ...words(`${row.word} not taken: ${row.reason}`, null, 2)]],
+      { column, symbol: 'warning' },
+      caps,
+    ),
+  );
+/**
+ * Each projected file, then each hook group and each record not taken, nested at the elements block's content column
+ * (§6.4 rule 3), under the element they belong to.
+ */
+const fileBlock = (view: HostView, caps: Capabilities): readonly string[] => {
+  const projection = view.elements.find((element) => element.id === 'projection'),
+    column = indentOf(1) + blockSymbolWidth(view.elements.map(elementSymbol), caps.ascii) + 2;
+  return [
+    ...projectionFileRows(projection?.files ?? [], column, caps),
+    ...projectionHookRows(projection?.hooks ?? [], column, caps),
+    ...unsupportedRows(projection?.unsupported ?? [], column, caps),
+  ];
+};
 const headerBlock = (view: HostView, caps: Capabilities): readonly string[] => [
   ...headerLine(
     'Plan',

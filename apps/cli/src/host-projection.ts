@@ -6,12 +6,17 @@
  * the command catalog this CLI tags (`packetCatalog`). One render feeds `ia host`, `ia doctor`'s projection rows and the
  * install/update/remove refresh, so no two of them can disagree about what the projection should contain.
  *
- * `applyHostProjection` is the only writer of projection files. Before any of them changes it retires a steward-guard
- * registration an earlier release made (B11): with no per-system steward agent left to satisfy it, the guard would deny
- * every edit under `.ia/src/systems/<name>/`, so it stays retired until milestone generation-binding re-keys it to
- * `@mandate` scope (task generation-hook-governance). It then applies the planned files through
- * `@inventarch/distribution/projection`, which deletes the owned 1.x steward files and leaves foreign ones (B9), and
- * writes the receipt beside the projection state (B12).
+ * Milestone generation-binding task host-consumes-generated-set (plan amendments C4, C5, C9 and C12): the render also
+ * holds the host set workspace-runtime generates from the workspace's authored records, computed once
+ * (`generateHostSet`): the agent and skill files beside the packet's, the `@hook` declarations whose groups the writer
+ * registers, the operation and harness definitions, and a row for each authored record the host does not take.
+ *
+ * `applyHostProjection` is the only writer of projection files and hook groups. Before any file changes it retires a
+ * steward-guard registration an earlier release made (B11), then registers the hook groups of the authored `@hook`
+ * records (distribution's guard-registration, owned by exact match through their own state), then applies the planned
+ * files through `@inventarch/distribution/projection`, which owns packet and generated files alike through the
+ * projection state, deletes the owned 1.x steward files and obsolete generated files and leaves foreign ones (B9), and
+ * writes the receipt beside the projection state last (B12). Ownership is the states', never the receipt's.
  */
 import {
   accessSync,
@@ -26,13 +31,28 @@ import {
 } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderHost, renderPacket, PACKET_MARKER } from '@inventarch/runtime';
-import type { HostFile, HostOutput, PacketReceipt } from '@inventarch/runtime';
-import type { GuardPlan } from '@inventarch/distribution/guard-registration';
+import type {
+  HookGroupRow,
+  HookToolName,
+  HostFile,
+  HostOutput,
+  PacketReceipt,
+  UnsupportedRow,
+} from '@inventarch/runtime';
+import { ProjectionError } from '@inventarch/workspace-runtime/projections';
+import { generateHostSet } from '@inventarch/workspace-runtime/internal/generate';
+import type { GuardPlan, HookPlan } from '@inventarch/distribution/guard-registration';
 import {
   applyGuardRegistration,
+  applyHookRegistration,
   assertRetirableGuard,
+  hookGroupDigest,
   planGuardRegistration,
+  planHookRegistration,
+  planHooksFor,
+  readHookRegistration,
 } from '@inventarch/distribution/guard-registration';
+import type { HostCacheTarget } from '@inventarch/distribution/host';
 import {
   acquireHostRegistrationLock,
   assertHostRegistrationIdle,
@@ -40,7 +60,7 @@ import {
 } from '@inventarch/distribution/host';
 import type { WorkspaceHost } from '@inventarch/distribution/hosts';
 import type { ProjectionPlan } from '@inventarch/distribution/projection';
-import { applyProjection, planProjection } from '@inventarch/distribution/projection';
+import { applyProjection, planProjection, projectionOwnable } from '@inventarch/distribution/projection';
 import {
   DistributionError,
   json,
@@ -88,23 +108,110 @@ export function checkAdmitted(root: string): void {
 }
 
 /**
+ * A host-generation refusal (workspace-runtime's ProjectionError, which carries its code in `diagnostic`) as this CLI's
+ * refusal: its IA-PROJECTION-* code and message, located at the workspace, naming the command that shows the records.
+ * Generation reports a record it cannot render as an unsupported row, so this is a refusal of the whole render.
+ */
+function generationRefusal(error: unknown, root: string): unknown {
+  if (!(error instanceof ProjectionError)) return error;
+  return new Refusal(
+    error.diagnostic.code,
+    error.diagnostic.message,
+    3,
+    { path: root },
+    'Correct the record the message names, then run "ia validate".',
+  );
+}
+/**
  * §6.1: the packet over the whole workspace, through the session's own scope, rendered by `host`'s adapter for the
- * consumer target: its files, each carrying `PACKET_MARKER`, and the receipt the render fills (B12). No agent file is
- * rendered for any host.
+ * consumer target, and the host set generated from the workspace's authored records through the same scope: the
+ * packet's files, then the generated agent and skill files, each carrying `PACKET_MARKER`; the `@hook` declarations
+ * (`hooks`, claude only); and the receipt the render fills (B12), whose `files` list every file with its SHA-256,
+ * `generated` the generated ones with their records, `definitions` the operation and harness definitions and
+ * `unsupported` each authored record the host does not take. Its `hooks` rows are the applying caller's.
  */
 export function renderProjectionFor(root: string, host: HostName): HostOutput {
   const session = openSession(root);
   try {
     requireAdmitted(session, root);
-    const { packet, digest, hostNote } = renderPacket(
-      session.reader,
-      session.reader.resolveScope().token,
-      packetCatalog(),
-    );
-    return renderHost(host, packet, digest, hostNote, 'consumer');
+    const within = session.reader.resolveScope().token;
+    const { packet, digest, hostNote } = renderPacket(session.reader, within, packetCatalog());
+    const output = renderHost(host, packet, digest, hostNote, 'consumer');
+    let set: ReturnType<typeof generateHostSet>;
+    try {
+      set = generateHostSet(session.reader, within, host);
+    } catch (error) {
+      throw generationRefusal(error, root);
+    }
+    const generated = set.files.map(({ identity, word, path, text }) => ({
+      identity,
+      word,
+      path,
+      sha256: sha256(text),
+    }));
+    return Object.freeze({
+      files: Object.freeze([...output.files, ...set.files.map(({ path, text }) => Object.freeze({ path, text }))]),
+      receipt: Object.freeze({
+        ...output.receipt,
+        files: Object.freeze([...output.receipt.files, ...generated.map(({ path, sha256 }) => ({ path, sha256 }))]),
+        generated: Object.freeze(generated),
+        definitions: set.definitions,
+        unsupported: set.unsupported,
+      }),
+      hooks: set.hooks,
+    });
   } finally {
     session.close();
   }
+}
+
+/**
+ * Where hook groups run from (plan amendment C9): the payload `ia host` materialized and verified (`verified`), the one
+ * it is about to (`expected`, for a plan), or none (null), when the caller registers no host: `ia project`, the install
+ * refresh and a migration then keep the groups an earlier `ia host` registration owns in step with the records, against
+ * the payload that registration recorded, and register none themselves.
+ */
+export type HookCache = { readonly verified: string } | { readonly expected: HostCacheTarget } | null;
+/** The step's plan, or null when there is nothing to register or remove, and the hooks it cannot register. */
+export interface HookStep {
+  readonly plan: HookPlan | null;
+  readonly unregistered: readonly UnsupportedRow[];
+}
+/** Why a declared hook is not registered when no host payload is known: `ia host` materializes one. */
+export const HOOKS_NEED_HOST =
+  'Not registered: a hook group runs the guard in the host payload "ia host claude --apply" materializes; run it to register this hook';
+/**
+ * The hook groups `rendered` declares, planned for `host` (claude only; Codex hooks are unsupported, C12): with no
+ * declared hook, the removal of every owned group; else their registration against `cache`, or against the payload the
+ * owned registration recorded; with neither, none, and each declared hook comes back unregistered. A removal
+ * (`rendered` null) removes every owned group. Reads only.
+ */
+export function planHooks(root: string, host: HostName, rendered: HostOutput | null, cache: HookCache): HookStep {
+  if (host !== 'claude') return { plan: null, unregistered: [] };
+  const rows = (rendered?.hooks ?? []).map(({ identity, tools }) => ({ identity, tools }));
+  const prior = readHookRegistration(root);
+  if (rows.length === 0)
+    return {
+      plan: prior === null ? null : planHookRegistration(root, { remove: HOST_REGISTRATION }),
+      unregistered: [],
+    };
+  if (cache !== null && 'expected' in cache)
+    return { plan: planHooksFor(root, cache.expected, rows), unregistered: [] };
+  const directory = cache?.verified ?? prior?.cache;
+  if (directory === undefined)
+    return {
+      plan: null,
+      unregistered: rows.map((row) => ({ identity: row.identity, word: 'hook' as const, reason: HOOKS_NEED_HOST })),
+    };
+  return { plan: planHookRegistration(root, { cache: directory, hooks: rows }), unregistered: [] };
+}
+/** The hook groups the workspace owns now, as a receipt lists them: one row per `@hook`, keyed by identity. */
+function hookRows(root: string): readonly HookGroupRow[] {
+  return (readHookRegistration(root)?.groups ?? []).map(({ hook, group }) => ({
+    identity: hook,
+    tools: group.matcher.split('|') as HookToolName[],
+    sha256: hookGroupDigest(group),
+  }));
 }
 
 /**
@@ -251,16 +358,7 @@ function readPending(root: string, host: HostName): PendingReceipt | null {
     value.host !== host ||
     typeof value.guard !== 'boolean' ||
     !digests(value.removed) ||
-    value.removed.some(
-      (file) =>
-        !/^\.claude\/agents\/[a-z][a-z0-9-]*\.md$/.test(file.path) &&
-        ![
-          '.claude/rules/ia-workspace.md',
-          '.claude/skills/ia-authoring/SKILL.md',
-          'AGENTS.md',
-          '.agents/skills/ia-authoring/SKILL.md',
-        ].includes(file.path),
-    ) ||
+    value.removed.some((file) => !projectionOwnable(host, file.path)) ||
     (value.receipt !== undefined && !HEX.test(value.receipt)) ||
     Object.keys(body).sort().join(',') !==
       (value.receipt === undefined ? 'format,guard,host,removed' : 'format,guard,host,receipt,removed') ||
@@ -352,10 +450,12 @@ export function applyHostProjection(
   rendered: HostOutput | null,
   checkpoint: (stage: string) => void = () => {},
   previous?: PacketReceipt,
+  cache: HookCache = null,
 ): HostProjectionApplied {
   // A pending host journal refuses every host write, as it refuses the plan (§8).
   assertHostRegistrationIdle(root);
   const retirement = planRetirement(root, host),
+    hooks = planHookStep(root, host, rendered, cache),
     plan = planFiles(root, host, rendered);
   const writeEvidence = (path: string, value: unknown | null): void => {
     const unlock = acquireHostRegistrationLock(root);
@@ -371,6 +471,9 @@ export function applyHostProjection(
   checkpoint('evidence');
   if (retirement !== null) applyGuardRegistration(retirement);
   checkpoint('guard');
+  // The hook groups next, through their own journal and lock; a plan that changes nothing writes nothing.
+  if (hooks.plan !== null) applyHookRegistration(hooks.plan);
+  checkpoint('hooks');
   // The last apply's receipt goes before any projection file changes (B12).
   writeEvidence(STATE.receipt(host), null);
   const result = applyProjection(plan, checkpoint),
@@ -384,6 +487,8 @@ export function applyHostProjection(
           removed: evidence.removed.filter((file) => !existsSync(resolve(root, file.path))),
           foreign: plan.actions.filter((action) => action.action === 'foreign').map((action) => action.path),
           guard,
+          ...(host === 'claude' ? { hooks: hookRows(root) } : {}),
+          unsupported: [...(rendered.receipt.unsupported ?? []), ...hooks.unregistered],
           writtenAt: new Date().toISOString(),
         };
   if (receipt !== null) {
@@ -398,6 +503,23 @@ export function applyHostProjection(
     guard,
     receipt,
   };
+}
+
+/** `planHooks`, a refusal it does not locate at a file located at the settings the hook groups live in. */
+export function planHookStep(root: string, host: HostName, rendered: HostOutput | null, cache: HookCache): HookStep {
+  try {
+    return planHooks(root, host, rendered, cache);
+  } catch (error) {
+    const code = codeOf(error, '');
+    if (
+      error instanceof Error &&
+      /^IA-/.test(code) &&
+      code !== 'IA-DIST-RECOVERY-REQUIRED' &&
+      refusedPath(error) === null
+    )
+      throw new DistributionError(code, error.message, SETTINGS);
+    throw error;
+  }
 }
 
 const HEX = /^[a-f0-9]{64}$/;
@@ -437,7 +559,26 @@ export function readReceipt(root: string, host: HostName): PacketReceipt | null 
     !digests(row.files) ||
     !digests(row.removed) ||
     !Array.isArray(row.foreign) ||
-    !row.foreign.every((item) => typeof item === 'string')
+    !row.foreign.every((item) => typeof item === 'string') ||
+    (row.generated !== undefined &&
+      (!digests(row.generated) ||
+        !(row.generated as unknown[]).every(
+          (item) =>
+            typeof (item as { identity?: unknown }).identity === 'string' &&
+            ['agent-profile', 'playbook'].includes(String((item as { word?: unknown }).word)),
+        ))) ||
+    (row.hooks !== undefined &&
+      (!Array.isArray(row.hooks) ||
+        !(row.hooks as unknown[]).every(
+          (item) =>
+            item !== null &&
+            typeof item === 'object' &&
+            typeof (item as { identity?: unknown }).identity === 'string' &&
+            Array.isArray((item as { tools?: unknown }).tools) &&
+            HEX.test(String((item as { sha256?: unknown }).sha256)),
+        ))) ||
+    (row.unsupported !== undefined && !Array.isArray(row.unsupported)) ||
+    (row.definitions !== undefined && !Array.isArray(row.definitions))
   )
     throw new DistributionError('IA-DIST-INPUT-INVALID', 'Invalid projection receipt', path);
   return row as PacketReceipt;

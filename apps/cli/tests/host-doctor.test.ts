@@ -14,8 +14,11 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
+import { materializeHostPayload } from '@inventarch/distribution/host-home';
 import { JOINS } from '@inventarch/distribution/implementations';
+import { HOST_TREE_LIMITS, packTree } from '@inventarch/distribution/ustar';
 import { json, sha256 } from '@inventarch/distribution/services';
+import { collectDoctor } from '../src/doctor.js';
 import { applyHostProjection, renderProjectionFor } from '../src/host-projection.js';
 import { rootedNext, SETTINGS } from '../src/host.js';
 import { quote } from '../src/render.js';
@@ -572,6 +575,18 @@ function tree(...roots: string[]): Record<string, string> {
 
 it('doctor lists the installed-implementation catalog and the join ia host recorded, and writes nothing (C16, C24)', async () => {
   const { root, env } = await initialized();
+  /** Doctor in the current state, checked to leave the workspace and the IA home exactly as it found them (B-N2). */
+  const quiet = async () => {
+    const before = tree(root, env.IA_HOST_HOME);
+    const report = await doctor(root, env);
+    expect(tree(root, env.IA_HOST_HOME)).toEqual(before);
+    return report;
+  };
+  // Before any apply the payload is not materialized, and the catalog row says so.
+  expect(row((await doctor(root, env)).checks, 'implementations')).toMatchObject({
+    status: 'info',
+    detail: expect.stringContaining('is not materialized; ia host materializes it'),
+  });
   const release = JSON.parse((await host(root, env, 'claude', '--apply', '--yes')).stdout).plan.release as string;
   // ia host records the claude join from its committed registration: the catalog the materialized payload carries,
   // at the workspace's authored revision, which the projection receipt names too.
@@ -615,7 +630,7 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
   const planted = resolve(payload, 'runtime/node_modules/@inventarch/agent-composition-system/node_modules');
   put(planted, '@inventarch/agent-system/package.json', JSON.stringify({ name: '@inventarch/agent-system' }));
   put(planted, '@inventarch/agent-system/index.js', 'export const planted = true;\n');
-  const shadowed = await doctor(root, env);
+  const shadowed = await quiet();
   expect(shadowed.exitCode).toBe(1);
   expect(row(shadowed.checks, 'host-claude')!.status).toBe('fail');
   expect(row(shadowed.checks, 'implementations')).toMatchObject({
@@ -631,7 +646,7 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
 
   // A join that names another catalog is drifted, and the remedy records the current one again.
   put(root, JOINS, json({ ...recorded, joins: [{ ...recorded.joins[0], digest: '0'.repeat(64) }] }));
-  const drifted = await doctor(root, env);
+  const drifted = await quiet();
   expect(drifted.exitCode).toBe(0);
   expect(row(drifted.checks, 'join-claude')).toMatchObject({
     status: 'warn',
@@ -644,7 +659,7 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
 
   // Receipts that cannot be read fail with their repair; with none recorded, the registered host's join is unavailable.
   put(root, JOINS, '{broken');
-  const broken = await doctor(root, env);
+  const broken = await quiet();
   expect(broken.exitCode).toBe(1);
   expect(row(broken.checks, 'joins')).toMatchObject({ status: 'fail', remedy: rootedApply(root) });
   expect(row(broken.checks, 'joins')!.detail).toContain(`Delete ${JOINS}`);
@@ -664,6 +679,18 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
     detail: expect.stringContaining('unavailable: no join recorded for host claude'),
   });
 
+  // A registration deleted by hand leaves its join drifted, naming the removal that drops it; doctor writes nothing.
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  const state = '.ia/distributions/hosts/claude-workspace.json',
+    kept = read(root, state);
+  rmSync(resolve(root, state));
+  expect(row((await quiet()).checks, 'join-claude')).toMatchObject({
+    status: 'warn',
+    detail: expect.stringContaining('but host claude is not registered'),
+    remedy: `ia host claude --root ${quote(root)} --remove --apply`,
+  });
+  put(root, state, kept);
+
   // Removing the registration drops its join, and doctor then lists none.
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   expect(existsSync(resolve(root, JOINS))).toBe(true);
@@ -672,4 +699,83 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
   const removed = await doctor(root, env);
   expect(removed.checks.filter((check) => check.id.startsWith('join'))).toEqual([]);
   expect(row(removed.checks, 'implementations')!.status).toBe('ok');
+});
+
+/** An installation package root whose bundled payload carries `catalog` (or none), materialized in `home`. */
+function installation(home: string, catalog: unknown | null): string {
+  const packageRoot = resolve(scratch('host-catalog-package'), 'cli'),
+    files = new Map<string, Buffer>();
+  if (catalog !== null) files.set('implementations.json', Buffer.from(json(catalog)));
+  const inventory = json({
+    format: 'ia.host-cache.v2',
+    version: '9.9.9',
+    packages: [],
+    files: [...files].map(([path, bytes]) => ({ path, bytes: bytes.length, sha256: sha256(bytes) })),
+  });
+  const launcher = '// launcher\n',
+    release = json({ format: 'ia.host-release.v2', inventory: sha256(inventory), launcher: sha256(launcher) });
+  const archive = packTree(
+    new Map([
+      ...files,
+      ['inventory.json', Buffer.from(inventory)],
+      ['scripts/ia.mjs', Buffer.from(launcher)],
+      ['release.json', Buffer.from(release)],
+    ]),
+    HOST_TREE_LIMITS,
+  );
+  const pin = { release: sha256(release), archive: sha256(archive), files: files.size + 3, bytes: 0 };
+  put(packageRoot, 'assets/host.json', JSON.stringify(pin));
+  mkdirSync(resolve(packageRoot, 'assets/host'), { recursive: true });
+  writeFileSync(resolve(packageRoot, `assets/host/${pin.archive}.tgz`), archive);
+  materializeHostPayload({ home, archive, pin });
+  return packageRoot;
+}
+it('notes a payload that carries no catalog and warns about one that lists an operation unavailable or revoked (B-N2)', async () => {
+  const { root, env } = await initialized();
+  const report = (packageRoot: string) =>
+    collectDoctor({
+      cwd: root,
+      root,
+      packageRoot,
+      runtime: { version: process.version, platform: process.platform, arch: process.arch },
+      env,
+      home: env.IA_HOST_HOME,
+    }).checks.find((check) => check.id === 'implementations');
+  expect(report(installation(env.IA_HOST_HOME, null))).toMatchObject({
+    status: 'info',
+    detail: expect.stringContaining('carries no installed-implementation catalog'),
+  });
+  const degraded = report(
+    installation(env.IA_HOST_HOME, {
+      format: 'ia.installed-implementations.v1',
+      evaluators: { format: 'ia-evaluator-catalog/1.0', entries: [] },
+      operations: [
+        { id: 'missing-read-v1', status: 'unavailable', reason: 'its package is not installed in this repository' },
+        { id: 'withdrawn-read-v1', status: 'revoked', reason: 'withdrawn by its producer' },
+      ],
+    }),
+  );
+  expect(degraded).toMatchObject({ status: 'warn', remedy: null });
+  expect(degraded!.detail).toContain('missing-read-v1 unavailable (its package is not installed in this repository)');
+  expect(degraded!.detail).toContain('withdrawn-read-v1 revoked (withdrawn by its producer)');
+});
+
+it('records a codex join and an ia init --host join, and doctor lists each (B-N2)', async () => {
+  const { root, env } = await initialized();
+  expect((await host(root, env, 'codex', '--apply', '--yes')).exitCode).toBe(0);
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  expect(JSON.parse(read(root, JOINS)).joins.map((join: { consumer: string }) => join.consumer)).toEqual([
+    'claude',
+    'codex',
+  ]);
+  const report = await doctor(root, env);
+  for (const id of ['join-claude', 'join-codex']) expect(row(report.checks, id), id).toMatchObject({ status: 'ok' });
+  expect((await host(root, env, 'codex', '--remove', '--apply', '--yes')).exitCode).toBe(0);
+  expect(JSON.parse(read(root, JOINS)).joins.map((join: { consumer: string }) => join.consumer)).toEqual(['claude']);
+  // ia init --host goes through the same apply, so it records the join too.
+  const fresh = resolve(scratch('host-init-join'), 'demo');
+  expect((await run(['init', fresh, '--apply', '--yes', '--json', '--host', 'claude'], { env })).exitCode).toBe(0);
+  expect(JSON.parse(read(fresh, JOINS))).toMatchObject({
+    joins: [{ consumer: 'claude', implementation: 'installed-implementations' }],
+  });
 });

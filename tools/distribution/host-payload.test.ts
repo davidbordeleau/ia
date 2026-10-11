@@ -27,6 +27,7 @@ import {
   collectPayload,
   generateHostPayload,
   moduleClosure,
+  operationRow,
   packageClosure,
 } from './host-payload.mjs';
 
@@ -517,4 +518,44 @@ it('never ships, or imports at build time, an implementation package found above
   expect(existsSync(marker)).toBe(false);
   expect(readFileSync(resolve(extract(archive), 'inventory.json'), 'utf8')).not.toContain('@acme/impl');
   expect(pin.files).toBeGreaterThan(0);
+});
+it('lists an implementation unavailable when its module closure is incomplete or leaves its package closure, and refuses one that declares nothing (B-N2)', async () => {
+  const files = (handler: string, extra: Record<string, string> = {}) =>
+    new Map(
+      Object.entries({
+        'runtime/node_modules/@acme/handler/package.json': JSON.stringify({ name: '@acme/handler' }),
+        'runtime/node_modules/@acme/handler/dist/read.js': handler,
+        'runtime/node_modules/@acme/other/package.json': JSON.stringify({ name: '@acme/other' }),
+        ...extra,
+      }).map(([key, text]) => [key, Buffer.from(text)]),
+    );
+  const located = (dir: string | null = null) => ({
+    id: 'acme-read-v1',
+    package: '@acme/handler',
+    module: 'dist/read.js',
+    declaration: 'catalog',
+    dir,
+    reason: null,
+  });
+  // A relative import of a file the payload does not ship.
+  expect(await operationRow(located(), files("import { gone } from './gone.js';\n"))).toEqual({
+    id: 'acme-read-v1',
+    status: 'unavailable',
+    reason: 'its handler module closure lacks runtime/node_modules/@acme/handler/dist/gone.js',
+  });
+  // An import of a shipped package its own manifest does not declare.
+  expect(await operationRow(located(), files("import other from '@acme/other';\n"))).toEqual({
+    id: 'acme-read-v1',
+    status: 'unavailable',
+    reason: 'its handler module imports @acme/other, outside its package closure',
+  });
+  // A shipped module that declares no such implementation is the producer's error, never a catalog row.
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ia-host-payload-declaration-')));
+  made.push(dir);
+  const handler = 'export const catalog = () => ({ operations: {} });\n';
+  mkdirSync(join(dir, 'dist'));
+  writeFileSync(join(dir, 'dist/read.js'), handler);
+  await expect(operationRow(located(dir), files(handler))).rejects.toThrow(
+    '@acme/handler/dist/read.js does not declare installed operation acme-read-v1',
+  );
 });

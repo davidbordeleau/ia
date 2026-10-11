@@ -22,6 +22,8 @@ import { lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fieldTypeText } from '@inventarch/compliance';
 import { linked, pathKey, readWorkspaceBytes } from '@inventarch/db';
+import { mandateAuthorityOf, RuntimeError } from '@inventarch/runtime';
+import type { MandateAuthority } from '@inventarch/runtime';
 import {
   addRelationship,
   appendRecord,
@@ -511,6 +513,53 @@ function ownedRecord(run: Invocation, node: Node): void {
       },
     );
 }
+/**
+ * Review C2-R6 (a lead decision, flagged for the operator): whether a `@mandate` binds the acting participant, so that
+ * neither verb may create or change it, before or after the edit; moves pool across the mandates that bind an actor, so
+ * a participant that could write one could lift its own restrictions. It binds when its participant resolves to the
+ * actor, or when it names no participant and governs where the actor acts: its scope names the workspace, or it claims
+ * paths (`covers`). One whose authority the runtime cannot read binds too, since it would refuse every gated command
+ * here. Mandates are cooperative: a human, or another participant, still makes the change.
+ */
+function bindsActor(run: Invocation, node: Node, profile: Profile): boolean {
+  if (node.discriminator !== 'mandate') return false;
+  let authority: MandateAuthority;
+  try {
+    authority = mandateAuthorityOf(node);
+  } catch (error) {
+    if (error instanceof RuntimeError) return true;
+    throw error;
+  }
+  if (authority.participant !== undefined) {
+    if (profile.actor === undefined) return false;
+    const resolved = run.snapshot.resolve(
+      { kind: 'ref', discriminator: 'agent', name: authority.participant },
+      { within: run.within },
+    );
+    return resolved.ok && resolved.identity === profile.actor;
+  }
+  const workspace =
+    profile.workspace === undefined ? undefined : run.snapshot.get(profile.workspace, { within: run.within })?.name;
+  return (
+    (authority.covers?.length ?? 0) > 0 ||
+    (workspace !== undefined && (authority.scope ?? []).some((name) => name.toLowerCase() === workspace))
+  );
+}
+/** IA-CLI-EDIT-MANDATE when `node`, before or after the edit, is a `@mandate` that binds the acting participant. */
+function guardMandate(run: Invocation, node: Node | undefined, profile: Profile, path: string, created: boolean): void {
+  if (node === undefined || !bindsActor(run, node, profile)) return;
+  const actor = profile.actor ?? 'whoever acts here',
+    seat = created ? profile.workspace : node.identity;
+  throw new Refusal(
+    'IA-CLI-EDIT-MANDATE',
+    `${node.identity} ${created ? 'would be a new' : 'is a'} @mandate that binds the acting participant, ${actor}; a participant may not create or change a mandate that binds it`,
+    1,
+    { path, identity: node.identity },
+    seat === undefined
+      ? `Run "ia position${run.rooted}" for the mandates that govern here; a human or another participant makes this change.`
+      : `Run "ia position --seat ${seat} --shape governance${run.rooted}" for the mandates that bind ${actor}; a human or another participant makes this change.`,
+  );
+}
 /** One schema field by `section.key`, or by a key no other field of the schema has. */
 function schemaField(run: Invocation, schema: Schema, word: string, key: string): SchemaField {
   const found = key.includes('.')
@@ -546,6 +595,8 @@ function compiled(
   expected: { readonly identity: string; readonly word: string; readonly name: string },
 ): {
   identity: string;
+  /** The edited (or new) record as the candidate admits it; absent when admission refuses it. */
+  node: Node | undefined;
   admitted: boolean;
   records: readonly RecordDigest[];
   revision: string;
@@ -622,6 +673,7 @@ function compiled(
   });
   return {
     identity,
+    node: record,
     admitted: record !== undefined,
     records,
     revision: candidate.revision,
@@ -665,6 +717,7 @@ function previewRecord(
   // Spec 3.1: a new record's identity is its registration's system, kind and first facet, then its lowercased name.
   const identity = `${registration.system}/${registration.kind}/${registration.facets[0]}/${name.toLowerCase()}`;
   const result = compiled(run, target, text, { identity, word, name });
+  guardMandate(run, result.node, profile, target.path, true);
   return {
     view: {
       mode: 'record',
@@ -755,6 +808,7 @@ function previewEdit(
   });
   if (node === undefined) throw missing(run, request.owned);
   ownedRecord(run, node);
+  guardMandate(run, node, profile, node.source.path, false);
   const word = node.discriminator,
     path = node.source.path,
     reference = `@${word} ${node.displayName}`;
@@ -800,6 +854,7 @@ function finish(
   profile: Profile,
 ): Candidate {
   const result = compiled(run, target, text, { identity: node.identity, word: node.discriminator, name: node.name });
+  guardMandate(run, result.node, profile, target.path, false);
   return {
     view: {
       mode,

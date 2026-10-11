@@ -411,6 +411,55 @@ describe('ia author refusals, each writing nothing', () => {
     await refused(excluded, ['author', ...form, '--digest', digest], 'IA-RUNTIME-MANDATE-WORD');
     await refused(excluded, ['author', 'system', 'notes'], 'IA-RUNTIME-MANDATE-WORD');
   });
+  it('refuses a change to a @mandate that binds the acting participant, and allows one for another (review C2-R6)', async () => {
+    const root = workspace((at) => writeFileSync(resolve(at, '.ia/src/ops.ia'), `#! ia 1.0\n${AGENT('ops')}`));
+    const draft = (name: string, authority: readonly string[]) => [
+      'mandate',
+      name,
+      'meaning.says=Fixture mandate.',
+      'meaning.answers=What may its participant do?',
+      ...authority,
+    ];
+    // A new mandate that would bind demo, by naming it or by naming no participant where demo acts, is refused.
+    for (const authority of [
+      ['authority.participant=@agent demo', 'authority.moves=[Execution]'],
+      ['authority.moves=[Execution]', 'authority.scope=[@workspace demo]'],
+      ['authority.covers=[src/]'],
+    ]) {
+      const form = draft('self', authority);
+      const preview = await refused(root, ['preview', ...form], 'IA-CLI-EDIT-MANDATE');
+      expect(preview['message'], authority.join(' ')).toContain(participant);
+      expect(nextArgv(preview['next'] as string).slice(0, 4)).toEqual(['position', '--seat', demo, '--shape']);
+      await refused(root, ['author', ...form, '--digest', EMPTY], 'IA-CLI-EDIT-MANDATE');
+    }
+    // Its own mandate is refused any change, and the refusal names that mandate's governance position.
+    for (const form of [
+      ['--set', '@mandate demo-mandate', 'authority.moves=[Observation]'],
+      ['--set', '@mandate demo-mandate', 'authority.excluded-words=[hook]'],
+      ['--set', '@mandate demo-mandate', 'authority.participant=@agent ops'],
+    ]) {
+      const own = await refused(root, ['preview', ...form], 'IA-CLI-EDIT-MANDATE');
+      expect(nextArgv(own['next'] as string).slice(0, 3)).toEqual(['position', '--seat', mandate('demo-mandate')]);
+      const digest = createHash('sha256')
+        .update(readFileSync(resolve(root, '.ia/src/workspace.ia')))
+        .digest('hex');
+      await refused(root, ['author', ...form, '--digest', digest], 'IA-CLI-EDIT-MANDATE');
+    }
+    // A mandate for another participant is written, and so is a change to it that keeps it another's.
+    const other = draft('ops-mandate', [
+      'authority.participant=@agent ops',
+      'authority.moves=[Observation]',
+      'authority.scope=[@workspace demo]',
+    ]);
+    expect((await authored(root, other)).view['identity']).toBe(mandate('ops-mandate'));
+    await authored(root, ['--set', '@mandate ops-mandate', 'authority.moves=[Observation, Verification]']);
+    // Handing it to demo would bind the actor, so that is refused.
+    await refused(
+      root,
+      ['preview', '--set', '@mandate ops-mandate', 'authority.participant=@agent demo'],
+      'IA-CLI-EDIT-MANDATE',
+    );
+  });
   it('judges the profile before a missing or malformed digest, so the preview it names runs (review C2-R4)', async () => {
     const form = ['--set', '@milestone m1', 'work.owner=Tom'];
     // An open actor choice is refused first; its next names the actor, and that author's digest refusal the preview.

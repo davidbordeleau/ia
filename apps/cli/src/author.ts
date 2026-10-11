@@ -264,22 +264,6 @@ export function runAuthor(context: Context): Result {
     );
   const system = request.mode === 'record' && request.word === 'system',
     digest = args.value('digest');
-  if (digest !== undefined && !DIGEST.test(digest))
-    throw new Refusal(
-      'IA-CLI-USAGE',
-      `--digest takes the 64 lowercase hex digits of the target file's sha256; got ${digest}`,
-      2,
-      null,
-      `Run "${previewOf(context)}" for the candidate and the digest to pass.`,
-    );
-  if (digest === undefined && !system)
-    throw new Refusal(
-      'IA-CLI-USAGE',
-      'ia author requires --digest <sha256>, the target file digest ia preview prints for the same form',
-      2,
-      null,
-      `Run "${previewOf(context)}" for the candidate and the digest to pass.`,
-    );
   const root = requireRoot(context);
   const editor = openEditor(root);
   let view: AuthorView;
@@ -289,6 +273,24 @@ export function runAuthor(context: Context): Result {
     const candidate = candidateOf(run, request, 'author'),
       { target } = candidate,
       preview = candidate.view;
+    // Review C2-R4: the profile is judged first (candidateOf), so a missing or malformed digest is refused only for an
+    // actor the author mode allows, and the preview it names is judged by that profile (gatedNext) before it is printed.
+    if (digest !== undefined && !DIGEST.test(digest))
+      throw new Refusal(
+        'IA-CLI-USAGE',
+        `--digest takes the 64 lowercase hex digits of the target file's sha256; got ${digest}`,
+        2,
+        null,
+        `Run "${again}" for the candidate and the digest to pass.`,
+      );
+    if (digest === undefined && !system)
+      throw new Refusal(
+        'IA-CLI-USAGE',
+        'ia author requires --digest <sha256>, the target file digest ia preview prints for the same form',
+        2,
+        null,
+        `Run "${again}" for the candidate and the digest to pass.`,
+      );
     if (digest !== undefined && digest !== target.digest)
       throw new Refusal(
         'IA-CLI-EDIT-STALE',

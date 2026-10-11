@@ -411,6 +411,47 @@ describe('ia author refusals, each writing nothing', () => {
     await refused(excluded, ['author', ...form, '--digest', digest], 'IA-RUNTIME-MANDATE-WORD');
     await refused(excluded, ['author', 'system', 'notes'], 'IA-RUNTIME-MANDATE-WORD');
   });
+  it('judges the profile before a missing or malformed digest, so the preview it names runs (review C2-R4)', async () => {
+    const form = ['--set', '@milestone m1', 'work.owner=Tom'];
+    // An open actor choice is refused first; its next names the actor, and that author's digest refusal the preview.
+    const ambiguous = workspace((at) => {
+      rewrite(at, '.ia/src/workspace.ia', (text) => text.replace('    steward @agent demo\n', ''));
+      writeFileSync(
+        resolve(at, '.ia/src/ops.ia'),
+        `#! ia 1.0\n${AGENT('ops')}${MANDATE('ops-mandate', ['participant @agent ops', 'moves [Observation, Verification]', 'scope [@workspace demo]'])}`,
+      );
+    });
+    for (const digest of [[], ['--digest', 'abc']]) {
+      const open = await refused(ambiguous, ['author', ...form, ...digest], 'IA-RUNTIME-MANDATE-ACTOR', false);
+      const named = nextArgv(open['next'] as string);
+      expect(named.slice(0, 4), open['next'] as string).toEqual(['author', '@milestone m1', 'work.owner=Tom', '--set']);
+      expect(named).toContain('--actor');
+      const usage = await run([...named, '--json'], { env: HOMES });
+      expect(body(usage), usage.stdout).toMatchObject({ ok: false, code: 'IA-CLI-USAGE' });
+      const preview = nextArgv(body(usage).next!);
+      expect(preview.slice(0, 4)).toEqual(['preview', '@milestone m1', 'work.owner=Tom', '--set']);
+      expect(preview).toContain('--actor');
+      expect((await run(preview, { env: HOMES })).exitCode, preview.join(' ')).toBe(0);
+    }
+    // A move the mandate does not grant and an excluded word are refused before the digest.
+    const observer = workspace((at) => moves(at, 'Observation, Verification'));
+    await refused(observer, ['author', ...form], 'IA-RUNTIME-MANDATE-MOVE');
+    const excluded = workspace((at) =>
+      rewrite(at, '.ia/src/workspace.ia', (text) =>
+        text.replace('    scope [@workspace demo]\n', '    scope [@workspace demo]\n    excluded-words [milestone]\n'),
+      ),
+    );
+    await refused(excluded, ['author', ...form, '--digest', 'abc'], 'IA-RUNTIME-MANDATE-WORD');
+    // Synthesis without Verification: the digest refusal names the governance position, not a preview it refuses.
+    const writer = workspace((at) => moves(at, 'Observation, Synthesis'));
+    const usage = await refused(writer, ['author', ...form], 'IA-CLI-USAGE');
+    expect(nextArgv(usage['next'] as string).slice(0, 4)).toEqual([
+      'position',
+      '--seat',
+      mandate('demo-mandate'),
+      '--shape',
+    ]);
+  });
 });
 
 describe('the mandate profile on every gated mode', () => {

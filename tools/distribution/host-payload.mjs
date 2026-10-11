@@ -109,8 +109,8 @@ const under = (parent, child) => {
  * Node's node_modules walk from the dependent's own directory. pnpm links every declared dependency, workspace or
  * store, into the dependent's node_modules (store packages see their dependencies as siblings), so no exports map
  * is consulted: some packages expose neither "." nor "./package.json". With a `ceiling` (review finding B-RC2, for an
- * implementation's closure) the walk stays inside it: a dependency found only above the repository's own install is
- * unavailable rather than shipped and imported from wherever an enclosing directory holds one.
+ * implementation's closure) the walk stays inside it: a dependency found only above the repository's own install fails
+ * the build (review finding B3-N9) rather than being shipped and imported from wherever an enclosing directory holds one.
  */
 function manifestDir(name, from, ceiling = null) {
   if (ceiling !== null && !under(ceiling, from))

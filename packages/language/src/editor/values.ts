@@ -50,8 +50,11 @@ export const refuse = (reason: SourceEditReason, message: string): never => {
 /** IA strings escape only quotes and backslashes. JSON escapes would change tabs and newlines into literal text. */
 export const quotedText = (value: string): string => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 
-/** Line breaks, and the controls a terminal or a line scanner could read as structure; a tab is data. */
-const UNSAFE = /[\u0000-\u0008\n-\u001f\u007f\u2028\u2029]/;
+/**
+ * Line breaks, and the controls a terminal or a line scanner could read as structure: C0 but the tab, DEL, C1, the
+ * Unicode line and paragraph separators, and the bidirectional embedding, override and isolate controls.
+ */
+const UNSAFE = /[\u0000-\u0008\n-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 const PROBE = (text: string): string => `#! ia 1.0\n@schema probe\n  value ${text}\n`;
 
 function inlineValue(text: string): Value {
@@ -134,10 +137,12 @@ function scalar(field: DraftField, value: Value): string {
 }
 
 /**
- * The canonical IA spelling of one form value for `field`, or a SourceEditError. A form value is data: text is always
- * quoted, so quotes and backslashes cannot end it, and every other type must parse as exactly one value of its type,
- * with nothing after it, so no comment, condition, section, record or second field can ride along. A list type takes a
- * bracketed list, or with `item` one list item. Line breaks and other controls are refused outright.
+ * The strict spelling of one form value for `field`, or a SourceEditError: the opt-in `setField` and the CLI's
+ * `ia preview` and `ia author` use. A form value is data: text is always quoted, so quotes and backslashes cannot end it,
+ * and every other type must parse as exactly one value of its type, by the predicates compliance applies, with nothing
+ * after it, so no comment, condition, section, record or second field can ride along. A list type takes a bracketed
+ * list, or with `item` one list item. Line breaks, C0 and C1 controls but the tab, DEL, the Unicode line and paragraph
+ * separators and the bidirectional controls are refused outright.
  */
 export function encodeValue(field: DraftField, text: string, item = false): string {
   if (typeof text !== 'string' || UNSAFE.test(text)) refuse('value', 'Form fields must be single-line plain text');
@@ -152,6 +157,23 @@ export function encodeValue(field: DraftField, text: string, item = false): stri
     return `[${items.join(', ')}]`;
   }
   return scalar(field, value);
+}
+/**
+ * A form value as 2.0.0's `draftSource` spelled it: text quoted, every other type written as given, so a value the
+ * strict encoder refuses but the parser admits is still written and left to admission. Only what would add structure is
+ * refused: a line break the scanner splits on (CR or LF), a `when` condition, or a comment. A value cannot add a field,
+ * section or record without a line break.
+ */
+export function draftValue(field: DraftField, text: string): string {
+  if (typeof text !== 'string' || /[\r\n]/.test(text))
+    refuse('value', 'Form fields must be single-line; use the source draft for multiline prose or structure');
+  if (field.type === 'text') return quotedText(text);
+  const parsed = parse(PROBE(text), 'value.ia');
+  if (parsed.ast.records[0]?.head.some((row) => row.when !== undefined))
+    refuse('value', `${path(field)} would gain a condition: ${JSON.stringify(text)}`);
+  if (parsed.ast.trivia.some((trivia) => trivia.kind === 'comment'))
+    refuse('value', `${path(field)} would carry a comment: ${JSON.stringify(text)}`);
+  return text;
 }
 /** An authored list item, re-spelled canonically for the field's item type; one the type refuses is refused here too. */
 export function encodeItem(field: DraftField, item: ListItem): string {

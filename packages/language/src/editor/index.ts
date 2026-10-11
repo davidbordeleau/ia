@@ -7,17 +7,18 @@ import { scan } from '../scanner/index.js';
 import { logicalLines, walk } from '../scanner/lines.js';
 import { tokenizeLine } from '../scanner/tokenize.js';
 import type { Token } from '../scanner/tokens.js';
-import { encodeValue } from './values.js';
+import { draftValue } from './values.js';
 import type { DraftSchema } from './values.js';
 export { format, checkFormatPreservation } from '../formatter.js';
 export { annotateRecord, appendRecord, addRelationship, relationshipConsent, setField } from './edit-source.js';
 export type { RelationshipConsent } from './edit-source.js';
-export { encodeValue, SourceEditError } from './values.js';
+export { draftValue, encodeValue, SourceEditError } from './values.js';
 export type { DraftField, DraftSchema, SourceEditReason } from './values.js';
 
 /**
  * Minimal source serialization for a schema-backed form; admission remains a separate operation. Each value is spelled
- * by `encodeValue` for its field's type, so a form value is data and never adds a condition, comment or field.
+ * as 2.0.0 spelled it (`draftValue`: text quoted, other types as given), and a value that would add a condition or a
+ * comment is refused with SourceEditError, as a line break always was. The strict typed spelling is `encodeValue`.
  */
 export function draftSource(
   discriminator: string,
@@ -36,7 +37,7 @@ export function draftSource(
     if (value === undefined) continue;
     if (typeof value !== 'string' || /[\r\n]/.test(value))
       throw new Error('Form fields must be single-line; use the source draft for multiline prose or structure');
-    const encoded = encodeValue(field, value);
+    const encoded = draftValue(field, value);
     const rows = sections.get(field.section) ?? [];
     rows.push(`${field.key} ${encoded}`);
     sections.set(field.section, rows);

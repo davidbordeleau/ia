@@ -265,6 +265,11 @@ describe('setField', () => {
       ['meaning.says', 'line one\nline two'],
       ['meaning.says', 'carriage\rreturn'],
       ['meaning.says', 'separator\u2028here'],
+      // C1 controls (NEL, CSI) and bidirectional overrides and isolates (C-R3).
+      ['meaning.says', `next${String.fromCharCode(0x85)}line`],
+      ['meaning.says', `csi${String.fromCharCode(0x9b)}2J`],
+      ['meaning.says', `override${String.fromCharCode(0x202e)}txt`],
+      ['meaning.says', `isolate${String.fromCharCode(0x2066)}here`],
     ] as const)
       refusedWith('value', () => editor.setField(source, '@task one', path, value, schema));
     refusedWith('field', () => editor.setField(source, '@task one', 'work.foreign', 'x', schema));

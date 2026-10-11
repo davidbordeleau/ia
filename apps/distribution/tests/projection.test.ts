@@ -651,3 +651,52 @@ it('owns a codex skill beside the packet, and reads a state listing generated pa
     );
   }
 });
+
+it("removes the folder a removed generated skill emptied, and keeps one that still holds the user's files (H-N6, H-N11)", () => {
+  const root = temp();
+  applyProjection(planProjection({ root, host: 'claude', artifacts: generated(), marker: MARK }));
+  applyProjection(planProjection({ root, host: 'claude', artifacts: artifacts(), marker: MARK }));
+  expect(existsSync(resolve(root, '.claude/skills/note-review'))).toBe(false);
+  // The user added a file beside the generated skill: removing the skill leaves the folder and that file.
+  applyProjection(planProjection({ root, host: 'claude', artifacts: generated(), marker: MARK }));
+  put(root, '.claude/skills/note-review/notes.md', 'mine\n');
+  applyProjection(planProjection({ root, host: 'claude', artifacts: artifacts(), marker: MARK }));
+  expect(existsSync(resolve(root, SKILL))).toBe(false);
+  expect(read(root, '.claude/skills/note-review/notes.md')).toBe('mine\n');
+});
+
+it('refuses to write a generated skill into a folder it does not own that holds files, and accepts an empty one (H-N11)', () => {
+  const root = temp();
+  put(root, '.claude/skills/note-review/reference.md', 'my own skill notes\n');
+  expect(where(() => planProjection({ root, host: 'claude', artifacts: generated(), marker: MARK }))).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    path: SKILL,
+    message: expect.stringContaining('a folder this projection does not own that already holds files'),
+  });
+  expect(read(root, '.claude/skills/note-review/reference.md')).toBe('my own skill notes\n');
+  rmSync(resolve(root, '.claude/skills/note-review/reference.md'));
+  applyProjection(planProjection({ root, host: 'claude', artifacts: generated(), marker: MARK }));
+  expect(read(root, SKILL)).toContain(MARK);
+});
+
+it("keeps a listed generated skill without an owned marker as the user's, never deleting it on its recorded hash (H-N10)", () => {
+  const root = temp();
+  applyProjection(planProjection({ root, host: 'claude', artifacts: generated(), marker: MARK }));
+  // The state lists the skill with the true hash of an unmarked user file.
+  const mine = '---\nname: note-review\n---\n\nMy own skill.\n';
+  put(root, SKILL, mine);
+  put(
+    root,
+    STATE,
+    json({
+      format: 'ia.host-projection-state.v1',
+      host: 'claude',
+      files: { ...stateFiles(root), [SKILL]: sha256(mine) },
+    }),
+  );
+  const plan = planProjection({ root, host: 'claude', artifacts: artifacts(), marker: MARK });
+  expect(plan.actions.filter((row) => row.path === SKILL)).toEqual([{ path: SKILL, action: 'foreign' }]);
+  applyProjection(plan);
+  expect(read(root, SKILL)).toBe(mine);
+  expect(Object.keys(stateFiles(root))).not.toContain(SKILL);
+});

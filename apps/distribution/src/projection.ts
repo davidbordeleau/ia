@@ -1,4 +1,4 @@
-import { lstatSync, readdirSync, type Dirent } from 'node:fs';
+import { lstatSync, readdirSync, rmdirSync, type Dirent } from 'node:fs';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
 import {
   bytes,
@@ -230,6 +230,22 @@ function orphanStewardFiles(root: string, host: Host, exclude: ReadonlySet<strin
   }
   return found;
 }
+/** A generated skill's folder (`.claude/skills/<name>` or `.agents/skills/<name>`), or undefined for any other path. */
+const skillFolder = (host: Host, path: string): string | undefined =>
+  GENERATED_PATHS[host].test(path) && path.endsWith('/SKILL.md') ? path.slice(0, -'/SKILL.md'.length) : undefined;
+/** The entries of a workspace folder, none when it does not exist; a link or a file there is refused. */
+function folderEntries(root: string, folder: string): readonly string[] {
+  const absolute = contained(root, folder);
+  let stat: ReturnType<typeof lstatSync> | undefined;
+  try {
+    stat = lstatSync(absolute);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+  if (!stat.isDirectory()) fail('PATH-UNSAFE', `Generated skill folder is not a directory: ${folder}`);
+  return readdirSync(absolute);
+}
 export function planProjection(input: {
   readonly root: string;
   readonly host: Host;
@@ -256,6 +272,17 @@ export function planProjection(input: {
       seen.add(artifact.path);
       const existing = read(root, artifact.path);
       if (existing === null) {
+        // A generated skill never moves into a folder IA does not own that already holds the user's files (H-N11).
+        const folder = skillFolder(host, artifact.path);
+        if (
+          folder !== undefined &&
+          !Object.keys(files).some((path) => path.startsWith(`${folder}/`)) &&
+          folderEntries(root, folder).length > 0
+        )
+          fail(
+            'LOCAL-MODIFICATION',
+            `Refusing to write a generated skill into ${folder}, a folder this projection does not own that already holds files; move them, or rename the @playbook, then rerun`,
+          );
         actions.push({ path: artifact.path, action: 'create' });
         return;
       }
@@ -278,6 +305,12 @@ export function planProjection(input: {
     if (!seen.has(path) && !legacyAgent(host, path))
       locate(path, () => {
         const existing = read(root, path);
+        // A listed generated file without an owned marker is the user's: it is kept as foreign, never deleted on the
+        // strength of a recorded hash alone (review finding H-N10).
+        if (existing !== null && GENERATED_PATHS[host].test(path) && !marked(existing, input.marker)) {
+          actions.push({ path, action: 'foreign' });
+          return;
+        }
         if (existing !== null && !accepts(value, sha256(existing)))
           fail('LOCAL-MODIFICATION', handEditMessage(path, existing, value));
         actions.push({ path, action: 'remove' });
@@ -326,8 +359,17 @@ export function applyProjection(
       );
       checkpoint('pending');
       for (const action of mutating) {
-        if (action.action === 'remove') replace(root, action.path, null);
-        else replace(root, action.path, Buffer.from(plan.artifacts.find((a) => a.path === action.path)!.text));
+        if (action.action === 'remove') {
+          replace(root, action.path, null);
+          // The folder a removed generated skill emptied goes too, never recursively (review findings H-N6, H-N11).
+          const folder = skillFolder(host, action.path);
+          if (folder !== undefined && folderEntries(root, folder).length === 0)
+            try {
+              rmdirSync(contained(root, folder));
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+            }
+        } else replace(root, action.path, Buffer.from(plan.artifacts.find((a) => a.path === action.path)!.text));
         checkpoint(action.path);
       }
     }

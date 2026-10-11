@@ -16,6 +16,8 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import fsModule from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -381,12 +383,52 @@ function installed(options: Parameters<typeof payload>[0] = {}, home = temp()) {
   cpSync(built.root, root, { recursive: true });
   return { ...built, root, home, trust: { home, release: built.release } };
 }
-/** Whether any payload verification since the last clear opened `directory` or anything under it. */
-const opened = (directory: string) =>
-  vi
-    .mocked(verifyHostCache)
-    .mock.calls.some(([path]) => resolve(path).toLowerCase().startsWith(resolve(directory).toLowerCase()));
 const RERUN = 'run "ia host claude --apply"';
+/**
+ * Review finding B2-RC2: the result of `run` and every synchronous filesystem call made meanwhile whose path names
+ * `directory` (case and separators folded). Each watched export of node:fs is wrapped, `.native` included, and the
+ * wrappers reach every named import through `syncBuiltinESMExports`; an empty list means `directory` was never touched.
+ */
+function watched<T>(directory: string, run: () => T): { readonly result: T; readonly calls: readonly string[] } {
+  const fold = (value: unknown) => String(value).toLowerCase().replaceAll('/', '\\');
+  const needle = fold(directory),
+    calls: string[] = [],
+    originals = new Map<string, unknown>();
+  const target = fsModule as unknown as Record<
+    string,
+    ((...args: unknown[]) => unknown) & { native?: (...args: unknown[]) => unknown }
+  >;
+  const watch = (name: string, original: (...args: unknown[]) => unknown) =>
+    function (this: unknown, path: unknown, ...rest: unknown[]) {
+      if (fold(path).includes(needle)) calls.push(`${name} ${String(path)}`);
+      return original.call(this, path, ...rest);
+    };
+  for (const name of [
+    'existsSync',
+    'statSync',
+    'lstatSync',
+    'readFileSync',
+    'realpathSync',
+    'readdirSync',
+    'opendirSync',
+    'openSync',
+    'accessSync',
+    'readlinkSync',
+  ]) {
+    const original = target[name]!;
+    originals.set(name, original);
+    const wrapped = watch(name, original) as (typeof target)[string];
+    if (typeof original.native === 'function') wrapped.native = watch(`${name}.native`, original.native);
+    target[name] = wrapped;
+  }
+  syncBuiltinESMExports();
+  try {
+    return { result: run(), calls };
+  } finally {
+    for (const [name, original] of originals) target[name] = original as (typeof target)[string];
+    syncBuiltinESMExports();
+  }
+}
 
 it('finds the catalog a host joined for binding, and says why there is none', () => {
   const root = temp(),
@@ -455,53 +497,55 @@ it('reports a joined payload whose handler bytes no longer match their pins as d
   });
 });
 
-it('binds only through the payload this installation pins in its own IA home, and opens no other (B2-R2)', (context) => {
+it('binds only through the payload this installation pins in its own IA home, and opens no other (B2-R2, B2-RC2)', (context) => {
   const genuine = installed();
   // A self-consistent forged payload (another catalog, every pin recomputed) outside the IA home, registered and joined
-  // at its own release: never trusted, and never opened.
+  // at its own release: never trusted, and no filesystem call ever names it.
   const forgedRoot = temp(),
     forged = payload({ mutate: (row) => ({ ...row, handler: 'acme.forged.v1' }) });
   registered(forgedRoot, 'claude', forged.root, forged.release);
   joinHost(forgedRoot, 'claude', REVISION);
-  vi.mocked(verifyHostCache).mockClear();
-  expect(joinedCatalog(forgedRoot, genuine.trust)).toEqual({
+  const forgedRead = watched(forged.root, () => joinedCatalog(forgedRoot, genuine.trust));
+  expect(forgedRead.result).toEqual({
     status: 'unavailable',
     reason: expect.stringContaining(
       `host claude is registered for release ${forged.release.slice(0, 12)}, not this installation's ${genuine.release.slice(0, 12)}; ${RERUN}`,
     ),
   });
-  expect(opened(forged.root)).toBe(false);
-  // The genuine release, but a copy of its payload inside the workspace: the registration names a path outside the IA
-  // home, so nothing is read from it.
+  expect(forgedRead.calls).toEqual([]);
+  // The genuine release, but a copy of its payload inside the workspace: the registration names another directory, so
+  // nothing is read from it.
   const inRepo = temp(),
     copy = resolve(inRepo, '.ia/work/payload');
   cpSync(genuine.root, copy, { recursive: true });
   registered(inRepo, 'claude', copy, genuine.release);
   joinHost(inRepo, 'claude', REVISION);
-  vi.mocked(verifyHostCache).mockClear();
-  expect(joinedCatalog(inRepo, genuine.trust)).toEqual({
+  const copied = watched(copy, () => joinedCatalog(inRepo, genuine.trust));
+  expect(copied.result).toEqual({
     status: 'unavailable',
     reason: expect.stringContaining(
-      `host claude's registration names a payload outside this installation's IA home; ${RERUN}`,
+      `host claude's registration names a payload other than ${resolve(genuine.home, 'hosts', genuine.release)} (another directory or another spelling of it); ${RERUN}`,
     ),
   });
-  expect(opened(copy)).toBe(false);
+  expect(copied.calls).toEqual([]);
   // A stale registration: an earlier release materialized in the same IA home, which ia doctor reports as stale.
   const stale = temp(),
     earlier = installed({ mutate: (row) => ({ ...row, version: 2 }) }, genuine.home);
   registered(stale, 'claude', earlier.root, earlier.release);
   joinHost(stale, 'claude', REVISION);
-  vi.mocked(verifyHostCache).mockClear();
-  expect(joinedCatalog(stale, genuine.trust)).toMatchObject({
+  const staleRead = watched(earlier.root, () => joinedCatalog(stale, genuine.trust));
+  expect(staleRead.result).toMatchObject({
     status: 'unavailable',
     reason: expect.stringContaining(`registered for release ${earlier.release.slice(0, 12)}`),
   });
-  expect(opened(earlier.root)).toBe(false);
+  expect(staleRead.calls).toEqual([]);
   // An installation that pins no payload trusts no join at all.
   const own = temp();
   registered(own, 'claude', genuine.root, genuine.release);
   joinHost(own, 'claude', REVISION);
   expect(joinedCatalog(own, genuine.trust)).toMatchObject({ status: 'joined', consumer: 'claude' });
+  // The watcher sees the trusted payload being read, so an empty list above is evidence, not silence.
+  expect(watched(genuine.root, () => joinedCatalog(own, genuine.trust)).calls.length).toBeGreaterThan(0);
   expect(joinedCatalog(own, null)).toEqual({
     status: 'unavailable',
     reason: expect.stringContaining('carries no host payload of its own'),
@@ -514,12 +558,12 @@ it('binds only through the payload this installation pins in its own IA home, an
   const unc = `\\\\localhost\\${genuine.root.slice(0, 1)}$${genuine.root.slice(2)}`;
   if (process.platform !== 'win32' || !existsSync(unc)) return context.skip();
   registered(own, 'claude', unc, genuine.release);
-  vi.mocked(verifyHostCache).mockClear();
-  expect(joinedCatalog(own, genuine.trust)).toEqual({
+  const network = watched('\\\\localhost\\', () => joinedCatalog(own, genuine.trust));
+  expect(network.result).toEqual({
     status: 'unavailable',
-    reason: expect.stringContaining('names a payload outside this installation'),
+    reason: expect.stringContaining('names a payload other than'),
   });
-  expect(vi.mocked(verifyHostCache).mock.calls.some(([path]) => path.startsWith('\\\\'))).toBe(false);
+  expect(network.calls).toEqual([]);
 });
 
 it('reports the trusted payload damaged whichever host joined it, in either consumer order (B2-N1)', () => {

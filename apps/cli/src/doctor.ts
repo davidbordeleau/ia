@@ -67,7 +67,10 @@ import {
   JOINS,
   readInstalledImplementations,
   readJoins,
+  registrationUntrusted,
+  trustedPayload,
 } from '@inventarch/distribution/implementations';
+import type { HostTrust } from '@inventarch/distribution/implementations';
 import { hostVerifier } from '@inventarch/distribution/host-observe';
 import type { HostVerifier } from '@inventarch/distribution/host-observe';
 import { observeProjection } from '@inventarch/distribution/projection';
@@ -806,8 +809,22 @@ function catalogRow(
 }
 
 /**
+ * The trust `ia validate` binds a join through (review finding B2-RC1): the payload this installation pins, in the IA home
+ * the request resolves; null when it pins none or the home cannot be resolved.
+ */
+function doctorTrust(request: DoctorRequest, pinned: Pinned): HostTrust | null {
+  if (pinned.release === null) return null;
+  try {
+    return { home: resolveIaHome(request.env, request.home ?? homedir()).home, release: pinned.release };
+  } catch {
+    return null;
+  }
+}
+/**
  * Design item 9: one row per consumer join `.ia/distributions/hosts/joins.json` records, compared with the catalog of the
- * payload that consumer's registration now names. `ok` (present) when the join names that catalog, digest and release;
+ * payload this installation pins, as `ia validate` binds through it (review finding B2-RC1): a registration of another
+ * release or naming another directory, or another spelling of it, is `warn` with the apply that registers this
+ * installation's payload, and nothing it names is opened. `ok` (present) when the join names that catalog, digest and release;
  * `warn` (drifted) when it names another, when that payload carries none, or when the consumer is not registered, each
  * naming the apply that records or drops the join; `unknown` when the registration or its catalog cannot be read, which
  * the host row reports. A registered host with no join is an `info` row (unavailable) naming the apply that records
@@ -818,7 +835,9 @@ function joinRows(
   observed: readonly HostObservation[],
   read: ReturnType<typeof catalogReader>,
   commands: Commands,
+  trust: HostTrust | null,
 ): readonly Check[] {
+  const trusted = trust === null ? null : trustedPayload(trust);
   let joins: readonly ImplementationJoin[];
   try {
     joins = readJoins(root) ?? [];
@@ -863,7 +882,18 @@ function joinRows(
         `Not compared; joined ${joined}; the registration cannot be read`,
         null,
       );
-    const result = read(host.cache, host.release);
+    if (trusted === null)
+      return installation(
+        id,
+        title,
+        'unknown',
+        `Not compared; joined ${joined}; this installation pins no host payload, so it trusts no registration`,
+        null,
+      );
+    const untrusted = registrationUntrusted(trusted, host.host, { cache: host.cache, release: host.release }, null);
+    if (untrusted !== null)
+      return installation(id, title, 'warn', `drifted: joined ${joined}; ${untrusted}`, commands.apply(join.consumer));
+    const result = read(trusted.payload, trusted.release);
     if (!result.ok)
       return installation(
         id,
@@ -1105,7 +1135,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
       catalogRow(request, pinned, read, observed, commandsFor(supplied)),
       ...hostTransactionRows(root),
       ...hostRows(root, observed, pinned, commandsFor(supplied), verify),
-      ...joinRows(root, observed, read, commandsFor(supplied)),
+      ...joinRows(root, observed, read, commandsFor(supplied), doctorTrust(request, pinned)),
       ...movedRows(request, observed, commandsFor(supplied)),
     );
   }

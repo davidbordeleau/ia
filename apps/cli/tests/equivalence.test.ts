@@ -409,7 +409,7 @@ it('reports one Bindings section through ia validate --json and ia-distribution 
       catalog: {
         status: 'unavailable',
         reason: expect.stringContaining(
-          "host claude's registration names a payload outside this installation's IA home",
+          "host claude's registration names a payload other than",
         ),
       },
       status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'unavailable' },

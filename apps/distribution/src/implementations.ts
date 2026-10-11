@@ -366,6 +366,50 @@ const DAMAGE = new Set(['IA-DIST-INTEGRITY-MISMATCH', 'IA-DIST-PATH-UNSAFE', 'IA
  * catalog or not materialized), the catalog is `unavailable`, with the reasons, so nothing binds. Reads only: nothing is
  * written, imported or executed.
  */
+/** The one payload a trust opens, `<home>/hosts/<release>`, whether it is materialized, and its spellings (B2-R2). */
+export interface TrustedPayload {
+  readonly release: string;
+  readonly home: string;
+  readonly payload: string;
+  readonly materialized: boolean;
+  readonly spellings: ReadonlySet<string>;
+}
+/**
+ * The payload `trust` opens. `ia host` records a payload as verification resolved it, so its real path is one more
+ * spelling of the same entry; nothing a workspace names is ever opened to find out.
+ */
+export function trustedPayload(trust: HostTrust): TrustedPayload {
+  const payload = hostPayloadPath(trust.home, trust.release),
+    materialized = existsSync(payload),
+    spellings = new Set([pathKey(resolve(payload))]);
+  if (materialized)
+    try {
+      spellings.add(pathKey(realpathSync(payload)));
+    } catch {
+      // The reader refuses it with its own code.
+    }
+  return { release: trust.release, home: trust.home, payload, materialized, spellings };
+}
+/**
+ * Why host `host`'s registration (`state`) and its join (at `joined`, or null for no join) do not bind through
+ * `trusted`, or null when they do: registered or joined for another release, the payload not materialized, or a
+ * registration naming another directory or another spelling of it (review finding B2-RC1). Compares spellings only:
+ * the registration's own path is never opened.
+ */
+export function registrationUntrusted(
+  trusted: TrustedPayload,
+  host: string,
+  state: { readonly cache: string; readonly release: string },
+  joined: string | null,
+): string | null {
+  if (state.release !== trusted.release || (joined !== null && joined !== trusted.release))
+    return `host ${host} is registered for release ${state.release.slice(0, 12)}, not this installation's ${trusted.release.slice(0, 12)}`;
+  if (!trusted.materialized)
+    return `this installation's payload for host ${host} is not materialized in ${trusted.home}`;
+  if (!trusted.spellings.has(pathKey(resolve(state.cache))))
+    return `host ${host}'s registration names a payload other than ${trusted.payload} (another directory or another spelling of it)`;
+  return null;
+}
 export function joinedCatalog(rootInput: string, trust: HostTrust | null): JoinedCatalog {
   const root = workspace(rootInput);
   if (trust !== null && (!HEX.test(trust.release) || !isAbsolute(trust.home)))
@@ -390,15 +434,7 @@ export function joinedCatalog(rootInput: string, trust: HostTrust | null): Joine
     };
   // The one payload this installation trusts, opened only in its IA home; a workspace's own paths are never followed.
   // `ia host` records the payload as verification resolved it, so its real path is one more spelling of the same entry.
-  const expected = hostPayloadPath(trust.home, trust.release),
-    materialized = existsSync(expected),
-    spellings = new Set([pathKey(resolve(expected))]);
-  if (materialized)
-    try {
-      spellings.add(pathKey(realpathSync(expected)));
-    } catch {
-      // The reader below refuses it with its own code.
-    }
+  const trusted = trustedPayload(trust);
   let catalog: InstalledCatalog | { readonly status: 'damaged'; readonly reason: string } | undefined;
   const reasons: string[] = [];
   for (const join of joins) {
@@ -419,20 +455,12 @@ export function joinedCatalog(rootInput: string, trust: HostTrust | null): Joine
       reasons.push(`host ${host} joined a catalog but is no longer registered`);
       continue;
     }
-    if (state.release !== trust.release || join.release !== trust.release) {
-      reasons.push(
-        `host ${host} is registered for release ${state.release.slice(0, 12)}, not this installation's ${trust.release.slice(0, 12)}; ${rerun}`,
-      );
+    const untrusted = registrationUntrusted(trusted, host, state, join.release);
+    if (untrusted !== null) {
+      reasons.push(`${untrusted}; ${rerun}`);
       continue;
     }
-    if (!materialized) {
-      reasons.push(`this installation's payload for host ${host} is not materialized in ${trust.home}; ${rerun}`);
-      continue;
-    }
-    if (!spellings.has(pathKey(resolve(state.cache)))) {
-      reasons.push(`host ${host}'s registration names a payload outside this installation's IA home; ${rerun}`);
-      continue;
-    }
+    const expected = trusted.payload;
     if (catalog === undefined)
       try {
         catalog = readInstalledImplementations(expected, trust.release);

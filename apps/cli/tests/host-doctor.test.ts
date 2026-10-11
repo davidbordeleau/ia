@@ -4,6 +4,7 @@
  * See docs/specs/host-registration/README.md §§4–10.
  */
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -655,6 +656,25 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
   });
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   expect(JSON.parse(read(root, JOINS))).toEqual(recorded);
+  expect(row((await doctor(root, env)).checks, 'join-claude')!.status).toBe('ok');
+
+  // Review finding B2-RC1: the join row trusts what ia validate trusts. A registration naming a copy of the payload
+  // inside the workspace (another directory holding the same bytes) is drifted, with the apply that registers this
+  // installation's own payload, where it used to read the copy and say ok.
+  const registration = '.ia/distributions/hosts/claude-workspace.json',
+    genuine = read(root, registration),
+    copy = resolve(root, '.ia/work/payload-copy');
+  cpSync(payload, copy, { recursive: true });
+  put(root, registration, json({ ...JSON.parse(genuine), cache: copy }));
+  expect(row((await quiet()).checks, 'join-claude')).toMatchObject({
+    status: 'warn',
+    remedy: rootedApply(root),
+    detail: expect.stringContaining(
+      `host claude's registration names a payload other than ${payload} (another directory or another spelling of it)`,
+    ),
+  });
+  put(root, registration, genuine);
+  rmSync(copy, { recursive: true });
   expect(row((await doctor(root, env)).checks, 'join-claude')!.status).toBe('ok');
 
   // Receipts that cannot be read fail with their repair; with none recorded, the registered host's join is unavailable.

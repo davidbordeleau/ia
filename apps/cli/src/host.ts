@@ -19,6 +19,11 @@
  * The plan asks the mechanisms themselves. `planHostFor` plans against the payload apply will materialize, described
  * from the pin without reading it (`expectedHostCache`), so a conflict in the preview is the service's own refusal —
  * its code and message unchanged (contract §4.1) — and is the refusal apply would raise.
+ *
+ * Milestone generation-binding (plan amendments C16 and C24, design item 9): once the MCP registration commits, the
+ * apply records the host's join receipt from that committed registration (`joinHost`): the installed-implementation
+ * catalog of the payload it names, at the workspace's authored revision. A removal drops it (`leaveHost`). The plan and
+ * the envelope do not change; `ia doctor` reports the join.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, realpathSync, statSync } from 'node:fs';
@@ -44,6 +49,7 @@ import {
   materializeHostPayload,
   readHostPin,
 } from '@inventarch/distribution/host-home';
+import { joinHost, JOINS, leaveHost } from '@inventarch/distribution/implementations';
 import { assertIaHomeUsable } from '@inventarch/distribution/ia-home';
 import { readMaterializedPlugin } from '@inventarch/distribution/plugin-home';
 import type { ProjectionAction } from '@inventarch/distribution/projection';
@@ -718,6 +724,24 @@ export function applyHostSet(
     id,
     status: view.elements.find((element) => element.id === id)!.capability,
   });
+  /** A failure as the refusal it raises: a pending journal's recovery, the held lock's, or once anything was written, the rerun. */
+  const failure = (error: unknown): unknown => {
+    const refusal = refusalOf(error),
+      journal = pendingJournal(root);
+    if (journal !== undefined)
+      return new Refusal(
+        refusal.code,
+        refusal.message,
+        3,
+        { path: journal[0] },
+        say(view, recoverNext(view.root, journal[1])),
+      );
+    const busy = lockRefusal(error, view.root);
+    if (busy !== null) return busy;
+    if (done.length > 0)
+      return new Refusal(refusal.code, refusal.message, 3, refusal.where, say(view, `Run "${rerun}" to finish.`));
+    return error;
+  };
   const step = (id: ElementId, run: () => Omit<AppliedElement, 'id'>): void => {
     if (signal?.aborted) throw new Interrupted(say(view, `Run "${rerun}" to finish.`));
     let applied: Omit<AppliedElement, 'id'>;
@@ -725,24 +749,35 @@ export function applyHostSet(
       applied = run();
     } catch (error) {
       if (id === 'projection') throw projectionFailure(error, root, host, rerun);
-      const refusal = refusalOf(error),
-        journal = pendingJournal(root);
-      if (journal !== undefined)
+      throw failure(error);
+    }
+    done.push({ id, ...applied });
+    checkpoint(id);
+  };
+  /**
+   * Design item 9 (plan amendment C16): the host's join receipt, recorded after its registration committed and derived
+   * from that committed state (`joinHost`), or dropped after a removal (`leaveHost`). It follows the MCP element, so a
+   * failure here names the rerun that finishes the set; an interrupted apply leaves no join, or the previous one, which
+   * `ia doctor` reports as unavailable or drifted rather than as current. Receipts that cannot be read are never
+   * replaced, and a rerun alone would refuse again, so that refusal names deleting them first: they are derived, and
+   * the rerun records them again.
+   */
+  const receipt = (run: () => unknown): void => {
+    try {
+      run();
+    } catch (error) {
+      if (refusedPath(error) === JOINS && pendingJournal(root) === undefined) {
+        const refusal = refusalOf(error);
         throw new Refusal(
           refusal.code,
           refusal.message,
           3,
-          { path: journal[0] },
-          say(view, recoverNext(view.root, journal[1])),
+          { path: JOINS },
+          say(view, `Delete ${JOINS}, then run "${rerun}".`),
         );
-      const busy = lockRefusal(error, view.root);
-      if (busy !== null) throw busy;
-      if (done.length > 0)
-        throw new Refusal(refusal.code, refusal.message, 3, refusal.where, say(view, `Run "${rerun}" to finish.`));
-      throw error;
+      }
+      throw failure(error);
     }
-    done.push({ id, ...applied });
-    checkpoint(id);
   };
   const project = (rendered: HostOutput | null) => (): Omit<AppliedElement, 'id'> => {
     const { status, guard } = applyHostProjection(root, host, rendered);
@@ -754,6 +789,7 @@ export function applyHostSet(
     const rendered = renderProjectionFor(root, host);
     replanProjection(root, host, rendered, (conflict) => refusalFor(view, 'projection', conflict));
     step('mcp', () => ({ status: applyHost(mcp).status }));
+    receipt(() => joinHost(root, host, rendered.receipt.revision));
     done.push(skipped('context'));
     step('projection', project(rendered));
     return { status: 'host-registered', elements: done, observed: false };
@@ -767,6 +803,7 @@ export function applyHostSet(
   step('projection', project(null));
   done.push(skipped('context'));
   step('mcp', () => ({ status: mcp === null ? 'absent' : applyHost(mcp).status }));
+  receipt(() => leaveHost(root, host));
   return { status: 'host-removed', elements: done, observed: false };
 }
 

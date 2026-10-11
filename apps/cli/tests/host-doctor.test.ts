@@ -3,13 +3,23 @@
  * Shared setup lives in host-fixture.ts; every case owns a fresh workspace and IA home.
  * See docs/specs/host-registration/README.md §§4–10.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { json } from '@inventarch/distribution/services';
+import { JOINS } from '@inventarch/distribution/implementations';
+import { json, sha256 } from '@inventarch/distribution/services';
 import { applyHostProjection, renderProjectionFor } from '../src/host-projection.js';
 import { rootedNext, SETTINGS } from '../src/host.js';
 import { quote } from '../src/render.js';
-import { run, scratch } from './workspace-fixture.js';
+import { cli, run, scratch } from './workspace-fixture.js';
 import {
   put,
   read,
@@ -546,4 +556,101 @@ it('reports real hand edits without a receipt and the repair converges', async (
   rmSync(resolve(root, path));
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   expect((await doctor(root, env)).exitCode).toBe(0);
+});
+
+/** Every entry under `roots`, with each file's size, modification time and digest: a write anywhere changes it. */
+function tree(...roots: string[]): Record<string, string> {
+  const entries: Record<string, string> = {};
+  for (const top of roots)
+    for (const entry of readdirSync(top, { recursive: true, encoding: 'utf8' })) {
+      const path = resolve(top, entry),
+        stat = statSync(path);
+      entries[path] = stat.isDirectory() ? 'directory' : `${stat.size} ${stat.mtimeMs} ${sha256(readFileSync(path))}`;
+    }
+  return entries;
+}
+
+it('doctor lists the installed-implementation catalog and the join ia host recorded, and writes nothing (C16, C24)', async () => {
+  const { root, env } = await initialized();
+  const release = JSON.parse((await host(root, env, 'claude', '--apply', '--yes')).stdout).plan.release as string;
+  // ia host records the claude join from its committed registration: the catalog the materialized payload carries,
+  // at the workspace's authored revision, which the projection receipt names too.
+  const recorded = JSON.parse(read(root, JOINS)),
+    payload = resolve(env.IA_HOST_HOME, 'hosts', release);
+  expect(recorded).toEqual({
+    format: 'ia.host-joins.v1',
+    joins: [
+      {
+        consumer: 'claude',
+        implementation: 'installed-implementations',
+        version: JSON.parse(read(cli, 'package.json')).version,
+        digest: sha256(readFileSync(resolve(payload, 'implementations.json'))),
+        release,
+        consumerRevision: JSON.parse(read(root, RECEIPT)).revision,
+      },
+    ],
+  });
+  const before = tree(root, env.IA_HOST_HOME);
+  const report = await doctor(root, env);
+  expect(tree(root, env.IA_HOST_HOME)).toEqual(before);
+  expect(report.exitCode).toBe(0);
+  expect(row(report.checks, 'implementations')).toMatchObject({
+    status: 'ok',
+    remedy: null,
+    detail: expect.stringContaining(
+      'captured-source-read-v1 available (handler ia.captured-source.read.v1, shipped bytes ',
+    ),
+  });
+  expect(report.checks.filter((check) => check.id.startsWith('join'))).toEqual([
+    expect.objectContaining({
+      id: 'join-claude',
+      status: 'ok',
+      remedy: null,
+      detail: expect.stringContaining('present: joined installed-implementations '),
+    }),
+  ]);
+
+  // A join that names another catalog is drifted, and the remedy records the current one again.
+  put(root, JOINS, json({ ...recorded, joins: [{ ...recorded.joins[0], digest: '0'.repeat(64) }] }));
+  const drifted = await doctor(root, env);
+  expect(drifted.exitCode).toBe(0);
+  expect(row(drifted.checks, 'join-claude')).toMatchObject({
+    status: 'warn',
+    remedy: rootedApply(root),
+    detail: expect.stringContaining(`drifted: joined installed-implementations`),
+  });
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  expect(JSON.parse(read(root, JOINS))).toEqual(recorded);
+  expect(row((await doctor(root, env)).checks, 'join-claude')!.status).toBe('ok');
+
+  // Receipts that cannot be read fail with their repair; with none recorded, the registered host's join is unavailable.
+  put(root, JOINS, '{broken');
+  const broken = await doctor(root, env);
+  expect(broken.exitCode).toBe(1);
+  expect(row(broken.checks, 'joins')).toMatchObject({ status: 'fail', remedy: rootedApply(root) });
+  expect(row(broken.checks, 'joins')!.detail).toContain(`Delete ${JOINS}`);
+  // ia host never replaces them either; its refusal names the same repair, which converges.
+  const refused = await host(root, env, 'claude', '--apply', '--yes');
+  expect(refused.exitCode).toBe(3);
+  expect(JSON.parse(refused.stdout)).toMatchObject({
+    ok: false,
+    where: { path: JOINS },
+    next: `Delete ${JOINS}, then run "${rootedApply(root)}".`,
+  });
+  expect(read(root, JOINS)).toBe('{broken');
+  rmSync(resolve(root, JOINS));
+  expect(row((await doctor(root, env)).checks, 'join-claude')).toMatchObject({
+    status: 'info',
+    remedy: rootedApply(root),
+    detail: expect.stringContaining('unavailable: no join recorded for host claude'),
+  });
+
+  // Removing the registration drops its join, and doctor then lists none.
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  expect(existsSync(resolve(root, JOINS))).toBe(true);
+  expect((await host(root, env, 'claude', '--remove', '--apply', '--yes')).exitCode).toBe(0);
+  expect(existsSync(resolve(root, JOINS))).toBe(false);
+  const removed = await doctor(root, env);
+  expect(removed.checks.filter((check) => check.id.startsWith('join'))).toEqual([]);
+  expect(row(removed.checks, 'implementations')!.status).toBe('ok');
 });

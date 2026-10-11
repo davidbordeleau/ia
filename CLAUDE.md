@@ -12,7 +12,7 @@
 
 ## Mandates
 
-- `agent-system/policy/mandate/language-mandate`: participant `agent-system/binding/agent/language-participant`; moves Observation, Verification, Synthesis; scope `workspace-system/definition/workspace/language-workspace`; covers `.ia/src/`
+- `agent-system/policy/mandate/language-mandate`: participant `agent-system/binding/agent/language-participant`; moves Observation, Verification, Synthesis, Delegation, Execution; scope `workspace-system/definition/workspace/language-workspace`; covers `.ia/src/`
 
 ## Systems
 
@@ -90,4 +90,4 @@
 - state intent to the CLI as shape + optional phase + optional seat + optional word; the CLI never receives free text
 - when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation
 
-ia-generated 6fc9fd43bfa11b9fad3231a12ce8c9fe120a0cd1b0509d1cf526992c64dc90f9 2022e74a4c3c47871c35398c8e55c09379d71ee1c79dce0eb862dd617b1e1287 ia-claude
+ia-generated b020a3e417b10422c20141059dca78f930aeed8bb4f68ba5a636afab9b17d29a 2cc13d8fa6fa796eff5ab9c7b339ae3806a74721f33855db65e95152e23be3a5 ia-claude

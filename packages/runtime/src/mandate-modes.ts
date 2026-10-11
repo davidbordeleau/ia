@@ -229,13 +229,21 @@ export interface GoverningMandate {
 export interface DefaultActor {
   /** The `@agent` identity; absent when OD1 names none. */
   readonly actor?: string;
-  /** What named it: the workspace's `composition.steward`, or the one participant the workspace's mandates name. */
+  /**
+   * What named it: the workspace's `composition.steward`, an authored `@agent`, or the one participant the workspace's
+   * mandates name.
+   */
   readonly by?: 'steward' | 'participant';
   /**
    * The authored `@agent` records an authored mandate of the workspace's closure scoped to it names as participant, by
    * identity: the participants the position packet lists when K0 seats at the workspace (B3).
    */
   readonly participants: readonly string[];
+  /**
+   * The `@agent` identities a command may be told to act as at the workspace, sorted: the participants and, when it is
+   * an authored `@agent`, the workspace's `composition.steward`, which may be no participant (review C2-R1).
+   */
+  readonly actors: readonly string[];
   /** Present exactly when `actor` is absent: why none is named, and the choice that would name one. */
   readonly reason?: string;
   /**
@@ -404,11 +412,12 @@ export function governingMandates(
 
 /**
  * OD1: the actor a mandate-gated command acts as at `workspace` when none is named. It is the `@agent` the workspace's
- * `composition.steward` resolves to (ia init names its participant there); failing that, the workspace's one
- * participant, an authored `@agent` that an authored mandate of its closure scoped to it names. With several
- * participants there is none, and the refusal names the choice; with none, there is no actor and no refusal, and the
- * reason says whether the workspace states no steward or one that resolves to no admitted `@agent`. A `workspace` that
- * is not an admitted `@workspace` of the scope is IA-RUNTIME-REQUEST-INVALID.
+ * `composition.steward` resolves to (ia init names its participant there), when that is an authored (band 100) record;
+ * failing that, the workspace's one participant, an authored `@agent` that an authored mandate of its closure scoped to
+ * it names. An installed steward names no actor, as if none were stated (review C2-R1). With several participants there
+ * is none, and the refusal names the choice; with none, there is no actor and no refusal, and the reason says whether
+ * the workspace states no steward, one that resolves to no admitted `@agent`, or one that is no authored `@agent`. A
+ * `workspace` that is not an admitted `@workspace` of the scope is IA-RUNTIME-REQUEST-INVALID.
  */
 export function defaultActor(reader: ReadHandle, within: string, workspace: string): DefaultActor {
   const { nodes, targets, admit, closure } = admitted(reader, within);
@@ -424,21 +433,28 @@ export function defaultActor(reader: ReadHandle, within: string, workspace: stri
       }),
     ),
   ].sort(order);
-  const steward = targets(workspace, 'composition.steward', 'agent')[0];
-  if (steward !== undefined) return freeze<DefaultActor>({ actor: steward, by: 'steward', participants });
+  const named = targets(workspace, 'composition.steward', 'agent')[0],
+    steward = named !== undefined && nodes.get(named)!.band === 100 ? named : undefined,
+    actors = [...new Set([...participants, ...(steward === undefined ? [] : [steward])])].sort(order);
+  if (steward !== undefined) return freeze<DefaultActor>({ actor: steward, by: 'steward', participants, actors });
   if (participants.length === 1)
-    return freeze<DefaultActor>({ actor: participants[0]!, by: 'participant', participants });
-  const unnamed = states(nodes.get(workspace)!, 'composition', 'steward')
-    ? `${workspace}'s composition.steward resolves to no admitted @agent`
-    : `${workspace} states no composition.steward`;
+    return freeze<DefaultActor>({ actor: participants[0]!, by: 'participant', participants, actors });
+  const unnamed =
+    named !== undefined
+      ? `${workspace}'s composition.steward ${named} is no authored @agent`
+      : states(nodes.get(workspace)!, 'composition', 'steward')
+        ? `${workspace}'s composition.steward resolves to no admitted @agent`
+        : `${workspace} states no composition.steward`;
   if (participants.length === 0)
     return freeze<DefaultActor>({
       participants,
+      actors,
       reason: `${unnamed}, and no authored @mandate scoped to it names an authored @agent as its participant`,
     });
   const reason = `${unnamed}, and its authored mandates name ${participants.length} participants (${participants.join(', ')}): name one of them as its composition.steward`;
   return freeze<DefaultActor>({
     participants,
+    actors,
     reason,
     refusal: { code: 'IA-RUNTIME-MANDATE-ACTOR', message: reason, next: governance(workspace) },
   });

@@ -104,43 +104,6 @@ function namedAgent(reader: ReadHandle, within: string, spelled: string): string
   const resolved = reader.resolve({ kind: 'ref', discriminator: 'agent', name }, { within });
   return resolved.ok ? resolved.identity : undefined;
 }
-/**
- * The workspace's authored participants: the authored `@agent` records its scoped mandates name (the position packet's
- * participants), and its `composition.steward` when that is an authored `@agent`.
- */
-export function participantsOf(reader: ReadHandle, within: string, workspace: string): readonly string[] {
-  const named = defaultOf(reader, within, workspace),
-    steward = named.by === 'steward' ? named.actor : undefined;
-  return [
-    ...new Set([
-      ...named.participants,
-      ...(steward !== undefined && reader.get(steward, { within })?.band === 100 ? [steward] : []),
-    ]),
-  ].sort();
-}
-/**
- * OD1's default actor, with the rule `--actor` follows (review C-N4): the workspace's `composition.steward` counts only
- * as an authored (band 100) `@agent`; an installed steward leaves the choice to the participants, as if none were named.
- */
-function defaultOf(reader: ReadHandle, within: string, workspace: string): ReturnType<typeof defaultActor> {
-  const named = defaultActor(reader, within, workspace);
-  if (named.by !== 'steward' || reader.get(named.actor!, { within })?.band === 100) return named;
-  const { participants } = named,
-    unnamed = `${workspace}'s composition.steward ${named.actor} is no authored @agent`;
-  if (participants.length === 1) return { actor: participants[0]!, by: 'participant', participants };
-  if (participants.length === 0)
-    return { participants, reason: `${unnamed}, and no authored @mandate scoped to it names an authored @agent` };
-  const reason = `${unnamed}, and its authored mandates name ${participants.length} participants (${participants.join(', ')})`;
-  return {
-    participants,
-    reason,
-    refusal: {
-      code: 'IA-RUNTIME-MANDATE-ACTOR',
-      message: reason,
-      next: `ia position --seat ${workspace} --shape governance`,
-    },
-  };
-}
 /** The seat a runtime mandate refusal's next command (`ia position --seat <seat> --shape governance`) names. */
 const seatOf = (next: string): string | undefined => /--seat (\S+)/.exec(next)?.[1];
 
@@ -201,7 +164,7 @@ export function requireProfile(request: ProfileRequest): Profile {
    * is open, the first participant allowed (`choose`).
    */
   const mistyped = (participants: readonly string[]): string => {
-    const fallback = workspace === undefined ? undefined : defaultOf(reader, within, workspace);
+    const fallback = workspace === undefined ? undefined : defaultActor(reader, within, workspace);
     if (fallback?.actor !== undefined)
       return judge(fallback.actor).verdict.refusal === undefined
         ? `Run "${respell(context, { options: { actor: [] } })}" as the workspace's default actor, ${fallback.actor}.`
@@ -214,7 +177,7 @@ export function requireProfile(request: ProfileRequest): Profile {
     const spelled = context.args.value('actor');
     let actor: string | undefined, by: Profile['by'];
     if (spelled !== undefined) {
-      const participants = workspace === undefined ? [] : participantsOf(reader, within, workspace),
+      const participants = workspace === undefined ? [] : defaultActor(reader, within, workspace).actors,
         named = namedAgent(reader, within, spelled);
       if (named === undefined || !participants.includes(named))
         throw new Refusal(
@@ -229,14 +192,14 @@ export function requireProfile(request: ProfileRequest): Profile {
       actor = named;
       by = 'actor';
     } else if (workspace !== undefined) {
-      const fallback = defaultOf(reader, within, workspace);
+      const fallback = defaultActor(reader, within, workspace);
       if (fallback.refusal !== undefined)
         throw new Refusal(
           fallback.refusal.code,
           `${fallback.refusal.message}, or name the acting participant`,
           1,
           { identity: workspace },
-          choose(participantsOf(reader, within, workspace)),
+          choose(fallback.actors),
         );
       if (fallback.actor !== undefined) {
         actor = fallback.actor;
@@ -255,7 +218,7 @@ export function requireProfile(request: ProfileRequest): Profile {
         1,
         seat === undefined ? null : { identity: seat },
         unbound
-          ? choose(participantsOf(reader, within, workspace).filter((participant) => participant !== actor))
+          ? choose(defaultActor(reader, within, workspace).actors.filter((participant) => participant !== actor))
           : seat === undefined
             ? `Run "ia position${rooted}" for the repository's position and the mandates that govern it.`
             : `Run "ia position --seat ${seat} --shape governance${rooted}" for the mandates that govern here and what they allow.`,

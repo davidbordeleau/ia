@@ -55,7 +55,7 @@ it("resolves a fresh init's participant as the default actor, its mandate as gov
     within = token(db);
   expect(errors(db)).toEqual([]);
   const actor = defaultActor(db, within, demo);
-  expect(actor).toEqual({ actor: participant, by: 'steward', participants: [participant] });
+  expect(actor).toEqual({ actor: participant, by: 'steward', participants: [participant], actors: [participant] });
   expect(Object.isFrozen(actor)).toBe(true);
   const governing = governingMandates(db, within, { actor: participant, workspace: demo });
   expect(governing).toEqual([
@@ -89,6 +89,7 @@ it("resolves a fresh init's participant as the default actor, its mandate as gov
     actor: participant,
     by: 'participant',
     participants: [participant],
+    actors: [participant],
   });
   for (const mode of MODES) expect(profileAt(unstewarded, mode), mode).toEqual({});
 });
@@ -189,7 +190,12 @@ it('governs a path through authority.covers, an authored claimant only, and says
   const both = governingMandates(db, within, { actor: participant, workspace: demo, path: 'docs/guide.md' });
   for (const mode of MODES) expect(profileRefusal(both, mode), mode).toEqual({});
   // zed is no participant of the workspace (its mandate scopes none), so the steward stays the default actor.
-  expect(defaultActor(db, within, demo)).toEqual({ actor: participant, by: 'steward', participants: [participant] });
+  expect(defaultActor(db, within, demo)).toEqual({
+    actor: participant,
+    by: 'steward',
+    participants: [participant],
+    actors: [participant],
+  });
 });
 
 it('refuses an actor that no mandate governing the workspace binds, rather than read it as ungoverned', () => {
@@ -201,7 +207,12 @@ it('refuses an actor that no mandate governing the workspace binds, rather than 
     within = token(db);
   expect(errors(db)).toEqual([]);
   // The steward names the actor, whether or not it is a participant.
-  expect(defaultActor(db, within, demo)).toEqual({ actor: ops, by: 'steward', participants: [participant] });
+  expect(defaultActor(db, within, demo)).toEqual({
+    actor: ops,
+    by: 'steward',
+    participants: [participant],
+    actors: [participant, ops],
+  });
   expect(governingMandates(db, within, { actor: ops, workspace: demo })).toEqual([
     { identity: mandate('demo-mandate'), band: 100, participant, binds: false, moves: ['Observation'], scope: [demo] },
   ]);
@@ -247,6 +258,7 @@ it('reads only the closure of the workspace, as position does: another root neve
     actor: participant,
     by: 'participant',
     participants: [participant],
+    actors: [participant],
   });
   // The other root's mandate naming demo widens nothing, and zed, bound by none of demo's mandates, is refused.
   expect(profileAt(db, 'effect').refusal).toMatchObject({
@@ -397,7 +409,12 @@ it('binds whoever acts a mandate that names no participant, and judges it withou
   const stewarded = database(freshInit(`${unmandated}${houseRules}`)),
     within = token(stewarded);
   expect(errors(stewarded)).toEqual([]);
-  expect(defaultActor(stewarded, within, demo)).toEqual({ actor: participant, by: 'steward', participants: [] });
+  expect(defaultActor(stewarded, within, demo)).toEqual({
+    actor: participant,
+    by: 'steward',
+    participants: [],
+    actors: [participant],
+  });
   expect(governingMandates(stewarded, within, { actor: participant, workspace: demo })).toEqual([
     {
       identity: mandate('house-rules'),
@@ -420,6 +437,7 @@ it('binds whoever acts a mandate that names no participant, and judges it withou
     expect(errors(unstewarded)).toEqual([]);
     expect(defaultActor(unstewarded, token(unstewarded), demo)).toEqual({
       participants: [],
+      actors: [],
       reason: `${demo} states no composition.steward, and no authored @mandate scoped to it names an authored @agent as its participant`,
     });
     expect(profileAt(unstewarded, 'read')).toEqual({});
@@ -440,6 +458,7 @@ it('names no default actor while several participants and no steward leave the c
   const actor = defaultActor(db, within, demo);
   expect(actor).toEqual({
     participants: [participant, zed],
+    actors: [participant, zed],
     reason,
     refusal: { code: 'IA-RUNTIME-MANDATE-ACTOR', message: reason, next: governance(demo) },
   });
@@ -460,6 +479,7 @@ it('names no default actor while several participants and no steward leave the c
     actor: participant,
     by: 'steward',
     participants: [participant, zed],
+    actors: [participant, zed],
   });
   // A steward that resolves to no admitted @agent names none; the reason says so rather than that none is stated.
   const dangling = database(
@@ -474,9 +494,58 @@ it('names no default actor while several participants and no steward leave the c
   expect(errors(none)).toEqual([]);
   expect(defaultActor(none, token(none), demo)).toEqual({
     participants: [],
+    actors: [],
     reason: `${demo} states no composition.steward, and no authored @mandate scoped to it names an authored @agent as its participant`,
   });
   for (const mode of MODES) expect(profileAt(none, mode), mode).toEqual({ notice: UNGOVERNED });
+});
+
+it('counts only an authored steward as the default actor, and lists it among the actors (review C2-R1)', () => {
+  // The adopted corpus's agent-steward is an installed (band 90) @agent: as composition.steward it names no actor, and
+  // the choice falls to the participants, as if the workspace named no steward.
+  const installed = 'agent-system/binding/agent/agent-steward',
+    INSTALLED = '    steward @agent agent-steward\n',
+    unnamed = `${demo}'s composition.steward ${installed} is no authored @agent`;
+  const db = database(freshInit(records.replace(STEWARD, INSTALLED))),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  expect(db.records().find((record) => record.identity === installed)!.band).toBe(90);
+  expect(defaultActor(db, within, demo)).toEqual({
+    actor: participant,
+    by: 'participant',
+    participants: [participant],
+    actors: [participant],
+  });
+  const several = database(
+    freshInit(
+      `${records.replace(STEWARD, INSTALLED)}${agent('zed')}${authorized('zed-mandate', [
+        'participant @agent zed',
+        'moves [Observation]',
+        'scope [@workspace demo]',
+      ])}`,
+    ),
+  );
+  const reason = `${unnamed}, and its authored mandates name 2 participants (${participant}, ${zed}): name one of them as its composition.steward`;
+  expect(defaultActor(several, token(several), demo)).toEqual({
+    participants: [participant, zed],
+    actors: [participant, zed],
+    reason,
+    refusal: { code: 'IA-RUNTIME-MANDATE-ACTOR', message: reason, next: governance(demo) },
+  });
+  const none = database(freshInit(unmandated.replace(STEWARD, INSTALLED)));
+  expect(defaultActor(none, token(none), demo)).toEqual({
+    participants: [],
+    actors: [],
+    reason: `${unnamed}, and no authored @mandate scoped to it names an authored @agent as its participant`,
+  });
+  // An authored steward is the default actor and one of the actors --actor may name, participant or not.
+  const authored = database(freshInit(`${records.replace(STEWARD, '    steward @agent ops\n')}${agent('ops')}`));
+  expect(defaultActor(authored, token(authored), demo)).toEqual({
+    actor: ops,
+    by: 'steward',
+    participants: [participant],
+    actors: [participant, ops],
+  });
 });
 
 it('counts only the authored participants of authored mandates', () => {
@@ -500,6 +569,7 @@ it('counts only the authored participants of authored mandates', () => {
     actor: participant,
     by: 'participant',
     participants: [participant],
+    actors: [participant],
   });
   expect(governingMandates(db, within, { actor: participant, workspace: demo })).toEqual([
     {
@@ -520,7 +590,12 @@ it('restricts nothing and says so when no mandate governs', () => {
     within = token(db);
   expect(errors(db)).toEqual([]);
   // The steward is still the default actor; no mandate names it.
-  expect(defaultActor(db, within, demo)).toEqual({ actor: participant, by: 'steward', participants: [] });
+  expect(defaultActor(db, within, demo)).toEqual({
+    actor: participant,
+    by: 'steward',
+    participants: [],
+    actors: [participant],
+  });
   expect(governingMandates(db, within, { actor: participant, workspace: demo })).toEqual([]);
   for (const mode of MODES) {
     expect(profileAt(db, mode), mode).toEqual({ notice: UNGOVERNED });
@@ -545,7 +620,12 @@ it('resolves what a workspace with admission errors admits', () => {
     within = token(db);
   expect(errors(db).length).toBeGreaterThan(0);
   expect(db.refused.map((record) => record.identity)).toContain('work-system/definition/task/broken');
-  expect(defaultActor(db, within, demo)).toEqual({ actor: participant, by: 'steward', participants: [participant] });
+  expect(defaultActor(db, within, demo)).toEqual({
+    actor: participant,
+    by: 'steward',
+    participants: [participant],
+    actors: [participant],
+  });
   expect(identities(db, { actor: participant, workspace: demo })).toEqual([mandate('demo-mandate')]);
   expect(profileAt(db, 'validate')).toEqual({});
   expect(profileAt(db, 'author').refusal).toMatchObject({
@@ -756,6 +836,7 @@ it('reads only through its scope token, never at runtime placement, and refuses 
     actor: participant,
     by: 'participant',
     participants: [participant],
+    actors: [participant],
   });
   expect(() => governingMandates(stewardPlaced, stewardWithin, { actor: rt })).toThrow(
     `'${rt}' is not an admitted @agent`,
@@ -763,7 +844,12 @@ it('reads only through its scope token, never at runtime placement, and refuses 
   // A narrowed scope reads only what it admits.
   const narrowed = authored.resolveScope({ identities: [demo, participant] }).token;
   expect(governingMandates(authored, narrowed, { actor: participant, workspace: demo })).toEqual([]);
-  expect(defaultActor(authored, narrowed, demo)).toEqual({ actor: participant, by: 'steward', participants: [] });
+  expect(defaultActor(authored, narrowed, demo)).toEqual({
+    actor: participant,
+    by: 'steward',
+    participants: [],
+    actors: [participant],
+  });
   // A missing token, or an actor or workspace that is not an admitted record of its word, is refused; an unknown
   // token keeps its database code.
   expect(() => governingMandates(authored, '')).toThrow('IA-RUNTIME-REQUEST-INVALID');
@@ -802,7 +888,12 @@ it("resolves this repository's participant as its default actor, granted all fiv
     own = 'agent-system/binding/agent/language-participant';
   expect(db.resolveSeat('', { within }).seat).toBe(language);
   // language-workspace states no composition.steward, so its one participant is the default actor.
-  expect(defaultActor(db, within, language)).toEqual({ actor: own, by: 'participant', participants: [own] });
+  expect(defaultActor(db, within, language)).toEqual({
+    actor: own,
+    by: 'participant',
+    participants: [own],
+    actors: [own],
+  });
   const governing = governingMandates(db, within, { actor: own, workspace: language });
   expect(governing).toEqual([
     {

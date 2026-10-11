@@ -567,19 +567,32 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
         ),
       );
   }
+  // A group deleted, changed or duplicated by hand is one apply refuses to put back on its own (guard review finding
+  // G-N2): the remedy removes the registration, and the next apply registers the workspace's hooks again.
+  const reregister = commands.apply(host, `ia host ${host} --remove --apply`),
+    again = `"ia host ${host} --apply" then registers the workspace's hooks again`;
   for (const { hook, drift } of hookDrift)
     checks.push(
-      installation(
-        `projection-${host}-hook:${hook}`,
-        title,
-        drift === 'modified' ? 'fail' : 'warn',
-        drift === 'missing'
-          ? `the hook group for ${hook} is missing from ${SETTINGS}; the remedy registers it again`
-          : drift === 'modified'
-            ? `the hook group for ${hook} in ${SETTINGS} changed since it was registered, or appears twice; delete only that group, then run the remedy`
-            : `${SETTINGS} holds a guard hook group for ${hook}, which this workspace's registration does not own; it is left in place`,
-        apply,
-      ),
+      drift === 'foreign'
+        ? installation(
+            `projection-${host}-hook:${hook}`,
+            title,
+            'warn',
+            `${SETTINGS} holds a guard hook group for ${hook}, which this workspace's registration does not own; it is left in place`,
+            apply,
+          )
+        : installation(
+            `projection-${host}-hook:${hook}`,
+            title,
+            'fail',
+            commands.prose(
+              host,
+              drift === 'missing'
+                ? `the hook group for ${hook} was deleted from ${SETTINGS}, which apply does not put back on its own; the remedy removes the registration, and ${again}`
+                : `the hook group for ${hook} in ${SETTINGS} changed since it was registered, or appears twice; delete only that group, then run the remedy, which removes the registration, and ${again}`,
+            ),
+            reregister,
+          ),
     );
   try {
     const rendered = renderProjectionFor(root, host),

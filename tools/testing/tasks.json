@@ -885,6 +885,36 @@
       ]
     },
     {
+      "id": "cli:test-host-generated",
+      "kind": "vitest",
+      "project": "apps/cli",
+      "files": [
+        "tests/host-generated.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "selected-tests-workspace-records",
+      "dependsOn": [
+        "cli:build",
+        "host-payload:generate",
+        "language-base:generate"
+      ],
+      "outputs": [
+        "artifacts/tests/cli-test-host-generated"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
       "id": "cli:test-host-recovery",
       "kind": "vitest",
       "project": "apps/cli",

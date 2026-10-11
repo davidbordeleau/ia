@@ -1,0 +1,493 @@
+/**
+ * Milestone generation-binding task host-consumes-generated-set (plan amendments C4, C5, C9, C10 and C12), end to end:
+ * an `ia init` workspace with the composition fixture laid over it (C7) gets its packet, its generated agent and skill
+ * and its `@hook`'s group through `ia host`, the one projection writer; the group is run through the materialized
+ * launcher exactly as Claude Code runs it; and renames and removals of the records take the obsolete agent, skill and
+ * group away again, leaving unrelated settings and unmarked files alone.
+ */
+import { cpSync, existsSync, realpathSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll, expect, it, vi } from 'vitest';
+import { PACKET_MARKER } from '@inventarch/runtime';
+import { hookGroupDigest } from '@inventarch/distribution/guard-registration';
+import { sha256 } from '@inventarch/distribution/services';
+import { runBounded } from '@tools/testing/subprocess.js';
+import { ProjectionError } from '@inventarch/workspace-runtime/projections';
+import { renderProjectionFor } from '../src/host-projection.js';
+import { quote } from '../src/render.js';
+import { cleanup, cli, run } from './workspace-fixture.js';
+import {
+  doctor,
+  GUARD_STATE,
+  host,
+  initialized,
+  legacyRegistration,
+  noDrift,
+  put,
+  read,
+  STEWARD,
+} from './host-fixture.js';
+
+vi.setConfig({ testTimeout: 600_000 });
+
+/** A seam on the host set's generation, so a test can make it refuse as workspace-runtime refuses; it passes through. */
+const seams = vi.hoisted(() => ({ refuse: undefined as Error | undefined }));
+vi.mock('@inventarch/workspace-runtime/internal/generate', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@inventarch/workspace-runtime/internal/generate')>();
+  return {
+    ...actual,
+    generateHostSet: (...args: Parameters<typeof actual.generateHostSet>) => {
+      if (seams.refuse !== undefined) throw seams.refuse;
+      return actual.generateHostSet(...args);
+    },
+  };
+});
+afterAll(cleanup);
+
+const FIXTURE = resolve(cli, 'tests/fixtures/composition-workspace');
+const PROFILE = 'agent-composition-system/binding/agent-profile/reviewer',
+  PLAYBOOK = 'governance-system/definition/procedure/note-review',
+  HOOK = 'hook-authoring-system/binding/hook/note-edits',
+  RENAMED = 'hook-authoring-system/binding/hook/doc-edits';
+const SETTINGS = '.claude/settings.local.json',
+  HOOK_STATE = '.ia/distributions/hosts/claude-hooks-workspace.json',
+  PROJECTION = '.ia/distributions/hosts/claude-projection.json',
+  AGENT = '.claude/agents/reviewer.md',
+  SKILL = '.claude/skills/note-review/SKILL.md',
+  PACKET = ['.claude/rules/ia-workspace.md', '.claude/skills/ia-authoring/SKILL.md'];
+const reviewer = { agent_id: 'subagent-1', agent_type: 'reviewer' };
+
+/** An `ia init` workspace with the composition fixture laid over it, by its physical path, and its IA home. */
+async function composed(legacy = false): Promise<{ root: string; env: { IA_HOST_HOME: string } }> {
+  const { root, env } = await initialized();
+  if (legacy) legacyRegistration(root, env);
+  cpSync(FIXTURE, root, { recursive: true });
+  return { root: realpathSync(root), env };
+}
+/** `text` with each `from` replaced by its `to`, every one of which must be there. */
+const edited = (text: string, ...edits: readonly (readonly [string, string])[]): string =>
+  edits.reduce((result, [from, to]) => {
+    if (!result.includes(from)) throw new Error(`fixture lacks ${from}`);
+    return result.replaceAll(from, to);
+  }, text);
+/** `text` without the span from `from` up to, not including, `to`. */
+const without = (text: string, from: string, to: string): string => {
+  const start = text.indexOf(from),
+    end = text.indexOf(to, start);
+  if (start < 0 || end < 0) throw new Error(`fixture lacks ${from} ... ${to}`);
+  return text.slice(0, start) + text.slice(end);
+};
+const edit = (root: string, path: string, ...edits: readonly (readonly [string, string])[]): void =>
+  writeFileSync(resolve(root, path), edited(read(root, path), ...edits));
+
+interface Handler {
+  readonly command: string;
+  readonly args: readonly string[];
+}
+interface Group {
+  readonly matcher: string;
+  readonly hooks: readonly Handler[];
+}
+const settings = (root: string): Record<string, unknown> & { hooks?: { PreToolUse?: Group[] } } =>
+  JSON.parse(read(root, SETTINGS));
+/** The `@hook` groups in the local settings, by the identity each runs the guard for. */
+const hookGroups = (root: string): ReadonlyMap<string, Group> =>
+  new Map(
+    (settings(root).hooks?.PreToolUse ?? [])
+      .filter((group) => group.hooks.some((handler) => handler.args?.includes('--hook')))
+      .map((group) => [group.hooks[0]!.args.at(-1)!, group]),
+  );
+/** Every file `paths` names, with its bytes, or null where none is. */
+const snapshot = (root: string, paths: readonly string[]): Record<string, string | null> =>
+  Object.fromEntries(paths.map((path) => [path, existsSync(resolve(root, path)) ? read(root, path) : null]));
+interface ProjectionElement {
+  readonly id: string;
+  readonly action: string;
+  readonly guard: string;
+  readonly files: { path: string; action: string }[];
+  readonly hooks?: { hook: string; action: string }[];
+  readonly unsupported: { identity: string; word: string; reason: string }[];
+}
+/** The projection element of an `ia host --json` envelope. */
+const projection = (stdout: string): ProjectionElement =>
+  (JSON.parse(stdout) as { plan: { elements: ProjectionElement[] } }).plan.elements.find(
+    (element) => element.id === 'projection',
+  )!;
+const actions = (element: ReturnType<typeof projection>): Record<string, string> =>
+  Object.fromEntries(element.files.map((file) => [file.path, file.action]));
+const receipt = (root: string, name = 'claude') =>
+  JSON.parse(read(root, `.ia/distributions/hosts/${name}-receipt.json`)) as {
+    files: { path: string; sha256: string }[];
+    generated: { identity: string; word: string; path: string; sha256: string }[];
+    hooks?: { identity: string; tools: string[]; sha256: string }[];
+    definitions: { identity: string; word: string; definition: Record<string, unknown> }[];
+    unsupported: { identity: string; word: string; reason: string }[];
+    removed: { path: string; sha256: string }[];
+    guard: string;
+    writtenAt: string;
+  };
+/** A receipt's rows: everything but the time and the retirement, which describe the apply that wrote it. */
+const rows = (root: string, name = 'claude') => {
+  const { writtenAt: _writtenAt, guard: _guard, ...rest } = receipt(root, name);
+  return rest;
+};
+async function apply(root: string, env: Record<string, string>, ...extra: string[]) {
+  const result = await host(root, env, 'claude', '--apply', '--yes', ...extra);
+  expect(result.exitCode, result.stdout).toBe(0);
+  return result;
+}
+/**
+ * Run a registered group's one handler on a file edit event, exactly as Claude Code runs it (the command and its
+ * arguments, the event on stdin): undefined when the guard allows the edit, else its refusal reason.
+ */
+async function guarded(
+  root: string,
+  group: Group | undefined,
+  path: string,
+  extra: Record<string, unknown> = {},
+  tool = 'Write',
+): Promise<string | undefined> {
+  expect(group, 'a registered hook group').toBeDefined();
+  const [handler] = group!.hooks;
+  const result = await runBounded(handler!.command, [...handler!.args], {
+    input: JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: tool,
+      tool_input: { file_path: resolve(root, path), content: 'x', ...(tool === 'MultiEdit' ? { edits: [] } : {}) },
+      ...extra,
+    }),
+    timeoutMs: 60_000,
+    env: { ...process.env, NODE_OPTIONS: '' },
+  });
+  expect(result.status, result.stderr).toBe(0);
+  const output = JSON.parse(result.stdout) as { hookSpecificOutput?: { permissionDecisionReason?: string } };
+  return output.hookSpecificOutput?.permissionDecisionReason;
+}
+const codeOf = (reason: string | undefined): string | undefined => reason?.split(':')[0];
+
+it('applies the packet, one agent, one skill and one hook group through the one writer, and a second apply writes nothing', async () => {
+  const { root, env } = await composed();
+  const first = projection((await apply(root, env)).stdout);
+  expect(actions(first)).toEqual({
+    [PACKET[0]!]: 'create',
+    [PACKET[1]!]: 'create',
+    [AGENT]: 'create',
+    [SKILL]: 'create',
+  });
+  expect(first.hooks).toEqual([{ hook: HOOK, action: 'create' }]);
+  expect(first.unsupported).toEqual([]);
+  for (const path of [...PACKET, AGENT, SKILL]) expect(read(root, path).split('\n'), path).toContain(PACKET_MARKER);
+  // One group, for every edit tool, running the guard for the hook (C9, G-R2); the ownership state records its paths.
+  const group = hookGroups(root).get(HOOK)!;
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  expect(settings(root).hooks?.PreToolUse).toHaveLength(1);
+  expect(group.matcher).toBe('Write|Edit|MultiEdit');
+  expect(group.hooks[0]!.args.slice(-5)).toEqual(['guard', '--root', root, '--hook', HOOK]);
+  expect(JSON.parse(read(root, HOOK_STATE)).groups).toEqual([
+    { hook: HOOK, group, paths: ['docs/**', 'restricted/**'] },
+  ]);
+  // Ownership is the projection state's: the generated files are owned there, beside the packet's.
+  expect(Object.keys(JSON.parse(read(root, PROJECTION)).files).sort()).toEqual([...PACKET, AGENT, SKILL].sort());
+  // The receipt lists each generated file with its record, the hook group by identity and digest, and the definitions.
+  const written = receipt(root);
+  expect(written.files.map((file) => file.path).sort()).toEqual([...PACKET, AGENT, SKILL].sort());
+  expect(written.generated).toEqual([
+    { identity: PROFILE, word: 'agent-profile', path: AGENT, sha256: sha256(read(root, AGENT)) },
+    { identity: PLAYBOOK, word: 'playbook', path: SKILL, sha256: sha256(read(root, SKILL)) },
+  ]);
+  expect(written.hooks).toEqual([
+    { identity: HOOK, tools: ['Write', 'Edit', 'MultiEdit'], sha256: hookGroupDigest(group) },
+  ]);
+  expect(written.unsupported).toEqual([]);
+  expect(written.definitions.map((row) => [row.word, row.identity])).toEqual([
+    ['operation', 'authoring-system/binding/operation/read-note'],
+    ['harness', 'agent-composition-system/definition/harness/note-workspace'],
+  ]);
+  // The handler and validator ids are catalog keys copied as authored; nothing resolves or runs them.
+  expect(written.definitions[0]!.definition).toMatchObject({
+    handler: 'read-note-v1',
+    input: 'read-note-input-v1',
+    output: 'read-note-output-v1',
+  });
+  expect(written.definitions[1]!.definition['registrations']).toEqual({
+    agents: [{ identity: PROFILE, path: AGENT }],
+    skills: [{ identity: PLAYBOOK, path: SKILL }],
+    hooks: [expect.objectContaining({ identity: HOOK, paths: ['docs/**', 'restricted/**'] })],
+  });
+
+  // A second apply is a no-op: no file, setting or state changes, and the receipt every apply writes (B12) holds the
+  // same rows, only its time differing.
+  const watched = [...PACKET, AGENT, SKILL, SETTINGS, HOOK_STATE, PROJECTION],
+    before = snapshot(root, watched),
+    rowsBefore = rows(root);
+  const second = projection((await apply(root, env)).stdout);
+  expect(second.action).toBe('unchanged');
+  expect(new Set(Object.values(actions(second)))).toEqual(new Set(['unchanged']));
+  expect(second.hooks).toEqual([{ hook: HOOK, action: 'unchanged' }]);
+  expect(snapshot(root, watched)).toEqual(before);
+  expect(rows(root)).toEqual(rowsBefore);
+
+  // Doctor finds nothing after a clean apply.
+  const clean = await doctor(root, env);
+  expect(clean.checks).toContainEqual(noDrift());
+  expect(clean.checks.filter((check) => check.id.startsWith('projection-claude') && check.status !== 'ok')).toEqual([]);
+});
+
+it('runs the registered group through the launcher: the hook decides what it selects, and IA state is managed', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  const group = hookGroups(root).get(HOOK);
+  // The main session acts as the workspace's steward, whom docs-mandate grants Synthesis under docs/.
+  expect(await guarded(root, group, 'docs/guide.md')).toBeUndefined();
+  // The reviewer subagent acts as @agent reviewer, whom no mandate governing docs/ binds.
+  const refused = await guarded(root, group, 'docs/guide.md', reviewer);
+  expect(codeOf(refused)).toBe('IA-HOOK-NOT-MANDATED');
+  expect(refused).toContain(`Use the participant's documentation mandate. (${HOOK}: subagent reviewer acts as`);
+  expect(codeOf(await guarded(root, group, 'restricted/plan.md', reviewer, 'Edit'))).toBe('IA-HOOK-NOT-MANDATED');
+  // What the hook does not select is not decided (C10), the records under .ia/src included.
+  expect(await guarded(root, group, 'src/app.ts', reviewer)).toBeUndefined();
+  expect(await guarded(root, group, '.ia/src/hooks.ia', reviewer)).toBeUndefined();
+  // A subagent no authored profile names is refused wherever the hook selects.
+  expect(codeOf(await guarded(root, group, 'docs/guide.md', { agent_id: 'subagent-2', agent_type: 'stranger' }))).toBe(
+    'IA-HOOK-IDENTITY-UNAVAILABLE',
+  );
+  // The generated files, the settings and the hook ownership state are managed for every edit tool and every actor.
+  for (const path of [AGENT, SKILL, SETTINGS, HOOK_STATE])
+    for (const tool of ['Write', 'Edit', 'MultiEdit'])
+      expect(codeOf(await guarded(root, group, path, {}, tool)), `${path} ${tool}`).toBe('IA-HOOK-PROJECTION-MANAGED');
+});
+
+it('reports drift in a generated file and in a hook group, and names the way back from a group deleted by hand', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  const original = read(root, SKILL);
+  writeFileSync(resolve(root, SKILL), `${original}Edited by hand.\n`);
+  const drifted = await doctor(root, env);
+  expect(
+    drifted.checks.filter((check) => check.id.startsWith('projection-claude') && check.status !== 'ok'),
+  ).not.toEqual([]);
+  writeFileSync(resolve(root, SKILL), original);
+  expect((await doctor(root, env)).checks).toContainEqual(noDrift());
+
+  // The group deleted by hand: doctor reports it missing, apply refuses to put it back silently, and the removal it
+  // names, then a new registration, restores it.
+  const kept = settings(root);
+  writeFileSync(resolve(root, SETTINGS), `${JSON.stringify({ ...kept, hooks: { PreToolUse: [] } }, null, 2)}\n`);
+  const missing = (await doctor(root, env)).checks.find((check) => check.id === `projection-claude-hook:${HOOK}`);
+  expect(missing).toMatchObject({
+    status: 'fail',
+    remedy: `ia host claude --root ${quote(root)} --remove --apply`,
+  });
+  expect(missing!.detail).toContain(
+    `the remedy removes the registration, and "ia host claude --root ${quote(root)} --apply" then registers`,
+  );
+  const refused = await host(root, env, 'claude', '--apply', '--yes');
+  expect(refused.exitCode).not.toBe(0);
+  expect(refused.stdout).toContain('was deleted by hand');
+  // The remedy doctor names, then the apply it names, run as given.
+  await apply(root, env, '--remove');
+  expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+  await apply(root, env);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  expect((await doctor(root, env)).checks).toContainEqual(noDrift());
+});
+
+it('removes the obsolete agent, skill and hook group when their records are renamed or deleted, leaving unrelated settings and unmarked files', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  // Unrelated settings and files the user keeps beside IA's.
+  const kept = settings(root),
+    bash = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo kept' }] };
+  writeFileSync(
+    resolve(root, SETTINGS),
+    `${JSON.stringify({ ...kept, env: { KEPT: '1' }, hooks: { PreToolUse: [...kept.hooks!.PreToolUse!, bash] } }, null, 2)}\n`,
+  );
+  const unmarked = { '.claude/agents/notes.md': '# My notes\n', '.claude/skills/custom/SKILL.md': 'My own skill.\n' };
+  for (const [path, text] of Object.entries(unmarked)) put(root, path, text);
+  const old = hookGroups(root).get(HOOK);
+
+  // The record edit itself is not selected by the hook, so the main session may make it.
+  expect(await guarded(root, old, '.ia/src/hooks.ia')).toBeUndefined();
+  // The renamed hook also narrows its tools to Write.
+  edit(
+    root,
+    '.ia/src/hooks.ia',
+    ['note-edits', 'doc-edits'],
+    ['@agent-profile reviewer', '@agent-profile auditor'],
+    ['tools [Write, Edit, MultiEdit]', 'tools [Write]'],
+  );
+  edit(
+    root,
+    '.ia/src/composition.ia',
+    ['@agent-profile reviewer', '@agent-profile auditor'],
+    ['note-review', 'doc-review'],
+  );
+  edit(root, '.ia/src/playbook.ia', ['@playbook note-review', '@playbook doc-review']);
+  const validated = await run(['validate', '--root', root, '--json']);
+  expect(validated.exitCode, validated.stdout).toBe(0);
+  // Until the next apply, the group whose hook is gone refuses no more than its last registered selection, naming the
+  // shell commands that bring the registration back in step (G-N4).
+  const stale = await guarded(root, old, 'docs/guide.md');
+  expect(codeOf(stale)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  expect(stale).toContain('this edit is under its last registered selection');
+  expect(stale).toContain(`ia host claude --root ${JSON.stringify(root)} --apply --yes`);
+  expect(stale).toContain(`ia host claude --root ${JSON.stringify(root)} --remove --apply --yes`);
+  expect(await guarded(root, old, 'src/app.ts')).toBeUndefined();
+
+  const renamed = projection((await apply(root, env)).stdout);
+  expect(actions(renamed)).toMatchObject({
+    [AGENT]: 'remove',
+    [SKILL]: 'remove',
+    '.claude/agents/auditor.md': 'create',
+    '.claude/skills/doc-review/SKILL.md': 'create',
+  });
+  expect(renamed.hooks).toEqual([
+    { hook: RENAMED, action: 'create' },
+    { hook: HOOK, action: 'remove' },
+  ]);
+  for (const path of [AGENT, SKILL]) expect(existsSync(resolve(root, path)), path).toBe(false);
+  const written = receipt(root);
+  expect(written.removed.map((file) => file.path).sort()).toEqual([AGENT, SKILL].sort());
+  expect(written.generated.map((row) => row.path)).toEqual([
+    '.claude/agents/auditor.md',
+    '.claude/skills/doc-review/SKILL.md',
+  ]);
+  // The receipt names the tools the hook declares, which the group's matcher, every edit tool, does not say.
+  expect(written.hooks).toEqual([
+    { identity: RENAMED, tools: ['Write'], sha256: hookGroupDigest(hookGroups(root).get(RENAMED)) },
+  ]);
+  // Unrelated settings keys and groups and unmarked files are intact.
+  expect(settings(root)['env']).toEqual({ KEPT: '1' });
+  expect(settings(root).hooks?.PreToolUse?.filter((group) => group.matcher === 'Bash')).toEqual([bash]);
+  expect([...hookGroups(root).keys()]).toEqual([RENAMED]);
+  for (const [path, text] of Object.entries(unmarked)) expect(read(root, path), path).toBe(text);
+  // The renamed hook decides through its own group; the subagent named after the renamed profile acts as the reviewer.
+  const group = hookGroups(root).get(RENAMED);
+  expect(await guarded(root, group, 'docs/guide.md')).toBeUndefined();
+  expect(codeOf(await guarded(root, group, 'docs/guide.md', { agent_id: 'subagent-1', agent_type: 'auditor' }))).toBe(
+    'IA-HOOK-NOT-MANDATED',
+  );
+  expect(codeOf(await guarded(root, group, 'docs/guide.md', reviewer))).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
+  // Its tools apply to its paths only: an Edit there is not decided, and IA state stays managed for every tool.
+  expect(
+    await guarded(root, group, 'docs/guide.md', { agent_id: 'subagent-1', agent_type: 'auditor' }, 'Edit'),
+  ).toBeUndefined();
+  expect(codeOf(await guarded(root, group, '.claude/agents/auditor.md', {}, 'Edit'))).toBe(
+    'IA-HOOK-PROJECTION-MANAGED',
+  );
+
+  // The hook deleted outright: the next apply removes its group and the ownership state, and nothing else.
+  writeFileSync(
+    resolve(root, '.ia/src/hooks.ia'),
+    edited(
+      without(
+        without(read(root, '.ia/src/hooks.ia'), '@hook doc-edits', '@mandate docs-mandate'),
+        '@execution-binding notes-hook',
+        '@harness note-workspace',
+      ),
+      ['bindings [@execution-binding notes-hook]', 'bindings []'],
+    ),
+  );
+  const removed = projection((await apply(root, env)).stdout);
+  expect(removed.hooks).toEqual([{ hook: RENAMED, action: 'remove' }]);
+  expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+  expect(settings(root)['env']).toEqual({ KEPT: '1' });
+  expect(settings(root).hooks?.PreToolUse).toEqual([bash]);
+  expect(receipt(root).hooks).toEqual([]);
+
+  // Removing the registration takes the generated files and leaves the user's own.
+  await apply(root, env, '--remove');
+  for (const path of ['.claude/agents/auditor.md', '.claude/skills/doc-review/SKILL.md', ...PACKET])
+    expect(existsSync(resolve(root, path)), path).toBe(false);
+  for (const [path, text] of Object.entries(unmarked)) expect(read(root, path), path).toBe(text);
+  expect(settings(root)['env']).toEqual({ KEPT: '1' });
+  expect(settings(root).hooks?.PreToolUse).toEqual([bash]);
+});
+
+it('retires a 1.x steward guard and registers the hook group in one apply, and a profile named after a 1.x steward file is one update', async () => {
+  const { root, env } = await composed(true);
+  // The fixture profile renamed after the 1.x steward file the projection state still owns.
+  edit(root, '.ia/src/composition.ia', ['@agent-profile reviewer', '@agent-profile demo-steward']);
+  edit(root, '.ia/src/hooks.ia', ['@agent-profile reviewer', '@agent-profile demo-steward']);
+  const element = projection((await apply(root, env)).stdout);
+  expect(element.guard).toBe('retire');
+  expect(element.files.filter((file) => file.path === STEWARD)).toEqual([{ path: STEWARD, action: 'update' }]);
+  expect(element.hooks).toEqual([{ hook: HOOK, action: 'create' }]);
+  // The steward guard's group and state are gone, and the one group left is the hook's.
+  expect(existsSync(resolve(root, GUARD_STATE))).toBe(false);
+  expect(settings(root).hooks?.PreToolUse).toHaveLength(1);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  const written = receipt(root);
+  expect(written.guard).toBe('retired');
+  expect(written.hooks?.map((row) => row.identity)).toEqual([HOOK]);
+  expect(written.generated.find((row) => row.word === 'agent-profile')).toMatchObject({ path: STEWARD });
+  expect(read(root, STEWARD).split('\n')).toContain(PACKET_MARKER);
+  expect(read(root, STEWARD)).toContain('name: "demo-steward"');
+  // And the next apply changes nothing; its receipt holds the same rows, and no retirement, which was the first's.
+  const before = snapshot(root, [STEWARD, SETTINGS, HOOK_STATE, PROJECTION]),
+    rowsBefore = rows(root);
+  expect(projection((await apply(root, env)).stdout).action).toBe('unchanged');
+  expect(snapshot(root, [STEWARD, SETTINGS, HOOK_STATE, PROJECTION])).toEqual(before);
+  expect(rows(root)).toEqual(rowsBefore);
+  expect(receipt(root).guard).toBe('none');
+});
+
+it('applies the packet and the skill for codex, and reports the agent and the hook as not taken (C12)', async () => {
+  const { root, env } = await composed();
+  const result = await host(root, env, 'codex', '--apply', '--yes');
+  expect(result.exitCode, result.stdout).toBe(0);
+  const element = projection(result.stdout);
+  expect(actions(element)).toEqual({
+    'AGENTS.md': 'create',
+    '.agents/skills/ia-authoring/SKILL.md': 'create',
+    '.agents/skills/note-review/SKILL.md': 'create',
+  });
+  expect(element.hooks).toBeUndefined();
+  const written = receipt(root, 'codex');
+  expect(written.unsupported.map((row) => [row.word, row.identity])).toEqual([
+    ['agent-profile', PROFILE],
+    ['hook', HOOK],
+  ]);
+  expect(written.generated.map((row) => [row.word, row.path])).toEqual([
+    ['playbook', '.agents/skills/note-review/SKILL.md'],
+  ]);
+  expect(written.hooks).toBeUndefined();
+  expect(written.definitions[0]!.definition).toMatchObject({ handler: 'read-note-v1' });
+  for (const path of [AGENT, SETTINGS, '.codex/agents']) expect(existsSync(resolve(root, path)), path).toBe(false);
+});
+
+it("falls back to the mandates that bind the fixture profile's agent when the profile names none (C1)", async () => {
+  const { root } = await composed();
+  edit(root, '.ia/src/composition.ia', ['    mandate @mandate demo-mandate\n', '']);
+  const agent = renderProjectionFor(root, 'claude').files.find((file) => file.path === AGENT)!.text;
+  expect(agent.split('\n## Mandate\n\n')[1]!.split('\n\n## ')[0]).toBe(
+    [
+      "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.",
+      '',
+      '- `agent-system/policy/mandate/reviewer-docs`',
+      '  - participant `agent-system/binding/agent/reviewer`',
+      '  - moves Observation',
+      '  - covers `restricted/`',
+    ].join('\n'),
+  );
+});
+
+it('reports a generation refusal with its own code, naming ia validate, and writes nothing', async () => {
+  const { root, env } = await composed();
+  seams.refuse = new ProjectionError({ code: 'IA-PROJECTION-INPUT-INVALID', message: 'forced generation refusal' });
+  try {
+    for (const extra of [[], ['--apply', '--yes']]) {
+      const refused = await host(root, env, 'claude', ...extra);
+      expect(refused.exitCode, refused.stdout).toBe(3);
+      expect(JSON.parse(refused.stdout)).toMatchObject({
+        ok: false,
+        code: 'IA-PROJECTION-INPUT-INVALID',
+        message: 'forced generation refusal',
+        next: `Correct the record the message names, then run "ia validate --root ${quote(root)}".`,
+      });
+    }
+  } finally {
+    seams.refuse = undefined;
+  }
+  for (const path of [AGENT, SKILL, HOOK_STATE]) expect(existsSync(resolve(root, path)), path).toBe(false);
+});

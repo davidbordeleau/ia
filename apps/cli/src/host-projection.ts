@@ -35,6 +35,7 @@ import type {
   HookGroupRow,
   HookToolName,
   HostFile,
+  HostHookDeclaration,
   HostOutput,
   PacketReceipt,
   UnsupportedRow,
@@ -205,11 +206,15 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
     };
   return { plan: planHookRegistration(root, { cache: directory, hooks: rows }), unregistered: [] };
 }
-/** The hook groups the workspace owns now, as a receipt lists them: one row per `@hook`, keyed by identity. */
-function hookRows(root: string): readonly HookGroupRow[] {
+/**
+ * The hook groups the workspace owns now, as a receipt lists them: one row per `@hook`, keyed by identity, with the
+ * tools the hook declares (every group matches every edit tool, so its matcher does not say them) and the group's digest.
+ */
+function hookRows(root: string, declared: readonly HostHookDeclaration[]): readonly HookGroupRow[] {
+  const tools = new Map(declared.map((hook) => [hook.identity, hook.tools]));
   return (readHookRegistration(root)?.groups ?? []).map(({ hook, group }) => ({
     identity: hook,
-    tools: group.matcher.split('|') as HookToolName[],
+    tools: [...(tools.get(hook) ?? (group.matcher.split('|') as HookToolName[]))],
     sha256: hookGroupDigest(group),
   }));
 }
@@ -471,8 +476,11 @@ export function applyHostProjection(
   checkpoint('evidence');
   if (retirement !== null) applyGuardRegistration(retirement);
   checkpoint('guard');
-  // The hook groups next, through their own journal and lock; a plan that changes nothing writes nothing.
-  if (hooks.plan !== null) applyHookRegistration(hooks.plan);
+  // The hook groups next, through their own journal and lock; a plan that changes nothing writes nothing. A retirement
+  // rewrote the settings the first plan read, so the groups are planned again against what it left: the first plan
+  // only refused, before anything was written, what this one would.
+  const registration = retirement === null ? hooks : planHookStep(root, host, rendered, cache);
+  if (registration.plan !== null) applyHookRegistration(registration.plan);
   checkpoint('hooks');
   // The last apply's receipt goes before any projection file changes (B12).
   writeEvidence(STATE.receipt(host), null);
@@ -487,8 +495,8 @@ export function applyHostProjection(
           removed: evidence.removed.filter((file) => !existsSync(resolve(root, file.path))),
           foreign: plan.actions.filter((action) => action.action === 'foreign').map((action) => action.path),
           guard,
-          ...(host === 'claude' ? { hooks: hookRows(root) } : {}),
-          unsupported: [...(rendered.receipt.unsupported ?? []), ...hooks.unregistered],
+          ...(host === 'claude' ? { hooks: hookRows(root, rendered.hooks ?? []) } : {}),
+          unsupported: [...(rendered.receipt.unsupported ?? []), ...registration.unregistered],
           writtenAt: new Date().toISOString(),
         };
   if (receipt !== null) {

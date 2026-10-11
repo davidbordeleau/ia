@@ -9,7 +9,17 @@
  * compared as the deliberate divergence they are rather than asserted equal: §1.4, §3 and §4.4 require the three
  * protocols to stay observably different, and decisions.md:65 forbids normalizing them.
  */
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it } from 'vitest';
 import { cleanup, DESCRIPTOR, FIXTURE, packable, repository, scratch, workspace } from './workspace-fixture.js';
@@ -276,4 +286,100 @@ it('refuses the same bad input with the same service code on both entrypoints', 
   expect(human.stdout).toBe('');
   expect(human.stderr).toContain('IA-DIST-INPUT-INVALID');
   expect(existsSync(resolve(empty, '.ia/distributions'))).toBe(false);
+});
+
+/** Every entry under `roots`, with each file's size, modification time and digest: a write anywhere changes it. */
+function tree(...roots: string[]): Record<string, string> {
+  const entries: Record<string, string> = {};
+  for (const top of roots)
+    for (const entry of readdirSync(top, { recursive: true, encoding: 'utf8' })) {
+      const path = resolve(top, entry),
+        stat = statSync(path);
+      entries[path] = stat.isDirectory()
+        ? 'directory'
+        : `${stat.size} ${stat.mtimeMs} ${createHash('sha256').update(readFileSync(path)).digest('hex')}`;
+    }
+  return entries;
+}
+/** Two authored execution bindings: one names the installed captured read, one an implementation no host ships. */
+const BINDINGS = `#! ia 1.0
+
+@execution-binding read-captured-source-binding
+  meaning
+    says "Select the installed first-party captured-source read adapter."
+    answers "Which installed implementation serves captured reads here?"
+  binding
+    kind operation
+    implementation captured-source-read-v1
+
+@execution-binding missing-binding
+  meaning
+    says "Select an implementation no host ships."
+    answers "What does an implementation that is not installed bind to?"
+  binding
+    kind operation
+    implementation missing-read-v1
+`;
+interface BindingRow {
+  readonly identity: string;
+  readonly status: string;
+  readonly reason: string;
+}
+it('reports one Bindings section through ia validate --json and ia-distribution validate, and neither writes (C23, C24)', async () => {
+  const root = resolve(scratch('equivalence-bindings'), 'workspace'),
+    home = resolve(scratch('equivalence-bindings-home'), '.ia'),
+    env = { ...process.env, IA_HOME: home };
+  expect((await spawned(MAIN, ['init', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  writeFileSync(resolve(root, '.ia/src/bindings.ia'), BINDINGS);
+  const both = async (exitCode: number, label: string) => {
+    const before = tree(root, ...(existsSync(home) ? [home] : []));
+    const consumer = result(
+      await spawned(MAIN, ['validate', '--root', root, '--json'], env),
+      'stdout',
+      exitCode,
+      label,
+    );
+    const machine = result(await spawned(DISTRIBUTION, ['validate', '--root', root], env), 'stdout', exitCode, label);
+    // Computing and reporting bindings writes nothing anywhere: not in the workspace, not in the IA home.
+    expect(tree(root, ...(existsSync(home) ? [home] : [])), label).toEqual(before);
+    expect(consumer['bindings'], label).toEqual(machine['bindings']);
+    const bindings = machine['bindings'] as { catalog: Record<string, unknown>; results: BindingRow[] };
+    return {
+      catalog: bindings.catalog,
+      status: Object.fromEntries(bindings.results.map((row) => [row.identity.split('/').at(-1), row.status])),
+    };
+  };
+  // No host has joined a catalog yet (as for an ia project-only workspace): nothing is bound, and nothing passes.
+  expect(await both(0, 'unjoined')).toEqual({
+    catalog: { status: 'unavailable', reason: expect.stringContaining('no host has joined') },
+    status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'unavailable' },
+  });
+  expect((await spawned(MAIN, ['host', 'claude', '--root', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
+  // The host's payload ships the read handler, so its binding is bound; the missing implementation stays unavailable.
+  const joined = await both(0, 'joined');
+  expect(joined).toEqual({
+    catalog: expect.objectContaining({ status: 'joined', consumer: 'claude' }),
+    status: { 'missing-binding': 'unavailable', 'read-captured-source-binding': 'bound' },
+  });
+  // Shipped handler bytes altered after the build: the joined catalog fails verification, and every operation binding
+  // is revoked, which fails both runs.
+  const handler = resolve(
+    home,
+    'hosts',
+    String(joined.catalog['release']),
+    'runtime/node_modules/@inventarch/agent-composition-system/dist/installed-read.js',
+  );
+  const original = readFileSync(handler);
+  writeFileSync(handler, Buffer.concat([original, Buffer.from('\n// altered\n')]));
+  try {
+    expect(await both(1, 'altered')).toEqual({
+      catalog: expect.objectContaining({
+        status: 'damaged',
+        reason: expect.stringContaining('IA-DIST-INTEGRITY-MISMATCH'),
+      }),
+      status: { 'missing-binding': 'revoked', 'read-captured-source-binding': 'revoked' },
+    });
+  } finally {
+    writeFileSync(handler, original);
+  }
 });

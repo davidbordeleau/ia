@@ -80,9 +80,15 @@ export function run(argv: readonly string[]): { exitCode: number; result: unknow
     reader = session.reader;
   try {
     if (command === 'validate') {
-      // The finding set `ia validate --json` reports, from the one service behind both (inert declarations included).
-      const validation = session.validation();
-      return { exitCode: validation.status === 'refused' ? 1 : 0, result: validation };
+      // The finding set `ia validate --json` reports, from the one service behind both (inert declarations included),
+      // and the execution bindings it reports (C24): a revoked binding is an error, so it fails the run as a refusal does.
+      const validation = session.validation(),
+        bindings = session.bindings();
+      return {
+        exitCode:
+          validation.status === 'refused' || bindings.results.some((binding) => binding.status === 'revoked') ? 1 : 0,
+        result: { ...validation, bindings },
+      };
     }
     const within = session.within();
     if (command === 'render') {

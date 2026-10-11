@@ -9,10 +9,17 @@
  * `renderValidation` rather than recomposing the report from renderer primitives. The only value that tool
  * supplies of its own is the display root, which §2.5 already defines as a CLI-resolved value and which is the
  * one part of this output that differs between machines.
+ *
+ * Task execution-binding-host-entry (plan amendment C24): the report also carries the workspace's execution bindings,
+ * each joined against the installed-implementation catalog its host joined, through the same distribution service
+ * `ia-distribution validate` reports (`WorkspaceSession.bindings`). A revoked binding is an error and fails the run;
+ * an unavailable one is never a pass. Computing them writes nothing and executes nothing (C23; milestone 7 runs
+ * operations). With no `@execution-binding` record the human report is unchanged.
  */
+import type { ValidationBindings } from '@inventarch/distribution/services';
 import type { Context, Result } from './consumer.js';
 import { requireRoot } from './consumer.js';
-import type { Capabilities, ErrorElements, Token } from './render.js';
+import type { Capabilities, ErrorElements, Field, SymbolName, Token } from './render.js';
 import {
   atom,
   blockSymbolWidth,
@@ -20,6 +27,7 @@ import {
   document,
   entry,
   errorBlock,
+  fieldRows,
   headerLine,
   sectionLabel,
   statusSymbol,
@@ -95,6 +103,8 @@ export interface ValidationView {
   /** Every finding, unfiltered: the counts and the exit class are computed from this. */
   readonly findings: readonly Finding[];
   readonly checks: ReadonlyMap<string, string>;
+  /** Every admitted `@execution-binding` joined against the catalog this workspace's host joined, unfiltered. */
+  readonly bindings: ValidationBindings;
 }
 export interface ValidationOptions {
   readonly filters: readonly string[];
@@ -102,7 +112,14 @@ export interface ValidationOptions {
   readonly limit: number;
 }
 export const DEFAULT_OPTIONS: ValidationOptions = { filters: [], severity: 'warning', limit: 50 };
-export const validationExit = (view: ValidationView): 0 | 1 => (countsOf(view.findings).errors === 0 ? 0 : 1);
+const bindingCounts = (bindings: ValidationBindings) => ({
+  bound: bindings.results.filter((binding) => binding.status === 'bound').length,
+  unavailable: bindings.results.filter((binding) => binding.status === 'unavailable').length,
+  revoked: bindings.results.filter((binding) => binding.status === 'revoked').length,
+});
+/** 1 when admission has an error or a binding is revoked, which is an error too; an unavailable binding is not. */
+export const validationExit = (view: ValidationView): 0 | 1 =>
+  countsOf(view.findings).errors === 0 && bindingCounts(view.bindings).revoked === 0 ? 0 : 1;
 
 /** Opens the workspace, reads its admission and closes it. The only part of this verb that touches a workspace. */
 export function collectValidation(root: string): ValidationView {
@@ -119,6 +136,7 @@ export function collectValidation(root: string): ValidationView {
       records: admission.records,
       findings: admission.findings,
       checks: checkNames(session.reader.report.verdicts),
+      bindings: session.bindings(),
     };
   } finally {
     session.close();
@@ -153,8 +171,38 @@ export function validationEnvelope(view: ValidationView, options: ValidationOpti
     counts: countsOf(view.findings),
     findings: shown,
     truncated: shown.length < reported.length,
+    bindings: view.bindings,
   };
 }
+
+const BINDING_SYMBOL: Readonly<Record<ValidationBindings['results'][number]['status'], SymbolName>> = {
+  bound: 'success',
+  unavailable: 'unknown',
+  revoked: 'error',
+};
+/** Where the bindings' catalog came from, in one sentence. */
+function catalogLine(catalog: NonNullable<ValidationBindings['catalog']>, ascii: boolean): string {
+  if (catalog.status === 'unavailable') return `No installed-implementation catalog: ${catalog.reason}.`;
+  if (catalog.status === 'damaged')
+    return `The catalog host ${catalog.consumer} joined failed verification: ${catalog.reason}.`;
+  return `Catalog ${truncateDigest(catalog.digest, ascii)} in release ${truncateDigest(catalog.release, ascii)} (${catalog.version}), joined by host ${catalog.consumer}. Nothing is executed.`;
+}
+/** The Bindings section: where the catalog came from, then one row per binding with its result and reason. */
+const bindingsSection = (bindings: ValidationBindings, caps: Capabilities): readonly string[] => {
+  const rows: Field[] = bindings.results.map((binding) => ({
+    symbol: BINDING_SYMBOL[binding.status],
+    label: binding.identity,
+    value: words(`${binding.implementation ?? 'no implementation'}: ${binding.status}`),
+    note: words(binding.reason),
+  }));
+  return [
+    sectionLabel('Bindings', caps),
+    ...(bindings.catalog === null
+      ? []
+      : entry([words(catalogLine(bindings.catalog, caps.ascii))], { depth: 1, symbol: 'info' }, caps)),
+    ...fieldRows(rows, { depth: 1 }, caps),
+  ];
+};
 
 const element = (view: ValidationView, finding: Finding, width: number): ErrorElements => {
   const location = locationOf(finding);
@@ -226,7 +274,8 @@ const severitySection = (view: ValidationView, rows: readonly Finding[], caps: C
 };
 
 export function renderValidation(view: ValidationView, options: ValidationOptions, caps: Capabilities): string {
-  const total = countsOf(view.findings);
+  const total = countsOf(view.findings),
+    bound = bindingCounts(view.bindings);
   const { reported, shown, hiddenBySeverity, hiddenByPath } = select(view, options);
   const summary: (readonly Token[])[] = [
     words(
@@ -239,6 +288,18 @@ export function renderValidation(view: ValidationView, options: ValidationOption
     summary.push(
       words(
         `${hiddenByPath} ${hiddenByPath === 1 ? 'finding' : 'findings'} elsewhere in the workspace hidden by the path filter; admission is whole-workspace and the counts above are unfiltered.`,
+      ),
+    );
+  if (bound.revoked > 0)
+    summary.push(
+      words(
+        `${bound.revoked} execution ${bound.revoked === 1 ? 'binding is' : 'bindings are'} revoked, which is an error.`,
+      ),
+    );
+  if (bound.unavailable > 0)
+    summary.push(
+      words(
+        `${bound.unavailable} execution ${bound.unavailable === 1 ? 'binding is' : 'bindings are'} not bound; an unbound binding is not a pass.`,
       ),
     );
   if (view.outcome === 'not-evaluated')
@@ -254,7 +315,7 @@ export function renderValidation(view: ValidationView, options: ValidationOption
       [{ text: `revision ${truncateDigest(view.revision, caps.ascii)}`, column: 50 }],
       caps,
     ),
-    entry(summary, { depth: 1, symbol: total.errors === 0 ? 'success' : 'error' }, caps),
+    entry(summary, { depth: 1, symbol: total.errors === 0 && bound.revoked === 0 ? 'success' : 'error' }, caps),
   ];
   for (const group of [
     { label: 'Errors', severity: 'error' as const },
@@ -277,11 +338,12 @@ export function renderValidation(view: ValidationView, options: ValidationOption
         caps,
       ),
     );
+  if (view.bindings.results.length > 0) blocks.push(bindingsSection(view.bindings, caps));
   blocks.push(
     entry(
       [
         words(
-          total.errors > 0
+          total.errors > 0 || bound.revoked > 0
             ? 'Fix the errors above and run "ia validate" again.'
             : view.outcome === 'not-evaluated'
               ? 'A not-evaluated result is not a pass. Supply the named evaluator to obtain one.'

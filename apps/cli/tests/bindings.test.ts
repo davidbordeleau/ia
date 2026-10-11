@@ -1,0 +1,95 @@
+/**
+ * Task execution-binding-host-entry (plan amendments C16 and C24): `ia validate`'s Bindings section. Each authored
+ * `@execution-binding` is joined against the catalog its host joined; only a bound one is ever a pass, an unavailable
+ * one says so, and a revoked one is an error. Nothing is executed. tests/equivalence.test.ts compares the section the
+ * two validation binaries report and proves neither writes; this file owns its presentation.
+ */
+import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll, expect, it, vi } from 'vitest';
+import { host, initialized, put } from './host-fixture.js';
+import { cleanup, run } from './workspace-fixture.js';
+
+vi.setConfig({ testTimeout: 180_000 });
+afterAll(cleanup);
+
+const BINDINGS = `#! ia 1.0
+
+@execution-binding read-captured-source-binding
+  meaning
+    says "Select the installed first-party captured-source read adapter."
+    answers "Which installed implementation serves captured reads here?"
+  binding
+    kind operation
+    implementation captured-source-read-v1
+
+@execution-binding missing-binding
+  meaning
+    says "Select an implementation no host ships."
+    answers "What does an implementation that is not installed bind to?"
+  binding
+    kind operation
+    implementation missing-read-v1
+`;
+const READ = 'agent-composition-system/binding/execution-binding/read-captured-source-binding',
+  MISSING = 'agent-composition-system/binding/execution-binding/missing-binding';
+/** The report with every run of whitespace one space, so assertions do not depend on where lines wrap. */
+const validate = async (root: string, env: Record<string, string>, ...extra: string[]) => {
+  const result = await run(['validate', '--root', root, ...extra], { env });
+  return { ...result, text: result.stdout.replace(/\s+/g, ' ') };
+};
+
+it('prints the Bindings section: unbound is never a pass, bound names the shipped handler, revoked is an error', async () => {
+  const { root, env } = await initialized();
+  // A workspace with no execution binding keeps the report it had, with an empty bindings result in JSON.
+  const plain = await validate(root, env);
+  expect(plain.text).not.toContain('Bindings');
+  expect(JSON.parse((await validate(root, env, '--json')).stdout).bindings).toEqual({ catalog: null, results: [] });
+
+  put(root, '.ia/src/bindings.ia', BINDINGS);
+  const unjoined = await validate(root, env);
+  expect(unjoined.exitCode).toBe(0);
+  expect(unjoined.text).toContain('2 execution bindings are not bound; an unbound binding is not a pass.');
+  expect(unjoined.text).toContain(
+    'No installed-implementation catalog: no host has joined an installed-implementation catalog in this workspace',
+  );
+  expect(unjoined.text).toContain(`${READ} captured-source-read-v1: unavailable`);
+
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  const joined = await validate(root, env);
+  expect(joined.exitCode).toBe(0);
+  expect(joined.text).toContain('1 execution binding is not bound; an unbound binding is not a pass.');
+  expect(joined.text).toMatch(
+    /Catalog [0-9a-f]{12}… in release [0-9a-f]{12}… \([^)]+\), joined by host claude\. Nothing is executed\./,
+  );
+  expect(joined.text).toContain(`${READ} captured-source-read-v1: bound`);
+  expect(joined.text).toContain('captured-source-read-v1 ships handler ia.captured-source.read.v1 (bytes ');
+  expect(joined.text).toContain(`${MISSING} missing-read-v1: unavailable`);
+  expect(joined.text).toContain('the installed catalog lists no implementation missing-read-v1');
+  const envelope = JSON.parse((await validate(root, env, '--json')).stdout);
+  expect(envelope.bindings.results.map((row: { status: string }) => row.status)).toEqual(['unavailable', 'bound']);
+  expect(envelope.counts.errors).toBe(0);
+
+  // Altered shipped handler bytes: the catalog fails verification, both bindings are revoked, and the run fails.
+  const handler = resolve(
+    env.IA_HOST_HOME,
+    'hosts',
+    envelope.bindings.catalog.release,
+    'runtime/node_modules/@inventarch/agent-composition-system/dist/installed-read.js',
+  );
+  const original = readFileSync(handler);
+  writeFileSync(handler, Buffer.concat([original, Buffer.from('\n// altered\n')]));
+  try {
+    const revoked = await validate(root, env);
+    expect(revoked.exitCode).toBe(1);
+    expect(revoked.text).toContain('2 execution bindings are revoked, which is an error.');
+    expect(revoked.text).toContain('The catalog host claude joined failed verification: IA-DIST-INTEGRITY-MISMATCH');
+    expect(revoked.text).toContain(`${READ} captured-source-read-v1: revoked`);
+    expect(revoked.text).toContain('Fix the errors above and run "ia validate" again.');
+    // Revocation is the bindings' own error: admission's findings and their counts are unchanged.
+    expect(JSON.parse((await validate(root, env, '--json')).stdout).counts).toEqual(envelope.counts);
+  } finally {
+    writeFileSync(handler, original);
+  }
+  expect((await validate(root, env)).exitCode).toBe(0);
+});

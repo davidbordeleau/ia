@@ -60,7 +60,17 @@ export interface UnavailableOperation {
   readonly status: 'unavailable';
   readonly reason: string;
 }
-export type InstalledOperation = AvailableOperation | UnavailableOperation;
+/**
+ * An operation implementation the catalog withdraws, with the reason: the payload's producer declares it must not be
+ * bound, whatever bytes are present. A binder reports it as an error, never as merely unavailable. Nothing produces
+ * one yet; the format carries it so a withdrawal stays distinct from an implementation that is simply not shipped.
+ */
+export interface RevokedOperation {
+  readonly id: string;
+  readonly status: 'revoked';
+  readonly reason: string;
+}
+export type InstalledOperation = AvailableOperation | UnavailableOperation | RevokedOperation;
 export interface InstalledImplementationsValue {
   readonly format: typeof INSTALLED_IMPLEMENTATIONS_FORMAT;
   /** An `ia-evaluator-catalog/1.x` value as compliance's `createEvaluatorCatalog` takes it: its built-ins are implicit. */
@@ -149,13 +159,13 @@ function operationRow(item: unknown): InstalledOperation {
   if (item === null || typeof item !== 'object' || Array.isArray(item))
     fail('INPUT-INVALID', 'Invalid installed operation');
   const status = (item as { status?: unknown }).status;
-  if (status === 'unavailable') {
+  if (status === 'unavailable' || status === 'revoked') {
     const row = object(item, UNAVAILABLE_KEYS);
     if (typeof row['id'] !== 'string' || !TOKEN.test(row['id']) || row['id'].length > 128 || !prose(row['reason'], 512))
-      fail('INPUT-INVALID', 'Invalid unavailable installed operation');
-    return row as unknown as UnavailableOperation;
+      fail('INPUT-INVALID', `Invalid ${status} installed operation`);
+    return row as unknown as UnavailableOperation | RevokedOperation;
   }
-  if (status !== 'available') fail('INPUT-INVALID', 'An installed operation is available or unavailable');
+  if (status !== 'available') fail('INPUT-INVALID', 'An installed operation is available, unavailable or revoked');
   const row = object(item, AVAILABLE_KEYS),
     packages = row['packages'];
   if (
@@ -403,4 +413,111 @@ export function leaveHost(rootInput: string, hostInput: string): boolean {
     if (present) writeJoin(root, host, null);
     return present;
   });
+}
+
+/**
+ * Where a workspace's execution bindings find their catalog (task execution-binding-host-entry, plan amendment C24): the
+ * catalog one of its hosts joined, or why there is none.
+ */
+export type JoinedCatalog =
+  | {
+      readonly status: 'joined';
+      readonly consumer: WorkspaceHost;
+      readonly release: string;
+      readonly version: string;
+      readonly digest: string;
+      readonly catalog: InstalledImplementations;
+    }
+  | { readonly status: 'unavailable'; readonly reason: string }
+  | { readonly status: 'damaged'; readonly consumer: WorkspaceHost; readonly release: string; readonly reason: string };
+const failure = (error: unknown): { readonly code: string; readonly text: string } => {
+  const code =
+    error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : 'unreadable';
+  return { code, text: `${code}: ${error instanceof Error ? error.message : String(error)}` };
+};
+/**
+ * Verification refusals that mean the payload holds other bytes, entries or paths than its pins vouch for: changed or
+ * unlisted files, a link or junction, or more entries than a payload may hold. A missing file or payload is not damage.
+ */
+const DAMAGE = new Set(['IA-DIST-INTEGRITY-MISMATCH', 'IA-DIST-PATH-UNSAFE', 'IA-DIST-LIMIT-EXCEEDED']);
+
+/**
+ * The catalog the workspace at `root` joined. Each join receipt is tried in consumer order: the consumer's registration
+ * (`<host>-workspace.json`) must still name the joined release, and the catalog of the payload it names must read, with
+ * its handler bytes checked (`readInstalledImplementations`), at the joined digest; the first join that holds is the
+ * source. A payload that fails verification with changed or unlisted files, a link or exceeded limits is `damaged`, which binders report as revoked. With no
+ * receipt, or none that still holds (an `ia project`-only workspace, a host registered by an earlier release, a drifted
+ * join, a payload without a catalog or no longer materialized), the catalog is `unavailable`, with the reasons, so
+ * nothing binds. Reads only: nothing is written, imported or executed.
+ */
+export function joinedCatalog(rootInput: string): JoinedCatalog {
+  const root = workspace(rootInput);
+  let joins: readonly ImplementationJoin[] | null;
+  try {
+    joins = readJoins(root);
+  } catch (error) {
+    return { status: 'unavailable', reason: `${JOINS} cannot be read (${failure(error).code})` };
+  }
+  if (joins === null || joins.length === 0)
+    return {
+      status: 'unavailable',
+      reason:
+        'no host has joined an installed-implementation catalog in this workspace; "ia host <host> --apply" records a join',
+    };
+  const reasons: string[] = [];
+  for (const join of joins) {
+    const host = join.consumer,
+      path = `.ia/distributions/hosts/${host}-${HOST_REGISTRATION}.json`;
+    let state: ReturnType<typeof saved>;
+    try {
+      state = locate(path, () => {
+        const content = bytes(root, path);
+        return saved(content === null ? null : utf8(content), host, HOST_REGISTRATION);
+      });
+    } catch (error) {
+      reasons.push(`host ${host}'s registration cannot be read (${failure(error).code})`);
+      continue;
+    }
+    if (state === null) {
+      reasons.push(`host ${host} joined a catalog but is no longer registered`);
+      continue;
+    }
+    if (state.release !== join.release) {
+      reasons.push(
+        `host ${host}'s join names release ${join.release.slice(0, 12)}, but its registration names ${state.release.slice(0, 12)}`,
+      );
+      continue;
+    }
+    let catalog: InstalledCatalog;
+    try {
+      catalog = readInstalledImplementations(state.cache, state.release);
+    } catch (error) {
+      const read = failure(error);
+      if (DAMAGE.has(read.code))
+        return { status: 'damaged', consumer: host, release: state.release, reason: read.text };
+      reasons.push(`host ${host}'s payload catalog cannot be read (${read.text})`);
+      continue;
+    }
+    if (catalog.status === 'unavailable') {
+      reasons.push(`host ${host}'s payload carries no catalog: ${catalog.reason}`);
+      continue;
+    }
+    if (catalog.digest !== join.digest) {
+      reasons.push(
+        `host ${host}'s join names catalog ${join.digest.slice(0, 12)}, but its payload carries ${catalog.digest.slice(0, 12)}`,
+      );
+      continue;
+    }
+    return {
+      status: 'joined',
+      consumer: host,
+      release: catalog.release,
+      version: catalog.version,
+      digest: catalog.digest,
+      catalog,
+    };
+  }
+  return { status: 'unavailable', reason: reasons.join('; ') };
 }

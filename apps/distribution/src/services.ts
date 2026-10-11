@@ -18,6 +18,8 @@ import type {
 import { DraftError, formatDraft } from '@inventarch/authoring-system';
 import type { DraftResult } from '@inventarch/authoring-system';
 import { KERNEL_DIGEST, LANGUAGE_VERSION } from '@inventarch/language';
+import { bindExecution, executionBindings } from '@inventarch/workspace-runtime/bind';
+import type { BindingCatalog, BindingResult } from '@inventarch/workspace-runtime/bind';
 import { acquireArtifact, readArtifactBytes } from './acquire.js';
 import { inspectArchiveMetadata } from './archive.js';
 import {
@@ -35,6 +37,7 @@ import type { ReleaseCandidate } from './resolve.js';
 import { bytes, contained, createFile, fail, locate, object, portable, utf8, workspace } from './files.js';
 import { observeHosts } from './host-observe.js';
 import type { HostObservation } from './host-observe.js';
+import { joinedCatalog } from './implementations.js';
 
 export { createFile, json, replace, sha256, DistributionError } from './files.js';
 export { acquireArtifact } from './acquire.js';
@@ -375,6 +378,25 @@ export interface WorkspaceAdmission {
   readonly findings: Findings;
   readonly records: number;
 }
+/**
+ * Task execution-binding-host-entry (plan amendment C24): every admitted `@execution-binding` joined against the
+ * installed-implementation catalog this workspace's host joined (`joinedCatalog`), with where that catalog came from.
+ * `catalog` is null when there is no binding, and then nothing beyond the records is read.
+ */
+export interface ValidationBindings {
+  readonly catalog:
+    | {
+        readonly status: 'joined';
+        readonly consumer: string;
+        readonly release: string;
+        readonly version: string;
+        readonly digest: string;
+      }
+    | { readonly status: 'unavailable'; readonly reason: string }
+    | { readonly status: 'damaged'; readonly consumer: string; readonly release: string; readonly reason: string }
+    | null;
+  readonly results: readonly BindingResult[];
+}
 export interface WorkspaceSession {
   readonly reader: Handle;
   /** The complete disclosed workspace scope; refuses while admission has errors. */
@@ -386,6 +408,12 @@ export interface WorkspaceSession {
    * nothing. `ia validate`, `ia capture` and `ia-distribution validate` all report this one finding set.
    */
   validation(): WorkspaceAdmission;
+  /**
+   * The execution bindings as a validation reports them (`ValidationBindings`). `ia validate` and `ia-distribution
+   * validate` both report this one result. It reads the records, the join receipts, the host registration and the
+   * materialized payload, and writes nothing (C23); no implementation is loaded or executed.
+   */
+  bindings(): ValidationBindings;
   close(): void;
 }
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -408,7 +436,8 @@ function inertFindings(reader: Handle): Findings {
   }));
 }
 export function openWorkspaceSession(options: { readonly root: string }): WorkspaceSession {
-  const reader = open(workspace(options.root), { cache: false });
+  const root = workspace(options.root),
+    reader = open(root, { cache: false });
   // Nothing is captured. formatSource refreshes this same handle, and reader.report is a live getter
   // over the state refresh() replaces, so a captured verdict beside a live revision could report an
   // admitted status next to error findings. The scope token is minted per call for the same reason:
@@ -442,6 +471,28 @@ export function openWorkspaceSession(options: { readonly root: string }): Worksp
             compareText(a.code, b.code) ||
             compareText(a.message, b.message),
         ),
+      };
+    },
+    bindings: (): ValidationBindings => {
+      const bindings = executionBindings(reader);
+      if (bindings.length === 0) return { catalog: null, results: [] };
+      const joined = joinedCatalog(root);
+      const catalog: BindingCatalog =
+        joined.status === 'joined'
+          ? { status: 'present', operations: joined.catalog.operations }
+          : { status: joined.status, reason: joined.reason };
+      return {
+        catalog:
+          joined.status === 'joined'
+            ? {
+                status: 'joined',
+                consumer: joined.consumer,
+                release: joined.release,
+                version: joined.version,
+                digest: joined.digest,
+              }
+            : joined,
+        results: bindings.map((binding) => bindExecution(binding, catalog)),
       };
     },
     close: (): void => reader.close(),

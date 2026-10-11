@@ -1040,6 +1040,7 @@
       "kind": "vitest",
       "project": "apps/cli",
       "files": [
+        "tests/bindings.test.ts",
         "tests/capture.test.ts",
         "tests/consumer.test.ts",
         "tests/decline.test.ts",

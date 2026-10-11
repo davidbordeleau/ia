@@ -22,6 +22,7 @@ import { verifyHostCache } from '../src/host.js';
 import {
   closureDigest,
   installedImplementationsValue,
+  joinedCatalog,
   joinHost,
   JOINS,
   leaveHost,
@@ -350,4 +351,85 @@ it('refuses to replace unreadable receipts, to write through aliases or past a p
   expect(existsSync(resolve(other, 'joins.json'))).toBe(false);
   expect(() => joinHost(temp(), 'claude', 'not-a-revision')).toThrow(code('IA-DIST-INPUT-INVALID'));
   expect(() => joinHost(temp(), 'cursor', REVISION)).toThrow(code('IA-DIST-HOST-UNSUPPORTED'));
+});
+
+it('carries a catalog-declared revocation distinctly from an implementation that is not shipped', () => {
+  const { root, release } = payload({
+    mutate: () => ({ id: 'read-v1', status: 'revoked', reason: 'withdrawn by its producer' }),
+  });
+  const read = readInstalledImplementations(root, release);
+  expect(read.status === 'present' && read.operations).toEqual([
+    { id: 'read-v1', status: 'revoked', reason: 'withdrawn by its producer' },
+  ]);
+  expect(() =>
+    installedImplementationsValue({
+      format: 'ia.installed-implementations.v1',
+      evaluators: { format: 'ia-evaluator-catalog/1.0', entries: [] },
+      operations: [{ id: 'read-v1', status: 'revoked' }],
+    }),
+  ).toThrow(code('IA-DIST-INPUT-INVALID'));
+});
+
+it('finds the catalog a host joined for binding, and says why there is none', () => {
+  const root = temp(),
+    current = payload(),
+    old = payload({ catalog: false });
+  // No join receipt: an ia project-only workspace, or one registered before joins existed.
+  expect(joinedCatalog(root)).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining('no host has joined an installed-implementation catalog'),
+  });
+  registered(root, 'claude', current.root, current.release);
+  joinHost(root, 'claude', REVISION);
+  const joined = joinedCatalog(root);
+  expect(joined).toMatchObject({
+    status: 'joined',
+    consumer: 'claude',
+    release: current.release,
+    version: '2.1.0',
+    digest: sha256(current.catalog!),
+  });
+  expect(joined.status === 'joined' && joined.catalog.operations[0]).toMatchObject({
+    id: 'read-v1',
+    status: 'available',
+  });
+  // The registration moved to another payload without a new join: drifted, so nothing binds through it.
+  registered(root, 'claude', old.root, old.release);
+  expect(joinedCatalog(root)).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining("host claude's join names release"),
+  });
+  // Another current join is used instead, in consumer order.
+  registered(root, 'codex', current.root, current.release);
+  joinHost(root, 'codex', REVISION);
+  expect(joinedCatalog(root)).toMatchObject({ status: 'joined', consumer: 'codex' });
+  rmSync(resolve(root, '.ia/distributions/hosts/codex-workspace.json'));
+  expect(joinedCatalog(root)).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining('host codex joined a catalog but is no longer registered'),
+  });
+  put(root, JOINS, '{broken');
+  expect(joinedCatalog(root)).toEqual({
+    status: 'unavailable',
+    reason: `${JOINS} cannot be read (IA-DB-SOURCE-UNAVAILABLE)`,
+  });
+});
+
+it('reports a joined payload whose handler bytes no longer match their pins as damaged, and a missing one as unavailable', () => {
+  const root = temp(),
+    { root: cache, release } = payload();
+  registered(root, 'claude', cache, release);
+  joinHost(root, 'claude', REVISION);
+  writeFileSync(resolve(cache, MODULE), readFileSync(resolve(cache, MODULE), 'utf8') + '// altered\n');
+  expect(joinedCatalog(root)).toEqual({
+    status: 'damaged',
+    consumer: 'claude',
+    release,
+    reason: expect.stringContaining('IA-DIST-INTEGRITY-MISMATCH'),
+  });
+  rmSync(cache, { recursive: true });
+  expect(joinedCatalog(root)).toEqual({
+    status: 'unavailable',
+    reason: expect.stringContaining("host claude's payload catalog cannot be read"),
+  });
 });

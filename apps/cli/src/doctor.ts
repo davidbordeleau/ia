@@ -715,21 +715,21 @@ function catalogReader(): (directory: string, release: string) => CatalogRead {
 }
 const refusalText = (error: unknown): string =>
   `${codeOf(error, 'IA-CLI-FAILED')}: ${error instanceof Error ? error.message : String(error)}`;
-/** A present catalog's operations in words: each with its handler and shipped bytes, or why it is unavailable. */
+/** A present catalog's operations in words: each with its handler and shipped bytes, or why it is unavailable or revoked. */
 function operationFacts(catalog: InstalledImplementations): string {
   if (catalog.operations.length === 0) return 'no installed operations';
   return catalog.operations
     .map((operation) =>
       operation.status === 'available'
         ? `${operation.id} available (handler ${operation.handler}, shipped bytes ${short(operation.digest)})`
-        : `${operation.id} unavailable (${operation.reason})`,
+        : `${operation.id} ${operation.status} (${operation.reason})`,
     )
     .join('; ');
 }
 
 /**
  * C16 and C24: the installed-implementation catalog of the payload this installation pins, as the IA home holds it.
- * Present is `ok`, or `warn` when it lists an operation unavailable; a payload that carries no catalog (one built
+ * Present is `ok`, or `warn` when it lists an operation unavailable or revoked; a payload that carries no catalog (one built
  * before the catalog existed) is an `info` note, and so is one not materialized yet. A payload that fails host
  * verification (a file its inventory does not list, a missing or changed one, a link), or a catalog whose pins disagree
  * with it, is `fail`, as its host row is: the payload is damaged, and its repair deletes the payload directory so the
@@ -784,7 +784,7 @@ function catalogRow(
   const catalog = result.value;
   if (catalog.status === 'unavailable')
     return installation(id, title, 'info', `Unavailable in release ${short(pinned.release)}: ${catalog.reason}`, null);
-  const degraded = catalog.operations.some((operation) => operation.status === 'unavailable');
+  const degraded = catalog.operations.some((operation) => operation.status !== 'available');
   return installation(
     id,
     title,

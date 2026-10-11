@@ -44,13 +44,16 @@ export type {
 } from './packet.js';
 export { PACKET_MARKER, renderHost } from './packet-host.js';
 export type {
+  HarnessDefinition,
   HostFile,
   HostOutput,
   HostHookDeclaration,
+  OperationDefinition,
   PacketDefinition,
   PacketHost,
   PacketReceipt,
   PacketTarget,
+  RegistrationRow,
 } from './packet-host.js';
 export { context, DEFAULT_TOKENIZER } from './context.js';
 export type {

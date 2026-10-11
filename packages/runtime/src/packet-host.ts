@@ -43,11 +43,45 @@ export interface HostHookDeclaration {
   readonly paths: readonly string[];
   readonly message: string;
 }
-export interface PacketDefinition {
-  readonly identity: string;
-  readonly word: 'operation' | 'harness';
-  readonly definition: Readonly<Record<string, unknown>>;
+/**
+ * An authored `@operation` as a definition (plan amendment C11): its handler and its input and output validators are
+ * catalog keys an installed implementation answers, never module specifiers; nothing imports, serves or executes them
+ * here (milestone 7 owns execution). A field the record does not state is absent.
+ */
+export interface OperationDefinition {
+  readonly name: string;
+  readonly description: string;
+  readonly handler?: string;
+  readonly input?: string;
+  readonly output?: string;
+  readonly effects: readonly string[];
 }
+/** A registration a harness selects: the record and the host path generation renders it at. */
+export interface RegistrationRow {
+  readonly identity: string;
+  readonly path: string;
+}
+/**
+ * An authored `@harness` as a definition: its workspace, host profile, profiles and bindings, and the registration set
+ * they select (the generated agents of its profiles, the skills of the playbooks their capabilities and included
+ * capabilities name, and the hooks its bindings target), as identities and paths only.
+ */
+export interface HarnessDefinition {
+  readonly name: string;
+  readonly description: string;
+  readonly workspace?: string;
+  readonly hostProfile?: string;
+  readonly profiles: readonly string[];
+  readonly bindings: readonly string[];
+  readonly registrations: {
+    readonly agents: readonly RegistrationRow[];
+    readonly skills: readonly RegistrationRow[];
+    readonly hooks: readonly HostHookDeclaration[];
+  };
+}
+export type PacketDefinition =
+  | { readonly identity: string; readonly word: 'operation'; readonly definition: OperationDefinition }
+  | { readonly identity: string; readonly word: 'harness'; readonly definition: HarnessDefinition };
 /**
  * B12: the receipt of one render, which the caller that applies the files writes beside the projection state.
  * `renderHost` fills what the render decides and leaves `removed` and `foreign` empty, `guard` `none`, and `cli` and

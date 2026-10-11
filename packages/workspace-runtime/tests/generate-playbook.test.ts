@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, it, vi } from 'vitest';
 import { open } from '@inventarch/db';
 import type { Handle } from '@inventarch/db';
 import { PACKET_MARKER } from '@inventarch/runtime';
+import type { PacketDefinition } from '@inventarch/runtime';
 import { adoptWorkspace } from '../src/corpus.js';
 import {
   generateDefinitions,
@@ -242,35 +243,59 @@ it('writes the same bytes at two roots and names neither root nor scope token', 
   }
 });
 
+/** The harness rows of `definitions`, typed as harness definitions. */
+const harnesses = (definitions: readonly PacketDefinition[]) =>
+  definitions.filter((row): row is Extract<PacketDefinition, { word: 'harness' }> => row.word === 'harness');
+const HARNESS = 'agent-composition-system/definition/harness/note-workspace',
+  PROFILE = 'agent-composition-system/binding/agent-profile/reviewer',
+  HOOK = 'hook-authoring-system/binding/hook/note-edits';
+
 it('renders operation and harness definitions without importing a handler or validator', () => {
   const { db, within } = fixture();
   const definitions = generateDefinitions(db, within, 'claude');
-  expect(definitions.find((row) => row.word === 'operation')?.definition).toEqual({
-    name: 'read-note',
-    description: 'Read one captured note.',
-    handler: 'read-note-v1',
-    input: 'read-note-input-v1',
-    output: 'read-note-output-v1',
-    effects: ['read-only'],
-  });
-  expect(definitions.find((row) => row.word === 'harness')?.definition.registrations).toMatchObject({
-    agents: [{ path: '.claude/agents/reviewer.md' }],
-    skills: [{ path: '.claude/skills/note-review/SKILL.md' }],
-    hooks: [
-      {
-        identity: 'hook-authoring-system/binding/hook/note-edits',
-        event: 'PreToolUse',
-        tools: ['Write', 'Edit', 'MultiEdit'],
+  expect(definitions).toEqual([
+    {
+      identity: 'authoring-system/binding/operation/read-note',
+      word: 'operation',
+      definition: {
+        name: 'read-note',
+        description: 'Read one captured note.',
+        handler: 'read-note-v1',
+        input: 'read-note-input-v1',
+        output: 'read-note-output-v1',
+        effects: ['read-only'],
       },
-    ],
-  });
-  expect(
-    generateDefinitions(db, within, 'codex').find((row) => row.word === 'harness')?.definition.registrations,
-  ).toMatchObject({
-    agents: [],
-    hooks: [],
-    skills: [{ path: '.agents/skills/note-review/SKILL.md' }],
-  });
+    },
+    {
+      identity: HARNESS,
+      word: 'harness',
+      definition: {
+        name: 'note-workspace',
+        description: 'The documentation review registrations.',
+        workspace: 'workspace-system/definition/workspace/demo',
+        hostProfile: 'claude-prose',
+        profiles: [PROFILE],
+        bindings: ['agent-composition-system/binding/execution-binding/notes-hook'],
+        registrations: {
+          agents: [{ identity: PROFILE, path: '.claude/agents/reviewer.md' }],
+          skills: [{ identity: IDENTITY, path: '.claude/skills/note-review/SKILL.md' }],
+          hooks: [
+            {
+              identity: HOOK,
+              event: 'PreToolUse',
+              tools: ['Write', 'Edit', 'MultiEdit'],
+              paths: ['docs/**', 'restricted/**'],
+              message: "Use the participant's documentation mandate.",
+            },
+          ],
+        },
+      },
+    },
+  ]);
+  // Codex registers no agent or hook, so its harness selects only the skill.
+  expect(harnesses(generateDefinitions(db, within, 'codex')).map((row) => row.definition.registrations)).toEqual([
+    { agents: [], skills: [{ identity: IDENTITY, path: '.agents/skills/note-review/SKILL.md' }], hooks: [] },
+  ]);
 });
 
 it('generates authored hooks only and reports tools and selections outside the edit guard contract', () => {

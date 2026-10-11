@@ -7,7 +7,7 @@ import { DbError } from './errors.js';
 import { pathKey } from './inputs.js';
 import type { InputSnapshot } from './inputs.js';
 import { viewBuilder } from './view.js';
-import type { RefusedRecord } from './view.js';
+import type { RefusedRecord, ViewOptions } from './view.js';
 
 export interface DraftChange {
   readonly path: string;
@@ -26,6 +26,7 @@ export function previewInputs(
   baseRevision: string,
   changes: readonly DraftChange[],
   locations: Readonly<Record<string, Location>> = {},
+  view: ViewOptions = {},
 ): DraftPreview {
   const invalid = (message: string): never => {
     throw new DbError('IA-DB-DRAFT-INVALID', message);
@@ -74,8 +75,10 @@ export function previewInputs(
   const ordered: readonly RevisionSource[] = Object.freeze(
     [...sources.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
   );
+  // Review finding B3-N5: a draft is previewed without evidence, which only an evidence reader lists.
+  const { evidence: _evidence, ...authored } = input;
   const snapshot = Object.freeze({
-    ...input,
+    ...authored,
     sources: ordered,
     folders: Object.freeze([...folders].sort()),
     fingerprint: createHash('sha256')
@@ -89,12 +92,12 @@ export function previewInputs(
       )
       .digest('hex'),
   });
-  const view = viewBuilder(snapshot)();
+  const built = viewBuilder(snapshot, view)();
   return Object.freeze({
     baseRevision,
-    revision: view.graph.revision,
-    records: Object.freeze([...view.graph.nodes.values()]),
-    report: view.report,
-    refused: view.refused,
+    revision: built.graph.revision,
+    records: Object.freeze([...built.graph.nodes.values()]),
+    report: built.report,
+    refused: built.refused,
   });
 }

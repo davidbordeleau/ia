@@ -10,7 +10,7 @@ import type { Node } from '@inventarch/graph';
 import type { CompiledField } from '@inventarch/language';
 
 /**
- * D15: binding each `@check` at validate (milestone generation-binding, plan amendments C15 and C22). A check names its
+ * D13: binding each `@check` at validate (milestone generation-binding, plan amendments C15 and C22). A check names its
  * evaluator (`check.implementation`, else `check.runs`; compliance `checkRunner`) and selects what it covers with the
  * text `check.scope`. Binding decides which implementation serves the evaluator and reads the verdicts it produced; it
  * runs nothing and writes nothing.
@@ -20,7 +20,7 @@ import type { CompiledField } from '@inventarch/language';
  *   when the scope is the whole-workspace token `*`, else exactly those whose scope equals it (record identities,
  *   system folders, `graph`, `sources`, as the evaluator reports them). Fail dominates, then not-evaluated, then pass.
  *   A scope that selects nothing (prose, an unknown scope, or an evaluator that reported nothing) is not-evaluated,
- *   never an empty pass.
+ *   never an empty pass. COMP-CHECK's pass for a check only structural admission admits counts as not-evaluated.
  * - Any other evaluator is looked up in the evaluator catalog the host payload carries (compliance
  *   `createEvaluatorCatalog`, `selectEvaluator`): `supported` is bound, but no host implementation is bound to run it in
  *   this release (`bindEvaluators` with none), so its result is not-evaluated; `unavailable`, an entry the catalog does
@@ -117,6 +117,25 @@ export function bindChecks(
     | undefined;
   // Records at runtime placement are evidence, not what a check covers.
   const runtime = new Set(records.filter((record) => record.band === 0).map((record) => record.identity));
+  // Review finding B3-N1: COMP-CHECK passes a check naming an evaluator that is not built in only under structural
+  // admission, while every strict reader fails it at the same revision; its verdict there is not-evaluated, never a pass.
+  const structural = new Set(
+    records
+      .filter((record) => record.discriminator === 'check' && record.band !== 0)
+      .filter((record) => {
+        const runner = checkRunner(record);
+        return runner !== undefined && !(CHECK_IDS as readonly string[]).includes(runner);
+      })
+      .map((record) => record.identity),
+  );
+  const verdicts =
+    structural.size === 0
+      ? report.verdicts
+      : report.verdicts.map((verdict) =>
+          verdict.check === 'COMP-CHECK' && structural.has(verdict.scope) && verdict.outcome === 'pass'
+            ? ({ ...verdict, outcome: 'not-evaluated' } as Verdict)
+            : verdict,
+        );
   const catalogOf = () => {
     if (catalog.status !== 'present') return undefined;
     if (evaluators === undefined)
@@ -156,7 +175,7 @@ export function bindChecks(
           });
         if (runner === null) return result('unavailable', 'the check names no evaluator');
         if ((CHECK_IDS as readonly string[]).includes(runner)) {
-          const { outcome, selected } = checkVerdicts(report.verdicts, runner, scope, runtime);
+          const { outcome, selected } = checkVerdicts(verdicts, runner, scope, runtime);
           const reason =
             selected.length > 0
               ? `built-in ${runner}: ${selected.length} selected ${selected.length === 1 ? 'verdict' : 'verdicts'}, ${outcome}`

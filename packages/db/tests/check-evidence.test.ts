@@ -11,9 +11,11 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  unlinkSync,
+  utimesSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { Verdict } from '@inventarch/compliance';
 import {
   bindChecks,
@@ -27,6 +29,10 @@ import {
 } from '../src/index.js';
 import type { CheckCatalog, Handle } from '../src/index.js';
 import { methodId, put, workspace } from './workspace.js';
+
+// Every node:fs export calls through; a test can make one unlink fail as a file the process may not remove would.
+vi.mock('node:fs', { spy: true });
+const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
 
 const CHECKS = '.ia/src/systems/compliance-system/checks/bound-checks.ia';
 /** A `@check` in the native compliance system naming `runner` with the text scope `scope`. */
@@ -426,5 +432,202 @@ it('stages and renames, so repeated writes of differing evidence always leave on
     path: null,
     written: true,
     pruned: [`${EVIDENCE_DIRECTORY}/${revision}.ia`],
+  });
+});
+
+/** The evidence file `validateOnce` wrote for `root`'s current authored revision, and that revision. */
+const written = (root: string) => {
+  const revision = using(structural(root), (db) => db.authoredRevision),
+    path = `${EVIDENCE_DIRECTORY}/${revision}.ia`;
+  return { revision, path, text: readEvidence(root, path)! };
+};
+const band0 = (db: Handle) =>
+  db.records().filter((record) => record.band === 0 && record.discriminator === 'observation');
+const findingLines = (db: Handle) =>
+  db.report.findings
+    .filter((finding) => !finding.path.startsWith(EVIDENCE_DIRECTORY))
+    .map((finding) => `${finding.code} ${finding.path}`);
+
+it('admits only evidence exactly as the writer makes it, which never changes what the authored records admit (B3-R4)', () => {
+  const root = workspace();
+  fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'), check('consent-check', 'COMP-CONSENT', 'graph'));
+  validateOnce(root);
+  const template = written(root).text,
+    start = template.indexOf('@observation '),
+    end = template.indexOf('\n\n@observation', start),
+    block = template.slice(start, end < 0 ? undefined : end + 1);
+  // An authored observation citing one that no source authors: a dangling reference the graph reports.
+  put(
+    root,
+    '.ia/src/systems/learning-system/records/authored.ia',
+    `#! ia 1.0\n\n${block.replace(/^@observation \S+/, '@observation authored-one').trimEnd()}\n  relationships\n    cites @observation forged-one\n`,
+  );
+  validateOnce(root);
+  const genuine = written(root);
+  const baseline = using(structural(root), (db) => ({
+    findings: findingLines(db),
+    consent: byName(db)['consent-check']!.outcome,
+  }));
+  expect(baseline.findings.some((finding) => finding.startsWith('IA-GRAPH-TARGET-MISSING'))).toBe(true);
+  // The genuine file is admitted, and the authored admission beside it is unchanged.
+  using(structural(root, true), (db) => {
+    expect(band0(db)).toHaveLength(genuine.text.split('@observation ').length - 1);
+    expect(findingLines(db)).toEqual(baseline.findings);
+  });
+  const genuineName = genuine.text.match(/^@observation (\S+)/m)![1]!;
+  const vectors: [string, string][] = [
+    // Resolving the authored dangling reference: a name no admitted check's evidence takes.
+    ['forged name', genuine.text.replaceAll(genuineName, 'forged-one')],
+    // Adding edges into authored records.
+    [
+      'relationships',
+      genuine.text.replace(
+        '\n  retention\n    status retained\n',
+        '\n  retention\n    status retained\n  relationships\n    supersedes @check whole-schema-check\n',
+      ),
+    ],
+    ['another locator', genuine.text.replace(/locator "[^"]+"/, `locator "${methodId}"`)],
+    ['another revision', genuine.text.replace(/ {4}revision "[0-9a-f]{64}"/, `    revision "${'0'.repeat(64)}"`)],
+    [
+      'a check no view admits',
+      genuine.text.replaceAll(genuineName, genuineName.replace('whole-schema-check', 'absent-check')),
+    ],
+    ['an extra field', genuine.text.replace('    move Verification\n', '    move Verification\n    note "planted"\n')],
+  ];
+  for (const [label, text] of vectors) {
+    expect(text, label).not.toBe(genuine.text);
+    put(root, genuine.path, text);
+    using(structural(root, true), (db) => {
+      expect(band0(db), label).toEqual([]);
+      expect(findingLines(db), label).toEqual(baseline.findings);
+      expect(byName(db)['consent-check']!.outcome, label).toBe(baseline.consent);
+      const rows = db.directedView(byName(db)['whole-schema-check']!.identity);
+      expect(
+        rows.some((row) => row.counterpart.includes('/observation/')),
+        label,
+      ).toBe(false);
+    });
+  }
+});
+
+it('records a failing built-in check as a refusal an evidence reader admits, failure dominating the real report (B3-R2)', () => {
+  const root = workspace();
+  fixture(
+    root,
+    check('whole-schema-check', 'COMP-SCHEMA', '*'),
+    check('method-schema-check', 'COMP-SCHEMA', methodId),
+    // A check without its required scope: refused, with a failing COMP-SCHEMA verdict of its own.
+    '@check broken-check\n  meaning\n    says "Broken."\n    answers "What fails?"\n  check\n    runs COMP-SCHEMA\n',
+  );
+  using(structural(root), (db) => {
+    const bound = byName(db),
+      failing = db.report.verdicts.filter((verdict) => verdict.check === 'COMP-SCHEMA' && verdict.outcome === 'fail');
+    expect(failing.map((verdict) => verdict.scope.split('/').at(-1))).toEqual(['broken-check']);
+    expect(db.report.verdicts.some((verdict) => verdict.check === 'COMP-SCHEMA' && verdict.outcome === 'pass')).toBe(
+      true,
+    );
+    // Fail dominates every passing verdict the whole-workspace scope also selects; an exact scope elsewhere passes.
+    expect(bound['whole-schema-check']).toMatchObject({ outcome: 'fail' });
+    expect(bound['method-schema-check']).toMatchObject({ outcome: 'pass' });
+    expect(bound['broken-check']).toBeUndefined();
+  });
+  const recorded = validateOnce(root);
+  expect(recorded.observations.map((row) => [row.name.replace(/-[0-9a-f]{12}$/, ''), row.verdict])).toEqual([
+    ['method-schema-check', 'success'],
+    ['whole-schema-check', 'refusal'],
+  ]);
+  using(structural(root, true), (db) => {
+    const verdicts = band0(db).map((record) => [
+      record.name.replace(/-[0-9a-f]{12}$/, ''),
+      record.sections
+        .find((section) => section.name === 'evidence')!
+        .fields.flatMap((field) =>
+          'key' in field && field.key === 'verdict' && 'text' in field.value ? [field.value.text] : [],
+        ),
+    ]);
+    expect(verdicts.sort()).toEqual([
+      ['method-schema-check', ['success']],
+      ['whole-schema-check', ['refusal']],
+    ]);
+  });
+});
+
+it('prunes best effort, never refusing with nothing to record or for a file it may not remove (B3-R1, B3-N2, B3-N6)', () => {
+  const root = workspace();
+  fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
+  const first = validateOnce(root),
+    revision = written(root).revision,
+    stalePath = `${EVIDENCE_DIRECTORY}/${'2'.repeat(64)}.ia`,
+    stale = resolve(root, stalePath),
+    undeletable = Object.assign(new Error('EPERM: operation not permitted, unlink'), { code: 'EPERM' });
+  put(root, stalePath, '#! ia 1.0\n');
+  vi.mocked(unlinkSync).mockImplementation((target) => {
+    if (String(target).endsWith(`${'2'.repeat(64)}.ia`)) throw undeletable;
+    actualFs.unlinkSync(target);
+  });
+  try {
+    // Unchanged bytes: nothing to write, and the stale file it may not remove is skipped.
+    expect(writeEvidence(root, revision, readFileSync(resolve(root, first.path!), 'utf8'))).toEqual({
+      path: first.path,
+      written: false,
+      pruned: [],
+    });
+    expect(existsSync(stale)).toBe(true);
+    // Nothing to record: still no refusal, though the file it may not remove stays.
+    expect(writeEvidence(root, revision, null)).toEqual({ path: null, written: true, pruned: [first.path] });
+    expect(existsSync(stale)).toBe(true);
+    validateOnce(root);
+  } finally {
+    vi.mocked(unlinkSync).mockImplementation(actualFs.unlinkSync);
+  }
+  // A file modified after the run read its inputs, as a validation of another revision may write one, is kept.
+  const hourAgo = new Date(Date.now() - 3_600_000);
+  utimesSync(resolve(root, first.path!), hourAgo, hourAgo);
+  expect(writeEvidence(root, revision, null, { pruneBefore: statSync(stale).mtimeMs })).toMatchObject({
+    pruned: [first.path],
+  });
+  expect(existsSync(stale)).toBe(true);
+  expect(writeEvidence(root, revision, null, { pruneBefore: Date.now() + 60_000 }).pruned).toEqual([stalePath]);
+  // Nothing to record with a directory where this revision's file goes: nothing is done, and nothing refuses.
+  mkdirSync(resolve(root, `${EVIDENCE_DIRECTORY}/${revision}.ia`), { recursive: true });
+  expect(writeEvidence(root, revision, null)).toEqual({ path: null, written: false, pruned: [] });
+  expect(() => writeEvidence(root, revision, '#! ia 1.0\n')).toThrow(code('IA-DB-PATH-UNSAFE'));
+});
+
+it('previews a draft as the handle admits it, never with evidence, and caches no structural graph (B3-N5)', () => {
+  const root = workspace();
+  fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
+  validateOnce(root);
+  const draft = [{ path: CHECKS, text: `#! ia 1.0\n\n${check('typing-check', 'acme-strict-typing', 'package')}` }];
+  const unknown = (db: Handle) =>
+    db.preview(draft).report.findings.some((finding) => finding.code === 'IA-COMP-CHECK-UNKNOWN');
+  using(open(root, { cache: false }), (db) => expect(unknown(db)).toBe(true));
+  using(structural(root, true), (db) => {
+    expect(band0(db)).toHaveLength(1);
+    expect(unknown(db)).toBe(false);
+    expect(db.preview([]).records.some((record) => record.band === 0 && record.discriminator === 'observation')).toBe(
+      false,
+    );
+  });
+  // Neither a structural nor an evidence reader publishes its graph, whatever cache says; a strict one still does.
+  const cache = resolve(root, '.ia/.iadb/graph.json');
+  using(open(root, { checks: 'structural', cache: true }), () => undefined);
+  using(open(root, { evidence: true }), () => undefined);
+  expect(existsSync(cache)).toBe(false);
+  using(open(root), () => undefined);
+  expect(existsSync(cache)).toBe(true);
+});
+
+it('never counts COMP-CHECK passing a check only structural admission admits (B3-N1)', () => {
+  const root = workspace();
+  fixture(root, check('check-check', 'COMP-CHECK', '*'));
+  expect(using(structural(root), (db) => byName(db)['check-check']!.outcome)).toBe('pass');
+  fixture(root, check('check-check', 'COMP-CHECK', '*'), check('typing-check', 'acme-strict-typing', 'package'));
+  using(structural(root), (db) => {
+    expect(byName(db)['check-check']).toMatchObject({ outcome: 'not-evaluated' });
+    const raw = db.report.verdicts.find(
+      (verdict) => verdict.check === 'COMP-CHECK' && verdict.scope.endsWith('/typing-check'),
+    );
+    expect(raw?.outcome).toBe('pass');
   });
 });

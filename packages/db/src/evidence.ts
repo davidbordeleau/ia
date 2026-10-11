@@ -150,52 +150,65 @@ function directories(root: string): void {
 }
 /** Whether `error` is D01's refusal of a link, junction or entry of the wrong kind. */
 const unsafe = (error: unknown): boolean => error instanceof DbError && error.code === 'IA-DB-PATH-UNSAFE';
-/**
- * The bytes of the evidence file at `path`, or null when there is none, including when a link, junction or entry of the
- * wrong kind stands on the way: nothing is read through one, and the writer refuses there.
- */
-export function readEvidence(root: string, path: string): string | null {
+/** Whether the evidence directories are plain directories as far as they exist (`directories` without refusing). */
+function plain(root: string): boolean {
   try {
     directories(root);
+    return true;
+  } catch (error) {
+    if (unsafe(error)) return false;
+    throw error;
+  }
+}
+/**
+ * The bytes of the evidence file at `path`, or null when there is none, including when a link, junction, hard link or
+ * entry of the wrong kind stands on the way (review finding B3-N9): nothing is read through one, and the writer refuses
+ * only where it must write.
+ */
+export function readEvidence(root: string, path: string): string | null {
+  if (!plain(root)) return null;
+  try {
     const target = entryAt(root, path);
-    return target === undefined ? null : readFileSync(target, 'utf8');
+    if (target === undefined || lstatSync(target).nlink !== 1) return null;
+    return readFileSync(target, 'utf8');
   } catch (error) {
     if (unsafe(error)) return null;
     throw error;
   }
 }
+/** The errors a prune skips rather than refuse for (review finding B3-R1): a file it may not or cannot remove. */
+const SKIPPED = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOENT', 'EROFS']);
 
 /**
- * Write `text` as the evidence of `authoredRevision` (D14), or, for null, keep none for it, and prune the evidence files of
- * other authored revisions. Every check passes before the first write: a link or junction on the way, or an entry at
- * either a directory's or the file's path of the wrong kind, refuses as IA-DB-PATH-UNSAFE, except that with nothing to
- * record (null) such a directory is left alone and nothing is done. The bytes are staged in the
- * evidence directory, flushed, and renamed into place, so a reader sees the whole old file or the whole new one; a file
- * that already holds `text` is not rewritten. Only regular files named `<64 hex>.ia` are pruned; nothing else in the
- * directory, temporary files included, is touched. A failure leaves the evidence it found, and only the error escapes.
+ * Write `text` as the evidence of `authoredRevision` (D14), or, for null, keep none for it, and prune the evidence files
+ * of other authored revisions. The writer refuses only when this revision's file must be written (review finding B3-R1):
+ * a link or junction on the way, or an entry of the wrong kind at a directory's or the file's path, refuses as
+ * IA-DB-PATH-UNSAFE, and a file it cannot write fails with the filesystem's code, before anything is pruned. With nothing
+ * to record (null, or a file that already holds exactly `text`) it never refuses, whatever stands at those paths (B3-N6).
+ * The bytes are staged in the evidence directory, flushed, and renamed into place, so a reader sees the whole old file or
+ * the whole new one. Pruning is best effort and comes last: only regular files named `<64 hex>.ia`, never temporary
+ * files or anything else; a file it may not remove is skipped; and with `pruneBefore` a file modified at or after that
+ * time, which a validation of a newer revision may have written meanwhile, is kept (B3-N2).
  */
 export function writeEvidence(
   root: string,
   authoredRevision: string,
   text: string | null,
+  options: { readonly pruneBefore?: number } = {},
 ): Omit<EvidenceWrite, 'observations'> {
   if (!HEX.test(authoredRevision)) throw new TypeError('An authored revision is 64 hex digits');
   const name = `${authoredRevision}.ia`,
-    path = `${EVIDENCE_DIRECTORY}/${name}`;
-  try {
-    directories(root);
-  } catch (error) {
-    // With nothing to record, a directory that is not plain holds nothing this writer may prune: nothing is done.
-    if (text === null && unsafe(error)) return Object.freeze({ path: null, written: false, pruned: Object.freeze([]) });
-    throw error;
-  }
-  const existing = entryAt(root, path),
-    before = existing === undefined ? null : readFileSync(existing);
+    path = `${EVIDENCE_DIRECTORY}/${name}`,
+    bytes = text === null ? null : Buffer.from(text, 'utf8'),
+    current = bytes === null ? null : readEvidence(root, path);
   let written = false;
-  if (text !== null && (before === null || !before.equals(Buffer.from(text, 'utf8')))) {
+  if (bytes !== null && (current === null || !Buffer.from(current, 'utf8').equals(bytes))) {
+    // Only here may the writer refuse: this revision's file must be written.
+    directories(root);
+    entryAt(root, path);
     mkdirSync(safePath(root, EVIDENCE_DIRECTORY), { recursive: true });
     directories(root);
-    let temporary: string | undefined = staged(root, path, Buffer.from(text, 'utf8'));
+    let temporary: string | undefined = staged(root, path, bytes);
     try {
       renameSync(safePath(root, temporary), safePath(root, path));
       temporary = undefined;
@@ -205,20 +218,38 @@ export function writeEvidence(
       discard(root, temporary);
     }
   }
-  const pruned: string[] = [];
-  const directory = safePath(root, EVIDENCE_DIRECTORY);
-  if (lstatSync(directory, { throwIfNoEntry: false })?.isDirectory() === true)
-    for (const entry of readdirSync(directory).sort()) {
-      if (!EVIDENCE_FILE.test(entry) || (entry === name && text !== null)) continue;
-      const other = `${EVIDENCE_DIRECTORY}/${entry}`;
-      if (lstatSync(safePath(root, other), { throwIfNoEntry: false })?.isFile() !== true) continue;
-      unlinkSync(safePath(root, other));
-      pruned.push(other);
-    }
-  if (pruned.length > 0) syncDirectory(directory);
+  const pruned = prune(root, bytes === null ? null : name, options.pruneBefore);
   return Object.freeze({
-    path: text === null ? null : path,
-    written: written || (text === null && pruned.includes(path)),
+    path: bytes === null ? null : path,
+    written: written || (bytes === null && pruned.includes(path)),
     pruned: Object.freeze(pruned),
   });
+}
+/** Best-effort removal of the evidence files other than `keep` (see `writeEvidence`); the paths removed. */
+function prune(root: string, keep: string | null, before: number | undefined): string[] {
+  if (!plain(root)) return [];
+  const directory = safePath(root, EVIDENCE_DIRECTORY);
+  let entries: string[];
+  try {
+    entries =
+      lstatSync(directory, { throwIfNoEntry: false })?.isDirectory() === true ? readdirSync(directory).sort() : [];
+  } catch {
+    return [];
+  }
+  const pruned: string[] = [];
+  for (const entry of entries) {
+    if (!EVIDENCE_FILE.test(entry) || entry === keep) continue;
+    const other = `${EVIDENCE_DIRECTORY}/${entry}`,
+      target = safePath(root, other),
+      stat = lstatSync(target, { throwIfNoEntry: false });
+    if (stat?.isFile() !== true || (before !== undefined && stat.mtimeMs >= before)) continue;
+    try {
+      unlinkSync(target);
+      pruned.push(other);
+    } catch (error) {
+      if (!SKIPPED.has((error as NodeJS.ErrnoException).code ?? '')) throw error;
+    }
+  }
+  if (pruned.length > 0) syncDirectory(directory);
+  return pruned;
 }

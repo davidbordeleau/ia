@@ -7,6 +7,7 @@ import {
   evidenceText,
   open,
   readEvidence,
+  reproducesEvidence,
   writeEvidence,
 } from '@inventarch/db';
 import type { CheckBinding, CheckCatalog, EvidenceWrite, Handle } from '@inventarch/db';
@@ -500,13 +501,14 @@ function inertFindings(reader: Handle): Findings {
   }));
 }
 export function openWorkspaceSession(options: SessionOptions): WorkspaceSession {
-  const root = workspace(options.root),
+  // B3-N2, B4-RC3: taken before the inputs are read, so evidence a validation of another revision writes, or touches,
+  // after that is never pruned by this session.
+  const openedAt = Date.now(),
+    root = workspace(options.root),
     reader = open(root, {
       cache: false,
       ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
-    }),
-    // B3-N2: evidence a validation of another revision writes after this session read its inputs is never pruned by it.
-    openedAt = Date.now();
+    });
   // One read of the joined catalog per session and trust, shared by execution and check bindings.
   const joined = new Map<string, ReturnType<typeof joinedCatalog>>();
   const joinedOnce = (trust: HostTrust | null): ReturnType<typeof joinedCatalog> => {
@@ -664,13 +666,15 @@ export function recordValidation(session: WorkspaceSession, checks: ValidationCh
   const vocabulary = records.some((record) => record.discriminator === 'schema' && record.name === CHECK_EVIDENCE_WORD);
   try {
     const path = `${EVIDENCE_DIRECTORY}/${revision}.ia`,
+      found = vocabulary ? readEvidence(root, path) : null,
+      // B4-RC2: prior times come only from a file the writer itself would have written, as a reader admits it.
+      prior =
+        found !== null &&
+        reproducesEvidence({ authoredRevision: revision, bindings: checks.results, records, text: found })
+          ? found
+          : null,
       built = vocabulary
-        ? evidenceText({
-            authoredRevision: revision,
-            bindings: checks.results,
-            records,
-            prior: readEvidence(root, path),
-          })
+        ? evidenceText({ authoredRevision: revision, bindings: checks.results, records, prior })
         : { text: null, observations: [] };
     return {
       ...writeEvidence(root, revision, built.text, { pruneBefore: session.openedAt }),

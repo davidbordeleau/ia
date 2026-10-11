@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
+import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, utimesSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Node } from '@inventarch/graph';
 import type { CheckBinding } from './checks.js';
@@ -33,7 +33,10 @@ export interface EvidenceWrite {
   readonly pruned: readonly string[];
 }
 const HEX = /^[0-9a-f]{64}$/,
-  STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+  /** The writer's own stamp, `Date.prototype.toISOString`'s exact form. */
+  STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+  /** How far ahead of this clock a kept time may be: another writer's clock, never a time not yet reached. */
+  SKEW = 5 * 60 * 1000;
 /** A text value as a quoted literal, with no character the string syntax would have to escape. */
 const quoted = (text: string): string => `"${text.replace(/["\\\u0000-\u001f]/g, ' ').trim()}"`;
 const short = (revision: string): string => revision.slice(0, 12);
@@ -41,7 +44,9 @@ const short = (revision: string): string => revision.slice(0, 12);
 /**
  * The prior evidence file's observation times, by observation name, with the verdict and subject digest they were taken
  * for: an observation that would be recorded again unchanged keeps the time it was first made, so validating twice at
- * one authored revision writes the same bytes. Read from this writer's own layout; anything else is ignored.
+ * one authored revision writes the same bytes. Read from this writer's own layout; anything else is ignored, and so is a
+ * time the writer would not have written: not its exact stamp, observed and captured apart, or later than this clock
+ * allows (review finding B4-RC1). Times are carried, not verified: nothing else attests when an observation was made.
  */
 function priorTimes(
   text: string | null,
@@ -54,7 +59,16 @@ function priorTimes(
       capturedAt = /^ {4}captured-at "([^"\n]*)"$/m.exec(block)?.[1],
       verdict = /^ {4}verdict ([a-z]+)$/m.exec(block)?.[1],
       digest = /^ {4}subject-revision "([0-9a-f]{64})"$/m.exec(block)?.[1];
-    if (name && observedAt && capturedAt && verdict && digest && STAMP.test(observedAt) && STAMP.test(capturedAt))
+    if (
+      name &&
+      observedAt &&
+      capturedAt &&
+      verdict &&
+      digest &&
+      STAMP.test(observedAt) &&
+      observedAt === capturedAt &&
+      Date.parse(observedAt) <= Date.now() + SKEW
+    )
       times.set(name, { observedAt, capturedAt, verdict, digest });
   }
   return times;
@@ -138,6 +152,23 @@ export function evidenceText(input: {
 }
 
 /**
+ * Review findings B4-RC1 and B4-RC2: whether `text` is exactly the evidence file `evidenceText` writes for `bindings`
+ * over `records` at `authoredRevision`, its times taken from `text` itself: every observation the writer would make
+ * and nothing else, with the writer's verdicts, reasons and wording, byte for byte. A reader admits only such a file,
+ * and the writer keeps prior times only from one, so a planted or edited file can neither be read as evidence nor lend
+ * the writer its times.
+ */
+export function reproducesEvidence(input: {
+  readonly authoredRevision: string;
+  readonly bindings: readonly CheckBinding[];
+  readonly records: readonly Node[];
+  readonly text: string;
+}): boolean {
+  const { text } = input;
+  return evidenceText({ ...input, prior: text, now: new Date(0) }).text === text;
+}
+
+/**
  * The directories evidence lives in, contained the D01 way from the root: a link or junction refuses as
  * IA-DB-PATH-UNSAFE (safePath), as does an entry at `.ia`, `.ia/work` or the evidence directory that is not a directory.
  */
@@ -188,7 +219,8 @@ const SKIPPED = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOENT', 'EROFS']);
  * The bytes are staged in the evidence directory, flushed, and renamed into place, so a reader sees the whole old file or
  * the whole new one. Pruning is best effort and comes last: only regular files named `<64 hex>.ia`, never temporary
  * files or anything else; a file it may not remove is skipped; and with `pruneBefore` a file modified at or after that
- * time, which a validation of a newer revision may have written meanwhile, is kept (B3-N2).
+ * time, which a validation of a newer revision may have written meanwhile, is kept (B3-N2); a current file left
+ * unchanged is touched, so it counts as modified now (B4-RC3).
  */
 export function writeEvidence(
   root: string,
@@ -216,6 +248,15 @@ export function writeEvidence(
       written = true;
     } finally {
       discard(root, temporary);
+    }
+  } else if (bytes !== null) {
+    // Review finding B4-RC3: the file is current again, so a validation of an older revision that began before now, and
+    // prunes only what was modified before it began, leaves it. Best effort: an untouchable file is still current.
+    try {
+      const now = new Date();
+      utimesSync(safePath(root, path), now, now);
+    } catch {
+      // Nothing to record differs; the file stays as it is.
     }
   }
   const pruned = prune(root, bytes === null ? null : name, options.pruneBefore);

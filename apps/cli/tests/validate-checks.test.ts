@@ -349,3 +349,15 @@ it('prunes best effort, so a file it may not remove never refuses validate, and 
   const human = await validate(root, env);
   expect(human.text).toContain('No evidence recorded: admission was refused, so nothing is recorded or pruned.');
 });
+
+it('keeps prior times only from a file the writer itself would write (B4-RC2)', async () => {
+  const { root, env } = await initialized();
+  put(root, '.ia/src/checks.ia', BUILT_IN);
+  const first = await json(root, env),
+    path = resolve(root, first.envelope.evidence.path),
+    planted = readFileSync(path, 'utf8').replace(/(observed|captured)-at "[^"]+"/g, '$1-at "2001-01-01T00:00:00Z"');
+  actualFs.writeFileSync(path, planted);
+  const second = await json(root, env);
+  expect(second.envelope.evidence).toMatchObject({ written: true });
+  expect(readFileSync(path, 'utf8')).not.toContain('2001-01-01');
+});

@@ -8,7 +8,7 @@ import {
 } from '@inventarch/language';
 import type { CompiledRecord, Diagnostic, FrozenRegistry, Phase, Source } from '@inventarch/language';
 import { authoredRevisionOf, canonicalRoot, load, reaches, stableSerialize } from '@inventarch/graph';
-import type { Graph, Node, RevisionSource } from '@inventarch/graph';
+import type { Graph, RevisionSource } from '@inventarch/graph';
 import {
   evaluate,
   validateCheck,
@@ -22,6 +22,8 @@ import {
 import type { Assessment, Report, SystemFolder } from '@inventarch/compliance';
 import type { InputSnapshot } from './inputs.js';
 import { EVIDENCE_DIRECTORY, evidenceSource, systemMember } from './inputs.js';
+import { bindChecks } from './checks.js';
+import { reproducesEvidence } from './evidence.js';
 import { declaredRoots, membershipOf } from './membership.js';
 import type { DeclaredRoot, MembershipRow } from './membership.js';
 import { repositoryWorkspace } from './seat.js';
@@ -78,98 +80,21 @@ export interface ViewOptions {
    */
   readonly checks?: 'strict' | 'structural';
 }
-type ParsedRecord = ReturnType<typeof parse>['ast']['records'][number];
-/** The writer's sections and fields, in its order (evidence.ts `evidenceText`); `subject` is the one optional field. */
-const EVIDENCE_SHAPE: readonly (readonly [string, readonly string[]])[] = [
-  ['meaning', ['says', 'answers']],
-  [
-    'evidence',
-    [
-      'origin',
-      'actor',
-      'observed-at',
-      'captured-at',
-      'workspace',
-      'locator',
-      'revision',
-      'bundle',
-      'digest',
-      'availability',
-      'subject',
-      'subject-revision',
-      'snapshot-revision',
-      'evaluator',
-      'move',
-      'verdict',
-    ],
-  ],
-  ['interpretation', ['applies', 'limits', 'reason', 'basis']],
-  ['retention', ['status']],
-];
-const textOf = (value: ParsedRecord['head'][number]['value']): string | undefined =>
-  value.kind === 'scalar' || value.kind === 'string' ? value.text : undefined;
 /**
- * D14, review finding B3-R4: whether `record` is exactly an observation `evidenceText` writes for one admitted check of
- * `root` at its authored revision: its sections and fields only, in the writer's order, with no relationships and no
- * condition; named `<check name>-<12 hex authored revision>` after a check `root` admits outside runtime placement; and
- * stating that check's identity as its locator, its digest as its digest and subject revision, the authored revision as
- * its revision and snapshot revision, its own file as its bundle, and the writer's fixed values elsewhere. Anything else is
- * not evidence, so a planted observation can neither resolve an authored reference nor add an edge.
+ * D14, review findings B3-R4 and B4-RC1: the evidence file at `source` when it is exactly what the writer makes for the
+ * checks `root` admits (`reproducesEvidence`): their bindings derived again from `root`'s own records and report, the
+ * times taken from the file itself. A forged verdict, reason or record, an observation for a check not evaluated, a
+ * relationship, another locator or revision, any byte the writer would not write, and anything written for another view,
+ * is not evidence. Only built-in evaluators produce evidence, so no catalog takes part.
  */
-function writerShaped(record: ParsedRecord, root: View, path: string, checks: ReadonlyMap<string, Node>): boolean {
-  const revision = root.authoredRevision,
-    suffix = `-${revision.slice(0, 12)}`;
-  if (record.discriminator !== 'observation' || record.nested.length > 0 || record.head.length > 0) return false;
-  if (!record.name.endsWith(suffix)) return false;
-  const check = checks.get(record.name.slice(0, -suffix.length));
-  if (check === undefined || record.sections.length !== EVIDENCE_SHAPE.length) return false;
-  const fields = new Map<string, ParsedRecord['head'][number]>();
-  for (const [index, [name, keys]] of EVIDENCE_SHAPE.entries()) {
-    const section = record.sections[index]!;
-    if (section.name !== name) return false;
-    const stated = section.children.map((child) =>
-      child.kind === 'field' && child.when === undefined && child.children.length === 0 ? child : undefined,
-    );
-    if (stated.some((child) => child === undefined)) return false;
-    const order = stated.map((child) => child!.key);
-    if (order.some((key, at) => keys.indexOf(key) < 0 || (at > 0 && keys.indexOf(key) <= keys.indexOf(order[at - 1]!))))
-      return false;
-    if (keys.some((key) => key !== 'subject' && !order.includes(key))) return false;
-    for (const child of stated) fields.set(`${name}.${child!.key}`, child!);
-  }
-  const text = (key: string) => textOf(fields.get(key)!.value);
-  const subject = fields.get('evidence.subject')?.value;
-  return (
-    text('evidence.origin') === 'check' &&
-    text('evidence.actor') === 'ia validate' &&
-    text('evidence.workspace') === '.' &&
-    text('evidence.locator') === check.identity &&
-    text('evidence.revision') === revision &&
-    text('evidence.snapshot-revision') === revision &&
-    text('evidence.bundle') === path &&
-    text('evidence.digest') === check.digest &&
-    text('evidence.subject-revision') === check.digest &&
-    text('evidence.availability') === 'available' &&
-    text('evidence.move') === 'Verification' &&
-    ['success', 'refusal'].includes(text('evidence.verdict') ?? '') &&
-    text('interpretation.basis') === 'evaluation' &&
-    text('retention.status') === 'retained' &&
-    (subject === undefined ||
-      (subject.kind === 'ref' && subject.discriminator === 'check' && subject.name === check.name))
-  );
-}
-/** The evidence file at `path` when every record in it is `writerShaped` for `root`, once each; otherwise undefined. */
 function writerEvidence(source: RevisionSource, root: View): RevisionSource | undefined {
-  const { ast, diagnostics } = parse(source.text, source.path);
-  if (diagnostics.length > 0 || ast.records.length === 0) return undefined;
-  const checks = new Map(
-    [...root.graph.nodes.values()]
-      .filter((node) => node.discriminator === 'check' && node.band !== 0)
-      .map((node) => [node.name, node]),
-  );
-  const names = new Set(ast.records.map((record) => record.name));
-  return names.size === ast.records.length &&
-    ast.records.every((record) => writerShaped(record, root, source.path, checks))
+  const records = [...root.graph.nodes.values()];
+  return reproducesEvidence({
+    authoredRevision: root.authoredRevision,
+    bindings: bindChecks(records, root.report, { status: 'unavailable', reason: 'no catalog takes part' }),
+    records,
+    text: source.text,
+  })
     ? source
     : undefined;
 }
@@ -212,8 +137,8 @@ function metadataOf(input: InputSnapshot): RevisionSource {
 /**
  * The views of `input`, admitted as `options` says. With evidence listed (D14), the authored view is built first; the
  * one file named after its authored revision, and no other, is then read (review finding B3-N10) and admitted only when
- * every record in it is exactly one the writer makes for a check that view admits (`writerShaped`, B3-R4) and adding it
- * changes nothing the authored records admit: their findings, verdicts, refusals and records stay as they were.
+ * it is exactly the file the writer makes for that view's checks (`writerEvidence`, B3-R4, B4-RC1) and adding it changes
+ * nothing the authored records admit: their findings, verdicts, refusals and records stay as they were.
  * Otherwise the authored view stands, as for a file that is not evidence. Evidence moves `revision`, never
  * `authoredRevision`, and is never what a validation binds or reports admission from.
  */

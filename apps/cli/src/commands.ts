@@ -720,7 +720,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     group: 'distribution',
     summary: "Plan or apply this workspace's host registration",
     syntax: [
-      'ia host <claude|codex|cursor> [--remove] [--context <identity>] [--apply] [--json] [--yes]',
+      'ia host <claude|codex|cursor> [--remove] [--context <identity>] [--apply] [--actor <agent>] [--json] [--yes]',
       'ia host claude --user [--remove] [--apply] [--json] [--yes]',
     ],
     grammar: grammar(
@@ -744,6 +744,8 @@ export const COMMANDS: readonly CommandSpec[] = [
           summary: 'Claude only: select the lifecycle context element',
         }),
         option({ name: 'apply', kind: 'boolean', summary: 'Apply the plan rather than previewing it' }),
+        // Review C2-R7: a workspace apply is gated as an effect; a removal and the user-level plugin are not.
+        { ...ACTOR, conflicts: ['user', 'remove'] },
       ],
       positionals('host', 1, 1),
     ),

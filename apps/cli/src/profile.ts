@@ -29,7 +29,10 @@ import { Refusal, respell } from './consumer.js';
 import { quote } from './render.js';
 import { openSession } from './session.js';
 
-/** The gated commands and their modes; every other command, `ia position` included, is never gated. */
+/**
+ * The gated commands and their modes; every other command, `ia position` included, is never gated, and `ia host` is
+ * gated only as a workspace `--apply` (`hostMode`).
+ */
 export const GATED_MODES: Readonly<Record<string, Mode>> = Object.freeze({
   read: 'read',
   next: 'read',
@@ -40,6 +43,12 @@ export const GATED_MODES: Readonly<Record<string, Mode>> = Object.freeze({
   compile: 'effect',
   project: 'effect',
 });
+/**
+ * Review C2-R7: `ia host <host> --apply` for a workspace is the effect mode; its plan, `--remove` and `--user` are never
+ * gated.
+ */
+const hostMode = (argv: readonly string[]): Mode | undefined =>
+  argv.includes('--apply') && !argv.includes('--remove') && !argv.includes('--user') ? 'effect' : undefined;
 /** What a gated command's profile leaves on its invocation for the refusals it raises later. */
 export interface GateState {
   readonly workspace?: string;
@@ -353,7 +362,7 @@ export function gatedNext(refusal: Refusal, gate: Gate | undefined): Refusal {
     token[0].startsWith('"') ? (JSON.parse(token[0]) as string) : token[0],
   );
   const verb = argv[1] ?? '',
-    mode = GATED_MODES[verb];
+    mode = verb === 'host' ? hostMode(argv) : GATED_MODES[verb];
   if (mode === undefined) return refusal;
   const word =
     (verb === 'preview' || verb === 'author') && !argv.includes('--relate') && !argv.includes('--set')

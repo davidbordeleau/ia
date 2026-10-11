@@ -535,6 +535,41 @@ describe('the mandate profile on every gated mode', () => {
     expect((await ia(root, ['position'])).exitCode).toBe(0);
     expect((await ia(root, ['position', '--seat', mandate('demo-mandate'), '--shape', 'governance'])).exitCode).toBe(0);
   });
+  it('gates a workspace ia host --apply as an effect, and leaves its plan, --remove and --user alone (review C2-R7)', async () => {
+    const root = workspace((at) => moves(at, 'Observation, Verification'));
+    const refusal = await refused(root, ['host', 'claude', '--apply', '--yes'], 'IA-RUNTIME-MANDATE-MOVE');
+    expect(refusal['message']).toBe(
+      `${mandate('demo-mandate')} allows Observation, Verification; effect needs Execution`,
+    );
+    expect(nextArgv(refusal['next'] as string).slice(0, 3)).toEqual(['position', '--seat', mandate('demo-mandate')]);
+    // The plan writes nothing and is not gated; a removal restores editing and is not gated either.
+    expect((await unchanged(root, ['host', 'claude'])).exitCode).toBe(0);
+    const removal = body(await ia(root, ['host', 'claude', '--remove', '--apply', '--yes']));
+    expect(String(removal['code'] ?? ''), JSON.stringify(removal)).not.toMatch(/^IA-RUNTIME-MANDATE-/);
+    // A next command naming the apply is judged by the profile; the plan and the removal are left as they are.
+    const { gatedNext } = await import('../src/profile.js');
+    const { Refusal } = await import('../src/consumer.js');
+    const restricted = {
+      identity: mandate('demo-mandate'),
+      band: 100 as const,
+      participant,
+      binds: true,
+      moves: ['Observation', 'Verification'] as const,
+      scope: [demo],
+    };
+    const gate = {
+      state: { workspace: demo, actor: participant, by: 'steward' as const, mandates: [restricted], rooted: '' },
+    };
+    const nextOf = (command: string): string =>
+      gatedNext(new Refusal('IA-CLI-FAILED', 'failed', 1, null, `Run "${command}" to repair it.`), gate).next!;
+    expect(nextArgv(nextOf('ia host claude --apply')).slice(0, 3)).toEqual([
+      'position',
+      '--seat',
+      mandate('demo-mandate'),
+    ]);
+    for (const command of ['ia host claude', 'ia host claude --remove --apply', 'ia host claude --user --apply'])
+      expect(nextOf(command), command).toBe(`Run "${command}" to repair it.`);
+  });
   it("lets ia next name ia preview plan only when the actor's profile allows Verification", async () => {
     const noPlan = (list: string) =>
       workspace((at) => {

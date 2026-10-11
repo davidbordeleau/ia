@@ -300,6 +300,28 @@ describe('ia author', () => {
   });
 });
 
+describe('the next command after an author (review C2-N11, C2-N13)', () => {
+  it('names the governance position, not an ia validate the profile refuses, under Synthesis without Verification', async () => {
+    const root = workspace((at) => moves(at, 'Observation, Synthesis'));
+    const digest = createHash('sha256')
+      .update(readFileSync(resolve(root, '.ia/src/work.ia')))
+      .digest('hex');
+    const written = await ia(root, ['author', '--set', '@milestone m1', 'work.owner=Tom', '--digest', digest]);
+    expect(written.exitCode, written.stdout).toBe(0);
+    expect(nextArgv(body(written).next!).slice(0, 3)).toEqual(['position', '--seat', mandate('demo-mandate')]);
+  });
+  it('carries a named actor as the participant it resolved, not as spelled', async () => {
+    const root = workspace();
+    const written = await ia(root, ['author', 'system', 'notes', '--actor', '@agent demo']);
+    expect(written.exitCode, written.stdout).toBe(0);
+    const next = nextArgv(body(written).next!),
+      at = next.indexOf('--actor');
+    expect(next.slice(0, 4)).toEqual(['author', '--set', demo, 'composition.systems+=@system notes']);
+    expect(next.slice(at, at + 2)).toEqual(['--actor', participant]);
+    expect(body(written).next).not.toContain('@agent demo');
+  });
+});
+
 describe('ia author refusals, each writing nothing', () => {
   it('refuses a missing, malformed or stale digest, naming the preview that prints the current one', async () => {
     const root = workspace();

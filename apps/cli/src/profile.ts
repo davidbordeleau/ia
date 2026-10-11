@@ -346,22 +346,23 @@ export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | '
 const ARGUMENT = /"(?:[^"\\]|\\.)*"|[^\s"]+/g;
 const QUOTED = /"(ia(?: (?:"(?:[^"\\]|\\.)*"|[^\s"]+))*)"/;
 /**
- * Design row 27 under the profile: the refusal a gated command raised, its next command judged by the profile that let
- * the command run. A next command of a gated mode the profile refuses (its move, or for `ia preview` and `ia author` the
- * word it names) becomes the governance position, which is never gated; one the profile allows carries `--actor` when the
- * command named its actor so. A refusal raised before any profile, or naming an ungated command, is returned as it is.
+ * Design row 27 under the profile: the next action a gated command printed, a refusal's or (review C2-N11) its own after
+ * a success, judged by the profile that let the command run. A next command of a gated mode the profile refuses (its
+ * move, or for `ia preview` and `ia author` the word it names) becomes the governance position, which is never gated;
+ * one the profile allows carries `--actor`, the participant it resolved, when the command named its actor so. A next
+ * action printed before any profile, or naming an ungated command, is returned as it is.
  */
-export function gatedNext(refusal: Refusal, gate: Gate | undefined): Refusal {
+export function judgedNext(next: string, gate: Gate | undefined): string {
   const state = gate?.state;
-  if (state === undefined || refusal.next === null) return refusal;
-  const match = QUOTED.exec(refusal.next);
-  if (match === null) return refusal;
+  if (state === undefined) return next;
+  const match = QUOTED.exec(next);
+  if (match === null) return next;
   const argv = [...match[1]!.matchAll(ARGUMENT)].map((token) =>
     token[0].startsWith('"') ? (JSON.parse(token[0]) as string) : token[0],
   );
   const verb = argv[1] ?? '',
     mode = verb === 'host' ? hostMode(argv) : GATED_MODES[verb];
-  if (mode === undefined) return refusal;
+  if (mode === undefined) return next;
   const word =
     (verb === 'preview' || verb === 'author') && !argv.includes('--relate') && !argv.includes('--set')
       ? argv.slice(2).find((token) => !token.startsWith('-'))
@@ -370,26 +371,20 @@ export function gatedNext(refusal: Refusal, gate: Gate | undefined): Refusal {
   if (verdict.refusal !== undefined) {
     const seat = seatOf(verdict.refusal.next) ?? state.workspace;
     const why = `${verb} needs ${MODE_MOVES[mode]}${word === undefined ? '' : ` and @${word}`}, which they do not grant${state.actor === undefined ? '' : ` ${state.actor}`}`;
-    return new Refusal(
-      refusal.code,
-      refusal.message,
-      refusal.exit,
-      refusal.where,
-      seat === undefined
-        ? `Run "ia position${state.rooted}" for the repository's position and the mandates that govern it; ${why}.`
-        : `Run "ia position --seat ${seat} --shape governance${state.rooted}" for what the mandates that govern here allow; ${why}.`,
-      refusal.at,
-    );
+    return seat === undefined
+      ? `Run "ia position${state.rooted}" for the repository's position and the mandates that govern it; ${why}.`
+      : `Run "ia position --seat ${seat} --shape governance${state.rooted}" for what the mandates that govern here allow; ${why}.`;
   }
-  if (state.by !== 'actor' || state.actor === undefined || argv.includes('--actor')) return refusal;
+  if (state.by !== 'actor' || state.actor === undefined || argv.includes('--actor')) return next;
   const actor = ` --actor ${quote(state.actor)}`;
   const command = match[1]!.includes(' -- ') ? match[1]!.replace(' -- ', `${actor} -- `) : `${match[1]}${actor}`;
-  return new Refusal(
-    refusal.code,
-    refusal.message,
-    refusal.exit,
-    refusal.where,
-    refusal.next.replace(match[0], `"${command}"`),
-    refusal.at,
-  );
+  return next.replace(match[0], `"${command}"`);
+}
+/** A refusal a gated command raised, its next command judged by `judgedNext`. */
+export function gatedNext(refusal: Refusal, gate: Gate | undefined): Refusal {
+  if (refusal.next === null) return refusal;
+  const next = judgedNext(refusal.next, gate);
+  return next === refusal.next
+    ? refusal
+    : new Refusal(refusal.code, refusal.message, refusal.exit, refusal.where, next, refusal.at);
 }

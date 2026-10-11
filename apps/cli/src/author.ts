@@ -31,6 +31,7 @@ import type { Context, Result } from './consumer.js';
 import { Refusal, requireRoot, respell } from './consumer.js';
 import { candidateOf, invocationOf, previewRequest, sha256 } from './preview.js';
 import type { Candidate, Invocation, PreviewView } from './preview.js';
+import { judgedNext } from './profile.js';
 import type { Profile } from './profile.js';
 import type { Capabilities } from './render.js';
 import {
@@ -157,16 +158,18 @@ function write(run: Invocation, candidate: Candidate, text: string, again: strin
   return sha256(bytes);
 }
 
-/** The command after `ia author system`: the workspace composing the new system, with its file's current digest. */
+/**
+ * The command after `ia author system`: the workspace composing the new system, with its file's current digest. A named
+ * actor is added by `judgedNext`, as the participant the profile resolved, never as spelled (review C2-N13).
+ */
 function composeNext(run: Invocation, name: string): string {
   const workspace = run.roots.workspace;
   if (workspace === undefined) return `Run "ia validate${run.rooted}" to confirm the workspace admits the new system.`;
   const node = run.snapshot.records({ within: run.within }).find((record) => record.identity === workspace)!;
   const source = run.snapshot.sources.find((candidate) => candidate.path === node.source.path)!;
-  const actor = run.context.args.value('actor');
   return `Run "ia author --set ${workspace} ${quote(`composition.systems+=@system ${name}`)} --digest ${sha256(
     Buffer.from(source.text, 'utf8'),
-  )}${actor === undefined ? '' : ` --actor ${quote(actor)}`}${run.rooted}" so the workspace composes it.`;
+  )}${run.rooted}" so the workspace composes it.`;
 }
 
 export function authorEnvelope(view: AuthorView): unknown {
@@ -251,7 +254,7 @@ export function renderAuthor(view: AuthorView, caps: Capabilities): string {
     ),
   );
   if (located.length > 0) blocks.push([sectionLabel('Findings', caps), ...located.flat()]);
-  blocks.push(entry([words(view.next)], { depth: 0, symbol: 'step' }, caps));
+  blocks.push(entry([words(terminalText(view.next))], { depth: 0, symbol: 'step' }, caps));
   return document(blocks, { leadingBlank: true });
 }
 
@@ -341,9 +344,13 @@ export function runAuthor(context: Context): Result {
       records: preview.records,
       findings: preview.findings,
       profile: preview.profile,
-      next: system
-        ? composeNext(run, (request as { readonly name: string }).name)
-        : `Run "ia validate${run.rooted}" to confirm the workspace admits what was written.`,
+      // Review C2-N11: the next command is judged by the profile that allowed the author, as a refusal's would be.
+      next: judgedNext(
+        system
+          ? composeNext(run, (request as { readonly name: string }).name)
+          : `Run "ia validate${run.rooted}" to confirm the workspace admits what was written.`,
+        context.gate,
+      ),
     };
   } finally {
     editor.close();

@@ -788,6 +788,18 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     (spelling): spelling is string => spelling !== undefined,
   );
   if (paths.length === 0) return {};
+  // A file with more than one link has another name a hook may select: the edit is refused rather than decided by the
+  // name it was typed with (guard review finding G-N3).
+  try {
+    const linked = lstatSync(edit.actual, { throwIfNoEntry: false });
+    if (linked !== undefined && linked.isFile() && linked.nlink > 1)
+      return deny(
+        'IA-HOOK-PATH-UNSAFE',
+        'A file with more than one link is refused: another of its names may be guarded',
+      );
+  } catch (error) {
+    return deny('IA-HOOK-PATH-UNSAFE', error instanceof Error ? error.message : String(error));
+  }
   let db: ReturnType<typeof openDatabase>;
   try {
     db = openDatabase(edit.base, { cache: false });

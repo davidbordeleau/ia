@@ -495,6 +495,9 @@ it('generates authored hooks only and reports tools and selections outside the e
   for (const [text, why] of [
     [hooks.replace('[Write, Edit, MultiEdit]', '[Bash]'), 'hook.tools must name Write, Edit or MultiEdit'],
     [hooks.replace('"docs/**"', '"../docs/**"'), 'hook.paths must hold workspace-relative path selections'],
+    // No C1 control or bidirectional control either (G-R7).
+    [hooks.replace('"docs/**"', '"docs/\u0085x/**"'), 'hook.paths must hold workspace-relative path selections'],
+    [hooks.replace('"docs/**"', '"docs/\u202ex/**"'), 'hook.paths must hold workspace-relative path selections'],
     // A backslash is no separator in the dialect: the selection must be written with /.
     [
       hooks.replace('"docs/**"', '"docs\\\\**"'),

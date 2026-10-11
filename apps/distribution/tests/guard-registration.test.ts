@@ -778,3 +778,43 @@ it("observes each owned hook group's drift read-only: missing, modified, duplica
     expect(readFileSync(resolve(root, settings), 'utf8')).toBe(before);
   }
 });
+
+it('updates a group in place when its cache changes, ignores a change of tools, and removes two hooks at once (G-N5)', () => {
+  const root = temp(),
+    first = cacheV2(),
+    second = cacheV2(),
+    other = (name: string) => `hook-authoring-system/binding/hook/${name}`,
+    row = (name: string, tools: HookRow['tools'] = ['Write', 'Edit', 'MultiEdit']): HookRow => ({
+      identity: other(name),
+      tools,
+      paths: ['docs/**'],
+    });
+  const unrelated = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo' }] };
+  put(root, settings, json({ hooks: { PreToolUse: [unrelated] } }));
+  applyHookRegistration(planHookRegistration(root, { cache: first, hooks: [row('a'), row('b'), row('c')] }));
+  // An unrelated group between the owned ones stays where it is.
+  const config = JSON.parse(readFileSync(resolve(root, settings), 'utf8'));
+  config.hooks.PreToolUse.splice(2, 0, unrelated);
+  put(root, settings, json(config));
+  const groups = () => JSON.parse(readFileSync(resolve(root, settings), 'utf8')).hooks.PreToolUse;
+  // A change of tools changes no group: every group matches every edit tool, and the guard reads the tools from the record.
+  expect(planHookRegistration(root, { cache: first, hooks: [row('a', ['Write']), row('b'), row('c')] }).hooks).toEqual([
+    { hook: other('a'), action: 'unchanged' },
+    { hook: other('b'), action: 'unchanged' },
+    { hook: other('c'), action: 'unchanged' },
+  ]);
+  // Another payload: each owned group is replaced at its own index.
+  const moved = planHookRegistration(root, { cache: second, hooks: [row('a'), row('b'), row('c')] });
+  expect(moved.hooks.map((hook) => hook.action)).toEqual(['update', 'update', 'update']);
+  applyHookRegistration(moved);
+  expect(groups()).toEqual([
+    unrelated,
+    hookGroup(join(second, 'scripts/ia.mjs'), root, row('a')),
+    unrelated,
+    hookGroup(join(second, 'scripts/ia.mjs'), root, row('b')),
+    hookGroup(join(second, 'scripts/ia.mjs'), root, row('c')),
+  ]);
+  // Removing a and c at once removes exactly those two, from the highest index down.
+  applyHookRegistration(planHookRegistration(root, { cache: second, hooks: [row('b')] }));
+  expect(groups()).toEqual([unrelated, unrelated, hookGroup(join(second, 'scripts/ia.mjs'), root, row('b'))]);
+});

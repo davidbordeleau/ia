@@ -18,6 +18,13 @@ const TOOLS = new Map([
  * `[A-Za-z][A-Za-z0-9-]*`, lower-cased), so only the bound can refuse one. A hook's name is not a host path, so no
  * portable-name rule applies to it.
  */
+/**
+ * The characters no registered selection may hold: every C0 and C1 control, DEL, the Unicode line and paragraph
+ * separators and the bidirectional controls (built from a string, which names them).
+ */
+const CONTROL = new RegExp(
+  '[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]',
+);
 export const HOOK_IDENTITY = /^[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*){3}$/;
 export const HOOK_IDENTITY_LIMIT = 512;
 export const registrableHook = (identity: unknown): identity is string =>
@@ -43,7 +50,7 @@ export function hookDeclaration(node: Node): HostHookDeclaration {
   if (tools.length === 0 || tools.some((tool) => !TOOLS.has(tool.toLowerCase() as 'write')))
     unsupported('hook.tools must name Write, Edit or MultiEdit');
   if (paths.length === 0) unsupported('hook.paths selects no path, so the hook could never deny');
-  if (paths.some((path) => !isSelection(path) || path.includes('\\') || /[\u0000-\u001f\u007f]/.test(path)))
+  if (paths.some((path) => !isSelection(path) || path.includes('\\') || CONTROL.test(path)))
     unsupported('hook.paths must hold workspace-relative path selections written with /');
   if (message === undefined || message.trim() === '') unsupported('hook.message is required and not blank');
   return frozen({

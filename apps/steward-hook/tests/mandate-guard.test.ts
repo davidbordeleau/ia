@@ -10,7 +10,17 @@
  * own `sample-mandate` (agent-steward; Observation, Verification; covers `docs/**`) and `agent-steward-profile`. Every
  * path a hook selects is in the demo workspace, so demo-mandate governs it (C1 with the workspace).
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -458,4 +468,34 @@ it('refuses no more than the last registered selection of a hook whose record is
   // An unreadable state is no selection: refused under the root again.
   put(root, '.ia/distributions/hosts/claude-hooks-workspace.json', '{ not json');
   expect(code(check(root, 'src/app.ts'))).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+});
+
+it('refuses a file with more than one link, whose other name a hook may select, and protects the launcher a registration runs (G-N3, G-N5)', () => {
+  const root = workspace({ 'docs/guide.md': 'guarded\n', 'notes/plain.md': 'plain\n' });
+  linkSync(resolve(root, 'docs/guide.md'), resolve(root, 'notes/alias.md'));
+  for (const extra of [{}, reviewer]) {
+    expect(code(check(root, 'notes/alias.md', extra, 'Edit')), JSON.stringify(extra)).toBe('IA-HOOK-PATH-UNSAFE');
+    expect(code(check(root, 'docs/guide.md', extra, 'Edit')), JSON.stringify(extra)).toBe('IA-HOOK-PATH-UNSAFE');
+  }
+  expect(check(root, 'notes/plain.md', reviewer, 'Edit')).toEqual({});
+  // The cache launcher the hook ownership state names is managed, wherever it lies, for every tool.
+  const cache = mkdtempSync(resolve(tmpdir(), 'ia-mandate-guard-'));
+  roots.push(cache);
+  put(cache, 'scripts/ia.mjs', '// launcher\n');
+  put(
+    root,
+    '.ia/distributions/hosts/claude-hooks-workspace.json',
+    JSON.stringify({
+      format: 'ia.hook-registration-state.v1',
+      id: 'workspace',
+      cache,
+      release: 'a'.repeat(64),
+      created: true,
+      groups: [{ hook: HOOK, group: { matcher: 'Write|Edit|MultiEdit', hooks: [] }, paths: ['docs/**'] }],
+    }),
+  );
+  for (const tool of ['Write', 'Edit'])
+    expect(code(evaluateMandateHook(root, HOOK, event(root, resolve(cache, 'scripts/ia.mjs'), reviewer, tool)))).toBe(
+      'IA-HOOK-PROJECTION-MANAGED',
+    );
 });

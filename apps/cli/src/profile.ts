@@ -22,6 +22,7 @@
  * actor named by `--actor` carries it.
  */
 import type { ReadHandle } from '@inventarch/db';
+import { pathKey } from '@inventarch/db';
 import { defaultActor, governingMandates, MODE_MOVES, profileRefusal, RuntimeError } from '@inventarch/runtime';
 import type { GoverningMandate, Mode, ProfileVerdict } from '@inventarch/runtime';
 import type { Context } from './consumer.js';
@@ -158,12 +159,15 @@ export function requireProfile(request: ProfileRequest): Profile {
     rooted = rootedOf(context),
     workspace = repositoryWorkspace(reader, within);
   // The CLI's one call of governingMandates (review C-RC1): the profile, the gate state and every next command it judges
-  // read the mandates through it, so an option the runtime adds is passed here once.
+  // read the mandates through it, so an option the runtime adds is passed here once. `fold` is db's `pathKey`, as the
+  // edit guard passes it: a `covers` selection claims the target path as the volume opens it, so a directory not made
+  // yet and typed in another case, or a selection spelled in another case than the directory on disk, is still claimed
+  // where the volume folds names.
   const governing = (actor: string | undefined, path: string | undefined): readonly GoverningMandate[] =>
     governingMandates(reader, within, {
       ...(actor === undefined ? {} : { actor }),
       ...(workspace === undefined ? {} : { workspace }),
-      ...(path === undefined ? {} : { path }),
+      ...(path === undefined ? {} : { path, fold: pathKey }),
     });
   const judge = (actor: string | undefined): { mandates: readonly GoverningMandate[]; verdict: ProfileVerdict } => {
     const mandates = governing(actor, request.path);

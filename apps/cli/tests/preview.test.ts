@@ -419,6 +419,47 @@ describe('path spelling (review C-R1, C-R7)', () => {
       expect(body(await run([...next, '--json']))).toMatchObject({ code: 'IA-RUNTIME-MANDATE-WORD' });
     }
   });
+  it('matches covers as the edit guard does where the volume folds names: a missing covered directory, a covers in another case (review C-RC1)', async ({
+    skip,
+  }) => {
+    const FENCE = (name: string, covers: string) =>
+      `\n@mandate ${name}\n  meaning\n    says "Fixture fence ${name}."\n    answers "What may happen under ${covers}?"\n  governance\n    requires "Claim no host permission or execution from this mandate."\n  authority\n    participant @agent demo\n    covers ["${covers}"]\n    excluded-words [task]\n`;
+    const root = workspace((at) => {
+      mkdirSync(resolve(at, '.ia/src/restricted'));
+      writeFileSync(
+        resolve(at, '.ia/src/fence.ia'),
+        `#! ia 1.0\n${FENCE('future-fence', '.ia/src/future/')}${FENCE('upper-fence', '.ia/src/Restricted/')}`,
+      );
+    });
+    skip(!existsSync(resolve(root, '.IA/SRC')), 'a case-sensitive volume keeps each case its own directory');
+    // `.ia/src/future/` does not exist yet, so `--at` keeps its typed `Future`; the volume creates the directory the fence
+    // claims. And `.ia/src/Restricted/` claims the directory the volume spells `restricted`.
+    expect(existsSync(resolve(root, '.ia/src/future'))).toBe(false);
+    for (const [at, fence] of [
+      ['.ia/src/Future/t9.ia', 'future-fence'],
+      ['.ia/src/restricted/t9.ia', 'upper-fence'],
+    ] as const) {
+      const refusal = await refused(root, ['task', 't9', ...FIELDS, '--at', at], 'IA-RUNTIME-MANDATE-WORD');
+      expect(refusal['message'], at).toBe(`${mandate(fence)} excludes task`);
+      expect(nextArgv(refusal['next'] as string), at).toEqual([
+        'position',
+        '--seat',
+        mandate(fence),
+        '--shape',
+        'governance',
+        '--root',
+        root,
+      ]);
+      // `ia author` judges the same profile before it writes anything.
+      const before = tree(root);
+      const authored = await run(
+        ['author', 'task', 't9', ...FIELDS, '--at', at, '--digest', EMPTY, '--root', root, '--json'],
+        { env: HOMES },
+      );
+      expect(body(authored), at).toMatchObject({ ok: false, code: 'IA-RUNTIME-MANDATE-WORD' });
+      expect(tree(root)).toEqual(before);
+    }
+  });
   it('names the source as the volume spells it, never the file to move aside, for another spelling of a source', async () => {
     const root = workspace();
     const variants = [

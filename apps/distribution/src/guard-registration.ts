@@ -228,6 +228,8 @@ interface SettingsRead<T> {
   /** `.claude/settings.local.json`'s PreToolUse groups, bounded. */
   readonly rows: unknown[];
   readonly projectText: string | null;
+  /** Whether `disableAllHooks: true` turns hooks off (the local settings first, then the shared ones). */
+  readonly disabled: boolean;
 }
 /**
  * The settings file whose `disableAllHooks: true` turns Claude Code's hooks off for this workspace, as registration
@@ -282,15 +284,13 @@ function readSettings<T>(
     hooks = config['hooks'] === undefined ? {} : plain(config['hooks']);
   const projectText = read(root, projectPath),
     project = projectText === null ? {} : plain(decodeDistributionJson(projectText));
-  if (
-    writing &&
-    (config['disableAllHooks'] === true ||
-      (config['disableAllHooks'] === undefined && project['disableAllHooks'] === true))
-  )
-    fail('HOST-UNSUPPORTED', 'Project hooks are explicitly disabled by disableAllHooks');
+  const disabled =
+    config['disableAllHooks'] === true ||
+    (config['disableAllHooks'] === undefined && project['disableAllHooks'] === true);
+  if (writing && disabled) fail('HOST-UNSUPPORTED', 'Project hooks are explicitly disabled by disableAllHooks');
   const rows: unknown[] = hooks['PreToolUse'] === undefined ? [] : (hooks['PreToolUse'] as unknown[]);
   if (!Array.isArray(rows) || rows.length > 256) fail('INPUT-INVALID', 'Expected a bounded PreToolUse hook array');
-  return { id, before, prior, rows, projectText };
+  return { id, before, prior, rows, projectText, disabled };
 }
 /**
  * The journaled publication both registrations share (G-N9), under the host lock the caller holds: the journal first
@@ -615,14 +615,16 @@ function planHooksWith(
   desired: readonly HookRow[],
   removeId: unknown,
 ): HookPlan {
-  const { id, before, prior, rows, projectText } = readSettings(
+  // With hooks turned off, a plan that only keeps or removes owned groups proceeds; one that would write a group refuses
+  // below (review finding A-F1).
+  const { id, before, prior, rows, projectText, disabled } = readSettings(
     root,
     cache,
     removeId,
     'Hook',
     hookStatePath,
     (content, owner, removal) => savedHooks(content, root, owner, removal),
-    desired.length > 0,
+    false,
   );
   const wanted = new Map(desired.map((row) => [row.identity, hookGroup(cache!.launcher, root, row)])),
     selections = new Map(desired.map((row) => [row.identity, row.paths]));
@@ -697,6 +699,8 @@ function planHooksWith(
     }),
     ...owned.filter(({ hook }) => !wanted.has(hook)).map(({ hook }): HookAction => ({ hook, action: 'remove' })),
   ].sort((a, b) => order(a.hook, b.hook));
+  if (disabled && actions.some((row) => row.action === 'create' || row.action === 'update'))
+    fail('HOST-UNSUPPORTED', 'Project hooks are explicitly disabled by disableAllHooks');
   const body = {
     format: 'ia.hook-registration-plan.v1' as const,
     root,

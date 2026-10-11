@@ -1002,3 +1002,32 @@ it('refuses a generated skill at a populated folder it does not own, naming the 
     expect(read(root, SKILL).split('\n')).toContain(PACKET_MARKER);
   }
 });
+
+it('keeps an owned group as registered while disableAllHooks is on, and still removes an obsolete one (A-F1)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  const owned = hookGroups(root).get(HOOK)!;
+  put(root, '.claude/settings.json', `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
+  // The hook still declared keeps its group: listed as registered, never also as not taken.
+  const kept = projection((await apply(root, env)).stdout);
+  expect(kept.hooks).toEqual([]);
+  expect(kept.unsupported).toEqual([]);
+  expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([HOOK]);
+  expect(receipt(root).unsupported).toEqual([]);
+  // Renamed: the obsolete group goes now, and the new hook, which has no group, is reported naming the file.
+  edit(root, '.ia/src/hooks.ia', ['note-edits', 'doc-edits']);
+  const renamed = projection((await apply(root, env)).stdout);
+  expect(renamed.hooks).toEqual([{ hook: HOOK, action: 'remove' }]);
+  expect(renamed.unsupported).toEqual([
+    {
+      identity: RENAMED,
+      word: 'hook',
+      reason: 'Not registered: hooks are disabled by disableAllHooks in .claude/settings.json',
+    },
+  ]);
+  expect(existsSync(resolve(root, SETTINGS)) ? hookGroups(root).size : 0).toBe(0);
+  expect(receipt(root)).toMatchObject({
+    hooks: [],
+    removedHooks: [{ identity: HOOK, sha256: hookGroupDigest(owned) }],
+  });
+});

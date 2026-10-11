@@ -631,6 +631,29 @@ describe('the mandate profile on every gated mode', () => {
     const read = await refused(root, ['read', participant, '--actor', 'nobody'], 'IA-RUNTIME-MANDATE-ACTOR');
     expect(nextArgv(read['next'] as string)).toEqual(['read', participant, '--root', root]);
   });
+  it('judges excluded words only for preview and author, leaving read, validate, next and capture alone (review C2-N10)', async () => {
+    const root = workspace((at) =>
+      rewrite(at, '.ia/src/workspace.ia', (text) =>
+        text.replace(
+          '    scope [@workspace demo]\n',
+          '    scope [@workspace demo]\n    excluded-words [milestone, plan, mandate, workspace, agent]\n',
+        ),
+      ),
+    );
+    for (const argv of [
+      ['read', milestone('m1')],
+      ['read', mandate('demo-mandate')],
+      ['validate'],
+      ['next'],
+      ['capture', '--preview'],
+      ['project', 'claude'],
+    ]) {
+      const result = await unchanged(root, argv);
+      expect(result.exitCode, `${argv.join(' ')}: ${result.stdout}`).toBe(0);
+    }
+    // The words they read are excluded only from what preview and author write.
+    await refused(root, ['preview', 'milestone', 'm9'], 'IA-RUNTIME-MANDATE-WORD');
+  });
   it("lets ia next name ia preview plan only when the actor's profile allows Verification", async () => {
     const noPlan = (list: string) =>
       workspace((at) => {

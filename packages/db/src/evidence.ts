@@ -148,17 +148,28 @@ function directories(root: string): void {
     if (!stat.isDirectory()) throw new DbError('IA-DB-PATH-UNSAFE', `${path} is not a directory`, path);
   }
 }
-/** The bytes of the evidence file at `path`, or null when there is none. */
+/** Whether `error` is D01's refusal of a link, junction or entry of the wrong kind. */
+const unsafe = (error: unknown): boolean => error instanceof DbError && error.code === 'IA-DB-PATH-UNSAFE';
+/**
+ * The bytes of the evidence file at `path`, or null when there is none, including when a link, junction or entry of the
+ * wrong kind stands on the way: nothing is read through one, and the writer refuses there.
+ */
 export function readEvidence(root: string, path: string): string | null {
-  directories(root);
-  const target = entryAt(root, path);
-  return target === undefined ? null : readFileSync(target, 'utf8');
+  try {
+    directories(root);
+    const target = entryAt(root, path);
+    return target === undefined ? null : readFileSync(target, 'utf8');
+  } catch (error) {
+    if (unsafe(error)) return null;
+    throw error;
+  }
 }
 
 /**
  * Write `text` as the evidence of `authoredRevision` (D14), or, for null, keep none for it, and prune the evidence files of
  * other authored revisions. Every check passes before the first write: a link or junction on the way, or an entry at
- * either a directory's or the file's path of the wrong kind, refuses as IA-DB-PATH-UNSAFE. The bytes are staged in the
+ * either a directory's or the file's path of the wrong kind, refuses as IA-DB-PATH-UNSAFE, except that with nothing to
+ * record (null) such a directory is left alone and nothing is done. The bytes are staged in the
  * evidence directory, flushed, and renamed into place, so a reader sees the whole old file or the whole new one; a file
  * that already holds `text` is not rewritten. Only regular files named `<64 hex>.ia` are pruned; nothing else in the
  * directory, temporary files included, is touched. A failure leaves the evidence it found, and only the error escapes.
@@ -171,7 +182,13 @@ export function writeEvidence(
   if (!HEX.test(authoredRevision)) throw new TypeError('An authored revision is 64 hex digits');
   const name = `${authoredRevision}.ia`,
     path = `${EVIDENCE_DIRECTORY}/${name}`;
-  directories(root);
+  try {
+    directories(root);
+  } catch (error) {
+    // With nothing to record, a directory that is not plain holds nothing this writer may prune: nothing is done.
+    if (text === null && unsafe(error)) return Object.freeze({ path: null, written: false, pruned: Object.freeze([]) });
+    throw error;
+  }
   const existing = entryAt(root, path),
     before = existing === undefined ? null : readFileSync(existing);
   let written = false;

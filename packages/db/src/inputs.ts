@@ -12,6 +12,7 @@ import {
   realpathSync,
   statSync,
 } from 'node:fs';
+import type { Stats } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BAND_OF, KERNEL_SOURCES, isPlacementKind, isProvenance } from '@inventarch/language';
 import type { Location } from '@inventarch/language';
@@ -68,17 +69,23 @@ export const EVIDENCE_DIRECTORY = '.ia/work/evidence';
 export const EVIDENCE_FILE = /^[0-9a-f]{64}\.ia$/;
 const EVIDENCE_BYTES = 4 * 1024 * 1024;
 /**
- * D14: the evidence files at `.ia/work/evidence`, each at runtime placement band 0. The directories from the root are
- * contained the D01 way: a link or junction refuses as IA-DB-PATH-UNSAFE, and so does an entry at `.ia`, `.ia/work` or the
- * directory itself that is not a directory; a missing one means there is none. A file is read through
- * `readWorkspaceBytes`, so a linked, hard-linked or nonregular one refuses as IA-DB-PATH-UNSAFE; one that is not exact
- * UTF-8, or that grew past its bound, is not evidence and is skipped.
+ * D14: the evidence files at `.ia/work/evidence`, each at runtime placement band 0. Nothing is ever read through a link:
+ * the directories from the root are contained the D01 way, and a link, junction or entry of the wrong kind at `.ia`,
+ * `.ia/work` or the directory itself means there is no evidence, as a missing one does; evidence is optional, so a
+ * workspace a released reader validated is never refused for its `.ia/work`. A file is read through
+ * `readWorkspaceBytes`; a linked, hard-linked or nonregular one, one that is not exact UTF-8, or one past its bound is
+ * not evidence and is skipped. The writer refuses where it would have to write through any of these.
  */
 function evidenceSources(root: string): readonly RevisionSource[] {
   for (const directory of ['.ia', '.ia/work', EVIDENCE_DIRECTORY]) {
-    const stat = lstatSync(safePath(root, directory), { throwIfNoEntry: false });
-    if (stat === undefined) return [];
-    if (!stat.isDirectory()) throw new DbError('IA-DB-PATH-UNSAFE', `${directory} is not a directory`, directory);
+    let stat: Stats | undefined;
+    try {
+      stat = lstatSync(safePath(root, directory), { throwIfNoEntry: false });
+    } catch (error) {
+      if (error instanceof DbError && error.code === 'IA-DB-PATH-UNSAFE') return [];
+      throw error;
+    }
+    if (stat === undefined || !stat.isDirectory()) return [];
   }
   const found: RevisionSource[] = [];
   for (const name of readdirSync(safePath(root, EVIDENCE_DIRECTORY)).sort(compare)) {
@@ -89,8 +96,7 @@ function evidenceSources(root: string): readonly RevisionSource[] {
       text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
         readWorkspaceBytes(root, path, EVIDENCE_BYTES),
       );
-    } catch (error) {
-      if (error instanceof DbError && error.code === 'IA-DB-PATH-UNSAFE') throw error;
+    } catch {
       continue;
     }
     found.push(

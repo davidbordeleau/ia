@@ -6,7 +6,7 @@
  * tests/equivalence.test.ts holds the two validation binaries to one result and one evidence file.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { chmodSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -193,7 +193,7 @@ it('never creates or prunes evidence from doctor, capture --preview or a refused
   }
 });
 
-it('refuses cleanly where the evidence cannot be written, and through a junction, leaving what it found', async () => {
+it('refuses cleanly where the evidence cannot be written, leaving what it found, and reads none from a broken .ia/work', async () => {
   const { root, env } = await initialized();
   put(root, '.ia/src/checks.ia', CHECKS);
   const revision = authoredRevision(root),
@@ -219,6 +219,19 @@ it('refuses cleanly where the evidence cannot be written, and through a junction
     chmodSync(lock, process.platform === 'win32' ? 0o644 : 0o755);
   }
   expect((await json(root, env)).envelope.evidence.written).toBe(true);
+  // A file where .ia/work goes: nothing is read from it, and with a passing check to record validate refuses with the
+  // repair; without one, it validates as a released reader did.
+  rmSync(resolve(root, '.ia/work'), { recursive: true });
+  put(root, '.ia/work', 'not a directory\n');
+  const blocked = await run(['validate', '--root', root, '--json'], { env });
+  expect(blocked.exitCode).toBe(3);
+  expect(JSON.parse(blocked.stdout || blocked.stderr)).toMatchObject({
+    code: 'IA-DB-PATH-UNSAFE',
+    next: expect.stringContaining(`then run "ia validate --root`),
+  });
+  put(root, '.ia/src/checks.ia', `#! ia 1.0\n\n${check('prose-check', 'COMP-SCHEMA', 'every admitted record')}`);
+  expect((await json(root, env)).exitCode).toBe(0);
+  expect(readFileSync(resolve(root, '.ia/work'), 'utf8')).toBe('not a directory\n');
 });
 
 it('keeps one whole evidence file when several validates run at once', async () => {

@@ -317,31 +317,42 @@ it('ignores evidence that would collide with an authored observation or add a fi
   );
 });
 
-it('refuses evidence through a link or junction or at an entry of the wrong kind, writing nothing (C14)', () => {
+it('never reads or writes evidence through a link or junction or at an entry of the wrong kind (C14)', () => {
   const root = workspace(),
     elsewhere = workspace(false);
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   const revision = using(structural(root), (db) => db.authoredRevision);
-  // The evidence directory as a junction to a directory outside the workspace.
+  const noEvidence = () =>
+    using(structural(root, true), (db) =>
+      expect(db.records().some((record) => record.band === 0 && record.discriminator === 'observation')).toBe(false),
+    );
+  // The evidence directory as a junction to a directory outside the workspace. Read: nothing behind it is evidence,
+  // and the workspace still opens. Write: a passing check refuses, and with nothing to record nothing is pruned
+  // through it either.
   mkdirSync(resolve(root, '.ia/work'), { recursive: true });
   symlinkSync(elsewhere, resolve(root, EVIDENCE_DIRECTORY), 'junction');
+  const planted = `${'1'.repeat(64)}.ia`;
+  put(elsewhere, planted, '#! ia 1.0\n');
+  noEvidence();
   expect(() => validateOnce(root)).toThrow(code('IA-DB-PATH-UNSAFE'));
   expect(() => writeEvidence(root, revision, '#! ia 1.0\n')).toThrow(code('IA-DB-PATH-UNSAFE'));
-  expect(readdirSync(elsewhere)).toEqual([]);
+  expect(writeEvidence(root, revision, null)).toEqual({ path: null, written: false, pruned: [] });
+  expect(readdirSync(elsewhere)).toEqual([planted]);
   rmSync(resolve(root, EVIDENCE_DIRECTORY));
   // The evidence directory as a file, and the evidence file as a directory or a hard link.
   put(root, EVIDENCE_DIRECTORY, 'not a directory');
   expect(() => writeEvidence(root, revision, '#! ia 1.0\n')).toThrow(code('IA-DB-PATH-UNSAFE'));
-  expect(() => open(root, { cache: false, evidence: true })).toThrow(code('IA-DB-PATH-UNSAFE'));
+  expect(writeEvidence(root, revision, null)).toEqual({ path: null, written: false, pruned: [] });
+  noEvidence();
   rmSync(resolve(root, EVIDENCE_DIRECTORY));
   mkdirSync(resolve(root, `${EVIDENCE_DIRECTORY}/${revision}.ia`), { recursive: true });
   expect(() => writeEvidence(root, revision, '#! ia 1.0\n')).toThrow(code('IA-DB-PATH-UNSAFE'));
   rmSync(resolve(root, `${EVIDENCE_DIRECTORY}/${revision}.ia`), { recursive: true });
   put(elsewhere, 'outside.ia', '#! ia 1.0\n');
   linkSync(resolve(elsewhere, 'outside.ia'), resolve(root, `${EVIDENCE_DIRECTORY}/${revision}.ia`));
-  // A hard-linked evidence file is refused where it is read, and the writer replaces the entry rather than writing
+  // A hard-linked evidence file is never read as evidence, and the writer replaces the entry rather than writing
   // through it, so the file outside never changes.
-  expect(() => open(root, { cache: false, evidence: true })).toThrow(code('IA-DB-PATH-UNSAFE'));
+  noEvidence();
   expect(writeEvidence(root, revision, '#! ia 1.0\n\n')).toMatchObject({ written: true });
   expect(readFileSync(resolve(elsewhere, 'outside.ia'), 'utf8')).toBe('#! ia 1.0\n');
   expect(statSync(resolve(root, `${EVIDENCE_DIRECTORY}/${revision}.ia`)).nlink).toBe(1);

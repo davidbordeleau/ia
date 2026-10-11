@@ -16,6 +16,7 @@ import { dirname, join, resolve } from 'node:path';
 import { afterAll, expect, it } from 'vitest';
 import { unpackTree, HOST_TREE_LIMITS } from '../../apps/distribution/src/ustar.js';
 import { verifyHostCache } from '../../apps/distribution/src/host.js';
+import { readInstalledImplementations } from '../../apps/distribution/src/implementations.js';
 import { assertStaticPayloadCode, staticCliManifest, collectPayload, generateHostPayload } from './host-payload.mjs';
 
 const repository = resolve(import.meta.dirname, '../..'),
@@ -63,6 +64,18 @@ it('produces a deterministic v2 payload that verifies after extraction', async (
   expect(first.archive.equals(second.archive)).toBe(true);
   const verified = verifyHostCache(extract(first.archive));
   expect(verified).toMatchObject({ format: 2, host: null, release: first.pin.release });
+});
+it('inventories the installed catalog in the actual payload without an app-to-composition edge', async () => {
+  const payload = await generateHostPayload({ repository, write: false });
+  const root = extract(payload.archive);
+  const catalog = readInstalledImplementations(root, payload.pin.release);
+  expect(catalog.operations).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: 'captured-source-read-v1', handler: 'ia.captured-source.read.v1' }),
+  ]));
+  expect(catalog.evaluators).toEqual({ format: 'ia-evaluator-catalog/1.0', entries: [] });
+  const inventory = JSON.parse(readFileSync(resolve(root, 'inventory.json'), 'utf8'));
+  expect(inventory.files.find((row: { path: string }) => row.path === 'implementations.json'))
+    .toMatchObject({ sha256: catalog.digest });
 });
 it('excludes the private service dependencies and the payload itself', async () => {
   const { files, packages } = await collectPayload(repository);

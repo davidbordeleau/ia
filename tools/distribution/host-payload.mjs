@@ -198,7 +198,27 @@ export async function generateHostPayload({ repository, write }) {
   const { packTree, HOST_TREE_LIMITS } = await import(
     pathToFileURL(resolve(repository, 'apps/distribution/dist/ustar.js')).href
   );
-  const { files, packages } = await collectPayload(repository),
+  const { files, packages } = await collectPayload(repository);
+  // Producer-only import: consumers read verified data and never depend on composition.
+  const { installedReadCatalog } = await import(
+    pathToFileURL(resolve(manifestDir('@inventarch/agent-composition-system', repository), 'dist/installed-read.js')).href
+  );
+  const { installedImplementationsValue } = await import(
+    pathToFileURL(resolve(repository, 'apps/distribution/dist/implementations.js')).href
+  );
+  const operations = Object.entries(installedReadCatalog().operations)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([id, entry]) => ({
+      id, version: entry.version, handler: entry.value.handler,
+      input: entry.value.input, output: entry.value.output, digest: entry.digest,
+    }));
+  const catalog = installedImplementationsValue({
+    format: 'ia.installed-implementations.v1',
+    evaluators: { format: 'ia-evaluator-catalog/1.0', entries: [] },
+    operations,
+  });
+  files.set('implementations.json', Buffer.from(json(catalog)));
+  const
     runtimeBytes = [...files.values()].reduce((sum, b) => sum + b.length, 0);
   if (runtimeBytes > PAYLOAD_BYTES)
     throw Error(`Runtime closure of ${runtimeBytes} bytes exceeds the ${PAYLOAD_BYTES}-byte payload ceiling`);

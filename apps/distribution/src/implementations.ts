@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
+import { readWorkspaceBytes } from '@inventarch/db';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
 import { acquireHostRegistrationLock, assertHostRegistrationIdle } from './host.js';
-import { bytes, contained, fail, json, locate, object, replace, sha256, utf8, workspace } from './files.js';
+import { contained, fail, json, locate, object, replace, sha256, utf8, workspace } from './files.js';
 
 /**
  * Plan amendment C16 (design item 9): the installed-implementation catalog a v2 host payload carries at its root. The
@@ -54,6 +55,11 @@ const TOKEN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/,
 const OPERATION_KEYS = ['id', 'version', 'handler', 'input', 'output', 'digest'] as const,
   JOIN_KEYS = ['consumer', 'implementation', 'version', 'digest', 'consumerRevision'] as const;
 const text = (value: Buffer | null): string | null => (value === null ? null : utf8(value));
+// Descriptor-bound reads avoid allocation before bounds and refuse hard links and path swaps.
+function pinnedBytes(root: string, path: string, limit = 1024 * 1024): Buffer | null {
+  if (!existsSync(contained(root, path))) return null;
+  return Buffer.from(readWorkspaceBytes(root, path, limit));
+}
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
@@ -108,14 +114,14 @@ export function installedImplementationsValue(value: unknown): InstalledImplemen
  */
 export function readInstalledImplementations(directory: string, release: string): InstalledImplementations {
   const root = workspace(directory),
-    releaseText = text(bytes(root, 'release.json'));
+    releaseText = text(pinnedBytes(root, 'release.json'));
   if (!HEX.test(release)) fail('INPUT-INVALID', 'Invalid host release pin');
   if (releaseText === null) fail('ARTIFACT-UNAVAILABLE', 'Missing host release');
   if (sha256(releaseText) !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
   const pinned = object(decodeDistributionJson(releaseText), ['format', 'inventory', 'launcher']);
   if (pinned['format'] !== 'ia.host-release.v2')
     fail('ARTIFACT-UNAVAILABLE', 'Only a v2 host payload carries an installed-implementation catalog');
-  const inventoryText = text(bytes(root, 'inventory.json', 4 * 1024 * 1024));
+  const inventoryText = text(pinnedBytes(root, 'inventory.json', 4 * 1024 * 1024));
   if (inventoryText === null || sha256(inventoryText) !== pinned['inventory'])
     fail('INTEGRITY-MISMATCH', 'Host release inventory changed');
   const inventory = object(decodeDistributionJson(inventoryText), ['format', 'version', 'packages', 'files']);
@@ -128,8 +134,8 @@ export function readInstalledImplementations(directory: string, release: string)
       )
     : undefined;
   if (listed === undefined) fail('ARTIFACT-UNAVAILABLE', 'The host payload lists no installed-implementation catalog');
-  const content = bytes(root, INSTALLED_IMPLEMENTATIONS);
-  if (content === null || sha256(content) !== (listed as { sha256?: unknown }).sha256)
+  const content = pinnedBytes(root, INSTALLED_IMPLEMENTATIONS);
+  if (content === null || sha256(content) !== (listed as { sha256?: unknown }).sha256 || content.length !== (listed as { bytes?: unknown }).bytes)
     fail('INTEGRITY-MISMATCH', 'Installed-implementation catalog changed');
   return {
     ...installedImplementationsValue(decodeDistributionJson(utf8(content))),
@@ -151,7 +157,7 @@ function joinRow(value: unknown): ImplementationJoin {
 export function readJoins(rootInput: string): readonly ImplementationJoin[] | null {
   const root = workspace(rootInput);
   return locate(JOINS, () => {
-    const content = text(bytes(root, JOINS));
+    const content = text(pinnedBytes(root, JOINS));
     if (content === null) return null;
     const row = object(decodeDistributionJson(content), ['format', 'joins']);
     if (row['format'] !== JOINS_FORMAT || !Array.isArray(row['joins']) || row['joins'].length > ROWS)
@@ -183,12 +189,16 @@ export function recordJoin(rootInput: string, join: ImplementationJoin): readonl
   }
 }
 /** Delete the join receipts under the host lock; with none recorded nothing is written, the host area included. */
-export function removeJoins(rootInput: string): void {
+export function removeJoins(rootInput: string, consumer?: string): void {
   const root = workspace(rootInput);
   if (!existsSync(contained(root, JOINS))) return;
+  assertHostRegistrationIdle(root);
   const unlock = acquireHostRegistrationLock(root);
   try {
-    replace(root, JOINS, null);
+    const joins = readJoins(root)!;
+    const kept = consumer === undefined ? [] : joins.filter((join) => join.consumer !== consumer);
+    if (kept.length === joins.length) return;
+    replace(root, JOINS, kept.length === 0 ? null : Buffer.from(json({ format: JOINS_FORMAT, joins: kept })));
   } finally {
     unlock();
   }

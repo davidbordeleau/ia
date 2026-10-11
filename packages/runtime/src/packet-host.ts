@@ -35,13 +35,44 @@ export interface HostFile {
   readonly path: string;
   readonly text: string;
 }
+/**
+ * The words authored host generation (milestone generation-binding) renders files of, the word it registers hook groups
+ * for, and the words it defines, each union stated once here for the generators, the receipt and their consumers.
+ */
+export type GeneratedFileWord = 'agent-profile' | 'playbook';
+export type GeneratedRecordWord = GeneratedFileWord | 'hook';
+export type DefinitionWord = 'operation' | 'harness';
+/** The edit tools a hook group's matcher can name, in matcher order. */
+export type HookToolName = 'Write' | 'Edit' | 'MultiEdit';
 /** Authored hook metadata; registration derives a fixed command, never authored shell text. */
 export interface HostHookDeclaration {
   readonly identity: string;
   readonly event: 'PreToolUse';
-  readonly tools: readonly ('Write' | 'Edit' | 'MultiEdit')[];
+  readonly tools: readonly HookToolName[];
   readonly paths: readonly string[];
   readonly message: string;
+}
+/** One generated file a receipt lists: the record it renders, its word, its path and the SHA-256 of its text. */
+export interface GeneratedRow {
+  readonly identity: string;
+  readonly word: GeneratedFileWord;
+  readonly path: string;
+  readonly sha256: string;
+}
+/**
+ * One registered hook group a receipt lists, keyed by its `@hook`: the tools its matcher names and the SHA-256 of the
+ * group as it was written (its canonical JSON, keys sorted), so a hand edit of the group is evidence against the row.
+ */
+export interface HookGroupRow {
+  readonly identity: string;
+  readonly tools: readonly HookToolName[];
+  readonly sha256: string;
+}
+/** An authored record the host does not render or register, and why. */
+export interface UnsupportedRow {
+  readonly identity: string;
+  readonly word: GeneratedRecordWord;
+  readonly reason: string;
 }
 /**
  * An authored `@operation` as a definition (plan amendment C11): its handler and its input and output validators are
@@ -107,20 +138,13 @@ export interface PacketReceipt {
   /** The files this render writes and expects to remain, in render order, each with the SHA-256 of its UTF-8 text. */
   readonly files: readonly { readonly path: string; readonly sha256: string }[];
   /** Optional on receipts predating authored generation. Ownership remains projection state. */
-  readonly generated?: readonly {
-    readonly identity: string;
-    readonly word: 'agent-profile' | 'playbook' | 'hook';
-    readonly path: string;
-    readonly sha256: string;
-  }[];
+  /** The generated files among `files`, each with the record it renders. */
+  readonly generated?: readonly GeneratedRow[];
   readonly definitions?: readonly PacketDefinition[];
-  readonly hooks?: readonly HostHookDeclaration[];
+  /** The hook groups the applying caller registered, one per `@hook`. */
+  readonly hooks?: readonly HookGroupRow[];
   /** The authored records the host does not render or register, each with the reason. */
-  readonly unsupported?: readonly {
-    readonly identity: string;
-    readonly word: 'agent-profile' | 'playbook' | 'hook';
-    readonly reason: string;
-  }[];
+  readonly unsupported?: readonly UnsupportedRow[];
   /** The owned legacy files the applying caller deleted (B9). */
   readonly removed: readonly { readonly path: string; readonly sha256: string }[];
   /** The unmarked files the applying caller left in place (design §4, adapter rule 2). */

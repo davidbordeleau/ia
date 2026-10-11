@@ -1,6 +1,12 @@
 import type { Node } from '@inventarch/graph';
 import type { CompiledField, CompiledRecord, CompiledValue } from '@inventarch/language';
-import type { PacketHost } from '@inventarch/runtime';
+import type {
+  DefinitionWord,
+  GeneratedFileWord,
+  GeneratedRecordWord,
+  PacketHost,
+  UnsupportedRow,
+} from '@inventarch/runtime';
 import {
   code as packetCode,
   inline as packetInline,
@@ -17,8 +23,8 @@ import { frozen } from '../resource-format.js';
  * with.
  */
 
-/** The words a generator renders records of. */
-export type GeneratedWord = 'agent-profile' | 'playbook' | 'hook' | 'operation' | 'harness';
+/** The words a generator renders records of: runtime's unions, stated once there. */
+export type GeneratedWord = GeneratedRecordWord | DefinitionWord;
 /** One generated host file and the record it renders. */
 export interface GeneratedFile {
   /** Workspace-relative and `/`-separated. */
@@ -26,14 +32,10 @@ export interface GeneratedFile {
   readonly text: string;
   /** The identity of the rendered record. */
   readonly identity: string;
-  readonly word: GeneratedWord;
+  readonly word: GeneratedFileWord;
 }
 /** An authored record a host does not render or register, and why: the projection receipt's `unsupported` row. */
-export interface UnsupportedRecord {
-  readonly identity: string;
-  readonly word: 'agent-profile' | 'playbook' | 'hook';
-  readonly reason: string;
-}
+export type UnsupportedRecord = UnsupportedRow;
 /** What a file generator returns: the files it renders, and one row for each authored record it does not. */
 export interface GeneratedSet {
   readonly files: readonly GeneratedFile[];

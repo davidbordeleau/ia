@@ -44,7 +44,14 @@ export type {
 } from './packet.js';
 export { PACKET_MARKER, renderHost } from './packet-host.js';
 export type {
+  DefinitionWord,
+  GeneratedFileWord,
+  GeneratedRecordWord,
+  GeneratedRow,
   HarnessDefinition,
+  HookGroupRow,
+  HookToolName,
+  UnsupportedRow,
   HostFile,
   HostOutput,
   HostHookDeclaration,

@@ -8,7 +8,9 @@ import { PACKET_MARKER } from '@inventarch/runtime';
 import type { PacketDefinition } from '@inventarch/runtime';
 import { adoptWorkspace } from '../src/corpus.js';
 import {
+  generateAgentProfiles,
   generateDefinitions,
+  generateHostSet,
   generateHooks,
   generateHookSet,
   generatePlaybookSkills,
@@ -434,6 +436,41 @@ it('selects the skills of included capabilities, and only what its own profiles 
       },
     ],
   });
+});
+
+it('computes the host set once, so what it applies is exactly what its harness definitions register', () => {
+  const { db, within } = fixture({
+    '.ia/src/extra-hooks.ia':
+      '#! ia 1.0\n\n@hook session-start\n  meaning\n    says "Runs at session start."\n    answers "What runs at session start?"\n  hook\n    event Stop\n    tools [Write]\n    paths ["docs/**"]\n    message "Not an edit guard."\n',
+  });
+  for (const host of ['claude', 'codex'] as const) {
+    const set = generateHostSet(db, within, host),
+      agents = generateAgentProfiles(db, within, host),
+      skills = generatePlaybookSkills(db, within, host),
+      hooks = generateHookSet(db, within, host);
+    expect(set.files, host).toEqual([...agents.files, ...skills.files]);
+    expect(set.hooks, host).toEqual(hooks.hooks);
+    expect(set.unsupported, host).toEqual([...agents.unsupported, ...skills.unsupported, ...hooks.unsupported]);
+    expect(set.definitions, host).toEqual(generateDefinitions(db, within, host));
+    expect(Object.isFrozen(set) && Object.isFrozen(set.files), host).toBe(true);
+    for (const row of harnesses(set.definitions)) {
+      const { agents: agentRows, skills: skillRows, hooks: hookRows } = row.definition.registrations;
+      for (const registered of [...agentRows, ...skillRows])
+        expect(
+          set.files.some((file) => file.identity === registered.identity && file.path === registered.path),
+          host,
+        ).toBe(true);
+      for (const registered of hookRows) expect(set.hooks, host).toContainEqual(registered);
+    }
+  }
+  expect(generateHostSet(db, within, 'claude').unsupported.map((row) => row.identity)).toEqual([
+    'hook-authoring-system/binding/hook/session-start',
+  ]);
+  expect(generateHostSet(db, within, 'codex').unsupported.map((row) => [row.word, row.identity])).toEqual([
+    ['agent-profile', PROFILE],
+    ['hook', HOOK],
+    ['hook', 'hook-authoring-system/binding/hook/session-start'],
+  ]);
 });
 
 it('generates authored hooks only and reports tools and selections outside the edit guard contract', () => {

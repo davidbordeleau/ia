@@ -353,11 +353,14 @@ function writeJoin(root: string, consumer: WorkspaceHost, row: ImplementationJoi
   if (current !== null && json(joins) === json(current)) return;
   replace(root, JOINS, joins.length === 0 ? null : Buffer.from(json({ format: JOINS_FORMAT, joins })));
 }
-/** Run `work` under the host lock, as every host write runs; a pending host journal refuses it first. */
+/**
+ * Run `work` under the host lock, as every host write runs. Review finding B-N4: the lock is taken first and a pending
+ * host journal is checked under it, as `applyHost` does, so no journal can appear between the check and the write.
+ */
 function locked<T>(root: string, work: () => T): T {
-  assertHostRegistrationIdle(root);
   const unlock = acquireHostRegistrationLock(root);
   try {
+    assertHostRegistrationIdle(root);
     return work();
   } finally {
     unlock();

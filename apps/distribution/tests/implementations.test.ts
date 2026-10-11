@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { json, sha256 } from '../src/files.js';
-import { verifyHostCache } from '../src/host.js';
+import { acquireHostRegistrationLock, verifyHostCache } from '../src/host.js';
 import {
   closureDigest,
   installedImplementationsValue,
@@ -432,4 +432,28 @@ it('reports a joined payload whose handler bytes no longer match their pins as d
     status: 'unavailable',
     reason: expect.stringContaining("host claude's payload catalog cannot be read"),
   });
+});
+
+it('records no join while another holder has the host lock, and checks for a pending journal under it (B-N4)', () => {
+  const root = temp(),
+    { root: cache, release } = payload();
+  registered(root, 'claude', cache, release);
+  const unlock = acquireHostRegistrationLock(root);
+  try {
+    expect(() => joinHost(root, 'claude', REVISION)).toThrow(code('IA-DIST-INSTALL-BUSY'));
+    expect(() => leaveHost(root, 'claude')).not.toThrow();
+  } finally {
+    unlock();
+  }
+  expect(existsSync(resolve(root, JOINS))).toBe(false);
+  expect(joinHost(root, 'claude', REVISION).status).toBe('joined');
+  // With receipts present, a removal under a held lock refuses too, and leaves them as they were.
+  const before = readFileSync(resolve(root, JOINS), 'utf8'),
+    held = acquireHostRegistrationLock(root);
+  try {
+    expect(() => leaveHost(root, 'claude')).toThrow(code('IA-DIST-INSTALL-BUSY'));
+  } finally {
+    held();
+  }
+  expect(readFileSync(resolve(root, JOINS), 'utf8')).toBe(before);
 });

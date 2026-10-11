@@ -298,3 +298,58 @@ it('replays the printed guard remedy through the emitted ia entry and finishes t
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   expect(JSON.parse(read(root, RECEIPT))).toMatchObject({ guard: 'retired', removed: [{ path: STEWARD }] });
 });
+
+it('leaves no join, or the previous one, when an apply is interrupted before it completes (B-N1)', async () => {
+  const JOINS = '.ia/distributions/hosts/joins.json';
+  const { root, env } = await initialized();
+  // A first apply cut after either element records no join: the join is recorded only once every element is applied.
+  for (const at of ['mcp', 'projection'] as const) {
+    const raised = await cutAfter(root, env, at, () => {
+      throw new Error('interrupted');
+    });
+    expect((raised as Error).message, at).toBe('interrupted');
+    expect(existsSync(resolve(root, JOINS)), at).toBe(false);
+  }
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  const previous = read(root, JOINS);
+  // A record edit moves the authored revision the join names; an apply interrupted after its last element keeps the
+  // previous join, and the rerun records the current one.
+  put(
+    root,
+    '.ia/src/workspace.ia',
+    read(root, '.ia/src/workspace.ia').replace('Which systems does', 'Which systems do'),
+  );
+  const raised = await cutAfter(root, env, 'projection', () => {
+    throw new Error('interrupted');
+  });
+  expect((raised as Error).message).toBe('interrupted');
+  expect(read(root, JOINS)).toBe(previous);
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  const current = JSON.parse(read(root, JOINS)).joins[0];
+  expect(current.consumerRevision).not.toBe(JSON.parse(previous).joins[0].consumerRevision);
+  expect(current.consumerRevision).toBe(JSON.parse(read(root, RECEIPT)).revision);
+});
+
+it('refuses receipts it cannot read before writing anything, and the deletion it names converges (B-N1)', async () => {
+  const JOINS = '.ia/distributions/hosts/joins.json';
+  const { root, env } = await initialized();
+  put(root, JOINS, '{broken');
+  for (const extra of [[], ['--remove']]) {
+    const refused = await host(root, env, 'claude', ...extra, '--apply', '--yes');
+    expect(refused.exitCode, extra.join(' ')).toBe(3);
+    expect(JSON.parse(refused.stdout), extra.join(' ')).toMatchObject({
+      ok: false,
+      where: { path: JOINS },
+      next: `Delete ${JOINS}, then run "${rootedNext(`"ia host claude${extra.length ? ' --remove' : ''} --apply"`, 'claude', root).slice(1, -1)}".`,
+    });
+  }
+  // Nothing was registered, projected or materialized, and the receipts were left as they were.
+  expect(existsSync(resolve(root, '.mcp.json'))).toBe(false);
+  expect(existsSync(resolve(root, '.ia/distributions/hosts/claude-workspace.json'))).toBe(false);
+  expect(existsSync(resolve(root, RECEIPT))).toBe(false);
+  expect(existsSync(resolve(env.IA_HOST_HOME, 'hosts'))).toBe(false);
+  expect(read(root, JOINS)).toBe('{broken');
+  rmSync(resolve(root, JOINS));
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  expect(JSON.parse(read(root, JOINS)).joins.map((join: { consumer: string }) => join.consumer)).toEqual(['claude']);
+});

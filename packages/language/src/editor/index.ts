@@ -7,17 +7,17 @@ import { scan } from '../scanner/index.js';
 import { logicalLines, walk } from '../scanner/lines.js';
 import { tokenizeLine } from '../scanner/tokenize.js';
 import type { Token } from '../scanner/tokens.js';
-import type { SchemaField, SchemaSection } from '../registry/types.js';
+import { encodeValue } from './values.js';
+import type { DraftSchema } from './values.js';
 export { format, checkFormatPreservation } from '../formatter.js';
+export { appendRecord, addRelationship, setField } from './edit-source.js';
+export type { DraftSchema } from './values.js';
 
 /** Minimal source serialization for a schema-backed form; admission remains a separate operation. */
 export function draftSource(
   discriminator: string,
   name: string,
-  schema: {
-    readonly sections: readonly Pick<SchemaSection, 'name' | 'must'>[];
-    readonly fields: readonly Pick<SchemaField, 'section' | 'key' | 'type' | 'must'>[];
-  },
+  schema: DraftSchema,
   values: Readonly<Record<string, string>>,
 ): string {
   if (!/^[a-z][a-z0-9-]*$/.test(discriminator) || !/^[A-Za-z][A-Za-z0-9-]*$/.test(name))
@@ -32,7 +32,7 @@ export function draftSource(
     if (typeof value !== 'string' || /[\r\n]/.test(value))
       throw new Error('Form fields must be single-line; use the source draft for multiline prose or structure');
     // IA strings escape only quotes and backslashes. JSON escapes would change tabs and newlines into literal text.
-    const encoded = field.type === 'text' ? `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : value;
+    const encoded = encodeValue(field, value);
     const rows = sections.get(field.section) ?? [];
     rows.push(`${field.key} ${encoded}`);
     sections.set(field.section, rows);

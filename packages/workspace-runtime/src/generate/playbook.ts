@@ -5,9 +5,8 @@ import type { Cell } from '@inventarch/language';
 import { PACKET_MARKER } from '@inventarch/runtime';
 import type { PacketHost } from '@inventarch/runtime';
 import { inputFailure } from '../projection-format.js';
-import { frozen } from '../resource-format.js';
-import { authoredOf, code, inline, knownHost, safeName, section, textsAt } from './format.js';
-import type { GeneratedFile } from './format.js';
+import { authoredOf, code, inline, knownHost, perRecord, prose, safeName, section, textsAt } from './format.js';
+import type { GeneratedSet } from './format.js';
 
 /**
  * Generation of host skills from authored `@playbook` records (milestone generation-binding, task
@@ -15,10 +14,13 @@ import type { GeneratedFile } from './format.js';
  * `.claude/skills/<playbook name>/SKILL.md` for claude and `.agents/skills/<playbook name>/SKILL.md` for codex, with the
  * same text for both: YAML frontmatter naming the playbook and describing it by its `meaning.says`, the packet's marker
  * on its own line, then one section per phase in the cycle order (orient, plan, act, learn) holding the playbook's
- * cells, the primary primitive's first. A phase with no cell is left out. A playbook below band 100, an installed or
- * adopted base, renders nothing (C8, operator decision OD3: public and adopted playbooks stay cells that `ia position`
- * delivers), and a workspace that authors public systems, as this repository does, renders their playbooks. The bytes
- * are a function of the playbook's record alone: no absolute path, time or scope token is written.
+ * unconditional and conditional cells, the primary primitive's first. A phase with no cell is left out. A playbook
+ * whose name is not a portable host name, that is named as the packet's own `ia-authoring` skill, or whose text is not
+ * inert prose is not rendered, and is reported as an unsupported row naming it and the reason; the others still render.
+ * A playbook below band 100, an installed or adopted base, renders nothing (C8, operator decision OD3: public and
+ * adopted playbooks stay cells that `ia position` delivers), and a workspace that authors public systems, as this
+ * repository does, renders their playbooks. The bytes are a function of the playbook's record alone: no absolute path,
+ * time or scope token is written.
  *
  * Nothing applies these files yet: milestone generation-binding task host-consumes-generated-set hands them to the one
  * projection writer.
@@ -32,26 +34,26 @@ const RESERVED = 'ia-authoring';
 const SKILLS: Readonly<Record<PacketHost, string>> = { claude: '.claude/skills', codex: '.agents/skills' };
 
 /**
- * The skills of the authored `@playbook` records the scope token `within` admits, by identity. An unknown host, and an
- * authored playbook named `ia-authoring`, are IA-PROJECTION-INPUT-INVALID; an unknown or stale token keeps its database
- * code.
+ * The skills of the authored `@playbook` records the scope token `within` admits, by identity, and an unsupported row
+ * for each one not rendered (see above). An unknown host is IA-PROJECTION-INPUT-INVALID; an unknown or stale token keeps
+ * its database code.
  */
-export function generatePlaybookSkills(reader: ReadHandle, within: string, host: PacketHost): readonly GeneratedFile[] {
+export function generatePlaybookSkills(reader: ReadHandle, within: string, host: PacketHost): GeneratedSet {
   knownHost(host);
-  const playbooks = authoredOf(reader.records({ within }), 'playbook');
-  // A record's name is lowercase, so no spelling of the reserved name escapes this, on a case-insensitive file system
-  // either.
-  const reserved = playbooks.find((playbook) => playbook.name === RESERVED);
-  if (reserved !== undefined)
-    inputFailure(`Playbook ${reserved.identity} would render over the packet's ${RESERVED} skill; rename the playbook`);
-  return frozen(
-    playbooks.map((playbook) => ({
+  return perRecord('playbook', authoredOf(reader.records({ within }), 'playbook'), (playbook) => {
+    // A record's name is lowercase, so no spelling of the reserved name escapes this, on a case-insensitive file system
+    // either.
+    if (playbook.name === RESERVED)
+      inputFailure(
+        `Playbook ${playbook.identity} would render over the packet's ${RESERVED} skill; rename the playbook`,
+      );
+    return {
       path: `${SKILLS[host]}/${safeName(playbook.name)}/SKILL.md`,
       text: skillFile(playbook),
       identity: playbook.identity,
       word: 'playbook' as const,
-    })),
-  );
+    };
+  });
 }
 
 function skillFile(playbook: Node): string {
@@ -84,5 +86,5 @@ const cellLine = (cell: Cell): string =>
   `- ${cell.primitive}${cell.primary ? ' (primary)' : ''}${
     cell.condition === undefined
       ? ''
-      : ` (when ${cell.condition.map((term) => `${term.axis} is ${term.value}`).join(' and ')})`
-  }: ${inline(cell.text)}`;
+      : ` (when ${cell.condition.map((term) => `${inline(term.axis)} is ${inline(term.value)}`).join(' and ')})`
+  }: ${prose(cell.text)}`;

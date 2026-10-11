@@ -5,7 +5,7 @@ import { frozen } from '../resource-format.js';
 import { authoredOf, knownHost, textsAt } from './format.js';
 import { generateAgentProfiles } from './agent-profile.js';
 import { generatePlaybookSkills } from './playbook.js';
-import { generateHooks } from './hook.js';
+import { generateHookSet } from './hook.js';
 
 /** Definitions only. Validator and implementation ids are metadata, never imported or executed. */
 export function generateDefinitions(reader: ReadHandle, within: string, host: PacketHost): readonly PacketDefinition[] {
@@ -17,9 +17,10 @@ export function generateDefinitions(reader: ReadHandle, within: string, host: Pa
       .directedView(node.identity, { within })
       .filter((row) => row.kind === 'field-ref' && row.direction === 'out' && row.field === field)
       .map((row) => row.counterpart);
-  const agents = generateAgentProfiles(reader, within, host),
-    skills = generatePlaybookSkills(reader, within, host),
-    hooks = generateHooks(reader, within, host);
+  // What the host renders and registers: an unsupported record selects nothing, so it never fails the definitions.
+  const agents = generateAgentProfiles(reader, within, host).files,
+    skills = generatePlaybookSkills(reader, within, host).files,
+    hooks = generateHookSet(reader, within, host).hooks;
   const first = (node: Node, field: string): string | undefined => textsAt(node, field)[0];
   const operation = (node: Node): PacketDefinition => {
     const handler = first(node, 'execution.handler'),

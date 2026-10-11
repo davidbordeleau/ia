@@ -5,6 +5,7 @@ import type { HostHookDeclaration, PacketHost } from '@inventarch/runtime';
 import { inputFailure, ProjectionError } from '../projection-format.js';
 import { frozen } from '../resource-format.js';
 import { authoredOf, knownHost, textsAt } from './format.js';
+import type { UnsupportedRecord } from './format.js';
 
 const TOOLS = new Map([
   ['write', 'Write'],
@@ -53,16 +54,10 @@ export function hookDeclaration(node: Node): HostHookDeclaration {
     message: message!,
   });
 }
-/** An authored `@hook` the host cannot register, as the projection receipt's `unsupported` section reports one. */
-export interface UnsupportedHook {
-  readonly identity: string;
-  readonly word: 'hook';
-  readonly reason: string;
-}
 /** What a host registers of the workspace's authored hooks, and what it reports instead of registering. */
 export interface HookSet {
   readonly hooks: readonly HostHookDeclaration[];
-  readonly unsupported: readonly UnsupportedHook[];
+  readonly unsupported: readonly UnsupportedRecord[];
 }
 /**
  * Every authored (band 100) `@hook`, by identity: each one `hookDeclaration` accepts is registered and each one it refuses
@@ -72,7 +67,7 @@ export interface HookSet {
 export function generateHookSet(reader: ReadHandle, within: string, host: PacketHost): HookSet {
   knownHost(host);
   const hooks: HostHookDeclaration[] = [],
-    unsupported: UnsupportedHook[] = [];
+    unsupported: UnsupportedRecord[] = [];
   for (const node of authoredOf(reader.records({ within }), 'hook')) {
     if (host === 'codex') {
       unsupported.push({ identity: node.identity, word: 'hook', reason: 'Codex hooks are unsupported' });

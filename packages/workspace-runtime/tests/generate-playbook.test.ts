@@ -93,7 +93,7 @@ ${PACKET_MARKER}
 
 it('renders the fixture playbook as one claude skill with its four phase sections in cycle order', () => {
   const { db, within } = fixture(),
-    files = generatePlaybookSkills(db, within, 'claude');
+    files = generatePlaybookSkills(db, within, 'claude').files;
   // The adopted corpus's own playbook renders nothing.
   expect(files).toEqual([
     { path: '.claude/skills/note-review/SKILL.md', text: SKILL, identity: IDENTITY, word: 'playbook' },
@@ -114,9 +114,10 @@ it('renders the fixture playbook as one claude skill with its four phase section
 
 it('renders the same skill for codex under .agents/skills', () => {
   const { db, within } = fixture();
-  expect(generatePlaybookSkills(db, within, 'codex')).toEqual([
-    { path: '.agents/skills/note-review/SKILL.md', text: SKILL, identity: IDENTITY, word: 'playbook' },
-  ]);
+  expect(generatePlaybookSkills(db, within, 'codex')).toEqual({
+    files: [{ path: '.agents/skills/note-review/SKILL.md', text: SKILL, identity: IDENTITY, word: 'playbook' }],
+    unsupported: [],
+  });
 });
 
 it('keeps each condition, lists a phase without a primary as authored, and leaves out a phase with no cell', () => {
@@ -149,7 +150,7 @@ it('keeps each condition, lists a phase without a primary as authored, and leave
     '',
   ].join('\n');
   const { db, within } = fixture({ '.ia/src/triage.ia': playbook }),
-    files = generatePlaybookSkills(db, within, 'claude');
+    files = generatePlaybookSkills(db, within, 'claude').files;
   expect(files.map((file) => file.path)).toEqual([
     '.claude/skills/note-review/SKILL.md',
     '.claude/skills/triage/SKILL.md',
@@ -180,23 +181,26 @@ ${PACKET_MARKER}
 it('renders nothing for an adopted playbook', () => {
   const { db, within } = fixture({ '.ia/src/playbook.ia': null }, { '.ia/src/playbook.ia': PLAYBOOK });
   expect(db.get(IDENTITY, { within })?.band).toBe(90);
-  for (const host of ['claude', 'codex'] as const) expect(generatePlaybookSkills(db, within, host), host).toEqual([]);
+  for (const host of ['claude', 'codex'] as const)
+    expect(generatePlaybookSkills(db, within, host), host).toEqual({ files: [], unsupported: [] });
 });
 
-it("refuses an authored playbook named after the packet's ia-authoring skill, however it is spelled, for either host", () => {
+it("reports an authored playbook named after the packet's ia-authoring skill, however it is spelled, for either host", () => {
   const { db, within } = fixture({
     '.ia/src/playbook.ia': PLAYBOOK.replace('@playbook note-review', '@playbook IA-Authoring'),
   });
   for (const host of ['claude', 'codex'] as const)
-    expect(() => generatePlaybookSkills(db, within, host), host).toThrow(
-      expect.objectContaining({
-        diagnostic: {
-          code: 'IA-PROJECTION-INPUT-INVALID',
-          message:
+    expect(generatePlaybookSkills(db, within, host), host).toEqual({
+      files: [],
+      unsupported: [
+        {
+          identity: 'governance-system/definition/procedure/ia-authoring',
+          word: 'playbook',
+          reason:
             "Playbook governance-system/definition/procedure/ia-authoring would render over the packet's ia-authoring skill; rename the playbook",
         },
-      }),
-    );
+      ],
+    });
 });
 
 it("renders a public system's playbook where the workspace authors that system, as this repository does", () => {
@@ -210,7 +214,7 @@ it("renders a public system's playbook where the workspace authors that system, 
     ['claude', '.claude/skills'],
     ['codex', '.agents/skills'],
   ] as const)
-    expect(generatePlaybookSkills(db, within, host).map((file) => [file.path, file.identity])).toEqual([
+    expect(generatePlaybookSkills(db, within, host).files.map((file) => [file.path, file.identity])).toEqual([
       [`${root}/example-method/SKILL.md`, 'governance-system/definition/procedure/example-method'],
     ]);
 });
@@ -232,9 +236,9 @@ it('writes the same bytes at two roots and names neither root nor scope token', 
   const one = fixture(),
     two = fixture();
   for (const host of ['claude', 'codex'] as const) {
-    const first = generatePlaybookSkills(one.db, one.within, host);
-    expect(generatePlaybookSkills(two.db, two.within, host)).toEqual(first);
-    expect(generatePlaybookSkills(one.db, one.db.resolveScope().token, host)).toEqual(first);
+    const first = generatePlaybookSkills(one.db, one.within, host).files;
+    expect(generatePlaybookSkills(two.db, two.within, host).files).toEqual(first);
+    expect(generatePlaybookSkills(one.db, one.db.resolveScope().token, host).files).toEqual(first);
     for (const { root, within } of [one, two])
       for (const file of first) {
         expect(file.text).not.toContain(root);
@@ -323,6 +327,10 @@ it('generates authored hooks only and reports tools and selections outside the e
     [hooks.replace('event PreToolUse', 'event Stop'), 'event Stop is not PreToolUse'],
     // A hook that selects no path could never deny: it is reported, never registered as a guard that guards nothing.
     [hooks.replace('["docs/**", "restricted/**"]', '[]'), 'hook.paths selects no path'],
+    [
+      hooks.replace(`message "Use the participant's documentation mandate."`, 'message " "'),
+      'hook.message is required and not blank',
+    ],
   ] as const) {
     const broken = fixture({ '.ia/src/hooks.ia': text });
     expect(generateHooks(broken.db, broken.within, 'claude')).toEqual([]);
@@ -348,7 +356,40 @@ it('generates authored hooks only and reports tools and selections outside the e
   ]);
 });
 
-it('refuses portable device names before emitting any host path', () => {
-  const { db, within } = fixture({ '.ia/src/playbook.ia': PLAYBOOK.replace('note-review', 'con') });
-  expect(() => generatePlaybookSkills(db, within, 'claude')).toThrow('Unsafe generated host name');
+it('reports a playbook whose name is no portable host name or whose text is not inert, and renders the others', () => {
+  // Review findings N5 and A-R3: com0 and lpt0 as db's input paths refuse them, a trailing or doubled hyphen, and a cell
+  // that runs a command or holds active HTML; the fixture's own playbook still renders.
+  const extra = (name: string, text = 'Read the note.'): string =>
+    `#! ia 1.0\n\n@playbook ${name}\n  meaning\n    says "Playbook ${name}."\n    answers "Which playbook is ${name}?"\n  cognition\n    orient\n      primary Attention\n      Attention means "${text}"\n`;
+  for (const [name, text, reason] of [
+    ['con', undefined, 'Unsafe generated host name: con'],
+    ['com0', undefined, 'Unsafe generated host name: com0'],
+    ['lpt0', undefined, 'Unsafe generated host name: lpt0'],
+    ['triage-', undefined, 'Unsafe generated host name: triage-'],
+    ['tri--age', undefined, 'Unsafe generated host name: tri--age'],
+    ['runner', 'Run !`rm -rf ~` first.', 'Executable dynamic context is unsupported in inert prose'],
+    ['styled', 'Read <b>this</b>.', 'Active HTML is unsupported in inert prose'],
+  ] as const) {
+    const { db, within } = fixture({ '.ia/src/extra.ia': extra(name, text) });
+    for (const host of ['claude', 'codex'] as const)
+      expect(generatePlaybookSkills(db, within, host), `${name} ${host}`).toMatchObject({
+        files: [{ identity: IDENTITY }],
+        unsupported: [{ identity: `governance-system/definition/procedure/${name}`, word: 'playbook', reason }],
+      });
+  }
+});
+
+it('writes cell text as the packet writes free text, each IA word a code span and a comment opener escaped', () => {
+  const { db, within } = fixture({
+      '.ia/src/playbook.ia': PLAYBOOK.replace(
+        'Learning means "Record what the review did not check."',
+        'Learning means "Record each @task the review did not check, not a@b.c. <!-- hidden"',
+      ),
+    }),
+    [file] = generatePlaybookSkills(db, within, 'claude').files;
+  expect(
+    file!.text.endsWith(
+      '- Learning (primary): Record each `@task` the review did not check, not a@b.c. &lt;!-- hidden\n',
+    ),
+  ).toBe(true);
 });

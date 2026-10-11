@@ -11,5 +11,5 @@ export {
   hookDeclaration,
   registrableHook,
 } from './hook.js';
-export type { HookSet, UnsupportedHook } from './hook.js';
-export type { GeneratedFile, GeneratedWord } from './format.js';
+export type { HookSet } from './hook.js';
+export type { GeneratedFile, GeneratedSet, GeneratedWord, UnsupportedRecord } from './format.js';

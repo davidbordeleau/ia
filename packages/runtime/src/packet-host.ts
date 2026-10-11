@@ -115,9 +115,10 @@ export interface PacketReceipt {
   }[];
   readonly definitions?: readonly PacketDefinition[];
   readonly hooks?: readonly HostHookDeclaration[];
+  /** The authored records the host does not render or register, each with the reason. */
   readonly unsupported?: readonly {
     readonly identity: string;
-    readonly word: 'agent-profile' | 'hook';
+    readonly word: 'agent-profile' | 'playbook' | 'hook';
     readonly reason: string;
   }[];
   /** The owned legacy files the applying caller deleted (B9). */
@@ -177,8 +178,12 @@ const skill = (target: PacketTarget, revision: string): string =>
     : `---\nname: ia-authoring\ndescription: Author or review IA records in this workspace.\n---\n\n${PACKET_MARKER}\n\nSource revision: ${revision}\n\nFind a word and its schema with \`ia vocabulary <word> --schema\`. Check records with \`ia validate\`. Inspect an admitted record with \`ia inspect <identity>\`. Validation establishes conformance to the declared schemas, not design quality.\n`;
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 
-/** `text` on one line: a line break and the blanks around it become one space, so each entry is one line. */
-function inline(text: string): string {
+/**
+ * `text` on one line: a line break and the blanks around it become one space, so each entry is one line. Exported on
+ * the `./internal/packet-host` subpath with `code` and `prose`, so workspace-runtime's host generators write free text
+ * exactly as the packet does.
+ */
+export function inline(text: string): string {
   const parts: string[] = [];
   let start = 0;
   for (let index = 0; index < text.length; ) {
@@ -198,7 +203,7 @@ function inline(text: string): string {
   return parts.length === 0 ? text : parts.join('') + text.slice(start);
 }
 /** `text` as one code span: its fence one backtick longer than the longest run inside, padded where one touches it. */
-function code(text: string): string {
+export function code(text: string): string {
   const one = inline(text),
     fence = '`'.repeat(Math.max(0, ...(one.match(/`+/g) ?? []).map((run) => run.length)) + 1),
     pad = one.startsWith('`') || one.endsWith('`') ? ' ' : '';
@@ -221,7 +226,7 @@ const SPAN_OR_TOKEN = new RegExp(`${SPAN.source}|${TOKEN.source}`, 'g');
  * backtick run no span closes: that run is literal text, and a fence of its length would close it. Markup only (design
  * §4): an authored span stays as written, a token in it included, and the packet's values and entries are unchanged.
  */
-function prose(text: string): string {
+export function prose(text: string): string {
   const one = inline(text),
     loose = new Set((one.replace(SPAN, '').match(/`+/g) ?? []).map((run) => run.length));
   let fence = '`';

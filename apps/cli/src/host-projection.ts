@@ -77,7 +77,7 @@ import {
 import { packetCatalog } from './commands.js';
 import { Refusal } from './consumer.js';
 import type { HookRefusal } from './host.js';
-import { refusedPath, SETTINGS, STATE } from './host.js';
+import { refusedPath, SETTINGS, skillFolderOf, STATE } from './host.js';
 import type { Session } from './session.js';
 import { codeOf, openSession } from './session.js';
 
@@ -726,7 +726,8 @@ export function preflightHooks(root: string, host: HostName, given?: HostOutput 
 /**
  * What a refresh's file plan would refuse, and its hook step, found before an install, update or remove writes anything
  * (review finding F4, the H-R3 class): the files are planned against the current records, rendered once, so a generated
- * skill refused at a populated folder of the user's refuses here; then `preflightHooks` runs on the same render.
+ * skill refused at a populated folder of the user's refuses here (any other file refusal is left to the refresh, as
+ * before); then `preflightHooks` runs on the same render.
  */
 export function preflightProjection(root: string, host: HostName): void {
   let rendered: HostOutput | null;
@@ -736,7 +737,14 @@ export function preflightProjection(root: string, host: HostName): void {
     // Records that do not render refuse the refresh itself, with their own next action.
     rendered = null;
   }
-  if (rendered !== null) planFiles(root, host, rendered);
+  // Only the populated skill folder refuses here: every other file refusal stays the refresh's after the install
+  // commits, naming the applied install (host registration §6.3), as before.
+  if (rendered !== null)
+    try {
+      planFiles(root, host, rendered);
+    } catch (error) {
+      if (skillFolderOf(error) !== undefined) throw error;
+    }
   preflightHooks(root, host, rendered);
 }
 /**

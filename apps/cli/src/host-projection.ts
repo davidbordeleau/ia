@@ -33,7 +33,6 @@ import { resolve } from 'node:path';
 import { renderHost, renderPacket, PACKET_MARKER } from '@inventarch/runtime';
 import type {
   HookGroupRow,
-  HookToolName,
   HostFile,
   HostHookDeclaration,
   HostOutput,
@@ -175,6 +174,12 @@ export interface HookStep {
   readonly plan: HookPlan | null;
   readonly unregistered: readonly UnsupportedRow[];
 }
+/**
+ * Why an obsolete owned group is still in the settings (review finding F1): with hooks disabled, the groups kept beside it
+ * are re-planned against the payload they were registered against, and that payload is gone.
+ */
+export const HOOK_KEPT =
+  'Kept: its record is gone, but its group is removed only once hooks are back on or the payload it was registered against is materialized again';
 /** Why a declared hook is not registered when no host payload is known: `ia host` materializes one. */
 export const HOOKS_NEED_HOST =
   'Not registered: a hook group runs the guard in the host payload "ia host claude --apply" materializes; run it to register this hook';
@@ -198,7 +203,12 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
   const disabled = hooksDisabledBy(root);
   if (disabled !== null) {
     // Review finding A-F1: a group owned for a hook still declared stays as registered, and is no unsupported row; an
-    // obsolete owned group is still removed; a hook with no group is reported, naming the file.
+    // obsolete owned group is removed; a hook with no group is reported, naming the file. A group deleted, changed or
+    // duplicated by hand refuses as it does with hooks on (H-R1).
+    if (prior !== null) {
+      const drift = observeHookRegistration(root).find((row) => row.drift !== 'foreign');
+      if (drift !== undefined) throw handEdited(drift);
+    }
     const owned = new Map((prior?.groups ?? []).map((group) => [group.hook, group.paths]));
     const kept = rows
       .filter((row) => owned.has(row.identity))
@@ -212,12 +222,21 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
       }));
     if (prior === null || kept.length === owned.size) return { plan: null, unregistered };
     if (kept.length === 0) return { plan: planHookRegistration(root, { remove: HOST_REGISTRATION }), unregistered };
-    // The kept groups are re-planned as recorded, so nothing is written for them; a recorded payload that is gone leaves
-    // the obsolete group until hooks are back on.
+    // The kept groups are re-planned as recorded, so nothing is written for them. That needs the payload they were
+    // registered against: when it is gone, the obsolete group stays, reported as kept rather than listed as registered.
     try {
       verifyHostCache(prior.cache);
     } catch {
-      return { plan: null, unregistered };
+      const declared = new Set(rows.map((row) => row.identity));
+      return {
+        plan: null,
+        unregistered: [
+          ...unregistered,
+          ...[...owned.keys()]
+            .filter((hook) => !declared.has(hook))
+            .map((hook) => ({ identity: hook, word: 'hook' as const, reason: HOOK_KEPT })),
+        ],
+      };
     }
     return { plan: planHookRegistration(root, { cache: prior.cache, hooks: kept }), unregistered };
   }
@@ -261,11 +280,15 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
  */
 function hookRows(root: string, declared: readonly HostHookDeclaration[]): readonly HookGroupRow[] {
   const tools = new Map(declared.map((hook) => [hook.identity, hook.tools]));
-  return (readHookRegistration(root)?.groups ?? []).map(({ hook, group }) => ({
-    identity: hook,
-    tools: [...(tools.get(hook) ?? (group.matcher.split('|') as HookToolName[]))],
-    sha256: hookGroupDigest(group),
-  }));
+  // Only the groups of declared hooks are registered ones: an obsolete group kept while hooks are disabled is reported
+  // as kept instead (review finding F1).
+  return (readHookRegistration(root)?.groups ?? [])
+    .filter(({ hook }) => tools.has(hook))
+    .map(({ hook, group }) => ({
+      identity: hook,
+      tools: [...tools.get(hook)!],
+      sha256: hookGroupDigest(group),
+    }));
 }
 
 /**

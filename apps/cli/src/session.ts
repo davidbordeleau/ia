@@ -81,15 +81,21 @@ export interface Editor {
   close(): void;
 }
 /**
+ * How `ia preview` and `ia author` open their editor snapshot: checks admitted structurally, as `ia validate` admits
+ * them (C21), so a `@check` naming an evaluator that is not built in is a record they can draft beside and edit rather
+ * than an admission error; no evidence is listed (review finding B3-N5), so a candidate never reads it.
+ */
+export const AUTHORING = { checks: 'structural' } as const;
+/**
  * The authoring verbs' open (plan amendment C18): db's editor database, which reads the inputs twice and keeps them only
  * when both reads agree, so the source text a draft edits, the registry its schema comes from and the admission it is
- * compiled against are one state. It publishes no cache and writes nothing. A workspace that does not open refuses as
- * `openSession` refuses.
+ * compiled against are one state, admitted as `AUTHORING` says. It publishes no cache and writes nothing. A workspace
+ * that does not open refuses as `openSession` refuses.
  */
 export function openEditor(root: string): Editor {
   let database: EditorDatabase;
   try {
-    database = new EditorDatabase(root);
+    database = new EditorDatabase(root, AUTHORING);
   } catch (error) {
     throw openRefusal(error, root);
   }

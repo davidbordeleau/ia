@@ -305,6 +305,92 @@ describe('ia author', () => {
   });
 });
 
+describe('structural check admission on the authoring paths (C21)', () => {
+  const check = (name: string, runner: string, scope: string) =>
+    `\n@check ${name}\n  meaning\n    says "Bind ${name} for the test."\n    answers "What does ${name} select?"\n  check\n    runs ${runner}\n    scope "${scope}"\n`;
+  const ID = (name: string) => `compliance-system/check/gate/${name}`;
+  const revisions = (root: string, options: Parameters<typeof open>[1]) => {
+    const db = open(root, { cache: false, ...options });
+    try {
+      return { revision: db.revision, authored: db.authoredRevision };
+    } finally {
+      db.close();
+    }
+  };
+  it('previews and authors beside a check whose evaluator is not built in, as validate admits it, reading no evidence', async () => {
+    const root = workspace((at) =>
+      writeFileSync(
+        resolve(at, '.ia/src/checks.ia'),
+        `#! ia 1.0\n${check('demo-schema-check', 'COMP-SCHEMA', '*')}${check('typing-check', 'acme-strict-typing', 'package')}`,
+      ),
+    );
+    // Validate admits the check structurally and names it in its summary; the passing built-in check is recorded.
+    const summary = `1 check names an evaluator that is not built in (${ID('typing-check')}): ia validate admits it to bind it`;
+    const validated = await ia(root, ['validate']);
+    expect(validated.exitCode, validated.stdout).toBe(0);
+    expect(body(validated)['evidence']).toMatchObject({ written: true });
+    expect((await run(['validate', '--root', root], { env: HOMES })).stdout.replace(/\s+/g, ' ')).toContain(summary);
+    // The evidence file is this authored revision's, one a reader that asks for evidence reads.
+    const plain = revisions(root, {}),
+      evidenced = revisions(root, { checks: 'structural', evidence: true });
+    expect(existsSync(resolve(root, `.ia/work/evidence/${plain.authored}.ia`))).toBe(true);
+    expect(evidenced.revision).not.toBe(plain.revision);
+    expect(evidenced.authored).toBe(plain.authored);
+    // A field of an unrelated record previews clean, as it did; and the check itself, which validate admits, is an
+    // owned record to edit. No evidence file is read into either snapshot: its revision is the evidence-free one.
+    const milestoneForm = ['--set', '@milestone m1', 'work.owner=Tom'],
+      typingForm = ['--set', '@check typing-check', 'check.scope=workspace'];
+    for (const [form, identity] of [
+      [milestoneForm, milestone('m1')],
+      [typingForm, ID('typing-check')],
+    ] as const) {
+      const previewed = await unchanged(root, ['preview', ...form]);
+      expect(previewed.exitCode, previewed.stdout).toBe(0);
+      expect(body(previewed)).toMatchObject({ clean: true, findings: [], identity, baseRevision: plain.revision });
+    }
+    // Both are written.
+    expect((await authored(root, milestoneForm)).view).toMatchObject({ mode: 'set', identity: milestone('m1') });
+    expect((await authored(root, typingForm)).view).toMatchObject({ mode: 'set', identity: ID('typing-check') });
+    // A new check naming another evaluator that is not built in drafts clean and is written.
+    const created = await authored(root, [
+      'check',
+      'lint-check',
+      'meaning.says=Lint the package.',
+      'meaning.answers=Is the package linted?',
+      'check.runs=acme-lint',
+      'check.scope=package',
+    ]);
+    expect(created.view).toMatchObject({ created: true, identity: ID('lint-check') });
+    // A check naming no evaluator still counts against the candidate, as it does for validate.
+    const bare = await unchanged(root, [
+      'preview',
+      'check',
+      'bare-check',
+      'meaning.says=Name nothing.',
+      'meaning.answers=What runs?',
+      'check.scope=package',
+    ]);
+    expect(bare.exitCode, bare.stdout).toBe(1);
+    expect(body(bare)).toMatchObject({
+      clean: false,
+      findings: [expect.objectContaining({ code: 'IA-COMP-CHECK-UNKNOWN' })],
+    });
+    // Validate still admits structurally and names both checks; every strict reader still refuses them.
+    const after = await run(['validate', '--root', root], { env: HOMES });
+    expect(after.exitCode, after.stdout).toBe(0);
+    const named = /2 checks name evaluators that are not built in \(([^)]*)\): ia validate admits them/.exec(
+      after.stdout.replace(/\s+/g, ' '),
+    );
+    expect(named?.[1]?.split(' and ').sort(), after.stdout).toEqual([ID('lint-check'), ID('typing-check')]);
+    const strict = open(root, { cache: false });
+    try {
+      expect(strict.report.findings.filter((finding) => finding.code === 'IA-COMP-CHECK-UNKNOWN')).toHaveLength(2);
+    } finally {
+      strict.close();
+    }
+  });
+});
+
 describe('the next command after an author (review C2-N11, C2-N13)', () => {
   it('names the governance position, not an ia validate the profile refuses, under Synthesis without Verification', async () => {
     const root = workspace((at) => moves(at, 'Observation, Synthesis'));

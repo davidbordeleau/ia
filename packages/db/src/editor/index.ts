@@ -8,10 +8,24 @@ import type { ReadOptions } from '../handle.js';
 import { inputOptions, pathKey, readInputs, safePath } from '../inputs.js';
 import type { InputOptions, InputSnapshot } from '../inputs.js';
 import { viewBuilder } from '../view.js';
-import type { View } from '../view.js';
+import type { View, ViewOptions } from '../view.js';
 import type { LockedPackage } from '../distribution/contracts.js';
 export type { ReadOptions, ReadHandle } from '../handle.js';
 export type { InputOptions } from '../inputs.js';
+
+/**
+ * What an editor database reads (`InputOptions`) and how it admits (`ViewOptions`). D13 `checks`: `strict`, the
+ * default for every caller that does not ask, admits a `@check` only when its runner is built in, as every released
+ * reader has it; `structural` admits one naming any single evaluator, for the authoring paths that judge a candidate as
+ * `ia validate` admits the workspace (plan amendment C21). The snapshot, its `preview` drafts, its candidates and every
+ * update or refresh admit alike. Evidence is listed only when `evidence` asks for it, which the authoring paths never do.
+ */
+export interface EditorOptions extends InputOptions {
+  readonly checks?: 'strict' | 'structural';
+}
+/** The view options `options` selects: `structural` only when asked, else every existing reader's defaults. */
+const viewOf = (options: EditorOptions): ViewOptions =>
+  options.checks === 'structural' ? { checks: 'structural' } : {};
 
 export interface Overlay {
   readonly path: string;
@@ -97,9 +111,12 @@ function overlayInputs(
 export class EditorSnapshot extends Reader {
   readonly sources: readonly EditorSource[];
   readonly installed: readonly LockedPackage[];
-  constructor(input: InputSnapshot, changes: readonly Overlay[] = [], options: InputOptions = {}) {
-    const captured = overlayInputs(input, changes, options.locations),
-      build = viewBuilder(captured),
+  /** How this snapshot admits, which its candidates keep. */
+  #view: ViewOptions;
+  constructor(input: InputSnapshot, changes: readonly Overlay[] = [], options: EditorOptions = {}) {
+    const view = viewOf(options),
+      captured = overlayInputs(input, changes, options.locations),
+      build = viewBuilder(captured, view),
       rootView = build();
     super(
       {
@@ -110,7 +127,9 @@ export class EditorSnapshot extends Reader {
         views: new Map([['["",null]', rootView]]),
       },
       options.locations,
+      view,
     );
+    this.#view = view;
     const overlays = new Map(changes.map((c) => [pathKey(c.path), c])),
       savedSources = new Map(input.sources.map((s) => [s.path, s.text]));
     this.sources = Object.freeze(
@@ -144,13 +163,13 @@ export class EditorSnapshot extends Reader {
     return this.view(options);
   }
   candidate(changes: readonly Overlay[]): EditorSnapshot {
-    return new EditorSnapshot(this.capturedInputs, changes);
+    return new EditorSnapshot(this.capturedInputs, changes, this.#view);
   }
 }
 
 function capture(
   root: string,
-  options: InputOptions,
+  options: EditorOptions,
   changes: readonly Overlay[] = [],
 ): { saved: InputSnapshot; current: EditorSnapshot } {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -171,14 +190,14 @@ function capture(
 /** Atomic rebuild: a failed capture never replaces a usable view. No cache is published. */
 export class EditorDatabase {
   readonly root: string;
-  #options: InputOptions;
+  #options: EditorOptions;
   #saved: InputSnapshot;
   #current: EditorSnapshot;
   #versions = new Map<string, { version: number; text: string | null }>();
   #generation = 0;
   #closed = false;
-  constructor(root: string, options: InputOptions = {}) {
-    this.#options = inputOptions(options);
+  constructor(root: string, options: EditorOptions = {}) {
+    this.#options = Object.freeze({ ...inputOptions(options), ...viewOf(options) });
     const captured = capture(root, this.#options);
     this.#saved = captured.saved;
     this.root = this.#saved.root;

@@ -28,6 +28,7 @@ import {
   writeEvidence,
 } from '../src/index.js';
 import type { CheckCatalog, Handle } from '../src/index.js';
+import { EditorDatabase } from '../src/editor/index.js';
 import { methodId, put, workspace } from './workspace.js';
 
 // Every node:fs export calls through; a test can make one unlink fail as a file the process may not remove would.
@@ -646,6 +647,64 @@ it('previews a draft as the handle admits it, never with evidence, and caches no
   expect(existsSync(cache)).toBe(false);
   using(open(root), () => undefined);
   expect(existsSync(cache)).toBe(true);
+});
+
+it('opens an editor database structurally only when asked, and lists no evidence into it or its drafts (C21)', () => {
+  const root = workspace();
+  fixture(
+    root,
+    check('whole-schema-check', 'COMP-SCHEMA', '*'),
+    check('typing-check', 'acme-strict-typing', 'package'),
+  );
+  expect(validateOnce(root).written).toBe(true);
+  // The file is evidence a reader that asks for it admits.
+  const plain = using(structural(root), (db) => db.revision);
+  using(structural(root, true), (db) => {
+    expect(band0(db)).toHaveLength(1);
+    expect(db.revision).not.toBe(plain);
+  });
+  const typing = (records: readonly { readonly name: string }[]) =>
+    records.some((record) => record.name === 'typing-check');
+  const text = `${readFileSync(resolve(root, CHECKS), 'utf8')}\n${check('lint-check', 'acme-lint', 'package')}`;
+  // Strict by default, as every other editor caller has it: the record is refused, and so is a draft's.
+  const strict = new EditorDatabase(root);
+  try {
+    expect(typing(strict.current.records())).toBe(false);
+    expect(strict.current.report.findings.map((finding) => finding.code)).toContain('IA-COMP-CHECK-UNKNOWN');
+    expect(strict.current.preview([{ path: CHECKS, text }]).records.some((r) => r.name === 'lint-check')).toBe(false);
+  } finally {
+    strict.close();
+  }
+  const editor = new EditorDatabase(root, { checks: 'structural' });
+  try {
+    const current = editor.current;
+    expect(typing(current.records())).toBe(true);
+    expect(current.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    // No evidence is listed: nothing at runtime placement, and the revision every evidence-free reader reports.
+    expect(current.records().some((record) => record.placement.kind === 'runtime')).toBe(false);
+    expect(current.revision).toBe(plain);
+    expect(current.authoredRevision).toBe(plain);
+    // Its drafts, candidates, overlays and refreshes admit structurally too, and none lists evidence.
+    const draft = current.preview([{ path: CHECKS, text }]);
+    expect(draft.records.some((record) => record.name === 'lint-check')).toBe(true);
+    expect(draft.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    expect(draft.records.some((record) => record.placement.kind === 'runtime')).toBe(false);
+    const candidate = current.candidate([{ path: CHECKS, text, version: 1 }]);
+    expect(candidate.records().some((record) => record.name === 'lint-check')).toBe(true);
+    candidate.close();
+    expect(
+      editor
+        .update([{ path: CHECKS, text, version: 1 }])
+        .records()
+        .some((r) => r.name === 'lint-check'),
+    ).toBe(true);
+    const refreshed = editor.update([], true);
+    expect(typing(refreshed.records())).toBe(true);
+    expect(refreshed.records().some((record) => record.placement.kind === 'runtime')).toBe(false);
+    expect(refreshed.revision).toBe(plain);
+  } finally {
+    editor.close();
+  }
 });
 
 it('never counts COMP-CHECK passing a check only structural admission admits (B3-N1)', () => {

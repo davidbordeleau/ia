@@ -231,9 +231,14 @@ function orphanStewardFiles(root: string, host: Host, exclude: ReadonlySet<strin
   }
   return found;
 }
-/** A generated skill's folder (`.claude/skills/<name>` or `.agents/skills/<name>`), or undefined for any other path. */
+/**
+ * A generated skill's folder (`.claude/skills/<name>` or `.agents/skills/<name>`), or undefined for any other path,
+ * the packet's own `ia-authoring` skill included.
+ */
 const skillFolder = (host: Host, path: string): string | undefined =>
-  GENERATED_PATHS[host].test(path) && path.endsWith('/SKILL.md') ? path.slice(0, -'/SKILL.md'.length) : undefined;
+  GENERATED_PATHS[host].test(path) && !PROJECTION_PATHS[host].includes(path) && path.endsWith('/SKILL.md')
+    ? path.slice(0, -'/SKILL.md'.length)
+    : undefined;
 /** The entries of a workspace folder, none when it does not exist; a link or a file there is refused. */
 function folderEntries(root: string, folder: string): readonly string[] {
   const absolute = contained(root, folder);
@@ -272,24 +277,23 @@ export function planProjection(input: {
         fail('INPUT-INVALID', `Projection artifact is missing the marker line: ${artifact.path}`);
       seen.add(artifact.path);
       const existing = read(root, artifact.path);
+      // A generated skill never moves into a folder IA does not own that already holds the user's files (H-N11); a
+      // user's own SKILL.md there is one of them, so the refusal names the folder in one hop (review finding F6).
+      const folder = skillFolder(host, artifact.path),
+        unowned = folder !== undefined && !Object.keys(files).some((path) => path.startsWith(`${folder}/`)),
+        users = existing !== null && existing !== artifact.text && !marked(existing, input.marker);
+      if (unowned && (users || (existing === null && folderEntries(root, folder!).length > 0)))
+        // Located at the folder and named as such (`skillFolder`), so the caller's repair names the files to move
+        // rather than the SKILL.md (review finding A-F2).
+        throw Object.assign(
+          new DistributionError(
+            'IA-DIST-LOCAL-MODIFICATION',
+            `Refusing to write a generated skill into ${folder}, a folder this projection does not own that already holds files; move them, or rename the @playbook, then rerun`,
+            folder,
+          ),
+          { skillFolder: folder },
+        );
       if (existing === null) {
-        // A generated skill never moves into a folder IA does not own that already holds the user's files (H-N11).
-        const folder = skillFolder(host, artifact.path);
-        if (
-          folder !== undefined &&
-          !Object.keys(files).some((path) => path.startsWith(`${folder}/`)) &&
-          folderEntries(root, folder).length > 0
-        )
-          // Located at the folder and named as such (`skillFolder`), so the caller's repair names the files to move
-          // rather than the absent SKILL.md (review finding A-F2).
-          throw Object.assign(
-            new DistributionError(
-              'IA-DIST-LOCAL-MODIFICATION',
-              `Refusing to write a generated skill into ${folder}, a folder this projection does not own that already holds files; move them, or rename the @playbook, then rerun`,
-              folder,
-            ),
-            { skillFolder: folder },
-          );
         actions.push({ path: artifact.path, action: 'create' });
         return;
       }

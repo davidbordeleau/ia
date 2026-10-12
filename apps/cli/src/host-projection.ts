@@ -704,11 +704,11 @@ function handEdited(drift: ReturnType<typeof observeHookRegistration>[number]): 
  * duplicated by hand refuses with the recovery doctor names, and so does a recorded payload a change of hooks would need.
  * When the records do not render, only a changed or duplicated group is refused, since a removal refuses it too.
  */
-export function preflightHooks(root: string, host: HostName): void {
+export function preflightHooks(root: string, host: HostName, given?: HostOutput | null): void {
   if (host !== 'claude' || readHookRegistration(root) === null) return;
   let rendered: HostOutput | null;
   try {
-    rendered = renderProjectionFor(root, host);
+    rendered = given === undefined ? renderProjectionFor(root, host) : given;
   } catch {
     // Records that do not render refuse the refresh itself, with their own next action.
     rendered = null;
@@ -722,6 +722,22 @@ export function preflightHooks(root: string, host: HostName): void {
     throw Object.assign(new DistributionError('IA-DIST-LOCAL-MODIFICATION', handEdited(changed).message, SETTINGS), {
       hookRefusal: { drift: 'modified', hook: changed.hook } satisfies HookRefusal,
     });
+}
+/**
+ * What a refresh's file plan would refuse, and its hook step, found before an install, update or remove writes anything
+ * (review finding F4, the H-R3 class): the files are planned against the current records, rendered once, so a generated
+ * skill refused at a populated folder of the user's refuses here; then `preflightHooks` runs on the same render.
+ */
+export function preflightProjection(root: string, host: HostName): void {
+  let rendered: HostOutput | null;
+  try {
+    rendered = renderProjectionFor(root, host);
+  } catch {
+    // Records that do not render refuse the refresh itself, with their own next action.
+    rendered = null;
+  }
+  if (rendered !== null) planFiles(root, host, rendered);
+  preflightHooks(root, host, rendered);
 }
 /**
  * The owned hook group a hook-registration refusal concerns, by its drift (review finding H-R1), so the refusal names the

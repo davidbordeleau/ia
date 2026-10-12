@@ -1159,3 +1159,43 @@ it('renames one of two hooks while disableAllHooks is on in the local settings, 
   expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([HOOK, PLAN_HOOK]);
   expect(receipt(root).unsupported).toEqual([]);
 });
+
+it("converges in one hop when the user's skill folder holds its own SKILL.md and other files (F6)", async () => {
+  const { root, env } = await composed();
+  put(root, SKILL, '---\nname: note-review\n---\n\nMy own skill.\n');
+  put(root, '.claude/skills/note-review/reference.md', 'notes\n');
+  const refused = await host(root, env, 'claude', '--apply', '--yes');
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  const body = JSON.parse(refused.stdout) as { where: { path: string }; next: string };
+  expect(body.where.path).toBe('.claude/skills/note-review');
+  // Follow it once: the folder's files go elsewhere, and the rerun writes the skill.
+  for (const name of ['SKILL.md', 'reference.md']) rmSync(resolve(root, '.claude/skills/note-review', name));
+  await follow(body.next, env);
+  expect(read(root, SKILL).split('\n')).toContain(PACKET_MARKER);
+});
+
+it('refuses an install before any install write when its refresh would refuse a generated skill at a populated folder (F4)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  // A new playbook whose skill folder already holds the user's files.
+  put(
+    root,
+    '.ia/src/other-playbook.ia',
+    read(root, '.ia/src/playbook.ia').replace('@playbook note-review', '@playbook other-review'),
+  );
+  put(root, '.claude/skills/other-review/reference.md', 'my own notes\n');
+  const install = baseInstall(root),
+    lock = read(root, '.ia/distributions.lock.json');
+  const refused = await run([...install, '--apply', '--yes', '--json'], { env });
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  const body = JSON.parse(refused.stdout) as { code: string; where: { path: string }; next: string };
+  expect(body).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    where: { path: '.claude/skills/other-review' },
+    next: `Move the files out of .claude/skills/other-review, or rename the @playbook that renders it, then run "ia host claude --root ${quote(root)} --apply".`,
+  });
+  expect(read(root, '.ia/distributions.lock.json')).toBe(lock);
+  rmSync(resolve(root, '.claude/skills/other-review/reference.md'));
+  await follow(body.next, env);
+  expect(read(root, '.claude/skills/other-review/SKILL.md').split('\n')).toContain(PACKET_MARKER);
+});

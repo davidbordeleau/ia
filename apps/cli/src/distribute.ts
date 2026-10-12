@@ -81,7 +81,7 @@ import {
   applyHostProjection,
   ownsGuard,
   planRetirement,
-  preflightHooks,
+  preflightProjection,
   preflightReceipt,
   renderProjectionFor,
 } from './host-projection.js';
@@ -510,8 +510,6 @@ export function requireProjectionsClean(root: string, hosts: readonly HostName[]
     try {
       planRetirement(root, host);
       preflightReceipt(root, host);
-      // The hook step the refresh runs, so a group changed by hand or a payload a change needs refuses here (H-R3).
-      preflightHooks(root, host);
       drifts = observeProjection({ root, host, artifacts: null, marker: PACKET_MARKER });
     } catch (error) {
       throw projectionFailure(error, root, host, rerun);
@@ -525,6 +523,13 @@ export function requireProjectionsClean(root: string, hosts: readonly HostName[]
         { path: changed.path },
         hostNext(projectionRepair(host, changed.path, rerun), host, root, rooted),
       );
+    // The refresh's file plan and hook step on the current render: a generated skill refused at a populated folder of the
+    // user's (F4), a hook group changed by hand or a payload a change needs (H-R3) refuse here, before any install write.
+    try {
+      preflightProjection(root, host);
+    } catch (error) {
+      throw projectionFailure(error, root, host, rerun);
+    }
   }
 }
 

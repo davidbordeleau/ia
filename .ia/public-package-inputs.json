@@ -2343,6 +2343,10 @@
       "sha256": "76f771d12300febee033bfb9daa620bb391559f95aa69f0b686075f02f299b15"
     },
     {
+      "path": "AGENTS.md",
+      "sha256": "49a21f08df23efc078994bd467c47cc481ff30987155135a8b6a92d83540cdfe"
+    },
+    {
       "path": "CHANGELOG.md",
       "sha256": "8f9e7ac85b1245b19af2664e507e9959c31f82cfd28750569d6f65c2a82dcaf7"
     },
@@ -2816,7 +2820,7 @@
     },
     {
       "path": "apps/distribution/src/archive.ts",
-      "sha256": "f6651d07b575de6030c707b4faea0406e18d9834b05e082d7eaf4418f3234f5a"
+      "sha256": "902f16e680078cea2da92a929297148187fcd61dcdf9157cb4219945f0d46766"
     },
     {
       "path": "apps/distribution/src/authoring-assets.ts",
@@ -3036,7 +3040,7 @@
     },
     {
       "path": "apps/distribution/tests/implementations.test.ts",
-      "sha256": "81ab976b9c5c853f413e38c6bfbafd5cc6f694c634f2c42f807da97af11eb427"
+      "sha256": "f4a82c9ed3676714045bb16ada29009ff70305932eedcabbeee3bbed1973c1db"
     },
     {
       "path": "apps/distribution/tests/installation-core.test.ts",
@@ -5952,7 +5956,7 @@
     },
     {
       "path": "packages/db/SPEC.md",
-      "sha256": "e41a193a55fcca605d7aafd5c8842ea2d589d6175c0e5f12fa9f1d19c380770a"
+      "sha256": "7a3ac93c27613f112f21123039630f4f056bbaf077ee3626c715b0bb78552879"
     },
     {
       "path": "packages/db/fixtures/descriptors/consumer.mjs",
@@ -6096,7 +6100,7 @@
     },
     {
       "path": "packages/db/src/distribution/index.ts",
-      "sha256": "eb71ee205e27bff9d1044224ca414d7dfe2ebfaef551b87cb4cee1223b335b0e"
+      "sha256": "448256cb2d178ab588a42602ef5b44ea83da980f6216076734381b7d0c342f6a"
     },
     {
       "path": "packages/db/src/distribution/membership.ts",
@@ -6104,7 +6108,11 @@
     },
     {
       "path": "packages/db/src/distribution/reader.ts",
-      "sha256": "104c634788c688d42d0b99f98cfcf56f8c230786c37a8266cfc66c32a60f44c4"
+      "sha256": "586b8d0ec3b460115ed55ae21acaf9ce2be5ffd10f8b51a79fdeb60b70512496"
+    },
+    {
+      "path": "packages/db/src/distribution/release-control.ts",
+      "sha256": "8cb57aa926dd8dbb113c2ac66fbd2524910753db034d6cd476bbd7e4ab67aba4"
     },
     {
       "path": "packages/db/src/editor/index.ts",
@@ -7408,7 +7416,7 @@
     },
     {
       "path": "packages/workspace-runtime/tests/installed-sources.test.ts",
-      "sha256": "9c12db0c91c581bbfdf9219ae954212e63e6956ad7301b5568680a0897ec187d"
+      "sha256": "b60280e452e315017650a69bfb56dec2057cfa007b1e9b5e0d17490151d49305"
     },
     {
       "path": "packages/workspace-runtime/tests/lifecycle-profile.test.ts",
@@ -7585,6 +7593,10 @@
     {
       "path": "releases/pending/public-architecture-boundaries.json",
       "sha256": "17763b2c1d05cc7f60acf994fe7728f6acd6638d6d6657085165846c1a741970"
+    },
+    {
+      "path": "releases/pending/retained-release-control-validation.json",
+      "sha256": "d707fd8577d40d917894fa0466a3469f71ace5e47b23fe81a8f89da377efda13"
     },
     {
       "path": "releases/pending/structural-check-admission.json",
@@ -8360,7 +8372,7 @@
     },
     {
       "path": "tools/testing/tasks.json",
-      "sha256": "2de391db7f9c6b8cf16100e1748f1a7e11843d3ef8f1a2e2879a42fc4bc7fcca"
+      "sha256": "78bba0c54a5db08ea7837d4b25cd355e02be6d67e1dcf4b42c696db96b7b90c0"
     },
     {
       "path": "tools/testing/timeouts.ts",
@@ -8385,10 +8397,10 @@
   ],
   "publicRefresh": {
     "format": "ia.public-input-refresh.v1",
-    "baseCommit": "7274f77ad4441e1920d24399bceecc804b07758f",
-    "baseTree": "06caa774b7c1203e2befa91047c93be012a4fb90",
+    "baseCommit": "7f1d7dce3cb92d3ad2bc07555319233010e45562",
+    "baseTree": "05f4d5c46ac9d69f389ccb17db7bbda16bf293dd",
     "dirty": true,
-    "inputDigest": "46176f13acb12689105e68c39d7547dec35d3955fc9f00117ae2251dd9f7395f",
+    "inputDigest": "5bd3521448f54e572ae34e3570e9f5903077219fba2639e8d771c5babad60772",
     "npm": {
       ".ia/src/systems/agent-composition-system/package.json": "2.0.0",
       ".ia/src/systems/agent-system/package.json": "2.0.0",

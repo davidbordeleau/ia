@@ -6,12 +6,13 @@ import {
   deriveGenerationInputs,
   DISTRIBUTION_LIMITS,
   portablePath,
+  verifyReleaseControl,
   sha256,
 } from '@inventarch/db/distribution';
 import type { BundleManifest, BundleMetadata } from '@inventarch/db/distribution';
 import { fail, utf8 } from './files.js';
 import { verifyAuthoringAssetClosure, verifySelectedAuthoringAssetClosure } from './authoring-assets.js';
-import { KERNEL_SOURCES, parse } from '@inventarch/language';
+import { KERNEL_SOURCES } from '@inventarch/language';
 import { inflateCanonical, ustarHeader } from './ustar.js';
 
 interface ArchiveContent {
@@ -40,62 +41,6 @@ function remembered(cache: Map<string, true>, key: string, verify: () => void): 
 }
 const kernelDigest = (): string => sha256(JSON.stringify(KERNEL_SOURCES));
 
-/** Root release controls carry only the selected declaration, never arbitrary authored source or authority. */
-function verifyReleaseControl(manifest: BundleManifest, files: ReadonlyMap<string, Buffer>): void {
-  const path = `.ia/src/releases/${manifest.distribution.split('/')[3]}.ia`;
-  const content = files.get(path);
-  if (!content) return;
-  const parsed = parse(utf8(content), path),
-    record = parsed.ast.records[0];
-  const refuse = (): never =>
-    fail('CLOSURE-INVALID', 'Root release control differs from its exact declaration and system roots');
-  if (
-    parsed.diagnostics.some((finding) => finding.severity === 'error') ||
-    parsed.ast.records.length !== 1 ||
-    !record ||
-    record.discriminator !== 'distribution' ||
-    record.head.length ||
-    record.nested.length ||
-    manifest.distribution !== `workspace-system/definition/distribution/${record.name}` ||
-    record.sections.length !== 2 ||
-    record.sections.some((section) => !['meaning', 'distribution'].includes(section.name))
-  )
-    return refuse();
-  const meaning = record.sections.find((section) => section.name === 'meaning'),
-    distribution = record.sections.find((section) => section.name === 'distribution');
-  if (
-    !meaning ||
-    meaning.children.length !== 2 ||
-    meaning.children.some(
-      (field) =>
-        field.kind !== 'field' ||
-        !['says', 'answers'].includes(field.key) ||
-        field.when ||
-        field.children.length ||
-        !['scalar', 'string', 'prose'].includes(field.value.kind),
-    ) ||
-    new Set(meaning.children.map((field) => (field.kind === 'field' ? field.key : ''))).size !== 2 ||
-    !distribution ||
-    distribution.children.length !== 1
-  )
-    return refuse();
-  const field = distribution.children[0]!;
-  if (
-    field.kind !== 'field' ||
-    field.key !== 'records' ||
-    field.when ||
-    field.children.length ||
-    field.value.kind !== 'list'
-  )
-    return refuse();
-  const roots = field.value.items
-    .map((ref) => {
-      if (ref.kind !== 'ref' || ref.discriminator !== 'system' || ref.fragment !== undefined) return refuse();
-      return `floor/definition/system/${ref.name}`;
-    })
-    .sort();
-  if (JSON.stringify(roots) !== JSON.stringify(manifest.roots)) return refuse();
-}
 const header = (path: string, size: number, epoch: number): Buffer => {
   portablePath(path);
   return ustarHeader(path, size, epoch);
@@ -186,7 +131,8 @@ function verifyArchiveBytes(input: Uint8Array, expectedDigest?: string): { pendi
   const manifest = decodeBundleManifest(utf8(content));
   if (canonicalDistributionJson(manifest) !== utf8(content)) fail('ARCHIVE-INVALID', 'Noncanonical manifest');
   files.delete('distribution.json');
-  verifyReleaseControl(manifest, files);
+  const control = files.get(`.ia/src/releases/${manifest.distribution.split('/')[3]}.ia`);
+  if (control) verifyReleaseControl(manifest, utf8(control), (message) => fail('CLOSURE-INVALID', message));
   // One canonical USTAR per manifest and payload; inflateCanonical already held it to the recipe's gzip envelope. The deflate bytes
   // are not compared: zlib builds encode the same tar differently (Homebrew's Node links the system zlib). A pinned digest still binds exact bytes.
   if (!archiveTar(manifest, files).equals(tar))

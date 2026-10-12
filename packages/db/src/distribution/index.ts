@@ -28,6 +28,7 @@ export {
   readInstalledGeneration,
 } from './reader.js';
 export type { ExpandedBundle, InstalledGeneration } from './reader.js';
+export { verifyReleaseControl } from './release-control.js';
 export {
   decodeReleaseDescriptor,
   decodeBundleManifest,

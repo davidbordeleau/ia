@@ -21,6 +21,7 @@ import {
 import type { ActivationPointer, DistributionLock, GenerationInputs, LockedPackage } from './contracts.js';
 import { deriveGenerationInputs, installationWorkspace } from './membership.js';
 import type { BundleMetadata } from './membership.js';
+import { verifyReleaseControl } from './release-control.js';
 
 export const DISTRIBUTION_ENGINE_VERSION = '0.1.1';
 export const INSTALL_PATHS = Object.freeze({
@@ -114,6 +115,8 @@ export function generationSources(
       total += content.length;
       if (total > DISTRIBUTION_LIMITS.expanded) corrupt('Combined installation byte limit');
     }
+    const control = bundle.files.get(`.ia/src/releases/${manifest.distribution.split('/')[3]}.ia`);
+    if (control) verifyReleaseControl(manifest, utf8(control), corrupt);
   }
   const workspaceText = installationWorkspace(lock, inputs, bundles);
   if (generationDigest(lock, inputs, workspaceText) !== pointer.generation)
@@ -204,6 +207,8 @@ export function readExpandedBundle(
   };
   walk('');
   if (files.size !== expected.size) corrupt('Incomplete installed payload inventory');
+  const control = files.get(`.ia/src/releases/${manifest.distribution.split('/')[3]}.ia`);
+  if (control) verifyReleaseControl(manifest, utf8(control), corrupt);
   return { manifest, files, archiveDigest: pkg.archive, manifestDigest: pkg.manifest };
 }
 export interface InstalledGeneration {

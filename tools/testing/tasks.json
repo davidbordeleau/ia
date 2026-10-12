@@ -2629,6 +2629,10 @@
       "project": ".",
       "files": [
         "tools/native/public-language.test.ts",
+        "tools/native/public-fixture.test.ts",
+        "tools/native/release-work.test.ts",
+        "tools/native/repository-architecture.test.ts",
+        "tools/native/work-example.test.ts",
         "tools/native/check.test.ts",
         "tools/native/language-base.test.ts"
       ],

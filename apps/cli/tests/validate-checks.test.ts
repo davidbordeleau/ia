@@ -140,7 +140,7 @@ it('binds every check, reports one Checks section, and records the passing one a
   expect(human.exitCode).toBe(0);
   expect(human.text).toContain(`✔ ${ID('demo-schema-check')} COMP-SCHEMA: bound, pass built-in COMP-SCHEMA: `);
   expect(human.text).toContain(
-    `1 check names an evaluator that is not built in (${ID('typing-check')}): ia validate admits it to bind it, but every other reader of the admitted graph still refuses it as IA-COMP-CHECK-UNKNOWN, so remove or replace it before ia host, ia capture or ia project.`,
+    `1 check names an evaluator that is not built in (${ID('typing-check')}): ia validate admits it to bind it, as ia preview and ia author do, but every other reader counts it as an IA-COMP-CHECK-UNKNOWN error, so ia host and ia project refuse the workspace and ia capture records it as an error; remove or replace it before ia host or ia project.`,
   );
   expect(human.text).toContain(
     `${ID('prose-check')} COMP-SCHEMA: bound, not-evaluated check.scope "every admitted record"`,

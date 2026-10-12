@@ -442,7 +442,7 @@ function closing(view: ValidationView, errors: number, revoked: number, notEvalu
   // admission admits; the repair names that check first, so the host's own remedy lands somewhere actionable.
   if (damaged?.status === 'damaged')
     return structural.length > 0
-      ? `Remove or replace ${listed(structural)}, which only ia validate admits and ia host refuses, then delete ${damaged.payload}, the host payload that failed verification, and run "ia host ${damaged.consumer} --root ${quote(view.root)} --apply".`
+      ? `Remove or replace ${listed(structural)}, which ia validate, ia preview and ia author admit but ia host refuses, then delete ${damaged.payload}, the host payload that failed verification, and run "ia host ${damaged.consumer} --root ${quote(view.root)} --apply".`
       : `Delete ${damaged.payload}, the host payload that failed verification, then run "ia host ${damaged.consumer} --root ${quote(view.root)} --apply".`;
   if (revokedChecks.length > 0)
     return `Remove or replace ${listed(revokedChecks)}, whose evaluator the installed catalog revokes, then run "ia validate --root ${quote(view.root)}" again.`;
@@ -494,13 +494,14 @@ export function renderValidation(view: ValidationView, options: ValidationOption
       ),
     );
   if (checked.structural > 0) {
-    // Review finding B3-R3: named, so the refusal ia host, ia capture or ia project gives for them has a place to land.
+    // Review finding B3-R3: named, so the refusal ia host or ia project gives, and the error ia capture records, has a
+    // place to land. ia preview and ia author admit them as validate does (C21); every other reader is strict.
     const named = listed(structurallyAdmitted(view.checkBindings));
     summary.push(
       words(
         checked.structural === 1
-          ? `1 check names an evaluator that is not built in (${named}): ia validate admits it to bind it, but every other reader of the admitted graph still refuses it as IA-COMP-CHECK-UNKNOWN, so remove or replace it before ia host, ia capture or ia project.`
-          : `${checked.structural} checks name evaluators that are not built in (${named}): ia validate admits them to bind them, but every other reader of the admitted graph still refuses them as IA-COMP-CHECK-UNKNOWN, so remove or replace them before ia host, ia capture or ia project.`,
+          ? `1 check names an evaluator that is not built in (${named}): ia validate admits it to bind it, as ia preview and ia author do, but every other reader counts it as an IA-COMP-CHECK-UNKNOWN error, so ia host and ia project refuse the workspace and ia capture records it as an error; remove or replace it before ia host or ia project.`
+          : `${checked.structural} checks name evaluators that are not built in (${named}): ia validate admits them to bind them, as ia preview and ia author do, but every other reader counts them as IA-COMP-CHECK-UNKNOWN errors, so ia host and ia project refuse the workspace and ia capture records them as errors; remove or replace them before ia host or ia project.`,
       ),
     );
   }

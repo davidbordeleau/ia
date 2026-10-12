@@ -325,7 +325,7 @@ describe('structural check admission on the authoring paths (C21)', () => {
       ),
     );
     // Validate admits the check structurally and names it in its summary; the passing built-in check is recorded.
-    const summary = `1 check names an evaluator that is not built in (${ID('typing-check')}): ia validate admits it to bind it`;
+    const summary = `1 check names an evaluator that is not built in (${ID('typing-check')}): ia validate admits it to bind it, as ia preview and ia author do, but every other reader counts it as an IA-COMP-CHECK-UNKNOWN error, so ia host and ia project refuse the workspace and ia capture records it as an error; remove or replace it before ia host or ia project.`;
     const validated = await ia(root, ['validate']);
     expect(validated.exitCode, validated.stdout).toBe(0);
     expect(body(validated)['evidence']).toMatchObject({ written: true });
@@ -375,12 +375,13 @@ describe('structural check admission on the authoring paths (C21)', () => {
       clean: false,
       findings: [expect.objectContaining({ code: 'IA-COMP-CHECK-UNKNOWN' })],
     });
-    // Validate still admits structurally and names both checks; every strict reader still refuses them.
+    // Validate still admits structurally and names both checks; every strict reader counts them as errors.
     const after = await run(['validate', '--root', root], { env: HOMES });
     expect(after.exitCode, after.stdout).toBe(0);
-    const named = /2 checks name evaluators that are not built in \(([^)]*)\): ia validate admits them/.exec(
-      after.stdout.replace(/\s+/g, ' '),
-    );
+    const named =
+      /2 checks name evaluators that are not built in \(([^)]*)\): ia validate admits them to bind them, as ia preview and ia author do, but every other reader counts them as IA-COMP-CHECK-UNKNOWN errors, so ia host and ia project refuse the workspace and ia capture records them as errors; remove or replace them before ia host or ia project\./.exec(
+        after.stdout.replace(/\s+/g, ' '),
+      );
     expect(named?.[1]?.split(' and ').sort(), after.stdout).toEqual([ID('lint-check'), ID('typing-check')]);
     const strict = open(root, { cache: false });
     try {

@@ -135,7 +135,7 @@ it('prints the Bindings section: unbound is never a pass, bound names the shippe
     const repair = (await validate(root, env)).text;
     expect(repair).toContain('1 check is revoked, which is an error.');
     expect(repair).toContain(
-      `Remove or replace ${TYPING_ID}, which only ia validate admits and ia host refuses, then delete ${resolve(env.IA_HOST_HOME, 'hosts', envelope.bindings.catalog.release)}, the host payload that failed verification, and run "ia host claude --root ${root} --apply".`,
+      `Remove or replace ${TYPING_ID}, which ia validate, ia preview and ia author admit but ia host refuses, then delete ${resolve(env.IA_HOST_HOME, 'hosts', envelope.bindings.catalog.release)}, the host payload that failed verification, and run "ia host claude --root ${root} --apply".`,
     );
     rmSync(resolve(root, '.ia/src/typing.ia'));
   } finally {

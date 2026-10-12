@@ -24,7 +24,9 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { open, readInputs } from '@inventarch/db';
 import { HOOK_CODES } from '@inventarch/runtime';
+import { digestValue } from '@inventarch/runtime/authoring';
 import { runBounded } from '@tools/testing/subprocess.js';
 import { evaluateHook, evaluateMandateHook, printable, runHook, streamed } from '../src/main.js';
 import type { HookOutput } from '../src/main.js';
@@ -203,6 +205,63 @@ it('refuses the main session with no default actor or an ambiguous one wherever 
   expect(reason(check(none, 'docs/guide.md', stranger))).not.toContain('--remove --apply');
   // The reviewer subagent is established all the same, and reviewer-mandate grants it docs/.
   expect(check(two, 'docs/guide.md', reviewer)).toEqual({});
+});
+
+/**
+ * The workspace with the conformance corpus adopted at band 90 through `.ia/workspace.json`, as an installed base is,
+ * rather than copied under `.ia/src`: its agents are then installed `@agent` records, and only the fixture's sources,
+ * with `overlay` applied, are authored.
+ */
+function installedBase(overlay: Readonly<Record<string, string>> = {}): string {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-mandate-guard-')),
+    vendor = 'vendor/foundation';
+  roots.push(root);
+  cpSync(NATIVE, resolve(root, vendor, '.ia/src'), { recursive: true });
+  const pinned = readInputs(resolve(root, vendor), { adopted: [] })
+    .sources.filter((source) => !source.path.startsWith('.ia/src/floor/'))
+    .map(({ path, text }) => ({ path, text }));
+  put(
+    root,
+    '.ia/workspace.json',
+    JSON.stringify({ version: 1, adopted: [{ id: 'foundation', path: vendor, revision: digestValue(pinned) }] }),
+  );
+  cpSync(FIXTURE, resolve(root, '.ia/src'), { recursive: true });
+  for (const [path, text] of Object.entries(overlay)) put(root, path, text);
+  return root;
+}
+
+it('judges the main session as the one authored participant when the steward is an installed agent (review C2-R1)', () => {
+  // The installed corpus's work-steward as composition.steward: runtime defaultActor counts only an authored steward,
+  // so the choice falls to the authored participants, as the CLI's mandate profile reads it.
+  const installed = 'agent-system/binding/agent/work-steward',
+    INSTALLED = ['    steward @agent demo\n', '    steward @agent work-steward\n'] as const;
+  // demo-mandate observes only, so the Synthesis docs/ needs is docs-mandate's: it covers the hook's path for demo.
+  const root = installedBase({ '.ia/src/workspace.ia': edited(OBSERVING, [INSTALLED]) });
+  const db = open(root, { cache: false });
+  try {
+    expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    expect(db.records().find((record) => record.identity === installed)?.band).toBe(90);
+  } finally {
+    db.close();
+  }
+  expect(check(root, 'docs/guide.md')).toEqual({});
+  expect(check(root, 'docs/guide.md', {}, 'Edit')).toEqual({});
+  // Under restricted/ only demo-mandate grants demo anything, and it observes only: the refusal names demo as the actor.
+  const restricted = check(root, 'restricted/plan.md');
+  expect(code(restricted)).toBe('IA-HOOK-NOT-MANDATED');
+  expect(reason(restricted)).toContain('the main session acts as agent-system/binding/agent/demo;');
+  // Two authored participants and that installed steward: the choice is open, and the refusal names the workspace's
+  // governance position, where a steward is named.
+  const two = installedBase({
+    '.ia/src/workspace.ia':
+      edited(OBSERVING, [INSTALLED]) +
+      authorized('reviewer-mandate', ['participant @agent reviewer', 'moves [Synthesis]', 'scope [@workspace demo]']),
+  });
+  const ambiguous = check(two, 'docs/guide.md');
+  expect(code(ambiguous)).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
+  expect(reason(ambiguous)).toContain(`${DEMO}'s composition.steward ${installed} is no authored @agent`);
+  expect(reason(ambiguous)).toContain('2 participants');
+  expect(reason(ambiguous)).toContain(`Next: ia position --seat ${DEMO} --shape governance`);
 });
 
 it('lets every established actor author where a governing mandate naming no participant grants Synthesis (G-N6)', () => {

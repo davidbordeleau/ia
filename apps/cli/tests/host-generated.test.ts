@@ -22,7 +22,7 @@ import { hookGroupDigest } from '@inventarch/distribution/guard-registration';
 import { sha256 } from '@inventarch/distribution/services';
 import { runBounded } from '@tools/testing/subprocess.js';
 import { ProjectionError } from '@inventarch/workspace-runtime/projections';
-import { applyHostProjection, renderProjectionFor } from '../src/host-projection.js';
+import { applyHostProjection, HOOK_KEPT, renderProjectionFor } from '../src/host-projection.js';
 import { quote } from '../src/render.js';
 import { cleanup, cli, nextArgv, run } from './workspace-fixture.js';
 import {
@@ -1065,4 +1065,139 @@ it('names the state repair when the hook ownership state cannot be read and the 
   const removed = await host(root, env, 'claude', '--remove', '--apply', '--yes');
   expect(removed.exitCode, removed.stdout).toBe(0);
   expect(existsSync(resolve(root, SETTINGS)) ? hookGroups(root).size : 0).toBe(0);
+});
+
+/** A second authored hook beside the fixture's, over specs/**, named `name`. */
+const secondHook = (name: string): string =>
+  `#! ia 1.0\n\n@hook ${name}\n  meaning\n    says "Hook ${name}."\n    answers "Which hook is ${name}?"\n  hook\n    event PreToolUse\n    tools [Write]\n    paths ["specs/**"]\n    message "Use the ${name} mandate."\n`;
+const SPEC_HOOK = 'hook-authoring-system/binding/hook/spec-edits',
+  PLAN_HOOK = 'hook-authoring-system/binding/hook/plan-edits';
+/** The local settings with `disableAllHooks` set or cleared, every other key and group kept. */
+const localHooksOff = (root: string, off: boolean): void => {
+  const local = settings(root);
+  if (off) local['disableAllHooks'] = true;
+  else delete local['disableAllHooks'];
+  writeFileSync(resolve(root, SETTINGS), `${JSON.stringify(local, null, 2)}\n`);
+};
+
+it('reports an obsolete group kept while hooks are off and its payload is gone, never as registered, and removes it once hooks are on (F1)', async () => {
+  const { root, env } = await composed();
+  put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits'));
+  const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release;
+  expect([...hookGroups(root).keys()].sort()).toEqual([HOOK, SPEC_HOOK]);
+  rmSync(resolve(env.IA_HOST_HOME, 'hosts', release), { recursive: true, force: true });
+  put(root, '.claude/settings.json', `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
+  rmSync(resolve(root, '.ia/src/extra-hooks.ia'));
+  const projected = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+  expect(projected.exitCode, projected.stdout).toBe(0);
+  // The group stays, reported as kept; only the declared hook's group is listed as registered.
+  expect([...hookGroups(root).keys()].sort()).toEqual([HOOK, SPEC_HOOK]);
+  expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([HOOK]);
+  expect(receipt(root).unsupported).toEqual([{ identity: SPEC_HOOK, word: 'hook', reason: HOOK_KEPT }]);
+  // Hooks back on: ia host materializes a payload and removes the obsolete group.
+  rmSync(resolve(root, '.claude/settings.json'));
+  const restored = projection((await apply(root, env)).stdout);
+  expect(restored.hooks).toEqual([
+    { hook: HOOK, action: 'unchanged' },
+    { hook: SPEC_HOOK, action: 'remove' },
+  ]);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  expect(receipt(root).removedHooks?.map((row) => row.identity)).toEqual([SPEC_HOOK]);
+  expect(receipt(root).unsupported).toEqual([]);
+});
+
+it('refuses a group deleted by hand while hooks are off as it does with hooks on, and the named removal works (F2)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  put(root, '.claude/settings.json', `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
+  withoutHookGroups(root);
+  const refused = await host(root, env, 'claude', '--apply', '--yes');
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  const body = JSON.parse(refused.stdout) as { code: string; next: string };
+  expect(body).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    next: `Run "ia host claude --root ${quote(root)} --remove --apply", which drops the registration of the hook group deleted by hand, then register again with ia host.`,
+  });
+  await follow(body.next, env);
+  // Registered again while hooks are off: no group, the hook reported naming the file.
+  const element = projection((await apply(root, env)).stdout);
+  expect(element.unsupported).toEqual([
+    {
+      identity: HOOK,
+      word: 'hook',
+      reason: 'Not registered: hooks are disabled by disableAllHooks in .claude/settings.json',
+    },
+  ]);
+});
+
+it('renames one of two hooks while disableAllHooks is on in the local settings, then registers both once hooks are on (F3)', async () => {
+  const { root, env } = await composed();
+  put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits'));
+  await apply(root, env);
+  localHooksOff(root, true);
+  put(root, '.ia/src/extra-hooks.ia', secondHook('plan-edits'));
+  const renamed = projection((await apply(root, env)).stdout);
+  expect(renamed.hooks).toEqual([
+    { hook: HOOK, action: 'unchanged' },
+    { hook: SPEC_HOOK, action: 'remove' },
+  ]);
+  expect(renamed.unsupported).toEqual([
+    {
+      identity: PLAN_HOOK,
+      word: 'hook',
+      reason: 'Not registered: hooks are disabled by disableAllHooks in .claude/settings.local.json',
+    },
+  ]);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  expect(settings(root)['disableAllHooks']).toBe(true);
+  // Hooks on again: both declared hooks register.
+  localHooksOff(root, false);
+  const restored = projection((await apply(root, env)).stdout);
+  expect(restored.hooks).toEqual([
+    { hook: HOOK, action: 'unchanged' },
+    { hook: PLAN_HOOK, action: 'create' },
+  ]);
+  expect([...hookGroups(root).keys()].sort()).toEqual([HOOK, PLAN_HOOK]);
+  expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([HOOK, PLAN_HOOK]);
+  expect(receipt(root).unsupported).toEqual([]);
+});
+
+it("converges in one hop when the user's skill folder holds its own SKILL.md and other files (F6)", async () => {
+  const { root, env } = await composed();
+  put(root, SKILL, '---\nname: note-review\n---\n\nMy own skill.\n');
+  put(root, '.claude/skills/note-review/reference.md', 'notes\n');
+  const refused = await host(root, env, 'claude', '--apply', '--yes');
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  const body = JSON.parse(refused.stdout) as { where: { path: string }; next: string };
+  expect(body.where.path).toBe('.claude/skills/note-review');
+  // Follow it once: the folder's files go elsewhere, and the rerun writes the skill.
+  for (const name of ['SKILL.md', 'reference.md']) rmSync(resolve(root, '.claude/skills/note-review', name));
+  await follow(body.next, env);
+  expect(read(root, SKILL).split('\n')).toContain(PACKET_MARKER);
+});
+
+it('refuses an install before any install write when its refresh would refuse a generated skill at a populated folder (F4)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  // A new playbook whose skill folder already holds the user's files.
+  put(
+    root,
+    '.ia/src/other-playbook.ia',
+    read(root, '.ia/src/playbook.ia').replace('@playbook note-review', '@playbook other-review'),
+  );
+  put(root, '.claude/skills/other-review/reference.md', 'my own notes\n');
+  const install = baseInstall(root),
+    lock = read(root, '.ia/distributions.lock.json');
+  const refused = await run([...install, '--apply', '--yes', '--json'], { env });
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  const body = JSON.parse(refused.stdout) as { code: string; where: { path: string }; next: string };
+  expect(body).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    where: { path: '.claude/skills/other-review' },
+    next: `Move the files out of .claude/skills/other-review, or rename the @playbook that renders it, then run "ia host claude --root ${quote(root)} --apply".`,
+  });
+  expect(read(root, '.ia/distributions.lock.json')).toBe(lock);
+  rmSync(resolve(root, '.claude/skills/other-review/reference.md'));
+  await follow(body.next, env);
+  expect(read(root, '.claude/skills/other-review/SKILL.md').split('\n')).toContain(PACKET_MARKER);
 });

@@ -701,3 +701,20 @@ it("keeps a listed generated skill without an owned marker as the user's, never 
   expect(read(root, SKILL)).toBe(mine);
   expect(Object.keys(stateFiles(root))).not.toContain(SKILL);
 });
+
+it("names the folder in one hop when the user's folder holds its own SKILL.md, and keeps the packet's skill to the file rule (F6)", () => {
+  const root = temp();
+  put(root, SKILL, '---\nname: note-review\n---\n\nMy own skill.\n');
+  put(root, '.claude/skills/note-review/reference.md', 'notes\n');
+  expect(where(() => planProjection({ root, host: 'claude', artifacts: generated(), marker: MARK }))).toMatchObject({
+    code: 'IA-DIST-LOCAL-MODIFICATION',
+    path: '.claude/skills/note-review',
+    skillFolder: '.claude/skills/note-review',
+  });
+  // The packet's own ia-authoring skill is no generated skill: an unmanaged file there is refused at the file.
+  const other = temp();
+  put(other, '.claude/skills/ia-authoring/SKILL.md', 'my own authoring skill\n');
+  expect(
+    where(() => planProjection({ root: other, host: 'claude', artifacts: artifacts(), marker: MARK })),
+  ).toMatchObject({ code: 'IA-DIST-LOCAL-MODIFICATION', path: '.claude/skills/ia-authoring/SKILL.md' });
+});

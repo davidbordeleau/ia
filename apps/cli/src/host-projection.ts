@@ -33,7 +33,6 @@ import { resolve } from 'node:path';
 import { renderHost, renderPacket, PACKET_MARKER } from '@inventarch/runtime';
 import type {
   HookGroupRow,
-  HookToolName,
   HostFile,
   HostHookDeclaration,
   HostOutput,
@@ -78,7 +77,7 @@ import {
 import { packetCatalog } from './commands.js';
 import { Refusal } from './consumer.js';
 import type { HookRefusal } from './host.js';
-import { refusedPath, SETTINGS, STATE } from './host.js';
+import { refusedPath, SETTINGS, skillFolderOf, STATE } from './host.js';
 import type { SessionGate } from './profile.js';
 import type { Session } from './session.js';
 import { codeOf, openSession } from './session.js';
@@ -178,6 +177,12 @@ export interface HookStep {
   readonly plan: HookPlan | null;
   readonly unregistered: readonly UnsupportedRow[];
 }
+/**
+ * Why an obsolete owned group is still in the settings (review finding F1): with hooks disabled, the groups kept beside it
+ * are re-planned against the payload they were registered against, and that payload is gone.
+ */
+export const HOOK_KEPT =
+  'Kept: its record is gone, but its group is removed only once hooks are back on or the payload it was registered against is materialized again';
 /** Why a declared hook is not registered when no host payload is known: `ia host` materializes one. */
 export const HOOKS_NEED_HOST =
   'Not registered: a hook group runs the guard in the host payload "ia host claude --apply" materializes; run it to register this hook';
@@ -201,7 +206,12 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
   const disabled = hooksDisabledBy(root);
   if (disabled !== null) {
     // Review finding A-F1: a group owned for a hook still declared stays as registered, and is no unsupported row; an
-    // obsolete owned group is still removed; a hook with no group is reported, naming the file.
+    // obsolete owned group is removed; a hook with no group is reported, naming the file. A group deleted, changed or
+    // duplicated by hand refuses as it does with hooks on (H-R1).
+    if (prior !== null) {
+      const drift = observeHookRegistration(root).find((row) => row.drift !== 'foreign');
+      if (drift !== undefined) throw handEdited(drift);
+    }
     const owned = new Map((prior?.groups ?? []).map((group) => [group.hook, group.paths]));
     const kept = rows
       .filter((row) => owned.has(row.identity))
@@ -215,12 +225,21 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
       }));
     if (prior === null || kept.length === owned.size) return { plan: null, unregistered };
     if (kept.length === 0) return { plan: planHookRegistration(root, { remove: HOST_REGISTRATION }), unregistered };
-    // The kept groups are re-planned as recorded, so nothing is written for them; a recorded payload that is gone leaves
-    // the obsolete group until hooks are back on.
+    // The kept groups are re-planned as recorded, so nothing is written for them. That needs the payload they were
+    // registered against: when it is gone, the obsolete group stays, reported as kept rather than listed as registered.
     try {
       verifyHostCache(prior.cache);
     } catch {
-      return { plan: null, unregistered };
+      const declared = new Set(rows.map((row) => row.identity));
+      return {
+        plan: null,
+        unregistered: [
+          ...unregistered,
+          ...[...owned.keys()]
+            .filter((hook) => !declared.has(hook))
+            .map((hook) => ({ identity: hook, word: 'hook' as const, reason: HOOK_KEPT })),
+        ],
+      };
     }
     return { plan: planHookRegistration(root, { cache: prior.cache, hooks: kept }), unregistered };
   }
@@ -264,11 +283,15 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
  */
 function hookRows(root: string, declared: readonly HostHookDeclaration[]): readonly HookGroupRow[] {
   const tools = new Map(declared.map((hook) => [hook.identity, hook.tools]));
-  return (readHookRegistration(root)?.groups ?? []).map(({ hook, group }) => ({
-    identity: hook,
-    tools: [...(tools.get(hook) ?? (group.matcher.split('|') as HookToolName[]))],
-    sha256: hookGroupDigest(group),
-  }));
+  // Only the groups of declared hooks are registered ones: an obsolete group kept while hooks are disabled is reported
+  // as kept instead (review finding F1).
+  return (readHookRegistration(root)?.groups ?? [])
+    .filter(({ hook }) => tools.has(hook))
+    .map(({ hook, group }) => ({
+      identity: hook,
+      tools: [...tools.get(hook)!],
+      sha256: hookGroupDigest(group),
+    }));
 }
 
 /**
@@ -684,11 +707,11 @@ function handEdited(drift: ReturnType<typeof observeHookRegistration>[number]): 
  * duplicated by hand refuses with the recovery doctor names, and so does a recorded payload a change of hooks would need.
  * When the records do not render, only a changed or duplicated group is refused, since a removal refuses it too.
  */
-export function preflightHooks(root: string, host: HostName): void {
+export function preflightHooks(root: string, host: HostName, given?: HostOutput | null): void {
   if (host !== 'claude' || readHookRegistration(root) === null) return;
   let rendered: HostOutput | null;
   try {
-    rendered = renderProjectionFor(root, host);
+    rendered = given === undefined ? renderProjectionFor(root, host) : given;
   } catch {
     // Records that do not render refuse the refresh itself, with their own next action.
     rendered = null;
@@ -702,6 +725,30 @@ export function preflightHooks(root: string, host: HostName): void {
     throw Object.assign(new DistributionError('IA-DIST-LOCAL-MODIFICATION', handEdited(changed).message, SETTINGS), {
       hookRefusal: { drift: 'modified', hook: changed.hook } satisfies HookRefusal,
     });
+}
+/**
+ * What a refresh's file plan would refuse, and its hook step, found before an install, update or remove writes anything
+ * (review finding F4, the H-R3 class): the files are planned against the current records, rendered once, so a generated
+ * skill refused at a populated folder of the user's refuses here (any other file refusal is left to the refresh, as
+ * before); then `preflightHooks` runs on the same render.
+ */
+export function preflightProjection(root: string, host: HostName): void {
+  let rendered: HostOutput | null;
+  try {
+    rendered = renderProjectionFor(root, host);
+  } catch {
+    // Records that do not render refuse the refresh itself, with their own next action.
+    rendered = null;
+  }
+  // Only the populated skill folder refuses here: every other file refusal stays the refresh's after the install
+  // commits, naming the applied install (host registration §6.3), as before.
+  if (rendered !== null)
+    try {
+      planFiles(root, host, rendered);
+    } catch (error) {
+      if (skillFolderOf(error) !== undefined) throw error;
+    }
+  preflightHooks(root, host, rendered);
 }
 /**
  * The owned hook group a hook-registration refusal concerns, by its drift (review finding H-R1), so the refusal names the

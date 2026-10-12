@@ -915,13 +915,13 @@ export function applyHostSet(
   return { status: 'host-removed', elements: done, observed: false };
 }
 
-/** §4 `--json`: the plan always, and `applied` only after an apply. */
 /**
  * A conflict as the `--json` envelopes print it (review finding A-F4): its code, path and reason. The descriptors a
  * refusal carries to word its own repair (`hook`, `folder`) stay internal; the repair is the refusal's `next`.
  */
 export const printedConflict = (conflict: Conflict | null): Conflict | null =>
   conflict === null ? null : { code: conflict.code, path: conflict.path, reason: conflict.reason };
+/** §4 `--json`: the plan always, and `applied` only after an apply. */
 const hostEnvelope = (view: HostView, applied: HostApplied | null): unknown => ({
   version: 1,
   command: 'host',

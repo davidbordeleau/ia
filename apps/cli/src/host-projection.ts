@@ -182,7 +182,23 @@ export interface HookStep {
  * are re-planned against the payload they were registered against, and that payload is gone.
  */
 export const HOOK_KEPT =
-  'Kept: its record is gone, but its group is removed only once hooks are back on or the payload it was registered against is materialized again';
+  'Kept: no registrable hook claims this group any more, but it stays until hooks are back on or the payload it was registered against is materialized again';
+/**
+ * The records a host does not take, one row per identity (review finding N3): generation's rows, then the hook step's;
+ * where both report an identity (an unsupported authored hook whose group is kept), one row carries both reasons.
+ */
+export function notTaken(
+  generated: readonly UnsupportedRow[],
+  step: readonly UnsupportedRow[],
+): readonly UnsupportedRow[] {
+  const rows = new Map(generated.map((row) => [`${row.word} ${row.identity}`, row]));
+  for (const row of step) {
+    const key = `${row.word} ${row.identity}`,
+      first = rows.get(key);
+    rows.set(key, first === undefined ? row : { ...first, reason: `${first.reason}; ${row.reason}` });
+  }
+  return [...rows.values()];
+}
 /** Why a declared hook is not registered when no host payload is known: `ia host` materializes one. */
 export const HOOKS_NEED_HOST =
   'Not registered: a hook group runs the guard in the host payload "ia host claude --apply" materializes; run it to register this hook';
@@ -206,13 +222,17 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
   const disabled = hooksDisabledBy(root);
   if (disabled !== null) {
     // Review finding A-F1: a group owned for a hook still declared stays as registered, and is no unsupported row; an
-    // obsolete owned group is removed; a hook with no group is reported, naming the file. A group deleted, changed or
-    // duplicated by hand refuses as it does with hooks on (H-R1).
-    if (prior !== null) {
-      const drift = observeHookRegistration(root).find((row) => row.drift !== 'foreign');
-      if (drift !== undefined) throw handEdited(drift);
-    }
-    const owned = new Map((prior?.groups ?? []).map((group) => [group.hook, group.paths]));
+    // obsolete owned group is removed; a hook with no group is reported, naming the file.
+    const owned = new Map((prior?.groups ?? []).map((group) => [group.hook, group.paths])),
+      declared = new Set(rows.map((row) => row.identity));
+    // A group changed or duplicated by hand refuses, and so does one deleted by hand whose hook is still declared, as
+    // with hooks on (H-R1); a deleted group of a hook no longer declared only loses its ownership (review finding N4).
+    const drift = prior === null ? [] : observeHookRegistration(root);
+    const handEditedRow = drift.find(
+      (row) => row.drift === 'modified' || (row.drift === 'missing' && declared.has(row.hook)),
+    );
+    if (handEditedRow !== undefined) throw handEdited(handEditedRow);
+    const gone = new Set(drift.filter((row) => row.drift === 'missing').map((row) => row.hook));
     const kept = rows
       .filter((row) => owned.has(row.identity))
       .map((row) => ({ ...row, paths: owned.get(row.identity)! }));
@@ -226,17 +246,27 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
     if (prior === null || kept.length === owned.size) return { plan: null, unregistered };
     if (kept.length === 0) return { plan: planHookRegistration(root, { remove: HOST_REGISTRATION }), unregistered };
     // The kept groups are re-planned as recorded, so nothing is written for them. That needs the payload they were
-    // registered against: when it is gone, the obsolete group stays, reported as kept rather than listed as registered.
+    // registered against: the one this apply materializes when it is that payload (review finding N1, so a plan and its
+    // apply agree), else the recorded one, which must still verify. Without it the obsolete groups stay, reported as kept
+    // rather than listed as registered; a group already deleted by hand is not kept, only still owned.
+    const given = cache === null ? undefined : 'expected' in cache ? cache.expected.directory : cache.verified;
+    if (cache !== null && given === prior.cache)
+      return {
+        plan:
+          'expected' in cache
+            ? planHooksFor(root, cache.expected, kept)
+            : planHookRegistration(root, { cache: cache.verified, hooks: kept }),
+        unregistered,
+      };
     try {
       verifyHostCache(prior.cache);
     } catch {
-      const declared = new Set(rows.map((row) => row.identity));
       return {
         plan: null,
         unregistered: [
           ...unregistered,
           ...[...owned.keys()]
-            .filter((hook) => !declared.has(hook))
+            .filter((hook) => !declared.has(hook) && !gone.has(hook))
             .map((hook) => ({ identity: hook, word: 'hook' as const, reason: HOOK_KEPT })),
         ],
       };
@@ -628,7 +658,7 @@ export function applyHostProjection(
           ...(rendered.receipt.definitions === undefined
             ? {}
             : { definitions: appliedDefinitions(rendered.receipt.definitions, rendered.receipt.files, registered) }),
-          unsupported: [...(rendered.receipt.unsupported ?? []), ...registration.unregistered],
+          unsupported: notTaken(rendered.receipt.unsupported ?? [], registration.unregistered),
           writtenAt: new Date().toISOString(),
         };
   if (receipt !== null) {

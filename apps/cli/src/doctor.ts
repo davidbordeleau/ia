@@ -94,7 +94,7 @@ import { discoverRoot, iaHomeOf } from './consumer.js';
 import { UNMAPPED } from './distribute.js';
 import { userRows } from './doctor-user.js';
 import type { HostName } from './host-projection.js';
-import { planRetirement, readReceipt, renderProjectionFor } from './host-projection.js';
+import { HOOK_KEPT, planRetirement, readReceipt, renderProjectionFor } from './host-projection.js';
 import {
   HOST_LOCK,
   HOSTS_AREA,
@@ -621,16 +621,26 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
     );
   // An authored @hook the last apply could not register guards nothing (review finding H-N4): `ia host` registers it, or,
   // where disableAllHooks turned hooks off, nothing does until that setting changes.
+  // A kept group is the other way round (review finding N2): an obsolete group that still guards, until hooks are back on
+  // or the payload it was registered against is materialized again; no command is sure to remove it.
   for (const row of receipt.unsupported ?? [])
     if (row.word === 'hook')
       checks.push(
-        installation(
-          `projection-${host}-hook:${row.identity}`,
-          title,
-          'warn',
-          commands.prose(host, `the authored @hook ${row.identity} guards nothing: ${row.reason}`),
-          row.reason.includes('disableAllHooks') ? null : commands.apply(host, `ia host ${host} --apply`),
-        ),
+        row.reason.includes(HOOK_KEPT)
+          ? installation(
+              `projection-${host}-hook:${row.identity}`,
+              title,
+              'warn',
+              `the hook group for ${row.identity} stays in ${SETTINGS} though no registrable hook claims it any more: it is removed once hooks are back on or the payload it was registered against is materialized again`,
+              null,
+            )
+          : installation(
+              `projection-${host}-hook:${row.identity}`,
+              title,
+              'warn',
+              commands.prose(host, `the authored @hook ${row.identity} guards nothing: ${row.reason}`),
+              row.reason.includes('disableAllHooks') ? null : commands.apply(host, `ia host ${host} --apply`),
+            ),
       );
   try {
     const rendered = renderProjectionFor(root, host),

@@ -1201,3 +1201,72 @@ it('refuses an install before any install write when its refresh would refuse a 
   await follow(body.next, env);
   expect(read(root, '.claude/skills/other-review/SKILL.md').split('\n')).toContain(PACKET_MARKER);
 });
+
+/** Two hooks owned (the fixture's and spec-edits), then hooks off in the shared settings and the payload deleted. */
+async function offWithoutPayload(): Promise<{ root: string; env: { IA_HOST_HOME: string } }> {
+  const { root, env } = await composed();
+  put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits'));
+  const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release;
+  rmSync(resolve(env.IA_HOST_HOME, 'hosts', release), { recursive: true, force: true });
+  put(root, '.claude/settings.json', `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
+  return { root, env };
+}
+
+it("plans the obsolete group's removal against the payload ia host materializes, so its preview and apply agree (N1)", async () => {
+  const { root, env } = await offWithoutPayload();
+  rmSync(resolve(root, '.ia/src/extra-hooks.ia'));
+  const expected = [
+    { hook: HOOK, action: 'unchanged' },
+    { hook: SPEC_HOOK, action: 'remove' },
+  ];
+  // The dry run plans the removal, as the apply that materializes the payload makes it.
+  const preview = projection((await host(root, env, 'claude')).stdout);
+  expect(preview.hooks).toEqual(expected);
+  expect(preview.unsupported).toEqual([]);
+  const applied = projection((await apply(root, env)).stdout);
+  expect(applied.hooks).toEqual(expected);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  expect(receipt(root).removedHooks?.map((row) => row.identity)).toEqual([SPEC_HOOK]);
+  expect(receipt(root).unsupported).toEqual([]);
+});
+
+it('words a kept group as one that still guards, and reports an unsupported authored hook whose group is kept once (N2, N3)', async () => {
+  const { root, env } = await offWithoutPayload();
+  // spec-edits stops being registrable (another event): generation reports it, and its owned group is kept.
+  put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits').replace('event PreToolUse', 'event PostToolUse'));
+  const projected = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+  expect(projected.exitCode, projected.stdout).toBe(0);
+  const rows = receipt(root).unsupported.filter((row) => row.identity === SPEC_HOOK);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]!.reason).toContain('event PostToolUse is not PreToolUse');
+  expect(rows[0]!.reason).toContain(HOOK_KEPT);
+  const checks = (await doctor(root, env)).checks.filter((check) => check.id === `projection-claude-hook:${SPEC_HOOK}`);
+  expect(checks).toEqual([
+    expect.objectContaining({
+      status: 'warn',
+      detail: `the hook group for ${SPEC_HOOK} stays in ${SETTINGS} though no registrable hook claims it any more: it is removed once hooks are back on or the payload it was registered against is materialized again`,
+      remedy: null,
+    }),
+  ]);
+});
+
+it('drops the ownership of a hand-deleted group whose hook is no longer declared while hooks are off, as with hooks on (N4)', async () => {
+  const { root, env } = await composed();
+  put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits'));
+  await apply(root, env);
+  put(root, '.claude/settings.json', `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
+  // spec-edits's record and, by hand, its group are gone; the fixture's hook and group stay.
+  rmSync(resolve(root, '.ia/src/extra-hooks.ia'));
+  const local = settings(root);
+  local.hooks!.PreToolUse = local.hooks!.PreToolUse!.filter((group) => group.hooks[0]!.args.at(-1) !== SPEC_HOOK);
+  writeFileSync(resolve(root, SETTINGS), `${JSON.stringify(local, null, 2)}\n`);
+  const element = projection((await apply(root, env)).stdout);
+  expect(element.hooks).toEqual([
+    { hook: HOOK, action: 'unchanged' },
+    { hook: SPEC_HOOK, action: 'remove' },
+  ]);
+  expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  expect(JSON.parse(read(root, HOOK_STATE)).groups.map((group: { hook: string }) => group.hook)).toEqual([HOOK]);
+  expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([HOOK]);
+  expect(receipt(root).unsupported).toEqual([]);
+});

@@ -10,6 +10,9 @@ export {
   text,
   portablePath,
   satisfies,
+  supportsDistributionLockEngine,
+  ROOT_RELEASE_CONTROL_ENGINE_VERSION,
+  supportsRootReleaseControls,
   compareVersions,
   version,
 } from './codec.js';

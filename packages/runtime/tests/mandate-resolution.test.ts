@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import type { Handle } from '@inventarch/db';
@@ -932,4 +932,33 @@ it("resolves this repository's participant as its default actor, granted all fiv
     mandate('language-mandate'),
   ]);
   expect(identities(db, { actor: own, path: 'README.md' })).toEqual([]);
+});
+
+it('names the consumers the code has: the CLI mandate profile and the edit guard, and no Door operation (R21)', () => {
+  const read = (path: string) => readFileSync(resolve(repository, path), 'utf8');
+  const RESOLVER = /\b(?:governingMandates|defaultActor|profileRefusal)\(/;
+  // The edit guard calls all three; no other runtime module but the resolver's own does, so no Door operation does.
+  const guard = read('packages/runtime/src/mandate-guard.ts');
+  for (const name of ['governingMandates', 'defaultActor', 'profileRefusal'])
+    expect(guard, name).toMatch(new RegExp(`\\b${name}\\(`));
+  const sources = readdirSync(resolve(repository, 'packages/runtime/src'), { recursive: true, encoding: 'utf8' })
+    .filter((path) => path.endsWith('.ts'))
+    .map((path) => path.replaceAll('\\', '/'));
+  expect(sources.filter((path) => RESOLVER.test(read(`packages/runtime/src/${path}`))).sort()).toEqual([
+    'mandate-guard.ts',
+    'mandate-modes.ts',
+  ]);
+  // SPEC R21 and the pending note say so.
+  const spec = read('packages/runtime/SPEC.md')
+      .split('\n')
+      .find((line) => line.startsWith('R21. '))!,
+    note = (JSON.parse(read('releases/pending/mandate-resolution.json')) as { summary: string }).summary;
+  for (const [text, where] of [
+    [spec, 'SPEC R21'],
+    [note, 'releases/pending/mandate-resolution.json'],
+  ] as const) {
+    expect(text, where).not.toContain('or hook does yet');
+    expect(text, where).toContain('the edit guard');
+    expect(text, where).toContain('no Door operation does');
+  }
 });

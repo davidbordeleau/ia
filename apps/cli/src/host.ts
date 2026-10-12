@@ -56,6 +56,7 @@ import { confirm, Interrupted, Refusal, refusalOf, requireRoot } from './consume
 import type { HookCache, HostName } from './host-projection.js';
 import {
   applyHostProjection,
+  notTaken,
   planFiles,
   planHookStep,
   planRetirement,
@@ -577,7 +578,7 @@ export function projectionElement(
       files,
       guard,
       ...(host === 'claude' ? { hooks } : {}),
-      unsupported: [...(rendered?.receipt.unsupported ?? []), ...unregistered],
+      unsupported: notTaken(rendered?.receipt.unsupported ?? [], unregistered),
     };
   } catch (error) {
     return refused(conflictOf(error, STATE.projection(host)));

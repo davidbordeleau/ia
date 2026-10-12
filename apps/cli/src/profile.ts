@@ -344,9 +344,7 @@ export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | '
     return refusal;
   const match = QUOTED.exec(refusal.next);
   if (match === null) return refusal;
-  const argv = [...match[1]!.matchAll(ARGUMENT)].map((token) =>
-    token[0].startsWith('"') ? (JSON.parse(token[0]) as string) : token[0],
-  );
+  const argv = argumentsOf(match[1]!);
   const supplied = context.args.value('root'),
     end = argv.indexOf('--'),
     own = (index: number): boolean =>
@@ -380,8 +378,32 @@ export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | '
   );
 }
 
-const ARGUMENT = /"(?:[^"\\]|\\.)*"|[^\s"]+/g;
 const QUOTED = /"(ia(?: (?:"(?:[^"\\]|\\.)*"|[^\s"]+))*)"/;
+/**
+ * The arguments of a next command's body, its `"…"` JSON strings decoded and its bare `[^\s"]+` tokens as written, in
+ * one pass. QUOTED matched the body, so every quoted token closes. A global regex would retry its quoted branch at every
+ * quote, which is quadratic on a value full of `\"` (CodeQL js/polynomial-redos).
+ */
+function argumentsOf(body: string): string[] {
+  const argv: string[] = [];
+  let at = 0;
+  while (at < body.length) {
+    if (/\s/.test(body[at]!)) {
+      at += 1;
+    } else if (body[at] === '"') {
+      let end = at + 1;
+      while (end < body.length && body[end] !== '"') end += body[end] === '\\' ? 2 : 1;
+      argv.push(JSON.parse(body.slice(at, end + 1)) as string);
+      at = end + 1;
+    } else {
+      let end = at;
+      while (end < body.length && body[end] !== '"' && !/\s/.test(body[end]!)) end += 1;
+      argv.push(body.slice(at, end));
+      at = end;
+    }
+  }
+  return argv;
+}
 /**
  * Design row 27 under the profile: the next action a gated command printed, a refusal's or (review C2-N11) its own after
  * a success, judged by the profile that let the command run. A next command of a gated mode the profile refuses (its
@@ -394,9 +416,7 @@ export function judgedNext(next: string, gate: Gate | undefined): string {
   if (state === undefined) return next;
   const match = QUOTED.exec(next);
   if (match === null) return next;
-  const argv = [...match[1]!.matchAll(ARGUMENT)].map((token) =>
-    token[0].startsWith('"') ? (JSON.parse(token[0]) as string) : token[0],
-  );
+  const argv = argumentsOf(match[1]!);
   const verb = argv[1] ?? '',
     mode = verb === 'host' ? hostMode(argv) : GATED_MODES[verb];
   if (mode === undefined) return next;

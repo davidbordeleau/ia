@@ -9,7 +9,6 @@ import {
   readFileSync,
   realpathSync,
   type BigIntStats,
-  type Stats,
 } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { evaluateMandateGuard, evaluateSteward, isEntry, mandateGuardSelects, openDatabase } from '@inventarch/runtime';
@@ -159,6 +158,57 @@ function legacySteward(target: string): boolean {
     closeSync(fd);
   }
 }
+/**
+ * The bytes of the ownership state at the absolute `path`, or undefined when there is none. A state must be a plain,
+ * unaliased, single-link file within 1 MiB. It is opened before it is judged, so the checks and the read are of one
+ * file (CodeQL js/file-system-race), and it must still be that file after the read. Anything else throws `unsafe`, and
+ * the caller fails closed.
+ */
+function readState(path: string, unsafe: string): Buffer | undefined {
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+  try {
+    const stat = fstatSync(fd, { bigint: true }),
+      limit = 1024 * 1024;
+    const same = (value: BigIntStats): boolean =>
+      value.isFile() &&
+      value.nlink === 1n &&
+      value.dev === stat.dev &&
+      value.ino === stat.ino &&
+      value.size === stat.size &&
+      value.mtimeNs === stat.mtimeNs &&
+      value.ctimeNs === stat.ctimeNs;
+    if (
+      !same(stat) ||
+      stat.size > BigInt(limit) ||
+      !same(lstatSync(path, { bigint: true })) ||
+      !unaliased(path, physical(path))
+    )
+      throw new Error(unsafe);
+    const content = Buffer.alloc(limit + 1);
+    let size = 0;
+    for (;;) {
+      const count = readSync(fd, content, size, content.length - size, null);
+      size += count;
+      if (count === 0 || size === content.length) break;
+    }
+    if (
+      size > limit ||
+      BigInt(size) !== stat.size ||
+      !same(fstatSync(fd, { bigint: true })) ||
+      !same(lstatSync(path, { bigint: true }))
+    )
+      throw new Error(unsafe);
+    return content.subarray(0, size);
+  } finally {
+    closeSync(fd);
+  }
+}
 
 /**
  * `ownership` is undefined in a legacy workspace (no projection state) and is read only when a candidate path needs it;
@@ -228,18 +278,8 @@ function projectionOwnership(root: string): Ownership | undefined {
   const files = new Set<string>();
   let found = false;
   for (const host of ['claude', 'codex'] as const) {
-    const path = resolve(directory, `${host}-projection.json`);
-    let stat: Stats;
-    try {
-      stat = lstatSync(path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-      throw error;
-    }
-    if (!stat.isFile() || stat.nlink !== 1 || stat.size > 1024 * 1024 || !unaliased(path, physical(path)))
-      throw new Error('Unsafe projection ownership state');
-    const content = readFileSync(path);
-    if (content.length > 1024 * 1024) throw new Error('Projection ownership state exceeds its bound');
+    const content = readState(resolve(directory, `${host}-projection.json`), 'Unsafe projection ownership state');
+    if (content === undefined) continue;
     const row: unknown = decodeDistributionJson(new TextDecoder('utf-8', { fatal: true }).decode(content));
     if (
       !object(row) ||
@@ -283,13 +323,12 @@ function registeredSelection(root: string, hook: string): readonly string[] | un
   if (directory === undefined) return undefined;
   for (const name of readdirSync(directory).sort()) {
     if (!/^claude-hooks-[a-z][a-z0-9-]{0,63}\.json$/.test(name)) continue;
-    const path = resolve(directory, name);
     let row: unknown;
     try {
-      const stat = lstatSync(path);
-      if (!stat.isFile() || stat.nlink !== 1 || stat.size > 1024 * 1024 || !unaliased(path, physical(path)))
-        throw new Error('Unsafe hook ownership state');
-      row = decodeDistributionJson(new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path)));
+      // A state the listing named that is gone by the read refuses, as one that changed does.
+      const content = readState(resolve(directory, name), 'Unsafe hook ownership state');
+      if (content === undefined) throw new Error('Hook ownership state disappeared while read');
+      row = decodeDistributionJson(new TextDecoder('utf-8', { fatal: true }).decode(content));
       if (!object(row) || row['format'] !== 'ia.hook-registration-state.v1' || !Array.isArray(row['groups']))
         throw new Error('Invalid hook ownership state');
     } catch (error) {

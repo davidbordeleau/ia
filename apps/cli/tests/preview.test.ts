@@ -749,6 +749,13 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
     expect(nextArgv(nextOf('ia preview task m-1 --actor ~x --root C:/ws'))).toEqual(FALLBACK);
     // The invocation's own --root value is repeated as every command repeats it.
     expect(nextOf('ia preview task m-1 --root C:/ws')).toBe('Run "ia preview task m-1 --root C:/ws" again.');
+    // A quoted value full of `\"` is split in one pass (CodeQL js/polynomial-redos): a quote is shell syntax, so it falls
+    // back, and a long one costs no more than a short one.
+    const quotes = (count: number): string => `ia preview task ${JSON.stringify('"'.repeat(count))} --root C:/ws`;
+    expect(nextArgv(nextOf(quotes(3)))).toEqual(FALLBACK);
+    const started = performance.now();
+    expect(nextArgv(nextOf(quotes(200_000)))).toEqual(FALLBACK);
+    expect(performance.now() - started).toBeLessThan(2_000);
   });
   it('escapes terminal controls from caller input in human refusals', async () => {
     const root = workspace();

@@ -1,4 +1,16 @@
-import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, utimesSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  unlinkSync,
+  utimesSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 import type { Node } from '@inventarch/graph';
 import type { CheckBinding } from './checks.js';
@@ -202,8 +214,21 @@ export function readEvidence(root: string, path: string): string | null {
   if (!plain(root)) return null;
   try {
     const target = entryAt(root, path);
-    if (target === undefined || lstatSync(target).nlink !== 1) return null;
-    return readFileSync(target, 'utf8');
+    if (target === undefined) return null;
+    // Open before judging the link count, so the check and the read are of one file (CodeQL js/file-system-race), and
+    // read nothing whose name moved to another file meanwhile.
+    const fd = openSync(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    try {
+      const opened = fstatSync(fd, { bigint: true });
+      if (!opened.isFile() || opened.nlink !== 1n) return null;
+      const text = readFileSync(fd, 'utf8'),
+        named = lstatSync(target, { bigint: true, throwIfNoEntry: false });
+      return named?.isFile() && named.nlink === 1n && named.dev === opened.dev && named.ino === opened.ino
+        ? text
+        : null;
+    } finally {
+      closeSync(fd);
+    }
   } catch (error) {
     if (unsafe(error)) return null;
     throw error;

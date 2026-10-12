@@ -2600,7 +2600,7 @@
     },
     {
       "path": "apps/cli/tests/distribution-verbs.test.ts",
-      "sha256": "a993d82d4e502917a2f8ad4c24050aab1935f94512e9d9579c0aa6b015efd4c4"
+      "sha256": "d211cecb38d5f9c65bb2b0503cdbc91a98759253739912cf250f7c2f125828e2"
     },
     {
       "path": "apps/cli/tests/equivalence.test.ts",
@@ -2616,7 +2616,7 @@
     },
     {
       "path": "apps/cli/tests/fixtures/composition-workspace/.ia/release.json",
-      "sha256": "fa66bdbfe7a02fc7d1f38153ae44ebd745f92c97b3d36b9c788281443515852e"
+      "sha256": "d70ad340300ef5fb85c2d558a1f0d84ced55f0371bf25199ade76f5289784290"
     },
     {
       "path": "apps/cli/tests/fixtures/composition-workspace/.ia/src/composition.ia",
@@ -2696,11 +2696,11 @@
     },
     {
       "path": "apps/cli/tests/init.test.ts",
-      "sha256": "37d8b959eb7888acbf4e2cbfcbee8feb608534531708ad289ea956da17814b13"
+      "sha256": "d8481b2fe0e295edaec78088126aae729cbb7df225f2000c0e137ca316b98f0c"
     },
     {
       "path": "apps/cli/tests/next.test.ts",
-      "sha256": "96c5138108154733ed1078b8662fbed79f03ecc2796bd01f44868609be962170"
+      "sha256": "a19795455d2a563d8962e7852cb5ce9d199e29813414da68dbbca9eaeeca7725"
     },
     {
       "path": "apps/cli/tests/position.test.ts",
@@ -2724,7 +2724,7 @@
     },
     {
       "path": "apps/cli/tests/read.test.ts",
-      "sha256": "392510bb36792c0705fecd556daa3570421849d28574cf684e59b2eb20020180"
+      "sha256": "57fcaff6cb911a39230041cfeb2e99eaebb6e96fd4c45c560ec8ffcd8a921c36"
     },
     {
       "path": "apps/cli/tests/refusal-next.test.ts",
@@ -7396,7 +7396,7 @@
     },
     {
       "path": "packages/workspace-runtime/tests/bind.test.ts",
-      "sha256": "9ce22bfdc624e6f38b8796bfa171815bdde749a4394f57facd12921723e5e6dc"
+      "sha256": "c7840bb15d4eb549654cc24d9434dedbd4697016f342331c1167a75e0c59868c"
     },
     {
       "path": "packages/workspace-runtime/tests/boundary.test.ts",
@@ -7404,11 +7404,11 @@
     },
     {
       "path": "packages/workspace-runtime/tests/generate-agent-profile.test.ts",
-      "sha256": "b1f5b899b8155b532c9d8c440d69f7133bc7e72748ce0e569c19a72bd55c7cb4"
+      "sha256": "30fa05b5aeff4e338c0949d608c7e113842b94b737e38c5e75422be02ef3626b"
     },
     {
       "path": "packages/workspace-runtime/tests/generate-playbook.test.ts",
-      "sha256": "40bd3b468162ba75abd02f99c39ba365e8164001a1c938b617434487f7e40944"
+      "sha256": "02ed13a80b40eb9623c88e5257fd2d5945f0081485ba564e987647b1bfcfaeb7"
     },
     {
       "path": "packages/workspace-runtime/tests/installed-catalog.test.ts",
@@ -7593,6 +7593,10 @@
     {
       "path": "releases/pending/public-architecture-boundaries.json",
       "sha256": "17763b2c1d05cc7f60acf994fe7728f6acd6638d6d6657085165846c1a741970"
+    },
+    {
+      "path": "releases/pending/qualify-separated-public-examples.json",
+      "sha256": "f3dcc8b42526d9418584df20ac814d7d25971cc964d254fce2de025aa17c3ce4"
     },
     {
       "path": "releases/pending/repository-native-ownership.json",
@@ -8401,10 +8405,10 @@
   ],
   "publicRefresh": {
     "format": "ia.public-input-refresh.v1",
-    "baseCommit": "0254149fc59bc81475533c1a0b548f5ab2a9eee5",
-    "baseTree": "fda138b1a76a127160cccbec1efbd58b151f482d",
+    "baseCommit": "d00d398833eaa5b318ad7e8b7c7695478d5feb19",
+    "baseTree": "d624b1d71675a1aa69f170163c53d5a3840ba02b",
     "dirty": true,
-    "inputDigest": "f2435304da38de7a6564f13d38a9f863ba7d8a622d0b6046c42a852476405752",
+    "inputDigest": "daa208413e1715e8e0ead4e1880428fc5242d20909e10ee46895aaab2b63a50e",
     "npm": {
       ".ia/src/systems/agent-composition-system/package.json": "2.0.0",
       ".ia/src/systems/agent-system/package.json": "2.0.0",

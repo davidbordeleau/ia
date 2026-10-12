@@ -1928,7 +1928,7 @@
     },
     {
       "path": ".ia/src/systems/authoring-system/tests/drafts.test.ts",
-      "sha256": "d059b93bb96a112b64029968d2c6009cbfcd0498a483fda4becc3bfbe6456e3f"
+      "sha256": "64595a3ad461509080b3157c74758c89ea2ef367579c15cfe8c241cf5f5cc908"
     },
     {
       "path": ".ia/src/systems/authoring-system/tsconfig.json",
@@ -2992,7 +2992,7 @@
     },
     {
       "path": "apps/distribution/tests/authoring-assets.test.ts",
-      "sha256": "f7a3b1148df003fca59c0e310c9447eb11adaca4701463d81965d02be780c3ca"
+      "sha256": "d86fe5dc780e0fe2dd9396b1bd70f29ef218ef67c8cc011e353e7275c0f5e8c7"
     },
     {
       "path": "apps/distribution/tests/authoring-consumers.test.ts",
@@ -3012,7 +3012,7 @@
     },
     {
       "path": "apps/distribution/tests/dependent-authoring.test.ts",
-      "sha256": "3bf9077436faa21a7c5290ebb25025ee623868a86ef4d822adcec695a604fe7c"
+      "sha256": "c4c2195154a773411475f7b5527258bef65721f03b958e83efd99f19eea3056a"
     },
     {
       "path": "apps/distribution/tests/guard-registration.test.ts",
@@ -3108,7 +3108,7 @@
     },
     {
       "path": "apps/distribution/tests/registry-selected.test.ts",
-      "sha256": "11189234dc2cd7f5270849a2721c45771a2734352ccc49d8be0c2d3ef1313d0d"
+      "sha256": "4ddd1bcaa4c7e89abc2bb8398ce06d79589fd4352cac7e90dd048c05d35d9e19"
     },
     {
       "path": "apps/distribution/tests/registry-source.test.ts",
@@ -3120,7 +3120,7 @@
     },
     {
       "path": "apps/distribution/tests/selected-cache.test.ts",
-      "sha256": "e44189a03fd0a1eb6b49d423485a3b1803e0e1fc3fb78dacbe5764d9e80f4def"
+      "sha256": "d82d2b7f08f63ca39656972a73dd3c863562d7e66b72bb007c30e813c6feffc1"
     },
     {
       "path": "apps/distribution/tests/services.test.ts",
@@ -6216,7 +6216,7 @@
     },
     {
       "path": "packages/db/tests/seat.test.ts",
-      "sha256": "73150dbed3edb8913c4593b08d61b88a0c7f29e7ad4135380632864178f593c9"
+      "sha256": "d8460204e17229f40cb8e2931b39d1ca6336d1229c5d2daa4370160aed519002"
     },
     {
       "path": "packages/db/tests/view.test.ts",
@@ -6808,7 +6808,7 @@
     },
     {
       "path": "packages/runtime/src/authoring-execution/inventory.ts",
-      "sha256": "12154ed0b96c94895e43ac260ca05ef46012580b79b67ce3f3c19c4208a6d7e7"
+      "sha256": "cd9b03b0b6b70228a6db9d6a1a07e2d3d94503bc108fb534c18a32562ecea386"
     },
     {
       "path": "packages/runtime/src/authoring-execution/shared.ts",
@@ -7595,6 +7595,10 @@
       "sha256": "17763b2c1d05cc7f60acf994fe7728f6acd6638d6d6657085165846c1a741970"
     },
     {
+      "path": "releases/pending/repository-native-ownership.json",
+      "sha256": "d1d9036d8bb1f7e1fdece856f26acc0145050f0b5c8dcb18d972df0a8a93809a"
+    },
+    {
       "path": "releases/pending/retained-release-control-validation.json",
       "sha256": "d707fd8577d40d917894fa0466a3469f71ace5e47b23fe81a8f89da377efda13"
     },
@@ -7760,7 +7764,7 @@
     },
     {
       "path": "tools/distribution/release-fixtures.ts",
-      "sha256": "b11fef738594901ced9cc51a958ea1b06533d3f1313710ab98f3375ecfc7ccb1"
+      "sha256": "4499a2c87ac03f77aa2167efce5405a8dc92d7bf743d4b535f61ce9e05094833"
     },
     {
       "path": "tools/distribution/release-graph.d.mts",
@@ -7836,7 +7840,7 @@
     },
     {
       "path": "tools/docs/audit.test.ts",
-      "sha256": "0373cdd81869c3479bc030fa6fe5851b11fd8a07fcbb3a93ae17ef4b619d3a95"
+      "sha256": "884d736f6ed450f950ca585f38d8ad515278619ebda2fbc048859011d76f7e99"
     },
     {
       "path": "tools/docs/audit.ts",
@@ -8316,7 +8320,7 @@
     },
     {
       "path": "tools/testing/inventory.test.ts",
-      "sha256": "b7e4b3afc364157bad7b22b1b2e5a679d7385cadadb5e5275bb0602c5012226a"
+      "sha256": "12ed45aae859f6ebe5c14fcd9c5ae79fcd9020093f9f773d6afcc368369b560a"
     },
     {
       "path": "tools/testing/inventory.ts",
@@ -8397,10 +8401,10 @@
   ],
   "publicRefresh": {
     "format": "ia.public-input-refresh.v1",
-    "baseCommit": "7f1d7dce3cb92d3ad2bc07555319233010e45562",
-    "baseTree": "05f4d5c46ac9d69f389ccb17db7bbda16bf293dd",
+    "baseCommit": "0254149fc59bc81475533c1a0b548f5ab2a9eee5",
+    "baseTree": "fda138b1a76a127160cccbec1efbd58b151f482d",
     "dirty": true,
-    "inputDigest": "5bd3521448f54e572ae34e3570e9f5903077219fba2639e8d771c5babad60772",
+    "inputDigest": "f2435304da38de7a6564f13d38a9f863ba7d8a622d0b6046c42a852476405752",
     "npm": {
       ".ia/src/systems/agent-composition-system/package.json": "2.0.0",
       ".ia/src/systems/agent-system/package.json": "2.0.0",

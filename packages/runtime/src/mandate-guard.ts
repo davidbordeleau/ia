@@ -32,8 +32,8 @@ import { freeze } from './types.js';
  *
  * Excluded words are not judged: the guard sees file bytes, not records, and `ia author` and `ia preview` enforce them.
  * Paths are matched in the G06c dialect (`selects`): `!`, `[` and every other character but `*`, `?` and `/` are
- * literal. `fold` (db `pathKey`) folds both a selection and the path where the volume folds names, for `hook.paths` and
- * `authority.covers` alike.
+ * literal. `fold` (db `pathKey`, which folds case on win32 and darwin whatever the volume) keys both a selection and
+ * the path, for `hook.paths` and `authority.covers` alike.
  */
 export interface MandateGuardRequest {
   /** The authored hook the registration names, as hook generation declares it. */
@@ -46,7 +46,7 @@ export interface MandateGuardRequest {
   readonly agentId?: unknown;
   /** The event's `agent_type`, as received. */
   readonly agentType?: unknown;
-  /** A key applied to a selection and a path before they are matched, for a volume that folds names. */
+  /** A key applied to a selection and a path before they are matched: db `pathKey`, folding case on win32 and darwin. */
   readonly fold?: (text: string) => string;
 }
 export interface MandateGuardDecision {

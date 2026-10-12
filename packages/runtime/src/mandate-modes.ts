@@ -214,10 +214,12 @@ export interface GoverningOptions {
    */
   readonly workspace?: string;
   /**
-   * A key applied to `path` and to each `authority.covers` selection before they are matched, for a volume that folds
-   * names (db `pathKey`, which the edit guard passes): a mandate then claims the path when the G06c dialect selects
-   * `fold(path)` with `fold(selection)`, so `DOCS/x.md` is under `covers ["docs/"]` where the volume opens them as one
-   * file. Absent, the claims are db's G06c claimants, matched case-sensitively as the dialect defines them.
+   * A key applied to `path` and to each `authority.covers` selection before they are matched (db `pathKey`, which the
+   * edit guard and the CLI's mandate profile pass): a mandate then claims the path when the G06c dialect selects
+   * `fold(path)` with `fold(selection)`. `pathKey` folds case on win32 and darwin whatever the volume, so there
+   * `DOCS/x.md` is under `covers ["docs/"]`, and on a case-sensitive directory a sibling spelled in another case is
+   * claimed too; on other platforms case is significant. Absent, the claims are db's G06c claimants, matched
+   * case-sensitively as the dialect defines them.
    */
   readonly fold?: (text: string) => string;
 }

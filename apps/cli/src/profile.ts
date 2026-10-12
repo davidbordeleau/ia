@@ -160,9 +160,9 @@ export function requireProfile(request: ProfileRequest): Profile {
     workspace = repositoryWorkspace(reader, within);
   // The CLI's one call of governingMandates (review C-RC1): the profile, the gate state and every next command it judges
   // read the mandates through it, so an option the runtime adds is passed here once. `fold` is db's `pathKey`, as the
-  // edit guard passes it: a `covers` selection claims the target path as the volume opens it, so a directory not made
-  // yet and typed in another case, or a selection spelled in another case than the directory on disk, is still claimed
-  // where the volume folds names.
+  // edit guard passes it, which folds case on win32 and darwin whatever the volume: there a `covers` selection claims
+  // the target path in any letter case, a directory not made yet and a selection cased otherwise than the directory on
+  // disk included; on other platforms case is significant.
   const governing = (actor: string | undefined, path: string | undefined): readonly GoverningMandate[] =>
     governingMandates(reader, within, {
       ...(actor === undefined ? {} : { actor }),

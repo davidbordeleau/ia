@@ -1,6 +1,6 @@
 import semver from 'semver';
 import type { CompiledChild, CompiledRecord } from '@inventarch/language';
-import { types } from 'node:util';
+import { isProxy } from 'node:util/types';
 import { attempt, deepFreeze, digestOf, parseResource, refuse, refuseEnvelope, snapshot } from './codec.js';
 import type { DecodedResource, DescriptorKind, DescriptorResult, Scope } from './codec.js';
 
@@ -97,7 +97,7 @@ const RESOURCE_KEY = /^[a-z0-9][a-z0-9._-]{0,63}(?:\/[a-z0-9][a-z0-9._-]{0,63}){
  * resource values are then snapshotted as plain data, so no getter or proxy can change what later checks see.
  */
 export function readInput(input: unknown, keys: readonly string[]): Readonly<Record<string, unknown>> {
-  if (input === null || typeof input !== 'object' || Array.isArray(input) || types.isProxy(input))
+  if (input === null || typeof input !== 'object' || Array.isArray(input) || isProxy(input))
     refuseEnvelope('DESC-ENVELOPE-INVALID', '', 'Compiler input must be a plain object');
   const prototype = Object.getPrototypeOf(input);
   if (prototype !== Object.prototype && prototype !== null)

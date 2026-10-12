@@ -818,3 +818,23 @@ it('updates a group in place when its cache changes, ignores a change of tools, 
   applyHookRegistration(planHookRegistration(root, { cache: second, hooks: [row('b')] }));
   expect(groups()).toEqual([unrelated, unrelated, hookGroup(join(second, 'scripts/ia.mjs'), root, row('b'))]);
 });
+
+it('with disableAllHooks on, keeps and removes owned groups but refuses to create or update one (A-F1)', () => {
+  const root = temp(),
+    first = cacheV2(),
+    second = cacheV2(),
+    other = (name: string) => `hook-authoring-system/binding/hook/${name}`,
+    row = (name: string): HookRow => ({ identity: other(name), tools: ['Write'], paths: ['docs/**'] });
+  applyHookRegistration(planHookRegistration(root, { cache: first, hooks: [row('a'), row('b')] }));
+  put(root, '.claude/settings.json', json({ disableAllHooks: true }));
+  // The same groups re-planned, and one of them removed, write no group: both proceed.
+  expect(planHookRegistration(root, { cache: first, hooks: [row('a'), row('b')] }).hooks).toEqual([
+    { hook: other('a'), action: 'unchanged' },
+    { hook: other('b'), action: 'unchanged' },
+  ]);
+  applyHookRegistration(planHookRegistration(root, { cache: first, hooks: [row('a')] }));
+  expect(readHookRegistration(root)?.groups.map((group) => group.hook)).toEqual([other('a')]);
+  // A new group, or an owned one rewritten for another payload, would be written: refused.
+  expect(() => planHookRegistration(root, { cache: first, hooks: [row('a'), row('c')] })).toThrow(/disableAllHooks/);
+  expect(() => planHookRegistration(root, { cache: second, hooks: [row('a')] })).toThrow(/disableAllHooks/);
+});

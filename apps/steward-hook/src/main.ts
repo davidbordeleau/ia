@@ -283,13 +283,19 @@ function registeredSelection(root: string, hook: string): readonly string[] | un
   if (directory === undefined) return undefined;
   for (const name of readdirSync(directory).sort()) {
     if (!/^claude-hooks-[a-z][a-z0-9-]{0,63}\.json$/.test(name)) continue;
-    const path = resolve(directory, name),
-      stat = lstatSync(path);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.size > 1024 * 1024 || !unaliased(path, physical(path)))
-      throw new Error('Unsafe hook ownership state');
-    const row: unknown = decodeDistributionJson(new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path)));
-    if (!object(row) || row['format'] !== 'ia.hook-registration-state.v1' || !Array.isArray(row['groups']))
-      throw new Error('Invalid hook ownership state');
+    const path = resolve(directory, name);
+    let row: unknown;
+    try {
+      const stat = lstatSync(path);
+      if (!stat.isFile() || stat.nlink !== 1 || stat.size > 1024 * 1024 || !unaliased(path, physical(path)))
+        throw new Error('Unsafe hook ownership state');
+      row = decodeDistributionJson(new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path)));
+      if (!object(row) || row['format'] !== 'ia.hook-registration-state.v1' || !Array.isArray(row['groups']))
+        throw new Error('Invalid hook ownership state');
+    } catch (error) {
+      // The state file that could not be read, root-relative, so a refusal can name its repair (review finding A-F3).
+      throw new UnreadableHookState(`.ia/distributions/hosts/${name}`, error);
+    }
     for (const group of row['groups'] as unknown[])
       if (
         object(group) &&
@@ -301,6 +307,15 @@ function registeredSelection(root: string, hook: string): readonly string[] | un
         return group['paths'] as string[];
   }
   return undefined;
+}
+/** A hook ownership state the guard could not read, by its root-relative path. */
+class UnreadableHookState extends Error {
+  constructor(
+    readonly path: string,
+    cause: unknown,
+  ) {
+    super(`${path} cannot be read: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
 }
 /** A bounded ownership-marker check, not registration validation or a grant of host authority. */
 interface GuardControls {
@@ -816,11 +831,13 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
   // recorded (guard review finding G-N4, review finding H-R8): edits elsewhere, the repair among them unless that
   // selection holds it, proceed. With no recorded selection, every edit under the root is refused.
   const unavailable = (code: HookCode, why: string, admits: boolean): HookOutput => {
-    let selection: readonly string[] | undefined;
+    let selection: readonly string[] | undefined, unreadable: string | undefined;
     try {
       selection = registeredSelection(edit.base, hook);
-    } catch {
+    } catch (error) {
       selection = undefined;
+      unreadable =
+        error instanceof UnreadableHookState ? error.path : '.ia/distributions/hosts/claude-hooks-workspace.json';
     }
     if (
       selection !== undefined &&
@@ -832,6 +849,13 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
       })
     )
       return {};
+    // An unreadable state is one the removal refuses too: its repair, from a shell, is deleting the state and the groups
+    // it owns, which restores editing; the removal then takes the rest of the registration (review finding A-F3).
+    if (unreadable !== undefined)
+      return deny(
+        code,
+        `${why}; the hook ownership state ${unreadable} cannot be read, so every edit under the root is refused; from a shell, delete ${unreadable} and every IA hook group in .claude/settings.local.json (each runs the guard for one authored @hook) to restore editing, then run "ia host claude --root ${JSON.stringify(edit.base)} --remove --apply --yes" to remove the rest of the registration`,
+      );
     return deny(
       code,
       `${why}; ${selection === undefined ? 'no registered selection is recorded, so every edit under the root is refused' : 'this edit is under its last registered selection'}; ${recovery(edit.base, admits)}`,

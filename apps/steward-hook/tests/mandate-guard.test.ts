@@ -527,9 +527,15 @@ it('refuses no more than the last registered selection of a hook whose record is
     expect(reason(refused)).toContain('this edit is under its last registered selection');
     for (const command of commands) expect(reason(refused)).toContain(command);
   }
-  // An unreadable state is no selection: refused under the root again.
+  // An unreadable state is no selection: refused under the root again, naming the state repair the removal itself
+  // would need, then the removal (A-F3).
   put(root, '.ia/distributions/hosts/claude-hooks-workspace.json', '{ not json');
-  expect(code(check(root, 'src/app.ts'))).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  const unreadable = check(root, 'src/app.ts');
+  expect(code(unreadable)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  expect(reason(unreadable)).toContain(
+    'the hook ownership state .ia/distributions/hosts/claude-hooks-workspace.json cannot be read, so every edit under the root is refused; from a shell, delete .ia/distributions/hosts/claude-hooks-workspace.json and every IA hook group in .claude/settings.local.json',
+  );
+  expect(reason(unreadable)).toContain(`"ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`);
 });
 
 it('refuses a file with more than one link, whose other name a hook may select, and protects the launcher a registration runs (G-N3, G-N5)', () => {

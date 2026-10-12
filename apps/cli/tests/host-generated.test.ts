@@ -971,3 +971,98 @@ it('converges after a generated-set rename apply interrupted at any of its check
     expect((await doctor(root, env)).checks, stage).toContainEqual(noDrift());
   }
 });
+
+it('refuses a generated skill at a populated folder it does not own, naming the files to move, and the next works (A-F2)', async () => {
+  // A folder the user holds under the skill's own name, and, where the volume folds names, under a case variant of it.
+  const folds = process.platform === 'win32' || process.platform === 'darwin';
+  for (const folder of ['.claude/skills/note-review', '.claude/skills/Note-Review']) {
+    const { root, env } = await composed();
+    put(root, `${folder}/reference.md`, 'my own skill notes\n');
+    const result = await host(root, env, 'claude', '--apply', '--yes');
+    if (folder !== '.claude/skills/note-review' && !folds) {
+      // A case variant is another folder where names do not fold: nothing collides.
+      expect(result.exitCode, result.stdout).toBe(0);
+      continue;
+    }
+    expect(result.exitCode, result.stdout).toBe(3);
+    const body = JSON.parse(result.stdout) as { code: string; where: { path: string }; next: string };
+    expect(body.code).toBe('IA-DIST-LOCAL-MODIFICATION');
+    expect(body.where.path).toBe('.claude/skills/note-review');
+    expect(body.next).toBe(
+      `Move the files out of .claude/skills/note-review, or rename the @playbook that renders it, then run "ia host claude --root ${quote(root)} --apply".`,
+    );
+    // The plans print the conflict as code, path and reason only (A-F4).
+    const conflict = {
+      code: 'IA-DIST-LOCAL-MODIFICATION',
+      path: '.claude/skills/note-review',
+      reason: expect.stringContaining('a folder this projection does not own that already holds files'),
+    };
+    const element = projection((await host(root, env, 'claude')).stdout) as unknown as { conflict: object };
+    expect(element.conflict).toMatchObject(conflict);
+    expect(Object.keys(element.conflict).sort()).toEqual(['code', 'path', 'reason']);
+    const planned = JSON.parse((await run(['project', 'claude', '--root', root, '--json'], { env })).stdout) as {
+      plan: { conflict: object };
+    };
+    expect(Object.keys(planned.plan.conflict).sort()).toEqual(['code', 'path', 'reason']);
+    expect(planned.plan.conflict).toMatchObject(conflict);
+    // ia project names the same files to move.
+    const project = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+    expect(JSON.parse(project.stdout).next).toBe(
+      `Move the files out of .claude/skills/note-review, or rename the @playbook that renders it, then run "ia project claude --root ${quote(root)}".`,
+    );
+    // Follow it: the files go elsewhere, and the rerun it names writes the skill.
+    const moved = resolve(root, '..', `kept-${folder.endsWith('Review') ? 'variant' : 'lower'}.md`);
+    writeFileSync(moved, read(root, '.claude/skills/note-review/reference.md'));
+    rmSync(resolve(root, '.claude/skills/note-review/reference.md'));
+    await follow(body.next, env);
+    expect(read(root, SKILL).split('\n')).toContain(PACKET_MARKER);
+  }
+});
+
+it('keeps an owned group as registered while disableAllHooks is on, and still removes an obsolete one (A-F1)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  const owned = hookGroups(root).get(HOOK)!;
+  put(root, '.claude/settings.json', `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
+  // The hook still declared keeps its group: listed as registered, never also as not taken.
+  const kept = projection((await apply(root, env)).stdout);
+  expect(kept.hooks).toEqual([]);
+  expect(kept.unsupported).toEqual([]);
+  expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([HOOK]);
+  expect(receipt(root).unsupported).toEqual([]);
+  // Renamed: the obsolete group goes now, and the new hook, which has no group, is reported naming the file.
+  edit(root, '.ia/src/hooks.ia', ['note-edits', 'doc-edits']);
+  const renamed = projection((await apply(root, env)).stdout);
+  expect(renamed.hooks).toEqual([{ hook: HOOK, action: 'remove' }]);
+  expect(renamed.unsupported).toEqual([
+    {
+      identity: RENAMED,
+      word: 'hook',
+      reason: 'Not registered: hooks are disabled by disableAllHooks in .claude/settings.json',
+    },
+  ]);
+  expect(existsSync(resolve(root, SETTINGS)) ? hookGroups(root).size : 0).toBe(0);
+  expect(receipt(root)).toMatchObject({
+    hooks: [],
+    removedHooks: [{ identity: HOOK, sha256: hookGroupDigest(owned) }],
+  });
+});
+
+it('names the state repair when the hook ownership state cannot be read and the hook record is broken, and it works (A-F3)', async () => {
+  const { root, env } = await composed();
+  await apply(root, env);
+  const group = hookGroups(root).get(HOOK);
+  writeFileSync(resolve(root, HOOK_STATE), '{ not json');
+  edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
+  const refused = await guarded(root, group, 'src/app.ts');
+  expect(codeOf(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  expect(refused).toContain(
+    `from a shell, delete ${HOOK_STATE} and every IA hook group in ${SETTINGS} (each runs the guard for one authored @hook) to restore editing, then run "ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`,
+  );
+  // Follow it: the state and the groups go, which restores editing, and the removal it names then succeeds.
+  rmSync(resolve(root, HOOK_STATE));
+  withoutHookGroups(root);
+  const removed = await host(root, env, 'claude', '--remove', '--apply', '--yes');
+  expect(removed.exitCode, removed.stdout).toBe(0);
+  expect(existsSync(resolve(root, SETTINGS)) ? hookGroups(root).size : 0).toBe(0);
+});

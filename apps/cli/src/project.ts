@@ -42,6 +42,8 @@ import {
   requireIdle,
   requireInitialized,
   rootedNext,
+  folderRepair,
+  printedConflict,
   hookRepair,
   STATE,
   unsupportedRows,
@@ -92,6 +94,7 @@ const conflictNext = (view: ProjectView, conflict: Conflict): string => {
     return view.given === undefined
       ? hookRepair(conflict.hook)
       : rootedNext(hookRepair(conflict.hook), view.host, view.given);
+  if (conflict.folder !== undefined) return folderRepair(conflict.folder, view.invocation);
   return projectionRepair(view.host, conflict.path, view.invocation, conflict.code);
 };
 const conflictRefusal = (view: ProjectView, conflict: Conflict): Refusal =>
@@ -173,7 +176,7 @@ export const projectEnvelope = (view: ProjectView, applied: PacketReceipt | null
     guard: view.projection.guard ?? null,
     hooks: view.projection.hooks ?? [],
     unsupported: view.projection.unsupported ?? [],
-    conflict: view.projection.conflict,
+    conflict: printedConflict(view.projection.conflict),
   },
   ...(applied === null ? {} : { applied }),
 });

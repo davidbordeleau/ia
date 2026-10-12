@@ -670,7 +670,8 @@ it('refuses to write a generated skill into a folder it does not own that holds 
   put(root, '.claude/skills/note-review/reference.md', 'my own skill notes\n');
   expect(where(() => planProjection({ root, host: 'claude', artifacts: generated(), marker: MARK }))).toMatchObject({
     code: 'IA-DIST-LOCAL-MODIFICATION',
-    path: SKILL,
+    path: '.claude/skills/note-review',
+    skillFolder: '.claude/skills/note-review',
     message: expect.stringContaining('a folder this projection does not own that already holds files'),
   });
   expect(read(root, '.claude/skills/note-review/reference.md')).toBe('my own skill notes\n');

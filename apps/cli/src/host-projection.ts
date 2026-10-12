@@ -199,15 +199,31 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
   // Hooks turned off by disableAllHooks: no group is registered, each declared hook is reported, and every other part of
   // the host applies as it does without hooks (review finding H-N12). Groups already owned stay as they are.
   const disabled = hooksDisabledBy(root);
-  if (disabled !== null)
-    return {
-      plan: null,
-      unregistered: rows.map((row) => ({
+  if (disabled !== null) {
+    // Review finding A-F1: a group owned for a hook still declared stays as registered, and is no unsupported row; an
+    // obsolete owned group is still removed; a hook with no group is reported, naming the file.
+    const owned = new Map((prior?.groups ?? []).map((group) => [group.hook, group.paths]));
+    const kept = rows
+      .filter((row) => owned.has(row.identity))
+      .map((row) => ({ ...row, paths: owned.get(row.identity)! }));
+    const unregistered = rows
+      .filter((row) => !owned.has(row.identity))
+      .map((row) => ({
         identity: row.identity,
         word: 'hook' as const,
         reason: `Not registered: hooks are disabled by disableAllHooks in ${disabled}`,
-      })),
-    };
+      }));
+    if (prior === null || kept.length === owned.size) return { plan: null, unregistered };
+    if (kept.length === 0) return { plan: planHookRegistration(root, { remove: HOST_REGISTRATION }), unregistered };
+    // The kept groups are re-planned as recorded, so nothing is written for them; a recorded payload that is gone leaves
+    // the obsolete group until hooks are back on.
+    try {
+      verifyHostCache(prior.cache);
+    } catch {
+      return { plan: null, unregistered };
+    }
+    return { plan: planHookRegistration(root, { cache: prior.cache, hooks: kept }), unregistered };
+  }
   if (cache !== null && 'expected' in cache)
     return { plan: planHooksFor(root, cache.expected, rows), unregistered: [] };
   const directory = cache?.verified ?? prior?.cache;

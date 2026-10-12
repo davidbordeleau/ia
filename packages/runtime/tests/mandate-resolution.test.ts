@@ -936,7 +936,7 @@ it("resolves this repository's participant as its default actor, granted all fiv
 
 it('names the consumers the code has: the CLI mandate profile and the edit guard, and no Door operation (R21)', () => {
   const read = (path: string) => readFileSync(resolve(repository, path), 'utf8');
-  const RESOLVER = /\b(?:governingMandates|defaultActor|profileRefusal)\(/;
+  const RESOLVER = /\b(?:governingMandates|defaultActor|profileRefusal|evaluateMandateGuard)\(/;
   // The edit guard calls all three; no other runtime module but the resolver's own does, so no Door operation does.
   const guard = read('packages/runtime/src/mandate-guard.ts');
   for (const name of ['governingMandates', 'defaultActor', 'profileRefusal'])
@@ -959,6 +959,7 @@ it('names the consumers the code has: the CLI mandate profile and the edit guard
   ] as const) {
     expect(text, where).not.toContain('or hook does yet');
     expect(text, where).toContain('the edit guard');
+    expect(text, where).toContain('evaluateMandateGuard');
     expect(text, where).toContain('no Door operation does');
   }
 });

@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { open } from '@inventarch/db';
+import { open, pathKey } from '@inventarch/db';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Result } from '../src/consumer.js';
 import { cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
@@ -419,7 +419,7 @@ describe('path spelling (review C-R1, C-R7)', () => {
       expect(body(await run([...next, '--json']))).toMatchObject({ code: 'IA-RUNTIME-MANDATE-WORD' });
     }
   });
-  it('matches covers as the edit guard does where the volume folds names: a missing covered directory, a covers in another case (review C-RC1)', async ({
+  it('matches covers as the edit guard does where pathKey folds case: a missing covered directory, a covers in another case, never a longer name (review C-RC1)', async ({
     skip,
   }) => {
     const FENCE = (name: string, covers: string) =>
@@ -431,9 +431,10 @@ describe('path spelling (review C-R1, C-R7)', () => {
         `#! ia 1.0\n${FENCE('future-fence', '.ia/src/future/')}${FENCE('upper-fence', '.ia/src/Restricted/')}`,
       );
     });
-    skip(!existsSync(resolve(root, '.IA/SRC')), 'a case-sensitive volume keeps each case its own directory');
-    // `.ia/src/future/` does not exist yet, so `--at` keeps its typed `Future`; the volume creates the directory the fence
-    // claims. And `.ia/src/Restricted/` claims the directory the volume spells `restricted`.
+    // db pathKey folds case on win32 and darwin whatever the volume, as the edit guard keys paths; elsewhere case counts.
+    skip(pathKey('A') === 'A', 'pathKey keeps case on this platform, so each case is its own path');
+    // `.ia/src/future/` does not exist yet, so `--at` keeps its typed `Future`, which the fence claims in any case. And
+    // `.ia/src/Restricted/` claims the directory on disk spelled `restricted`.
     expect(existsSync(resolve(root, '.ia/src/future'))).toBe(false);
     for (const [at, fence] of [
       ['.ia/src/Future/t9.ia', 'future-fence'],
@@ -459,6 +460,11 @@ describe('path spelling (review C-R1, C-R7)', () => {
       expect(body(authored), at).toMatchObject({ ok: false, code: 'IA-RUNTIME-MANDATE-WORD' });
       expect(tree(root)).toEqual(before);
     }
+    // A sibling directory whose name only begins with the covered one's is not claimed: it previews clean.
+    const sibling = await preview(root, ['task', 't9', ...FIELDS, '--at', '.ia/src/futures/t9.ia']);
+    expect(sibling.exitCode, sibling.stdout).toBe(0);
+    expect(body(sibling)).toMatchObject({ clean: true, path: '.ia/src/futures/t9.ia' });
+    expect((body(sibling)['profile'] as { mandates: string[] }).mandates).not.toContain(mandate('future-fence'));
   });
   it('names the source as the volume spells it, never the file to move aside, for another spelling of a source', async () => {
     const root = workspace();

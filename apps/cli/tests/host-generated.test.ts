@@ -1244,7 +1244,8 @@ it('words a kept group as one that still guards, and reports an unsupported auth
   expect(checks).toEqual([
     expect.objectContaining({
       status: 'warn',
-      detail: `the hook group for ${SPEC_HOOK} stays in ${SETTINGS} though no registrable hook claims it any more: it is removed once hooks are back on or the payload it was registered against is materialized again`,
+      // The apply that removes it, and generation's own reason beside it (F3, F4).
+      detail: `the hook group for ${SPEC_HOOK} stays in ${SETTINGS} though no registrable hook claims it any more: the next "ia host claude --root ${quote(root)} --apply" removes it once hooks are back on, or while they are off once it materializes the payload the group was registered against (${rows[0]!.reason.replace(`; ${HOOK_KEPT}`, '')})`,
       remedy: null,
     }),
   ]);
@@ -1269,4 +1270,60 @@ it('drops the ownership of a hand-deleted group whose hook is no longer declared
   expect(JSON.parse(read(root, HOOK_STATE)).groups.map((group: { hook: string }) => group.hook)).toEqual([HOOK]);
   expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([HOOK]);
   expect(receipt(root).unsupported).toEqual([]);
+});
+
+it('keeps the ownership of a hand-deleted obsolete group until a plan can run, and doctor names the removal (F1)', async () => {
+  // n4x's E1: hooks off, the recorded payload gone, spec-edits's record deleted and its group deleted by hand.
+  const { root, env } = await offWithoutPayload();
+  rmSync(resolve(root, '.ia/src/extra-hooks.ia'));
+  const local = settings(root);
+  local.hooks!.PreToolUse = local.hooks!.PreToolUse!.filter((group) => group.hooks[0]!.args.at(-1) !== SPEC_HOOK);
+  writeFileSync(resolve(root, SETTINGS), `${JSON.stringify(local, null, 2)}\n`);
+  const projected = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
+  expect(projected.exitCode, projected.stdout).toBe(0);
+  // Nothing could be planned: the ownership stays, the group is no kept row, and only the declared group is registered.
+  expect(JSON.parse(read(root, HOOK_STATE)).groups.map((group: { hook: string }) => group.hook)).toEqual([
+    HOOK,
+    SPEC_HOOK,
+  ]);
+  expect(receipt(root).hooks?.map((row) => row.identity)).toEqual([HOOK]);
+  expect(receipt(root).unsupported).toEqual([]);
+  // Doctor reports the group missing, naming the removal, which works whatever the payload.
+  const missing = (await doctor(root, env)).checks.find((check) => check.id === `projection-claude-hook:${SPEC_HOOK}`);
+  expect(missing).toMatchObject({ status: 'fail', remedy: `ia host claude --root ${quote(root)} --remove --apply` });
+  await follow(missing!.remedy!, env);
+  expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+});
+
+it('agrees with its apply for a home spelled in another case, and keeps the group for another payload, in both (F2)', async () => {
+  // Another letter case names the same home only where the volume folds names.
+  const folds = process.platform === 'win32' || process.platform === 'darwin';
+  if (folds) {
+    const { root, env } = await offWithoutPayload();
+    rmSync(resolve(root, '.ia/src/extra-hooks.ia'));
+    const variant = { IA_HOST_HOME: env.IA_HOST_HOME.replace(/[^\\/]+$/, (name) => name.toUpperCase()) };
+    expect(variant.IA_HOST_HOME).not.toBe(env.IA_HOST_HOME);
+    const expected = [
+      { hook: HOOK, action: 'unchanged' },
+      { hook: SPEC_HOOK, action: 'remove' },
+    ];
+    expect(projection((await host(root, variant, 'claude')).stdout).hooks).toEqual(expected);
+    expect(projection((await apply(root, variant)).stdout).hooks).toEqual(expected);
+    expect([...hookGroups(root).keys()]).toEqual([HOOK]);
+  }
+  // Another payload directory, with the recorded one gone: neither the dry run nor the apply can keep the groups as
+  // registered, so both report the obsolete group as kept and leave it and the state's cache as they are.
+  const { root, env } = await offWithoutPayload();
+  rmSync(resolve(root, '.ia/src/extra-hooks.ia'));
+  const other = { IA_HOST_HOME: resolve(env.IA_HOST_HOME, '..', 'other-home') },
+    state = read(root, HOOK_STATE),
+    groups = settings(root).hooks?.PreToolUse;
+  const kept = [{ identity: SPEC_HOOK, word: 'hook', reason: HOOK_KEPT }];
+  const preview = projection((await host(root, other, 'claude')).stdout);
+  expect([preview.hooks, preview.unsupported]).toEqual([[], kept]);
+  const applied = projection((await apply(root, other)).stdout);
+  expect([applied.hooks, applied.unsupported]).toEqual([[], kept]);
+  expect(read(root, HOOK_STATE)).toBe(state);
+  expect(settings(root).hooks?.PreToolUse).toEqual(groups);
+  expect(receipt(root).unsupported).toEqual(kept);
 });

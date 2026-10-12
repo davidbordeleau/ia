@@ -29,7 +29,8 @@ import {
   readFileSync,
   type BigIntStats,
 } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathKey } from '@inventarch/db';
 import { renderHost, renderPacket, PACKET_MARKER } from '@inventarch/runtime';
 import type {
   HookGroupRow,
@@ -244,15 +245,23 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
     if (kept.length === 0) return { plan: planHookRegistration(root, { remove: HOST_REGISTRATION }), unregistered };
     // The kept groups are re-planned as recorded, so nothing is written for them. That needs the payload they were
     // registered against: the one this apply materializes when it is that payload (review finding N1, so a plan and its
-    // apply agree), else the recorded one, which must still verify. Without it the obsolete groups stay, reported as kept
-    // rather than listed as registered; a group already deleted by hand is not kept, only still owned.
+    // apply agree), else the recorded one, which must still verify. Without it nothing is planned: the obsolete groups
+    // stay, reported as kept rather than listed as registered, and a group already deleted by hand is no kept group but
+    // stays owned until such a plan runs (review finding F1), which doctor reports as a missing group.
+    // The same directory is the same payload however its path is spelled (review finding F2: an IA_HOST_HOME in another
+    // letter case), compared as the volume compares names; the kept groups are planned against the recorded spelling, so
+    // their bytes are the ones registered and the dry run and the apply agree.
     const given = cache === null ? undefined : 'expected' in cache ? cache.expected.directory : cache.verified;
-    if (cache !== null && given === prior.cache)
+    if (cache !== null && given !== undefined && pathKey(resolve(given)) === pathKey(resolve(prior.cache)))
       return {
         plan:
           'expected' in cache
-            ? planHooksFor(root, cache.expected, kept)
-            : planHookRegistration(root, { cache: cache.verified, hooks: kept }),
+            ? planHooksFor(
+                root,
+                { ...cache.expected, directory: prior.cache, launcher: join(prior.cache, 'scripts/ia.mjs') },
+                kept,
+              )
+            : planHookRegistration(root, { cache: prior.cache, hooks: kept }),
         unregistered,
       };
     try {

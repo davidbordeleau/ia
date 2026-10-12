@@ -477,6 +477,14 @@ function hostRow(root: string, observed: HostObservation, pinned: Pinned, comman
   return installation(`host-${host}`, `Host ${host}`, 'fail', detail, commands.apply(host));
 }
 
+/** Generation's own reason beside a kept group's (review finding F3), as a trailing clause, or nothing. */
+const keptBeside = (reason: string): string => {
+  const other = reason
+    .split('; ')
+    .filter((part) => part !== HOOK_KEPT)
+    .join('; ');
+  return other === '' ? '' : ` (${other})`;
+};
 /**
  * Spec §7 and B12: the projection rows for one host that owns a projection, read from the receipt
  * `applyHostProjection` wrote. Each file it lists is compared with the disk: `missing` is what the next apply writes
@@ -606,7 +614,10 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
               `projection-${host}-hook:${row.identity}`,
               title,
               'warn',
-              `the hook group for ${row.identity} stays in ${SETTINGS} though no registrable hook claims it any more: it is removed once hooks are back on or the payload it was registered against is materialized again`,
+              commands.prose(
+                host,
+                `the hook group for ${row.identity} stays in ${SETTINGS} though no registrable hook claims it any more: the next "ia host ${host} --apply" removes it once hooks are back on, or while they are off once it materializes the payload the group was registered against${keptBeside(row.reason)}`,
+              ),
               null,
             )
           : installation(

@@ -380,6 +380,14 @@ export async function operationRow(implementation, files) {
   };
 }
 /**
+ * The file URL of a module in the repository's own distribution app, by its real path. A staged repository links its
+ * apps (junctions on Windows), and a module imported through the link would resolve its bare imports, such as
+ * `@inventarch/db`, beside the link rather than beside the real file. On the Windows CI runner it did; there the
+ * checkout and the temp directory are on different volumes.
+ */
+const distributionModule = (repository, name) =>
+  pathToFileURL(realpathSync.native(resolve(repository, 'apps/distribution/dist', name))).href;
+/**
  * The payload, its pin and its installed-implementation catalog (C16), which lists every one of `implementations` by
  * id: available with its shipped handler pins, or unavailable with the reason (C24). The catalog is generated here and
  * inventoried like every other payload file, since `verifyHostCache` refuses an uninventoried one. Its evaluators
@@ -387,12 +395,8 @@ export async function operationRow(implementation, files) {
  * requires, and no installed evaluator exists yet.
  */
 export async function generateHostPayload({ repository, write, implementations = IMPLEMENTATIONS }) {
-  const { packTree, HOST_TREE_LIMITS } = await import(
-    pathToFileURL(resolve(repository, 'apps/distribution/dist/ustar.js')).href
-  );
-  const { installedImplementationsValue } = await import(
-    pathToFileURL(resolve(repository, 'apps/distribution/dist/implementations.js')).href
-  );
+  const { packTree, HOST_TREE_LIMITS } = await import(distributionModule(repository, 'ustar.js'));
+  const { installedImplementationsValue } = await import(distributionModule(repository, 'implementations.js'));
   const { files, packages, implementations: located } = await collectPayload(repository, implementations);
   const operations = [];
   for (const implementation of [...located].sort((a, b) => (a.id < b.id ? -1 : 1)))

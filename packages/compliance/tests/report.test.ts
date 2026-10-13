@@ -10,6 +10,7 @@ import {
   EVIDENCE_CODES,
   evaluate,
   fixtureCoverage,
+  isConformanceEvidence,
   runLanguageFixture,
   verdict,
   verifyFixtures,
@@ -268,5 +269,37 @@ describe('fixture verification (C31)', () => {
     const result = runProfile(INVENTORY, INVENTORY_DIGEST, new URL('./missing/', directory));
     expect(result.assessment.outcome).toBe('not-evaluated');
     expect(result.assessment.findings.map((f) => f.code)).toEqual(['IA-COMP-NOT-EVALUATED']);
+  });
+});
+describe('conformance evidence objects (C31)', () => {
+  const kernel = verifyKernel(),
+    fixtures = verifyFixtures();
+  const frozen = (value: unknown, path = 'evidence'): string[] =>
+    typeof value !== 'object' || value === null
+      ? []
+      : [
+          ...(Object.isFrozen(value) ? [] : [path]),
+          ...Object.entries(value).flatMap(([key, item]) => frozen(item, `${path}.${key}`)),
+        ];
+  it('accepts only what verifyKernel and verifyFixtures produced, each for its own kind', () => {
+    expect(isConformanceEvidence(kernel)).toBe(true);
+    expect(isConformanceEvidence(kernel, 'COMP-KERNEL')).toBe(true);
+    expect(isConformanceEvidence(kernel, 'COMP-FIXTURES')).toBe(false);
+    expect(isConformanceEvidence(fixtures, 'COMP-FIXTURES')).toBe(true);
+    expect(isConformanceEvidence(fixtures, 'COMP-KERNEL')).toBe(false);
+  });
+  it('refuses a structured clone, a spread copy and a hand-built object', () => {
+    for (const evidence of [kernel, fixtures]) {
+      expect(isConformanceEvidence(structuredClone(evidence))).toBe(false);
+      expect(isConformanceEvidence({ ...evidence })).toBe(false);
+      expect(isConformanceEvidence(JSON.parse(JSON.stringify(evidence)))).toBe(false);
+    }
+    expect(isConformanceEvidence(null)).toBe(false);
+    expect(isConformanceEvidence('COMP-KERNEL')).toBe(false);
+  });
+  it('freezes the evidence at every depth', () => {
+    expect(frozen(kernel)).toEqual([]);
+    expect(frozen(fixtures)).toEqual([]);
+    expect(() => (fixtures.observedCodes as string[]).push('IA-COMP-INVENTED')).toThrow();
   });
 });

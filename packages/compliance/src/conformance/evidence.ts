@@ -37,6 +37,23 @@ export interface FixtureEvidence {
   readonly outOfProfile: readonly OutOfProfileSuite[];
   readonly assessment: Assessment;
 }
+export type ConformanceEvidence = KernelEvidence | FixtureEvidence;
+
+/** Evidence this module instance produced, by kind. Copies, clones and hand-built objects are never members. */
+const kernels = new WeakSet<object>(),
+  fixtureRuns = new WeakSet<object>();
+/** True only for evidence verifyKernel or verifyFixtures returned in this module instance, of `subject`'s kind if given. */
+export function isConformanceEvidence(value: unknown, subject: 'COMP-KERNEL'): value is KernelEvidence;
+export function isConformanceEvidence(value: unknown, subject: 'COMP-FIXTURES'): value is FixtureEvidence;
+export function isConformanceEvidence(value: unknown): value is ConformanceEvidence;
+export function isConformanceEvidence(value: unknown, subject?: ConformanceEvidence['subject']): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  return subject === 'COMP-KERNEL'
+    ? kernels.has(value)
+    : subject === 'COMP-FIXTURES'
+      ? fixtureRuns.has(value)
+      : kernels.has(value) || fixtureRuns.has(value);
+}
 
 let compliance: string | undefined;
 function complianceVersion(): string {
@@ -92,13 +109,15 @@ function floorOf(floor: unknown): readonly KernelSource[] {
  */
 export function verifyKernel(floor: readonly KernelSource[] = KERNEL_SOURCES): KernelEvidence {
   const sources = floorOf(floor);
-  return freeze({
-    subject: 'COMP-KERNEL' as const,
+  const evidence = freeze<KernelEvidence>({
+    subject: 'COMP-KERNEL',
     profile: CONFORMANCE_PROFILE,
     toolchain: runningToolchain(),
     floorDigest: kernelDigest(sources),
     assessment: kernelAssessment(sources),
   });
+  kernels.add(evidence);
+  return evidence;
 }
 
 /**
@@ -108,8 +127,8 @@ export function verifyKernel(floor: readonly KernelSource[] = KERNEL_SOURCES): K
  */
 export function verifyFixtures(): FixtureEvidence {
   const result = runProfile(INVENTORY, INVENTORY_DIGEST, new URL('../../fixtures/language/', import.meta.url));
-  return freeze({
-    subject: 'COMP-FIXTURES' as const,
+  const evidence = freeze<FixtureEvidence>({
+    subject: 'COMP-FIXTURES',
     profile: CONFORMANCE_PROFILE,
     toolchain: runningToolchain(),
     inventoryDigest: INVENTORY_DIGEST,
@@ -117,4 +136,6 @@ export function verifyFixtures(): FixtureEvidence {
     outOfProfile: INVENTORY.outOfProfile.map((suite) => ({ ...suite, codes: [...suite.codes] })),
     assessment: result.assessment,
   });
+  fixtureRuns.add(evidence);
+  return evidence;
 }

@@ -1,7 +1,7 @@
-import { expect, it } from 'vitest';
-import { KERNEL_DIGEST, LANGUAGE_VERSION, parse } from '@inventarch/language';
+import { describe, expect, it, vi } from 'vitest';
+import { KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION, parse } from '@inventarch/language';
 import { load, stableSerialize } from '@inventarch/graph';
-import { evaluate, fixtureCoverage, runLanguageFixture, verdict } from '../src/index.js';
+import { evaluate, fixtureCoverage, runLanguageFixture, verdict, verifyKernel } from '../src/index.js';
 import type { ReportOptions } from '../src/index.js';
 import { inputs, records, registry, sources } from './native.js';
 
@@ -104,4 +104,41 @@ it('retains only failed/unavailable admission observations and coalesces their s
   expect(report.verdicts.filter((v) => v.scope === 'refused')).toHaveLength(1);
   expect(report.findings.filter((f) => f.path === 'refused.ia')).toHaveLength(1);
   expect(report.verdicts.some((v) => v.scope === 'candidate-only')).toBe(false);
+});
+describe('kernel verification (C31)', () => {
+  const changed = KERNEL_SOURCES.map((s) =>
+    s.path.endsWith('/kind.ia') ? { ...s, text: s.text.replace("A standing 'ought'", "A standing 'Ought'") } : s,
+  );
+  it('passes the embedded floor and records its digest', () => {
+    const evidence = verifyKernel();
+    expect(evidence.assessment).toMatchObject({ check: 'COMP-KERNEL', outcome: 'pass' });
+    expect(evidence.floorDigest).toBe(KERNEL_DIGEST);
+    expect(verifyKernel(KERNEL_SOURCES).floorDigest).toBe(KERNEL_DIGEST);
+  });
+  it('fails a floor with one byte changed, and one that does not regenerate', () => {
+    expect(changed.map((s) => s.text).join('')).not.toBe(KERNEL_SOURCES.map((s) => s.text).join(''));
+    const evidence = verifyKernel(changed);
+    expect(evidence.assessment.outcome).toBe('fail');
+    expect(evidence.assessment.findings.map((f) => f.message).join()).toContain('KERNEL_DIGEST');
+    expect(evidence.floorDigest).not.toBe(KERNEL_DIGEST);
+    const broken = verifyKernel(KERNEL_SOURCES.filter((s) => !s.path.endsWith('/move.ia')));
+    expect(broken.assessment.outcome).toBe('fail');
+    expect(broken.assessment.findings[0]!.message).toContain('MOVES');
+  });
+  it('fails when the running language exports differ from regeneration', async () => {
+    vi.resetModules();
+    vi.doMock('@inventarch/language/internal/kernel.generated', async (original) => {
+      const actual = await original<Record<string, unknown>>();
+      return { ...actual, KINDS: [...(actual['KINDS'] as string[])].reverse() };
+    });
+    try {
+      const mocked = await import('../src/index.js');
+      expect(mocked.verifyKernel().assessment.findings.map((f) => f.message)).toEqual([
+        'Kernel verification: KINDS differs from regeneration',
+      ]);
+    } finally {
+      vi.doUnmock('@inventarch/language/internal/kernel.generated');
+      vi.resetModules();
+    }
+  });
 });

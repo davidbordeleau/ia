@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION, parse } from '@inventarch/language';
 import { load, stableSerialize } from '@inventarch/graph';
@@ -140,5 +142,16 @@ describe('kernel verification (C31)', () => {
       vi.doUnmock('@inventarch/language/internal/kernel.generated');
       vi.resetModules();
     }
+  });
+});
+describe('package-v1 suites (C31)', () => {
+  it('are compiled package code that imports no repository tool or test', () => {
+    const base = resolve(import.meta.dirname, '../src');
+    const files = readdirSync(base, { recursive: true, encoding: 'utf8' })
+      .map((f) => f.replaceAll('\\', '/'))
+      .filter((f) => f.endsWith('.ts'));
+    expect(files).toEqual(expect.arrayContaining(['conformance/refusals.ts', 'conformance/evidence-fixtures.ts']));
+    for (const file of files)
+      expect(readFileSync(resolve(base, file), 'utf8'), file).not.toMatch(/from '[^']*\/(tools|tests|fixtures)\//);
   });
 });

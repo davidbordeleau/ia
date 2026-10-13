@@ -9,10 +9,10 @@ import { COMP_CODES, EVIDENCE_CODES } from '../../packages/compliance/src/index.
 import { loadCorpus } from '../../packages/compliance/src/conformance/corpus.js';
 import { companionSuffixes, fileDigest, inventoryDigest } from '../../packages/compliance/src/conformance/inventory.js';
 import type { ConformanceInventory, InventoryFixture } from '../../packages/compliance/src/conformance/inventory.js';
-import { runRefusalFixtures } from '../../packages/compliance/fixtures/refusals.js';
+import { runRefusalFixtures } from '../../packages/compliance/src/conformance/refusals.js';
 import { HOOK_CODES, PUBLICATION_CODES, RUNTIME_CODES, RUNTIME_ESCALATIONS } from '../../packages/runtime/src/index.js';
 import { EXEC_CODES } from '../systems/types.js';
-import { runEvidenceFixtures } from './evidence-fixtures.js';
+import { runEvidenceFixtures } from '../../packages/compliance/src/conformance/evidence-fixtures.js';
 
 export const INVENTORY_PATH = 'packages/compliance/src/conformance/inventory.generated.ts';
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

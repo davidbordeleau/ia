@@ -66,6 +66,48 @@ const extensions: readonly Extension[] = [
 const run = (argv: readonly string[], options: HostOptions = {}): Promise<Result> =>
   dispatch(argv, makeHost(options), legacy, extensions);
 
+it('keeps the selected registry when typo guidance requires another working directory', async () => {
+  const cwd = resolve('registry-advice'),
+    root = 'workspace(active)',
+    registry = resolve(cwd, 'registry').replaceAll('\\', '/');
+  for (const flag of [true, false]) {
+    const result = await run(
+      ['instal', 'fixture/pkg', '--root', root, ...(flag ? ['--registry', './registry'] : []), '--json'],
+      { cwd, env: { IA_REGISTRY: flag ? './ignored' : './registry' } },
+    );
+    expect(result.exitCode).toBe(2);
+    const { next } = JSON.parse(result.stdout) as { next: string };
+    expect(next).toContain('--root .');
+    expect(next).toContain(`--registry ${registry}`);
+    expect(next).not.toContain('./ignored');
+    expect(next).toContain('from the workspace root');
+  }
+});
+
+it('preserves the registry for interrupted retries and gives doctor a complete manual remedy', async () => {
+  const cwd = resolve('registry-advice'),
+    abort = new AbortController(),
+    host = { ...makeHost({ cwd, env: { IA_REGISTRY: './registry' } }), signal: abort.signal };
+  abort.abort();
+  for (const verb of ['install', 'doctor']) {
+    const result = await dispatch(
+        [verb, ...(verb === 'install' ? ['fixture/pkg'] : []), '--root', 'workspace(active)', '--json'],
+        host,
+        legacy,
+        extensions,
+      ),
+      { next } = JSON.parse(result.stdout) as { next: string };
+    expect(result.exitCode).toBe(130);
+    if (verb === 'install') expect(next).toContain(`--registry ${resolve(cwd, 'registry').replaceAll('\\', '/')}`);
+    else {
+      expect(next).toContain('"ia doctor --help"');
+      expect(next).toContain(JSON.stringify(resolve(cwd, 'registry')));
+      expect(next).toContain('IA_REGISTRY');
+      expect(next).not.toContain('--root .');
+    }
+  }
+});
+
 it('routes the seven dispatch steps in order and never shadows a legacy operation', async () => {
   calls.legacy = [];
   calls.extension = [];

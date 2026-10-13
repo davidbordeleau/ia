@@ -22,7 +22,7 @@ import { open, readInputs } from '@inventarch/db';
 import { digestValue } from '@inventarch/runtime/authoring';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Result } from '../src/consumer.js';
-import { cleanup, cli, commandsIn, nextArgv, repository, run, scratch } from './workspace-fixture.js';
+import { commandRoots, cleanup, cli, commandsIn, nextArgv, repository, run, scratch } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 240_000, hookTimeout: 240_000 });
 afterAll(cleanup);
@@ -536,14 +536,9 @@ describe('ia author refusals, each writing nothing', () => {
     const root = workspace();
     const form = ['--set', '@milestone m1', 'work.owner=Tom'];
     const missing = await refused(root, ['author', ...form], 'IA-CLI-USAGE');
-    expect(nextArgv(missing['next'] as string)).toEqual([
-      'preview',
-      '@milestone m1',
-      'work.owner=Tom',
-      '--set',
-      '--root',
-      root,
-    ]);
+    expect(nextArgv(missing['next'] as string)).toEqual(
+      commandRoots(['preview', '@milestone m1', 'work.owner=Tom', '--set', '--root', root]),
+    );
     await refused(root, ['author', ...form, '--digest', 'abc'], 'IA-CLI-USAGE');
     const digest = await previewed(root, form);
     rewrite(root, '.ia/src/work.ia', (text) =>
@@ -805,16 +800,18 @@ describe('ia author refusals, each writing nothing', () => {
     for (const digest of [[], ['--digest', 'abc']]) {
       const open = await refused(ambiguous, ['author', ...form, ...digest], 'IA-RUNTIME-MANDATE-ACTOR');
       const named = nextArgv(open['next'] as string);
-      expect(named, open['next'] as string).toEqual([
-        'preview',
-        '@milestone m1',
-        'work.owner=Tom',
-        '--set',
-        '--actor',
-        participant,
-        '--root',
-        ambiguous,
-      ]);
+      expect(named, open['next'] as string).toEqual(
+        commandRoots([
+          'preview',
+          '@milestone m1',
+          'work.owner=Tom',
+          '--set',
+          '--actor',
+          participant,
+          '--root',
+          ambiguous,
+        ]),
+      );
       const preview = await run([...named, '--json'], { env: HOMES });
       expect(preview.exitCode, preview.stdout).toBe(0);
       const printed = body(preview)['digest'] as string;
@@ -874,15 +871,9 @@ describe('the mandate profile on every gated mode', () => {
       expect(refusal['message'], argv.join(' ')).toBe(
         `${mandate('demo-mandate')} allows Delegation; ${mode} needs ${move}`,
       );
-      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual([
-        'position',
-        '--seat',
-        mandate('demo-mandate'),
-        '--shape',
-        'governance',
-        '--root',
-        root,
-      ]);
+      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual(
+        commandRoots(['position', '--seat', mandate('demo-mandate'), '--shape', 'governance', '--root', root]),
+      );
     }
     expect((await ia(root, ['position'])).exitCode).toBe(0);
     expect((await ia(root, ['position', '--seat', mandate('demo-mandate'), '--shape', 'governance'])).exitCode).toBe(0);
@@ -956,7 +947,7 @@ describe('the mandate profile on every gated mode', () => {
     expect(nextArgv(refusal['next'] as string).slice(0, 3)).toEqual(['position', '--seat', demo]);
     // Where the actor-less profile allows the command, the next is that command.
     const read = await refused(root, ['read', participant, '--actor', 'nobody'], 'IA-RUNTIME-MANDATE-ACTOR');
-    expect(nextArgv(read['next'] as string)).toEqual(['read', participant, '--root', root]);
+    expect(nextArgv(read['next'] as string)).toEqual(commandRoots(['read', participant, '--root', root]));
   });
   it('judges excluded words only for preview and author, leaving read, validate, next and capture alone (review C2-N10)', async () => {
     const root = workspace((at) =>
@@ -989,18 +980,12 @@ describe('the mandate profile on every gated mode', () => {
       });
     const allowed = noPlan('Observation, Verification');
     const named = body(await unchanged(allowed, ['next']));
-    expect(nextArgv(named.next!)).toEqual(['preview', 'plan', '--root', allowed]);
+    expect(nextArgv(named.next!)).toEqual(commandRoots(['preview', 'plan', '--root', allowed]));
     const readOnly = noPlan('Observation');
     const refusal = await refused(readOnly, ['next'], 'IA-RUNTIME-NEXT-NO-PLAN');
-    expect(nextArgv(refusal['next'] as string)).toEqual([
-      'position',
-      '--seat',
-      mandate('demo-mandate'),
-      '--shape',
-      'governance',
-      '--root',
-      readOnly,
-    ]);
+    expect(nextArgv(refusal['next'] as string)).toEqual(
+      commandRoots(['position', '--seat', mandate('demo-mandate'), '--shape', 'governance', '--root', readOnly]),
+    );
     expect(refusal['next']).toContain('preview needs Verification and @plan');
     // Review C-R6: an excluded @plan is no command the profile allows either.
     const excluded = workspace((at) => {
@@ -1021,7 +1006,9 @@ describe('the mandate profile on every gated mode', () => {
       );
     });
     const actor = await refused(open, ['next', '--actor', participant], 'IA-RUNTIME-NEXT-NO-PLAN');
-    expect(nextArgv(actor['next'] as string)).toEqual(['preview', 'plan', '--root', open, '--actor', participant]);
+    expect(nextArgv(actor['next'] as string)).toEqual(
+      commandRoots(['preview', 'plan', '--root', open, '--actor', participant]),
+    );
     // ops may read but not preview: its next names no preview.
     const ops = await refused(open, ['next', '--actor', 'agent-system/binding/agent/ops'], 'IA-RUNTIME-NEXT-NO-PLAN');
     expect(nextArgv(ops['next'] as string)[0]).toBe('position');
@@ -1090,16 +1077,18 @@ describe('the mandate profile on every gated mode', () => {
     const form = ['--set', `@workspace demo`, 'composition.steward=@agent demo'];
     // The preview refuses the open choice and names itself with the first participant allowed to run it.
     const ambiguous = await refused(root, ['preview', ...form], 'IA-RUNTIME-MANDATE-ACTOR');
-    expect(nextArgv(ambiguous['next'] as string)).toEqual([
-      'preview',
-      '@workspace demo',
-      'composition.steward=@agent demo',
-      '--set',
-      '--actor',
-      participant,
-      '--root',
-      root,
-    ]);
+    expect(nextArgv(ambiguous['next'] as string)).toEqual(
+      commandRoots([
+        'preview',
+        '@workspace demo',
+        'composition.steward=@agent demo',
+        '--set',
+        '--actor',
+        participant,
+        '--root',
+        root,
+      ]),
+    );
     const digest = await previewed(root, [...form, '--actor', participant]);
     // No actor choice can authorize an administrative write, so the remedy must remain a read.
     const author = await refused(root, ['author', ...form, '--digest', digest], 'IA-RUNTIME-MANDATE-ACTOR');
@@ -1129,15 +1118,9 @@ describe('the mandate profile on every gated mode', () => {
         identity: mandate('unreadable-mandate'),
       });
       // Its governance position runs, as the seat is admitted, and shows the authority the profile cannot read.
-      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual([
-        'position',
-        '--seat',
-        mandate('unreadable-mandate'),
-        '--shape',
-        'governance',
-        '--root',
-        root,
-      ]);
+      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual(
+        commandRoots(['position', '--seat', mandate('unreadable-mandate'), '--shape', 'governance', '--root', root]),
+      );
     }
   });
 });
@@ -1166,7 +1149,7 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
     );
     expect(refusal['message'], label).toContain('correct it by hand');
     expect(refusal['message'], label).toContain('ia preview and ia author cannot target a record admission refused');
-    expect(nextArgv(refusal['next'] as string), label).toEqual(['report', '--root', root]);
+    expect(nextArgv(refusal['next'] as string), label).toEqual(commandRoots(['report', '--root', root]));
     return refusal;
   }
   it('refuses every gated mode at the refused mandate, naming an admission report that runs and shows it', async () => {
@@ -1253,7 +1236,7 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
     expect(refusal['message']).toContain(
       'the @mandate at .ia/src/header.ia:3 failed admission: IA-LANG-HEADER-MALFORMED',
     );
-    expect(nextArgv(refusal['next'] as string)).toEqual(['report', '--root', root]);
+    expect(nextArgv(refusal['next'] as string)).toEqual(commandRoots(['report', '--root', root]));
     // A parse error in a file that declares no mandate fails nothing closed: the preview runs.
     const plain = workspace((at) =>
       writeFileSync(resolve(at, '.ia/src/plain.ia'), '#! ia 1.0\n\n@agent plain\n  meaning\n    says "x\n'),
@@ -1331,15 +1314,35 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
     expect(body(validated)).toMatchObject({ status: 'refused' });
   });
   it('names an admission report that runs from the cwd alone, printing no character of the root (review D-R1, D-N2, D-N6)', async () => {
-    for (const name of ['amp&er', 'par(en', 'dol$lar', 'back`tick', 'sp ace', `caf${String.fromCharCode(0xe9)}`]) {
-      // Staged under an ASCII name and renamed: Node's cpSync spells a non-ASCII destination wrongly on win32.
+    // Construct the final directory directly: Windows may refuse a fixture-tree rename after its files were opened.
+    const copyUnicode = (source: string, target: string): void => {
+      mkdirSync(target, { recursive: true });
+      for (const item of readdirSync(source, { withFileTypes: true })) {
+        const from = resolve(source, item.name),
+          to = resolve(target, item.name);
+        if (item.isDirectory()) copyUnicode(from, to);
+        else {
+          expect(item.isFile()).toBe(true);
+          writeFileSync(to, readFileSync(from));
+        }
+      }
+    };
+    const unicode = `caf${String.fromCharCode(0xe9)}`;
+    for (const [name, omitted] of [
+      ['amp&er', true],
+      ['par(en', true],
+      ['dol$lar', true],
+      ['back`tick', true],
+      ['sp ace', false],
+      [unicode, false],
+    ] as const) {
       const parent = scratch('author-roots'),
-        staging = resolve(parent, 'staging'),
         root = resolve(parent, name);
-      cpSync(base, staging, { recursive: true });
-      probe(staging);
-      mkdirSync(resolve(staging, 'docs'), { recursive: true });
-      renameSync(staging, root);
+      // Direct byte copying also preserves the Unicode destination spelling on Windows.
+      if (name === unicode) copyUnicode(base, root);
+      else cpSync(base, root, { recursive: true });
+      probe(root);
+      mkdirSync(resolve(root, 'docs'), { recursive: true });
       // Without --root the workspace is found from the cwd, and the report is named relative to it, `.` or `..`.
       for (const [cwd, relative] of [
         [root, '.'],
@@ -1363,10 +1366,13 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
             expect.objectContaining({ code: 'IA-COMP-FIELD-VALUE', path: '.ia/src/workspace.ia', line: 27 }),
           );
         }
-      // With --root, the invocation's own value is repeated as every next command repeats it (review C2-R8), and runs.
+      // A supplied shell-active root is omitted, with the required cwd stated; inert roots keep their value.
       const given = body(await run(['validate', '--root', root, '--json'], { env: HOMES }));
-      expect(nextArgv(given.next!), name).toEqual(['report', '--root', root]);
-      expect((await run(nextArgv(given.next!), { env: HOMES })).exitCode, name).toBe(1);
+      expect(nextArgv(given.next!), name).toEqual(
+        omitted ? ['report', '--root', '.'] : commandRoots(['report', '--root', root]),
+      );
+      if (omitted) expect(given.next, name).toContain('from the workspace root');
+      expect((await run(nextArgv(given.next!), { cwd: root, env: HOMES })).exitCode, name).toBe(1);
     }
     // Review D2-R1: a cwd reached through a link inside the workspace keeps the link's spelling, and the CLI and db read
     // a relative --root lexically against it, so the next names a root that resolves there to the workspace: a junction
@@ -1446,7 +1452,7 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
         identity: mandate('sample-mandate'),
       });
       expect(refusal['message'], argv[0]).toContain('correct it by hand in .ia/src/override.ia');
-      expect(nextArgv(refusal['next'] as string), argv[0]).toEqual(['report', '--root', root]);
+      expect(nextArgv(refusal['next'] as string), argv[0]).toEqual(commandRoots(['report', '--root', root]));
       const report = await run(nextArgv(refusal['next'] as string), { env: HOMES });
       expect(report.stdout, argv[0]).toContain('override.ia');
       expect(report.stdout, argv[0]).toContain('Bogus');

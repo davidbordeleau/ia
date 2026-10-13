@@ -21,8 +21,8 @@ import { withScope } from '@tools/testing/resources.js';
 import { runBounded, spawnOwned } from '@tools/testing/subprocess.js';
 import { LEGACY_OPERATIONS } from '../src/commands.js';
 import { DEPRECATION } from '../src/compile.js';
-import { quote } from '../src/render.js';
-import { cleanup, delivery, scratch, workspace } from './workspace-fixture.js';
+
+import { quoteCommandRoot as quote, cleanup, delivery, scratch, workspace } from './workspace-fixture.js';
 
 const repository = resolve(import.meta.dirname, '../../..');
 let MAIN: string, DISTRIBUTION: string, installedRoot: string;
@@ -491,8 +491,8 @@ globalThis.fetch = async () => new Response(new ReadableStream({
         expect(result.stdout).toBe('');
       } else {
         expect(result.messages).toContain('cleaned');
-        // Design row 27: the interruption names the invocation to run again, as it was typed.
-        const next = `Run "ia install fixture/foundation --root ${quote(root)} --catalog .ia/work/catalog.json --apply --yes --json" again.`;
+        // The interruption rebuilds the same parsed invocation in canonical option order.
+        const next = `Run "ia install fixture/foundation --root ${quote(root)} --json --yes --catalog .ia/work/catalog.json --apply" again.`;
         expect(oneJsonLine(result.stdout, signal)).toMatchObject({ code: 'IA-CLI-INTERRUPTED', exit: 130, next });
         expect(result.stderr).toBe(`Interrupted. ${next}\n`);
       }

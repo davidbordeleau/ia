@@ -13,6 +13,7 @@ import {
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import {
   admissionReport,
+  inertCommandRoot,
   evaluateMandateGuard,
   evaluateSteward,
   isAdmissionRefusal,
@@ -73,13 +74,15 @@ function local(root: string, target: string): string | undefined {
 function physical(path: string): string {
   try {
     lstatSync(path);
-    return realpathSync.native(path);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     const parent = dirname(path);
     if (parent === path) throw error;
     return resolve(physical(parent), relative(parent, path));
   }
+  // An existing link whose target is absent is not an ordinary missing component. Its realpath failure must refuse
+  // the edit, including when this is an ancestor of a missing leaf or another link; never rebuild its lexical name.
+  return realpathSync.native(path);
 }
 type Rule = { projection?: true; system?: string; invalid?: true };
 /** Consumer-mode ownership: the files a projection state owns (folded) and whether a Codex registration exists. */
@@ -840,16 +843,19 @@ const admissionOf = (db: ReturnType<typeof openDatabase>): Admission =>
  * mandate-gated command (lane D), so the admission report, the version 1 machine route `ia report`, shows it instead,
  * its root spelled only when inert unquoted, else run from the workspace root (runtime `admissionReport`; review D-R1).
  */
+const rootCommand = (command: string, root: string, tail = ''): string =>
+  inertCommandRoot(root)
+    ? `"${command} --root ${JSON.stringify(root)}${tail}"`
+    : `"${command} --root .${tail}" from the workspace root`;
 const recovery = (root: string, admission: Admission): string => {
-  const quoted = JSON.stringify(root),
-    remove = `"ia host claude --root ${quoted} --remove --apply --yes"`;
+  const remove = rootCommand('ia host claude', root, ' --remove --apply --yes');
   if (admission === 'admits')
-    return `run "ia host claude --root ${quoted} --apply --yes" from a shell to register the workspace's current hooks, or ${remove} to remove the registration and restore editing`;
+    return `run ${rootCommand('ia host claude', root, ' --apply --yes')} from a shell to register the workspace's current hooks, or ${remove} to remove the registration and restore editing`;
   if (admission === 'mandate') {
     const report = admissionReport(root);
     return `run ${remove} from a shell to remove the registration and restore editing, and "${report.command}"${report.fromRoot ? ' from the workspace root' : ''} for the admission findings, the refused record's among them, before registering again`;
   }
-  return `run ${remove} from a shell to remove the registration and restore editing, and "ia validate --root ${quoted}" to see why the workspace does not admit before registering again`;
+  return `run ${remove} from a shell to remove the registration and restore editing, and ${rootCommand('ia validate', root)} to see why the workspace does not admit before registering again`;
 };
 /**
  * The `@mandate` guard (milestone generation-binding, plan amendments C9 and C10): one authored `@hook`'s group runs
@@ -923,7 +929,7 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     if (unreadable !== undefined)
       return deny(
         code,
-        `${why}; the hook ownership state ${unreadable} cannot be read, so every edit under the root is refused; from a shell, delete ${unreadable} and every IA hook group in .claude/settings.local.json (each runs the guard for one authored @hook) to restore editing, then run "ia host claude --root ${JSON.stringify(edit.base)} --remove --apply --yes" to remove the rest of the registration`,
+        `${why}; the hook ownership state ${unreadable} cannot be read, so every edit under the root is refused; from a shell, delete ${unreadable} and every IA hook group in .claude/settings.local.json (each runs the guard for one authored @hook) to restore editing, then run ${rootCommand('ia host claude', edit.base, ' --remove --apply --yes')} to remove the rest of the registration`,
       );
     return deny(
       code,
@@ -1003,7 +1009,7 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     // session's to resolve.
     const lift =
       event['agent_id'] === undefined
-        ? `; the main session can lift every hook from a shell with "ia host claude --root ${JSON.stringify(edit.base)} --remove --apply --yes"`
+        ? `; the main session can lift every hook from a shell with ${rootCommand('ia host claude', edit.base, ' --remove --apply --yes')}`
         : '';
     return deny(decision.code!, decision.message + lift);
   } catch (error) {

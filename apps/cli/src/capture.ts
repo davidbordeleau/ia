@@ -36,6 +36,7 @@ import {
 } from '@inventarch/db';
 import type { CapturePlan, CaptureWrite, MembershipRow, Snapshot } from '@inventarch/db';
 import { json, LANGUAGE_IDENTITY, sha256 } from '@inventarch/distribution/services';
+import { inertCommandRoot } from '@inventarch/runtime';
 import type { Context, Result } from './consumer.js';
 import { Refusal, requireRoot, respell } from './consumer.js';
 import type { Capabilities, Token } from './render.js';
@@ -46,6 +47,7 @@ import {
   entry,
   headerLine,
   quote,
+  safeRootCommand,
   sectionLabel,
   terminalText,
   truncateDigest,
@@ -104,6 +106,7 @@ export interface CapturePreview extends CaptureView, CapturePlan {
   readonly preview: true;
   /** The capture that writes what this preview reports, with `--root` as given. */
   readonly capture: string;
+  readonly captureFromRoot?: true;
 }
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -252,12 +255,16 @@ export function collectCapture(root: string, given?: string, gate?: SessionGate)
  */
 export function previewCapture(root: string, given?: string, gate?: SessionGate): CapturePreview {
   const built = capturable(root, given, gate);
+  const fromRoot = given !== undefined && !inertCommandRoot(given);
   return {
     root,
     ...built,
     ...planCapture(root, built.text),
     preview: true,
-    capture: `ia capture${given === undefined ? '' : ` --root ${quote(given)}`}`,
+    capture: safeRootCommand(`ia capture${given === undefined ? '' : ` --root ${fromRoot ? '.' : quote(given)}`}`, [
+      given,
+    ]),
+    ...(fromRoot ? { captureFromRoot: true as const } : {}),
   };
 }
 
@@ -379,7 +386,13 @@ export function renderCapture(view: CaptureView | CapturePreview, caps: Capabili
               'The snapshot would record these findings. Run "ia validate" for their locations, fix them, then capture.',
             ),
           ]
-        : commandFacts('Write this snapshot with "', preview.capture, '".', 3, caps);
+        : commandFacts(
+            'Write this snapshot with "',
+            preview.capture,
+            preview.captureFromRoot ? '" from the workspace root.' : '".',
+            3,
+            caps,
+          );
   return document(
     [
       preview === null

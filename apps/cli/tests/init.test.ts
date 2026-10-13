@@ -56,8 +56,19 @@ import {
 
 import { GUARD_SCOPE, MACHINE_LOCAL, MCP_APPROVAL, rootedNext } from '../src/host.js';
 import { renderProjectionFor } from '../src/host-projection.js';
-import { quote } from '../src/render.js';
-import { cleanup, cli, commandsIn, makeHost, nextArgv, repository, run, scratch } from './workspace-fixture.js';
+
+import { quote as serviceQuote } from '../src/render.js';
+import {
+  quoteCommandRoot as quote,
+  cleanup,
+  cli,
+  commandsIn,
+  makeHost,
+  nextArgv,
+  repository,
+  run,
+  scratch,
+} from './workspace-fixture.js';
 import type { HostOptions } from './workspace-fixture.js';
 
 afterEach(() => {
@@ -867,7 +878,7 @@ it('stops at the capture boundary on a signal once initialized, naming ia captur
   });
   // The descriptor is the completion point, so a rerun of init would refuse the target: the effect names its own verb.
   await expect(interrupted).rejects.toMatchObject({
-    next: `The workspace is initialized. Run "ia capture --root ${quote(root)}" to capture it.`,
+    next: `The workspace is initialized. Run "ia capture --root ${serviceQuote(root)}" to capture it.`,
   });
   expect(existsSync(resolve(root, '.ia/release.json'))).toBe(true);
   expect(existsSync(resolve(root, '.ia/work'))).toBe(false);

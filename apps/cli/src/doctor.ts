@@ -116,7 +116,7 @@ import {
 import type { Pinned } from './host.js';
 import { codeOf } from './session.js';
 import type { Capabilities, Field, SymbolName } from './render.js';
-import { atom, document, entry, fieldRows, sectionLabel, words } from './render.js';
+import { atom, document, entry, fieldRows, safeRootAdvice, sectionLabel, words } from './render.js';
 
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'unknown' | 'info';
 export type Section = 'Environment' | 'Workspace' | 'Installation';
@@ -1267,6 +1267,14 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
     channel: request.channel,
   });
   checks.push(...user.checks);
+  for (let index = 0; index < checks.length; index += 1) {
+    const check = checks[index]!;
+    checks[index] = {
+      ...check,
+      detail: safeRootAdvice(check.detail, [root, supplied, request.root], request),
+      remedy: check.remedy === null ? null : safeRootAdvice(check.remedy, [root, supplied, request.root], request),
+    };
+  }
   const briefing =
     request.host === undefined
       ? undefined
@@ -1274,7 +1282,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
           request.host,
           checks,
           user,
-          { root: workspaceRoot, supplied, enclosing: enclosing ?? null },
+          { root: workspaceRoot, supplied, enclosing: enclosing ?? null, advice: request },
           version,
         );
   return { checks, counts: count(checks), ...(briefing === undefined ? {} : { briefing }) };
@@ -1317,7 +1325,7 @@ function briefingFor(
   host: string,
   checks: readonly Check[],
   user: ReturnType<typeof userRows>,
-  where: Pick<BriefInput, 'root' | 'supplied' | 'enclosing'>,
+  where: Pick<BriefInput, 'root' | 'supplied' | 'enclosing' | 'advice'>,
   version: string,
 ): ReturnType<typeof brief> {
   const state = hostState(host, checks);

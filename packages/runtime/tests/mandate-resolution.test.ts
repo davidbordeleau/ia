@@ -10,6 +10,7 @@ import {
   isAdmissionRefusal,
   defaultActor,
   governingMandates,
+  mandateAuthorityOf,
   position,
   profileRefusal,
   refusedDependencies,
@@ -57,6 +58,25 @@ function profileAt(db: Handle, mode: Mode, words?: readonly string[]) {
 }
 const identities = (db: Handle, options: GoverningOptions = {}): readonly string[] =>
   governingMandates(db, token(db), options).map((entry) => entry.identity);
+
+it.each(['covers', 'participant'])('refuses actor-less use of a single participant mandate located by %s', (kind) => {
+  const source = records.replace(STEWARD, '').replace(SCOPE, kind === 'covers' ? '    covers ["docs/**"]\n' : '');
+  const db = database(freshInit(source)),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  expect(defaultActor(db, within, demo).actor).toBeUndefined();
+  const unbound = governingMandates(db, within, { workspace: demo, path: 'docs/new.md' });
+  expect(unbound).toHaveLength(1);
+  for (const mode of MODES)
+    expect(profileRefusal(unbound, mode).refusal, mode).toMatchObject({
+      code: 'IA-RUNTIME-MANDATE-ACTOR',
+      next: governance(mandate('demo-mandate')),
+    });
+  const bound = governingMandates(db, within, { actor: participant, workspace: demo, path: 'docs/new.md' });
+  expect(profileRefusal(bound, 'author')).toEqual({});
+  expect(profileRefusal([{ identity: mandate('anyone'), moves: ['Synthesis'] }], 'author')).toEqual({});
+  expect(profileRefusal([], 'author')).toMatchObject({ notice: UNGOVERNED });
+});
 /** Each governing mandate with whether it binds `options.actor`. */
 const bound = (db: Handle, options: GoverningOptions): readonly (readonly [string, boolean | undefined])[] =>
   governingMandates(db, token(db), options).map((entry) => [entry.identity, entry.binds] as const);
@@ -238,10 +258,12 @@ it('refuses an actor that no mandate governing the workspace binds, rather than 
         next: governance(mandate('demo-mandate')),
       },
     });
-  // Without an actor the workspace's mandate is judged; where no mandate claims the path, nothing is restricted.
-  expect(profileRefusal(governingMandates(db, within, { workspace: demo }), 'read')).toEqual({});
+  // Without an actor a named participant cannot be satisfied; where no mandate claims the path, nothing is restricted.
+  expect(profileRefusal(governingMandates(db, within, { workspace: demo }), 'read').refusal!.code).toBe(
+    'IA-RUNTIME-MANDATE-ACTOR',
+  );
   expect(profileRefusal(governingMandates(db, within, { workspace: demo }), 'author').refusal!.code).toBe(
-    'IA-RUNTIME-MANDATE-MOVE',
+    'IA-RUNTIME-MANDATE-ACTOR',
   );
   expect(profileRefusal(governingMandates(db, within, { actor: ops, path: 'docs/guide.md' }), 'author')).toEqual({
     notice: UNGOVERNED,
@@ -376,10 +398,10 @@ it('governs wherever its participant acts a mandate that states neither scope no
   expect(identities(db, { actor: zed, workspace: demo })).toEqual([]);
   expect(identities(db, { workspace: demo })).toEqual([mandate('demo-mandate')]);
   expect(identities(db)).toEqual([mandate('demo-mandate'), mandate('loose-mandate')]);
-  // Without a steward it names no participant of the workspace, yet governs the actorless profile alike.
+  // Without a steward it names no participant of the workspace; the located mandate still needs an established actor.
   const unstewarded = database(freshInit(located.replace(STEWARD, '')));
   expect(defaultActor(unstewarded, token(unstewarded), demo).actor).toBeUndefined();
-  expect(profileAt(unstewarded, 'author').refusal!.code).toBe('IA-RUNTIME-MANDATE-MOVE');
+  expect(profileAt(unstewarded, 'author').refusal!.code).toBe('IA-RUNTIME-MANDATE-ACTOR');
 });
 
 it('locates nothing by a declared empty scope or covers, so an empty list never lifts a restriction', () => {
@@ -461,7 +483,7 @@ it('binds whoever acts a mandate that names no participant, and judges it withou
   ]);
   expect(profileAt(stewarded, 'author').refusal).toEqual(refused);
   expect(profileAt(stewarded, 'read', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
-  // With no participant and no steward there is no actor and no refusal, but the mandate still governs.
+  // A participant-less mandate needs no actor; a dangling participant reference cannot grant an actor-less mode.
   for (const participantLine of [[], ['participant @agent ghost']]) {
     const unstewarded = database(
       freshInit(
@@ -474,8 +496,16 @@ it('binds whoever acts a mandate that names no participant, and judges it withou
       actors: [],
       reason: `${demo} states no composition.steward, and no authored @mandate scoped to it names an authored @agent as its participant`,
     });
-    expect(profileAt(unstewarded, 'read')).toEqual({});
-    expect(profileAt(unstewarded, 'author').refusal).toEqual(refused);
+    if (participantLine.length === 0) {
+      expect(profileAt(unstewarded, 'read')).toEqual({});
+      expect(profileAt(unstewarded, 'author').refusal).toEqual(refused);
+    } else {
+      for (const mode of ['read', 'author'] as const)
+        expect(profileAt(unstewarded, mode).refusal).toMatchObject({
+          code: 'IA-RUNTIME-MANDATE-ACTOR',
+          next: governance(mandate('house-rules')),
+        });
+    }
   }
 });
 
@@ -711,7 +741,12 @@ it('judges excluded words only when words are given, after the move', () => {
     },
   ]);
   expect(asPacket(governing)).toEqual(renderPacket(stated, token(stated), []).packet.mandates);
-  expect(profileRefusal(governing, 'author', ['hook'])).toEqual({});
+  expect(profileRefusal(governing, 'author', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-ACTOR');
+  expect(
+    profileRefusal(governingMandates(stated, token(stated), { actor: participant, workspace: demo }), 'author', [
+      'hook',
+    ]),
+  ).toEqual({});
 });
 
 it('judges any number of mandates: any one grants a move, any one excludes a word, the first named is next', () => {
@@ -792,7 +827,7 @@ it('judges any number of mandates: any one grants a move, any one excludes a wor
       next: governance(a),
     },
   });
-  // Two participants' mandates are never pooled; one participant's several, and those naming none, are.
+  // Two participants' mandates are never pooled. One participant's several need that actor to be established.
   expect(
     profileRefusal(
       [
@@ -813,8 +848,8 @@ it('judges any number of mandates: any one grants a move, any one excludes a wor
     profileRefusal(
       [
         { identity: a, moves: ['Observation'] },
-        { identity: b, participant: 'agent/x', moves: ['Synthesis'] },
-        { identity: 'agent-system/policy/mandate/c', participant: 'agent/x', moves: ['Execution'] },
+        { identity: b, participant: 'agent/x', binds: true, moves: ['Synthesis'] },
+        { identity: 'agent-system/policy/mandate/c', participant: 'agent/x', binds: true, moves: ['Execution'] },
       ],
       'author',
     ),
@@ -833,12 +868,14 @@ it('judges any number of mandates: any one grants a move, any one excludes a wor
   const sample = database(workspace())
     .records()
     .find((record) => record.discriminator === 'mandate' && record.name === 'sample-mandate')!;
-  expect(profileRefusal([sample], 'author').refusal).toEqual({
+  expect(profileRefusal([sample], 'read').refusal!.code).toBe('IA-RUNTIME-MANDATE-ACTOR');
+  const actingSample = { ...mandateAuthorityOf(sample), binds: true };
+  expect(profileRefusal([actingSample], 'author').refusal).toEqual({
     code: 'IA-RUNTIME-MANDATE-MOVE',
     message: `${sample.identity} allows Observation, Verification; author needs Synthesis`,
     next: governance(sample.identity),
   });
-  expect(profileRefusal([sample], 'read', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
+  expect(profileRefusal([actingSample], 'read', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
 });
 
 it('reads only through its scope token, never at runtime placement, and refuses what it cannot read', () => {

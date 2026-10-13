@@ -1,0 +1,12 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "patch",
+  "title": "Refuse dangling links in guarded edit paths",
+  "summary": "Both edit guard modes now refuse an existing symbolic link or junction whose target cannot be resolved, including a dangling ancestor of a missing file and chained links. Such paths report IA-HOOK-PATH-UNSAFE before selecting mandates or managed state. Ordinary missing files under a resolvable parent retain their existing decisions. These cooperative guards do not grant host permissions or filesystem isolation.",
+  "packages": [
+    "@inventarch/steward-hook"
+  ],
+  "paths": [
+    "apps/steward-hook/"
+  ]
+}

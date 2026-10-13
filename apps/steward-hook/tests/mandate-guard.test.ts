@@ -16,8 +16,8 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
-  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -107,6 +107,23 @@ const event = (root: string, path: string, extra: Record<string, unknown> = {}, 
 const check = (root: string, path: string, extra: Record<string, unknown> = {}, tool = 'Write', hook = HOOK) =>
   evaluateMandateHook(root, hook, event(root, path, extra, tool));
 const reason = (output: HookOutput): string | undefined => output.hookSpecificOutput?.permissionDecisionReason;
+it('never repeats shell-active roots in guard removal or validation suggestions', () => {
+  const parent = workspace(),
+    root = resolve(parent, 'ws-$(Write-Output SENTINEL)-`echo`-%PATH%-!PATH!-a&b,^;');
+  cpSync(resolve(parent, '.ia'), resolve(root, '.ia'), { recursive: true });
+  put(
+    root,
+    '.ia/src/workspace.ia',
+    starter(['moves [Observation, Verification, Synthesis, Delegation, Execution]', 'moves [Observation]']),
+  );
+  const denied = reason(check(root, 'restricted/plan.md'))!;
+  expect(denied).toContain('"ia host claude --root . --remove --apply --yes" from the workspace root');
+  expect(denied).not.toContain('SENTINEL');
+  put(root, '.ia/src/hooks.ia', 'this is not an IA source');
+  const missing = reason(check(root, 'docs/guide.md'))!;
+  expect(missing).toContain('"ia host claude --root . --remove --apply --yes" from the workspace root');
+  expect(missing).not.toContain('SENTINEL');
+});
 const code = (output: HookOutput): string | undefined => reason(output)?.split(':')[0];
 /** `text` with each `from` replaced by its `to`, every one of which must be there. */
 const edited = (text: string, edits: readonly (readonly [string, string])[]): string =>
@@ -124,6 +141,29 @@ const OBSERVING = starter([
 ]);
 const authorized = (name: string, authority: readonly string[]): string =>
   `\n@mandate ${name}\n  meaning\n    says "Fixture mandate ${name}."\n    answers "What may it do?"\n  governance\n    requires "Claim no host permission or execution from this mandate."\n  authority\n${authority.map((line) => `    ${line}\n`).join('')}`;
+
+it.each(['docs/not-created', '.ia/distributions/not-created'])(
+  'refuses dangling and chained directory aliases into absent protected targets %s',
+  (selected) => {
+    const root = workspace(),
+      missing = resolve(root, selected),
+      alias = resolve(root, 'missing-alias'),
+      chain = resolve(root, 'missing-chain');
+    symlinkSync(missing, alias, 'junction');
+    symlinkSync(alias, chain, 'junction');
+    expect(existsSync(missing)).toBe(false);
+    const direct = `${selected}/new.md`;
+    expect(code(check(root, direct, reviewer))).toBe(
+      selected.startsWith('.ia/') ? 'IA-HOOK-PROJECTION-MANAGED' : 'IA-HOOK-NOT-MANDATED',
+    );
+    for (const path of ['missing-alias/new.md', 'missing-chain/new.md']) {
+      expect(code(check(root, path, reviewer)), path).toBe('IA-HOOK-PATH-UNSAFE');
+      expect(code(evaluateHook(root, event(root, path))), path).toBe('IA-HOOK-PATH-UNSAFE');
+    }
+    expect(existsSync(missing)).toBe(false);
+    expect(check(root, 'unrestricted/ordinary-new.md')).toEqual({});
+  },
+);
 
 it('allows the main session where its mandate grants Synthesis, a session launched with --agent included (OD4)', () => {
   const root = workspace();
@@ -763,15 +803,27 @@ it('decides as before beside an unrelated refused @agent or a never-authored par
 
 it('never prints a shell-active character of the root in the admission report it names (review D-R1, D-N2)', () => {
   const safe = `caf${String.fromCharCode(0xe9)}`;
+  // Direct byte copies retain Unicode destination spelling without renaming a tree Windows may still have open.
+  const copyUnicode = (source: string, target: string): void => {
+    mkdirSync(target, { recursive: true });
+    for (const item of readdirSync(source, { withFileTypes: true })) {
+      const from = resolve(source, item.name),
+        to = resolve(target, item.name);
+      if (item.isDirectory()) copyUnicode(from, to);
+      else {
+        expect(item.isFile()).toBe(true);
+        writeFileSync(to, readFileSync(from));
+      }
+    }
+  };
   for (const name of ['amp&er', 'par(en', 'dol$lar', 'back`tick', 'sp ace', safe]) {
     const parent = mkdtempSync(resolve(tmpdir(), 'ia-mandate-guard-'));
     roots.push(parent);
-    // Staged under an ASCII name and renamed: Node's cpSync spells a non-ASCII destination wrongly on win32.
-    const staging = resolve(parent, 'staging'),
-      root = resolve(parent, name);
-    cpSync(NATIVE, resolve(staging, '.ia/src'), { recursive: true });
-    cpSync(FIXTURE, resolve(staging, '.ia/src'), { recursive: true });
-    renameSync(staging, root);
+    const root = resolve(parent, name);
+    for (const source of [NATIVE, FIXTURE]) {
+      if (name === safe) copyUnicode(source, resolve(root, '.ia/src'));
+      else cpSync(source, resolve(root, '.ia/src'), { recursive: true });
+    }
     put(
       root,
       '.ia/src/workspace.ia',

@@ -23,7 +23,8 @@ import type { Intent } from '@inventarch/distribution/hosts';
 import { hostRow, invocation, workspaceRow } from '@inventarch/distribution/hosts';
 import type { Channel } from './channel.js';
 import { describeChannel, updateInstruction } from './channel.js';
-import { quote } from './render.js';
+import { quote, safeRootAdvice, safeRootCommand } from './render.js';
+import type { AdviceContext } from './render.js';
 
 export interface NextAction {
   readonly intent: Intent;
@@ -42,6 +43,7 @@ export interface Session {
   readonly refresh: readonly string[] | null;
 }
 export interface BriefInput {
+  readonly advice?: AdviceContext;
   readonly host: string;
   readonly version: string;
   readonly channel: Channel;
@@ -106,7 +108,7 @@ export function brief(input: BriefInput): { readonly session: Session; readonly 
   } else if (input.root === undefined && input.enclosing !== null) {
     // The report is about the supplied directory, not the workspace above it; name that workspace and stop.
     context.push(
-      `${input.supplied} is inside InventArch workspace ${input.enclosing}; run ${command(['ia', 'doctor', '--root', input.enclosing])} for its state.`,
+      `${input.supplied} is inside InventArch workspace ${input.enclosing}; run "${command(['ia', 'doctor', '--root', input.enclosing])}" for its state.`,
     );
   } else if (input.root === undefined) {
     const decision = input.decision;
@@ -171,5 +173,18 @@ export function brief(input: BriefInput): { readonly session: Session; readonly 
       nudge = 'update';
     }
   }
-  return { session: { context, notice, nudge, refresh: input.refresh }, nextActions: actions };
+  const safe = (text: string): string =>
+    safeRootAdvice(text, [input.root, input.supplied, input.enclosing ?? undefined], input.advice);
+  return {
+    session: {
+      context: context.map(safe),
+      notice: notice === null ? null : safe(notice),
+      nudge,
+      refresh: input.refresh,
+    },
+    nextActions: actions.map((action) => ({
+      ...action,
+      host: safeRootCommand(action.host, [input.root, input.supplied, input.enclosing ?? undefined], input.advice),
+    })),
+  };
 }

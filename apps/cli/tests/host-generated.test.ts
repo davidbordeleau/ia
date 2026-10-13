@@ -23,8 +23,8 @@ import { sha256 } from '@inventarch/distribution/services';
 import { runBounded } from '@tools/testing/subprocess.js';
 import { ProjectionError } from '@inventarch/workspace-runtime/projections';
 import { applyHostProjection, HOOK_KEPT, renderProjectionFor } from '../src/host-projection.js';
-import { quote } from '../src/render.js';
-import { cleanup, cli, nextArgv, run } from './workspace-fixture.js';
+
+import { quoteCommandRoot as quote, cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
 import {
   doctor,
   GUARD_STATE,
@@ -175,6 +175,43 @@ async function guarded(
   return output.hookSpecificOutput?.permissionDecisionReason;
 }
 const codeOf = (reason: string | undefined): string | undefined => reason?.split(':')[0];
+
+it('follows shell-safe registered guard removal and unreadable ownership repairs', async () => {
+  const { root: initial, env } = await composed(),
+    root = resolve(scratch('active-hook-root'), 'ws-$(Write-Output SENTINEL)'),
+    source = read(initial, '.ia/src/hooks.ia');
+  cpSync(initial, root, { recursive: true });
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  const foreign = { matcher: 'Read', hooks: [{ command: 'foreign-handler', args: ['preserve'] }] };
+  const current = settings(root);
+  current.hooks!.PreToolUse!.push(foreign);
+  writeFileSync(resolve(root, SETTINGS), JSON.stringify(current));
+  put(root, '.ia/src/hooks.ia', 'this is not an IA source');
+  const denied = await guarded(root, hookGroups(root).get(HOOK), 'docs/guide.md');
+  expect(denied).toContain('"ia host claude --root . --remove --apply --yes"');
+  expect(denied).not.toContain('SENTINEL');
+  const removed = await run([...nextArgv(denied!), '--json'], { cwd: root, env });
+  expect(removed.exitCode, removed.stdout + removed.stderr).toBe(0);
+  expect(hookGroups(root).size).toBe(0);
+  expect(settings(root).hooks!.PreToolUse).toContainEqual(foreign);
+  expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+  put(root, '.ia/src/hooks.ia', source);
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  put(root, HOOK_STATE, '{}');
+  const before = snapshot(root, [SETTINGS, HOOK_STATE, AGENT, SKILL, PROJECTION]);
+  const refusal = await host(root, env, 'claude', '--apply', '--yes');
+  expect(refusal.exitCode).not.toBe(0);
+  const next = JSON.parse(refusal.stdout).next as string;
+  expect(next).toContain('--root .');
+  expect(next).not.toContain('SENTINEL');
+  expect(snapshot(root, Object.keys(before))).toEqual(before);
+  // The located manual repair removes only IA's damaged state and hook groups, preserving the foreign group.
+  rmSync(resolve(root, HOOK_STATE));
+  withoutHookGroups(root);
+  const followed = await run([...nextArgv(next), '--yes', '--json'], { cwd: root, env });
+  expect(followed.exitCode, followed.stdout + followed.stderr).toBe(0);
+  expect(settings(root).hooks!.PreToolUse).toContainEqual(foreign);
+});
 
 it('refuses removal when hook ownership is lost and preserves the active group until manual recovery', async () => {
   const { root, env } = await composed();

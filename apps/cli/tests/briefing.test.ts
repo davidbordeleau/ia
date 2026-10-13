@@ -3,6 +3,7 @@
  * pure function `ia doctor --host` calls, so no case needs a workspace, an IA home or a spawned process.
  */
 import { expect, it } from 'vitest';
+import { resolve } from 'node:path';
 import { brief } from '../src/briefing.js';
 import type { BriefInput } from '../src/briefing.js';
 
@@ -24,6 +25,48 @@ const base: BriefInput = {
   updates: null,
   refresh: null,
 };
+
+it('keeps structured argv as data while omitting shell-active roots from rendered briefing commands', () => {
+  for (const name of [
+    '$(Write-Output SENTINEL)',
+    '`echo SENTINEL`',
+    'a" --root other',
+    'a\nb',
+    'a,b',
+    '%PATH%',
+    '!PATH!',
+    'a^b',
+    'a&b',
+  ]) {
+    const root = `/work/${name}`;
+    const result = brief({ ...base, root, supplied: root });
+    expect(result.nextActions[0]!.argv).toEqual(['ia', 'host', 'claude', '--root', root, '--apply']);
+    expect(result.nextActions[0]!.host).toBe('ia host claude --root . --apply');
+    expect(result.session.notice).toContain('from the workspace root');
+    expect(result.session.notice).not.toContain(root);
+    const plain = brief({ ...base, supplied: root });
+    expect(plain.nextActions[0]!.argv).toEqual(['ia', 'init', root]);
+    expect(plain.nextActions[0]!.host).toBe('ia init .');
+    expect(plain.session.context.join('\n')).toContain('from the workspace root');
+  }
+});
+
+it('preserves inherited registry guidance when doctor points at an enclosing workspace', () => {
+  const cwd = resolve('registry-advice'),
+    enclosing = resolve(cwd, 'workspace(active)'),
+    result = brief({
+      ...base,
+      supplied: resolve(enclosing, 'nested'),
+      enclosing,
+      advice: { cwd, env: { IA_REGISTRY: './registry' } },
+    });
+  const text = result.session.context.join('\n');
+  expect(text).toContain('"ia doctor --help"');
+  expect(text).toContain('IA_REGISTRY');
+  expect(text).toContain(JSON.stringify(resolve(cwd, 'registry')));
+  expect(text).not.toContain('ia doctor --root .');
+  expect(result.nextActions).toEqual([]);
+});
 
 it('not a workspace, no decision: silent to the user, init offered only when relevant', () => {
   const { session, nextActions } = brief(base);
@@ -225,7 +268,7 @@ it('with --root inside a workspace, the briefing names that workspace and neithe
   expect(session.notice).toBeNull();
   expect(nextActions).toEqual([]);
   expect(session.context).toContain(
-    '/w/apps/cli is inside InventArch workspace /w; run ia doctor --root /w for its state.',
+    '/w/apps/cli is inside InventArch workspace /w; run "ia doctor --root /w" for its state.',
   );
   expect(session.context.join('\n')).not.toContain('not an InventArch workspace');
 });

@@ -44,7 +44,7 @@ import { runProject } from './project.js';
 import { runRead } from './read.js';
 import { runValidate } from './validate.js';
 import { runVocabulary } from './vocabulary.js';
-import type { Capabilities, Terminal, Token } from './render.js';
+import type { AdviceContext, Capabilities, Terminal, Token } from './render.js';
 import {
   atom,
   document,
@@ -54,6 +54,7 @@ import {
   quote,
   remedyWords,
   resolveCapabilities,
+  safeRootAdvice,
   sectionLabel,
   terminalText,
   words,
@@ -141,6 +142,7 @@ export class Refusal extends Error {
     readonly next: string | null = null,
     /** §6.5 element 1 when there is no `where`: the invocation that was refused, rendered but never serialized. */
     readonly at: string | null = null,
+    readonly registryIntent?: AdviceContext['registryIntent'],
   ) {
     super(message);
     this.name = 'Refusal';
@@ -169,6 +171,29 @@ const codeOf = (error: unknown): string | undefined => {
 export interface Refused {
   readonly command: string | null;
   readonly root?: string | undefined;
+  readonly roots?: readonly string[];
+  readonly advice?: AdviceContext;
+}
+/** Root spellings already selected by an invocation; failed usage performs no filesystem discovery. */
+function suggestionRoots(cwd: string, supplied: string | undefined, inspect: boolean): readonly string[] {
+  const roots = supplied === undefined ? [cwd] : [supplied, resolve(cwd, supplied)];
+  if (!inspect) return roots;
+  if (supplied === undefined) {
+    try {
+      const found = discoverRoot(cwd);
+      if (found !== undefined) roots.push(found);
+    } catch {
+      /* Keep the original refusal if discovery itself is unavailable. */
+    }
+  }
+  for (const root of [...roots]) {
+    try {
+      roots.push(realpathSync(root));
+    } catch {
+      /* Missing roots keep their original spelling. */
+    }
+  }
+  return roots;
 }
 /** Code areas whose refusals concern authored records, so their findings are what `ia validate` reports. */
 const RECORD_AREAS: ReadonlySet<string> = new Set(['COMP', 'GRAPH', 'LANG']);
@@ -219,7 +244,11 @@ export function renderRefusal(
   json: boolean,
   refused: Refused = { command: null },
 ): Result {
-  const next = refusal.next ?? serviceNext(refusal.code, refused);
+  const next = safeRootAdvice(
+    refusal.next ?? serviceNext(refusal.code, refused),
+    [refused.root, ...(refused.roots ?? [])],
+    refused.advice === undefined ? undefined : { ...refused.advice, registryIntent: refusal.registryIntent },
+  );
   const located =
     refusal.where?.path === undefined || refusal.where.path === ''
       ? null
@@ -504,6 +533,32 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   host: runHost,
 };
 
+/** Rebuild parsed values without losing option-token disambiguation or the canonical init target position. */
+function parsedInvocation(command: CommandSpec, args: Arguments): string {
+  const optionTokens = new Set(
+    command.grammar.options.flatMap((option) =>
+      option.short === undefined ? [`--${option.name}`] : [`--${option.name}`, `-${option.short}`],
+    ),
+  );
+  const options = command.grammar.options.flatMap((option) =>
+    option.kind === 'boolean'
+      ? args.flag(option.name)
+        ? [`--${option.name}`]
+        : []
+      : args
+          .list(option.name)
+          .flatMap((value) => (optionTokens.has(value) ? [`--${option.name}=${value}`] : [`--${option.name}`, value])),
+  );
+  const positionals =
+    command.name === 'init'
+      ? args.positionals.map((value) => (value.startsWith('-') ? `./${value}` : value))
+      : args.positionals;
+  const argv = positionals.some((value) => value.startsWith('-'))
+    ? [...options, '--', ...positionals]
+    : [...positionals, ...options];
+  return ['ia', command.name, ...argv].map(quote).join(' ');
+}
+
 /** §1.2 step 5. Parse, then run; every class-2 check has already happened when a handler is entered. */
 export async function runCommand(command: CommandSpec, argv: readonly string[], host: Host): Promise<Result> {
   const preliminary = resolveCapabilities(host.stdout, {});
@@ -545,13 +600,22 @@ export async function runCommand(command: CommandSpec, argv: readonly string[], 
     host.signal?.throwIfAborted();
     return result;
   } catch (error) {
+    const suppliedRoot = args?.value('root') ?? (command.name === 'init' ? args?.positionals[0] : undefined);
+    const roots = suggestionRoots(
+      host.cwd,
+      suppliedRoot,
+      args !== undefined && !(error instanceof UsageError) && !(error instanceof Refusal && error.exit === 2),
+    );
     if (host.signal?.aborted) {
       // Design row 27: an interruption names one next command too — the rerun a verb that had written supplies, or
-      // else this invocation again, exactly as it was typed.
-      const next =
+      // else this invocation rebuilt from the parsed values, so root option spellings cannot bypass its remedy.
+      const next = safeRootAdvice(
         error instanceof Interrupted
           ? error.next
-          : `Run "${['ia', command.name, ...argv].map(quote).join(' ')}" again.`;
+          : `Run "${args === undefined ? `ia ${command.name} --help` : parsedInvocation(command, args)}" again.`,
+        roots,
+        host,
+      );
       return {
         exitCode: 130,
         stdout: wantsJson(argv)
@@ -567,12 +631,12 @@ export async function runCommand(command: CommandSpec, argv: readonly string[], 
         stderr: `Interrupted. ${next}\n`,
       };
     }
-    const refused: Refused = { command: command.name, root: args?.value('root') };
+    const refused: Refused = { command: command.name, root: args?.value('root'), roots, advice: host };
     const gated = gatedNext(refusalOf(error, refused), gate),
-      raw = args === undefined ? gated : inertNext(gated, { command, args });
+      raw = args === undefined ? gated : inertNext(gated, { command, args, host });
     const refusal =
       raw.where === null && raw.at === null
-        ? new Refusal(raw.code, raw.message, raw.exit, null, raw.next, `ia ${command.name}`)
+        ? new Refusal(raw.code, raw.message, raw.exit, null, raw.next, `ia ${command.name}`, raw.registryIntent)
         : raw;
     return renderRefusal(refusal, refusal.exit === 2 ? preliminary : caps, wantsJson(argv), refused);
   }
@@ -660,6 +724,25 @@ export async function dispatch(
     nearest !== undefined && (LEGACY_OPERATIONS as readonly string[]).includes(nearest)
       ? machineOptions(argv.slice(1))
       : argv.slice(1);
+  let suggestion = nearest === undefined ? 'ia --help' : ['ia', nearest, ...rest].map(quote).join(' ');
+  let roots: readonly string[] = [];
+  const nearestCommand = nearest === undefined ? undefined : findCommand(nearest);
+  if (nearestCommand !== undefined) {
+    try {
+      const parsed = parseArguments(rest, nearestCommand.grammar);
+      suggestion = parsedInvocation(nearestCommand, parsed);
+      roots = suggestionRoots(
+        host.cwd,
+        parsed.value('root') ?? (nearest === 'init' ? parsed.positionals[0] : undefined),
+        false,
+      );
+    } catch {
+      suggestion = `ia ${nearest} --help`;
+    }
+  } else if (nearest !== undefined) {
+    const index = rest.indexOf('--root');
+    roots = suggestionRoots(host.cwd, index === -1 ? undefined : rest[index + 1], false);
+  }
   return renderRefusal(
     new Refusal(
       'IA-CLI-USAGE',
@@ -668,10 +751,11 @@ export async function dispatch(
       null,
       nearest === undefined
         ? 'Run "ia --help" for the commands this binary admits.'
-        : `Did you mean "${['ia', nearest, ...rest].map(quote).join(' ')}"?${others}`,
+        : `Did you mean "${suggestion}"?${others}`,
       `ia ${token}`,
     ),
     caps,
     wantsJson(argv),
+    { command: nearest ?? null, roots, advice: host },
   );
 }

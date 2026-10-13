@@ -46,6 +46,7 @@ import {
   errorBlock,
   headerLine,
   quote,
+  safeRootAdvice,
   sectionLabel,
   statusSymbol,
   truncateDigest,
@@ -549,7 +550,13 @@ export function renderValidation(view: ValidationView, options: ValidationOption
   if (view.bindings.results.length > 0) blocks.push(bindingsSection(view.bindings, caps));
   blocks.push(
     entry(
-      [words(closing(view, total.errors, bound.revoked + checked.revoked, checked.notEvaluated))],
+      [
+        words(
+          safeRootAdvice(closing(view, total.errors, bound.revoked + checked.revoked, checked.notEvaluated), [
+            view.root,
+          ]),
+        ),
+      ],
       {
         depth: 0,
         symbol: 'step',

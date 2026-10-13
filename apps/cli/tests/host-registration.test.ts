@@ -21,10 +21,11 @@ import {
 import { dirname, join, resolve } from 'node:path';
 import { PACKET_MARKER } from '@inventarch/runtime';
 import { runBounded } from '@tools/testing/subprocess.js';
-import { GUARD_RETIRED, GUARD_SCOPE, MACHINE_LOCAL, rootedNext } from '../src/host.js';
-import { quote } from '../src/render.js';
-import { cli, run, scratch } from './workspace-fixture.js';
+import { GUARD_RETIRED, GUARD_SCOPE, MACHINE_LOCAL } from '../src/host.js';
+import { quoteCommandRoot as quote, cli, run, scratch, cleanup } from './workspace-fixture.js';
+
 import {
+  rootedCommandNext as rootedNext,
   put,
   read,
   initialized,
@@ -41,7 +42,6 @@ import {
   STEWARD,
 } from './host-fixture.js';
 import { afterAll, expect, it, vi } from 'vitest';
-import { cleanup } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
 // Every case materializes a host payload of some 1,400 files in its own IA home (it carries the installed read handler

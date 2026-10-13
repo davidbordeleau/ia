@@ -77,7 +77,8 @@ export function qualifyInstalledViews(cli, cwd, env, workspace) {
     return result.stdout;
   };
   const machine = (args, exit = 0, deprecation = false) => JSON.parse(invoke([...args, '--json'], exit, deprecation));
-  const rooted = `--root ${JSON.stringify(workspace)}`;
+  const commandRoot = process.platform === 'win32' ? workspace.replaceAll('\\', '/') : workspace;
+  const rooted = `--root ${JSON.stringify(commandRoot)}`;
   const refusal = (args, exit, code, command, repair, directoryTimes = true) => {
     const before = tree(workspace, directoryTimes),
       result = machine(args, exit);

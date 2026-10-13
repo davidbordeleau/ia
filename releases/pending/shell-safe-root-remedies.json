@@ -1,0 +1,17 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "minor",
+  "title": "Keep workspace roots inert in suggested commands",
+  "summary": "Command suggestions use an explicit current-directory root and explain where to run when a workspace path contains shell syntax. CLI refusal, doctor, profile and hook recovery guidance no longer treats JSON quoting as shell escaping. Unknown-command advice preserves only parsed nearest-command arguments, and interruption reruns rebuild decoded root options and positional init targets. Option-like values retain equals spelling, and leading-dash init targets keep their positional protection after normalization. Inert Windows roots use forward slashes for consistent Git Bash, PowerShell and cmd arguments. Directory instructions appear only when the printed root was actually omitted; separator normalization keeps relative recovery and apply commands in their original directory. Fresh init previews whose omitted target is absent first instruct the operator to create and enter it without pasting its active path into a shell. Capture-preview advice normalizes both absolute and relative supplied Windows roots before rendering. When moving to the workspace root would change a relative registry selection, advice preserves the selected directory with a safe spelling or replaces the operation with help and precise manual restoration guidance. Doctor guidance restores the registry through the environment, and remedies that deliberately choose another registry keep that intent. Runtime adapters can use the new inertCommandRoot export to decide whether a known root can be repeated in a command. Mandate admission and ownership decisions remain conservative.",
+  "packages": [
+    "@inventarch/cli",
+    "@inventarch/runtime",
+    "@inventarch/steward-hook"
+  ],
+  "paths": [
+    "apps/cli/",
+    "apps/steward-hook/",
+    "packages/runtime/",
+    "tools/distribution/installed-views.mjs"
+  ]
+}

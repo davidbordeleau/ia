@@ -6,7 +6,7 @@ import { registryAddCollection } from '@inventarch/distribution/registry-build';
 import { workspaceRevision, planAdoption, applyAdoption } from '@inventarch/distribution/registry';
 import { captureWorkspace, Corpus } from '@inventarch/workspace-runtime';
 import { resourceOccurrences } from '@inventarch/workspace-runtime/resources';
-import { cleanup, nextArgv, run, scratch } from './workspace-fixture.js';
+import { cleanup, commandRoots, nextArgv, run, scratch } from './workspace-fixture.js';
 import * as captureService from '../src/capture.js';
 import * as projectionService from '../src/host-projection.js';
 import { buildFixtureRegistry } from './registry-fixture.js';
@@ -161,16 +161,18 @@ it.each(['capture', 'projection'] as const)(
     const pin = adoptedBindings(root);
     expect(pin).toHaveLength(1);
     const args = nextArgv(body.next);
-    expect(args).toEqual([
-      'adopt',
-      'example/reference@1.0.0',
-      '--registry',
-      fixture.root,
-      '--root',
-      root,
-      '--apply',
-      '--yes',
-    ]);
+    expect(args).toEqual(
+      commandRoots([
+        'adopt',
+        'example/reference@1.0.0',
+        '--registry',
+        fixture.root,
+        '--root',
+        root,
+        '--apply',
+        '--yes',
+      ]),
+    );
     const restored = await run([...args, '--json']);
     expect(restored.exitCode, restored.stdout).toBe(0);
     expect(JSON.parse(restored.stdout).projections).toHaveLength(1);

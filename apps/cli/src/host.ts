@@ -82,6 +82,7 @@ import {
   headerLine,
   indentOf,
   quote,
+  safeRootAdvice,
   sectionLabel,
   truncateDigest,
   words,
@@ -717,7 +718,7 @@ const say = (view: Pick<HostView, 'host' | 'root' | 'rooted'>, text: string): st
   hostNext(text, view.host, view.root, view.rooted);
 /** The next action a conflict renders, and the one its refusal carries, rooted when `--root` was given. */
 const nextFor = (view: HostView, id: ElementId, conflict: Conflict): string =>
-  say(view, conflictNext(view, id, conflict));
+  safeRootAdvice(say(view, conflictNext(view, id, conflict)), [view.root]);
 /** The unrooted next action for a conflict. §5.3 fixes the unowned MCP entry's wording. */
 function conflictNext(view: HostView, id: ElementId, conflict: Conflict): string {
   const rerun = `ia host ${view.host}${view.remove ? ' --remove' : ''} --apply`;
@@ -1084,7 +1085,12 @@ const notesBlocks = (view: HostView, caps: Capabilities): readonly (readonly str
     : []),
 ];
 
-export function renderHostPlan(view: HostView, applied: HostApplied | null, caps: Capabilities): string {
+export function renderHostPlan(
+  view: HostView,
+  applied: HostApplied | null,
+  caps: Capabilities,
+  supplied?: string,
+): string {
   const conflicted = view.elements.some((element) => element.conflict !== null);
   return document(
     [
@@ -1108,10 +1114,12 @@ export function renderHostPlan(view: HostView, applied: HostApplied | null, caps
       entry(
         [
           ...(applied === null && !conflicted
-            ? commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps)
+            ? commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps, [view.root, supplied])
             : []),
           // `plan.undo` stays unrooted (§4 `--json`); the printed command carries --root when it was given.
-          ...(view.remove ? [] : commandFacts('Undo with "', say(view, `"${view.undo}"`).slice(1, -1), '".', 3, caps)),
+          ...(view.remove
+            ? []
+            : commandFacts('Undo with "', say(view, `"${view.undo}"`).slice(1, -1), '".', 3, caps, [view.root])),
           ...(applied !== null && !view.remove ? [words('Run "ia doctor" for the observed host state.')] : []),
         ],
         { depth: 0, symbol: 'step' },
@@ -1161,7 +1169,7 @@ export async function runHost(context: Context): Promise<Result> {
   const rendered = (applied: HostApplied | null): Result =>
     json
       ? { exitCode: 0, stdout: JSON.stringify(hostEnvelope(view, applied)) + '\n', stderr: '' }
-      : { exitCode: 0, stdout: renderHostPlan(view, applied, caps), stderr: '' };
+      : { exitCode: 0, stdout: renderHostPlan(view, applied, caps, args.value('root')), stderr: '' };
   // §4: a plan with a conflict is a successful report; only --apply refuses it.
   if (!args.flag('apply')) return rendered(null);
   // §2.8 rule 3. Parsing has already refused every --apply whose question cannot be asked or answered.
@@ -1175,7 +1183,10 @@ export async function runHost(context: Context): Promise<Result> {
         [
           entry([words('Nothing was applied.')], { depth: 0, symbol: 'info' }, caps),
           entry(
-            commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps),
+            commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps, [
+              view.root,
+              args.value('root'),
+            ]),
             { depth: 0, symbol: 'step' },
             caps,
           ),

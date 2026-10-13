@@ -21,11 +21,22 @@ import {
 import { resolve, sep } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { DISTRIBUTION_ENGINE_VERSION } from '@inventarch/db/distribution';
-import { cleanup, cli, FORMATTABLE, makeHost, packable, run, scratch, workspace } from './workspace-fixture.js';
+import {
+  cleanup,
+  cli,
+  FORMATTABLE,
+  makeHost,
+  packable,
+  run,
+  scratch,
+  workspace,
+  quoteCommandRoot as quote,
+} from './workspace-fixture.js';
 import { dispatch } from '../src/consumer.js';
 import { collectPlan } from '../src/distribute.js';
 import { collectDoctor } from '../src/doctor.js';
-import { quote } from '../src/render.js';
+
+import { quote as serviceQuote } from '../src/render.js';
 
 it('doctor keeps real discovery by default and explicit roots precede fixture observations', () => {
   const root = workspace(),
@@ -479,7 +490,7 @@ it('keeps the 1.x collectPlan request form of @inventarch/cli/internal/distribut
     next: `Run "ia install ${ID}@^0.2.0 --catalog .ia/work/catalog.json --offline" first.`,
   });
   await expect(collectPlan({ ...request, rooted: true })).rejects.toMatchObject({
-    next: `Run "ia install ${ID}@^0.2.0 --catalog .ia/work/catalog.json --offline --root ${quote(root)}" first.`,
+    next: `Run "ia install ${ID}@^0.2.0 --catalog .ia/work/catalog.json --offline --root ${serviceQuote(root)}" first.`,
   });
 });
 
@@ -818,7 +829,7 @@ it('doctor --root <workspace subdirectory> stays literal and only names the encl
   expect(report.checks.find((check: { id: string }) => check.id === 'root').detail).toBe(nested);
   expect(report.checks.find((check: { id: string }) => check.id === 'workspace-decision')).toBeUndefined();
   expect(report.session.context).toContain(
-    `${nested} is inside InventArch workspace ${root}; run ia doctor --root ${quote(root)} for its state.`,
+    `${nested} is inside InventArch workspace ${root}; run "ia doctor --root ${quote(root)}" for its state.`,
   );
   expect(report.session.context.join(' ')).not.toContain('not an InventArch workspace');
   expect(report.session.notice).toBeNull();

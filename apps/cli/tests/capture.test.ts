@@ -20,7 +20,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { afterAll, expect, it, vi } from 'vitest';
 import { readInputs } from '@inventarch/db';
@@ -41,8 +41,17 @@ import {
 } from '../src/capture.js';
 import { COMMANDS } from '../src/commands.js';
 import { DEFAULT_OUT, DEPRECATION } from '../src/compile.js';
-import { quote } from '../src/render.js';
-import { cleanup, commandsIn, nextArgv, repository, run, scratch, workspace } from './workspace-fixture.js';
+
+import {
+  quoteCommandRoot as quote,
+  cleanup,
+  commandsIn,
+  nextArgv,
+  repository,
+  run,
+  scratch,
+  workspace,
+} from './workspace-fixture.js';
 
 afterAll(cleanup);
 
@@ -873,6 +882,26 @@ it('refuses a file where the snapshot directory or .ia/work belongs, writing not
     expect((await run(nextArgv(body.next))).exitCode, path).toBe(0);
   }
 });
+
+it.skipIf(process.platform !== 'win32')(
+  'prints capture preview roots that replay at the same Windows target',
+  async () => {
+    const root = workspace();
+    await capture(root);
+    const cwd = dirname(dirname(root));
+    for (const given of [root, relative(cwd, root)]) {
+      const before = pairAt(root);
+      const human = await run(['capture', '--preview', '--root', given], { cwd });
+      expect(human.exitCode, human.stdout).toBe(0);
+      const commands = commandsIn(unwrapped(human.stdout));
+      expect(commands).toEqual([`ia capture --root ${given.replaceAll('\\', '/')}`]);
+      expect(pairAt(root)).toEqual(before);
+      const followed = await run([...nextArgv(`Run "${commands[0]}".`), '--json'], { cwd });
+      expect(followed.exitCode, followed.stdout).toBe(0);
+      expect(JSON.parse(followed.stdout).snapshot).toBe(resolve(realpathSync(root), CURRENT));
+    }
+  },
+);
 
 it('previews exactly the edited record as changed and writes nothing: both snapshot files keep their bytes and mtimes', async () => {
   // Decision capture-preview-placement: the counts and the changed, new and removed identities, without writing.

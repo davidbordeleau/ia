@@ -21,8 +21,18 @@ import { parseArguments } from '../src/args.js';
 import { findCommand } from '../src/commands.js';
 import type { Refusal } from '../src/consumer.js';
 import { positionRefusal, renderPosition } from '../src/position.js';
-import { quote, resolveCapabilities, truncateDigest } from '../src/render.js';
-import { cleanup, commandsIn, delivery, nextArgv, repository, run, scratch } from './workspace-fixture.js';
+import { resolveCapabilities, truncateDigest } from '../src/render.js';
+
+import {
+  quoteCommandRoot as quote,
+  cleanup,
+  commandsIn,
+  delivery,
+  nextArgv,
+  repository,
+  run,
+  scratch,
+} from './workspace-fixture.js';
 
 afterAll(cleanup);
 

@@ -52,30 +52,37 @@ const text = (value: unknown, label: string): string => {
 function snapshot(inputs: unknown): RevisionInputs {
   const { sources, languageVersion, kernelDigest: digest } = record(inputs, 'conformance.inputs');
   if (!Array.isArray(sources)) throw new TypeError('conformance.inputs.sources must be an array');
+  // An index loop into a fresh array literal, reading the length once: Array methods would build their results through
+  // the caller's constructor[Symbol.species], which can define other objects in place of the copies validated here.
+  const length: unknown = sources.length;
+  if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0)
+    throw new TypeError('conformance.inputs.sources must be an array');
+  const copied: RevisionSource[] = [];
+  for (let index = 0; index < length; index++) {
+    const at = `conformance.inputs.sources[${index}]`;
+    const { path, text: body, location } = record(sources[index], at);
+    const { placement, provenance } = record(location, `${at}.location`);
+    const { kind, band, reach } = record(placement, `${at}.location.placement`);
+    if (typeof band !== 'number') throw new TypeError(`${at}.location.placement.band must be a number`);
+    copied.push(
+      Object.freeze({
+        path: text(path, `${at}.path`),
+        text: text(body, `${at}.text`),
+        location: Object.freeze({
+          placement: Object.freeze({
+            kind: text(kind, `${at}.location.placement.kind`),
+            band,
+            reach: text(reach, `${at}.location.placement.reach`),
+          }),
+          provenance: text(provenance, `${at}.location.provenance`),
+        }) as Location,
+      }),
+    );
+  }
   return Object.freeze({
     languageVersion: text(languageVersion, 'conformance.inputs.languageVersion'),
     kernelDigest: text(digest, 'conformance.inputs.kernelDigest'),
-    sources: Object.freeze(
-      (Array.prototype.slice.call(sources) as unknown[]).map((source, index): RevisionSource => {
-        const at = `conformance.inputs.sources[${index}]`;
-        const { path, text: body, location } = record(source, at);
-        const { placement, provenance } = record(location, `${at}.location`);
-        const { kind, band, reach } = record(placement, `${at}.location.placement`);
-        if (typeof band !== 'number') throw new TypeError(`${at}.location.placement.band must be a number`);
-        return Object.freeze({
-          path: text(path, `${at}.path`),
-          text: text(body, `${at}.text`),
-          location: Object.freeze({
-            placement: Object.freeze({
-              kind: text(kind, `${at}.location.placement.kind`),
-              band,
-              reach: text(reach, `${at}.location.placement.reach`),
-            }),
-            provenance: text(provenance, `${at}.location.provenance`),
-          }) as Location,
-        });
-      }),
-    ),
+    sources: Object.freeze(copied),
   });
 }
 

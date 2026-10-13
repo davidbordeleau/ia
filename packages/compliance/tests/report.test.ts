@@ -645,6 +645,55 @@ describe('evaluate binds conformance evidence to the graph (C31)', () => {
     });
     expect([sourceReads, textReads, versionReads]).toEqual([1, 1, 1]);
   });
+  it('copies the sources without Array methods, so a species constructor cannot swap them after validation', () => {
+    // Array methods build their result through constructor[Symbol.species]. This array's species hands back, in place
+    // of the validated copies, the caller's own objects, whose text getter shows the tampered floor first.
+    const tampered = local.inputs.sources.find((s) => s.path.endsWith('/kind.ia'))!,
+      original = embedded.inputs.sources.find((s) => s.path.endsWith('/kind.ia'))!;
+    let textReads = 0;
+    const own = local.inputs.sources.map((s) =>
+      s !== tampered
+        ? s
+        : {
+            path: s.path,
+            location: s.location,
+            get text() {
+              textReads++;
+              return textReads === 1 ? tampered.text : original.text;
+            },
+          },
+    );
+    // The first array a copy makes passes the caller's objects through; the second swaps each validated element, as it
+    // is defined, for the caller's object at that index; later ones are plain arrays.
+    let made = 0;
+    function Species(length: number): unknown[] {
+      made++;
+      if (made > 2) return new Array<unknown>(length);
+      const swap = made === 2;
+      return new Proxy(new Array<unknown>(length), {
+        defineProperty: (target, key, descriptor) =>
+          Reflect.defineProperty(
+            target,
+            key,
+            swap && typeof key === 'string' && /^\d+$/.test(key) && 'value' in descriptor
+              ? { ...descriptor, value: own[Number(key)] }
+              : descriptor,
+          ),
+        get: (target, key, receiver) =>
+          key === 'constructor' ? { [Symbol.species]: Species } : Reflect.get(target, key, receiver),
+      });
+    }
+    const sources: unknown[] = [...local.inputs.sources];
+    Object.defineProperty(sources, 'constructor', { value: { [Symbol.species]: Species } });
+    const inputs = { ...local.inputs, sources: sources as unknown as typeof local.inputs.sources };
+    const report = evaluate(local.graph, { conformance: { inputs, kernel, fixtures } });
+    expect(verdictsOf(report)['COMP-KERNEL']).toEqual(
+      notEvaluated('COMP-KERNEL', 'the kernel evidence verified another floor'),
+    );
+    expect(report.conformance?.kernel).toBeUndefined();
+    // The copy reads the given array by index, so the caller's swapped-in objects are never reached.
+    expect(textReads).toBe(0);
+  });
   it('refuses revision inputs whose fields are not plain strings and locations', () => {
     const inputs = embedded.inputs,
       first = inputs.sources[0]!;

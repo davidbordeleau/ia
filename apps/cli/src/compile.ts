@@ -1,13 +1,13 @@
 /**
  * `ia compile`: docs/specs/consumer-cli-contract/README.md §2.4, deprecated in favour of `ia capture`.
  *
- * Decision compile-verb-fate (operator, 2026-10-07): from 2.0 the verb is a deprecated alias of `ia capture`, removed
- * in 3.0. `runCompile` runs the capture and adds one deprecation line on stderr. Of the 1.x options, `--force` maps
+ * The deprecated alias of `ia capture` remains available in this release. `runCompile` runs the capture and adds
+ * one deprecation line on stderr. Of the 1.x options, `--force` maps
  * onto the capture, which always writes, and `--out <file>` and `--stdout` refuse naming the `ia capture` command to
  * run instead, because the capture writes one snapshot at a fixed place. 1.x kept the verb unchanged with that line
  * (decision release-bump).
  *
- * The `ia.compiled.v1` writer below stays exported for one major, so `@inventarch/cli/internal/compile` keeps its
+ * The `ia.compiled.v1` writer below stays exported, so `@inventarch/cli/internal/compile` keeps its
  * published signatures, but no command writes the artifact any more. One deterministic document, `ia.compiled.v1`. Determinism is a requirement on this writer, not a hope: records
  * are sorted by canonical identity, diagnostics by (path, line, code, message), object keys are emitted sorted and
  * the document ends in exactly one newline — which is what the distribution's own `json()` serializer does, so it
@@ -166,7 +166,7 @@ export function renderCompile(view: CompileView, path: string, caps: Capabilitie
  * Decision compile-verb-fate: `ia compile` prints this one line on stderr whenever it runs to a result, in both output
  * modes, so stdout is exactly what `ia capture` writes there; a refusal prints only the refusal.
  */
-export const DEPRECATION = `Deprecated: ia compile is an alias of "ia capture" and is removed in 3.0; run "ia capture", which writes the admitted snapshot to ${CAPTURE_CURRENT}.\n`;
+export const DEPRECATION = `Deprecated: ia compile is an alias of "ia capture"; run "ia capture", which writes the admitted snapshot to ${CAPTURE_CURRENT}.\n`;
 
 /**
  * The 1.x options the capture has no place for, refused as usage before the workspace is read. The remedy names the

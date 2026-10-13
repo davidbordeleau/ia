@@ -1,0 +1,12 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "patch",
+  "title": "Keep deprecated compile guidance consistent with the retained alias",
+  "summary": "The deprecated ia compile alias remains available in this release, with the same capture behavior, legacy-option mapping and internal writer exports. Help and the deprecation notice direct callers to ia capture without claiming the still-available alias was removed in 3.0.",
+  "packages": [
+    "@inventarch/cli"
+  ],
+  "paths": [
+    "apps/cli/"
+  ]
+}

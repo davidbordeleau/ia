@@ -1177,10 +1177,12 @@ it('lists ia capture in the help, and ia compile as its deprecated alias', async
   const help = await run(['capture', '--help']);
   expect(help.stdout).toContain('ia capture [--preview] [--actor <agent>] [--json]');
   expect(flat(help.stdout)).toContain('--preview Report what the capture would write; write nothing');
-  // Decision compile-verb-fate: from 2.0 `ia compile` is the deprecated alias of `ia capture`, removed in 3.0.
+  // The deprecated alias remains available; help must not claim that this candidate removed it.
   const compile = await run(['compile', '--help']);
   expect(compile.stdout).toContain('ia compile [--preview] [--force] [--json]');
-  expect(flat(compile.stdout)).toContain('Deprecated alias of capture, removed in 3.0');
+  expect(flat(compile.stdout)).toContain('Deprecated alias of capture');
+  expect(flat(compile.stdout)).not.toContain('removed in 3.0');
+  expect(DEPRECATION).not.toContain('removed in 3.0');
 });
 
 it('makes ia compile write the capture snapshot pair, never the 1.x compiled artifact', async () => {

@@ -248,7 +248,7 @@ it("formats this repository's participant records, authored under its root outsi
 }, 120_000);
 
 it('runs ia capture as the deprecated ia compile, maps --force and refuses --out and --stdout naming ia capture', async () => {
-  // Decision compile-verb-fate: from 2.0 `ia compile` is a deprecated alias of `ia capture`, removed in 3.0.
+  // The deprecated alias retains the capture's output and legacy-option mapping.
   const aliased = workspace(),
     captured = workspace();
   const first = await run(['compile', '--root', aliased]);

@@ -301,12 +301,12 @@ export const COMMANDS: readonly CommandSpec[] = [
     ]),
   },
   {
-    // Decision compile-verb-fate (operator, 2026-10-07): from 2.0 a deprecated alias of `ia capture`, removed in 3.0.
+    // The deprecated `ia capture` alias remains available in this release.
     // The 1.x options stay in the grammar so a 1.x invocation meets its mapping or its refusal, never an unknown flag.
     name: 'compile',
     group: 'workspace',
     // Short enough that its global help row fits 80 columns, so no wrapped fragment reads as a command name.
-    summary: 'Deprecated alias of capture, removed in 3.0',
+    summary: 'Deprecated alias of capture',
     syntax: ['ia compile [--preview] [--force] [--json]'],
     grammar: grammar([
       option({ name: 'preview', kind: 'boolean', summary: 'As ia capture --preview' }),

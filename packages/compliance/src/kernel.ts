@@ -1,11 +1,7 @@
 import { createHash } from 'node:crypto';
 import { buildRegistry, compile, parse } from '@inventarch/language';
 import type { CompiledField, CompiledRecord, Location } from '@inventarch/language';
-import * as exported from '@inventarch/language/internal/kernel.generated';
-import { stableSerialize } from '@inventarch/graph';
 import { validateSchema } from './schema.js';
-import { assess } from './types.js';
-import type { Assessment, Finding } from './types.js';
 
 /** One floor source: a canonical `.ia/src/floor/` path and its text. */
 export interface KernelSource {
@@ -331,34 +327,4 @@ export function generateKernel(input: readonly KernelSource[]): GeneratedKernel 
       .join('\n') +
     `\nexport const KERNEL_SOURCES: readonly Readonly<{ path: string; text: string }>[] = Object.freeze(${JSON.stringify(sources, null, 2)}.map((source) => Object.freeze(source)));\n`;
   return { text, digest, records: records.length, constants: { ...emitted, KERNEL_SOURCES: sources }, sources };
-}
-
-/**
- * COMP-KERNEL over `floor`: regenerate it and compare every regenerated constant, `KERNEL_DIGEST` and
- * `KERNEL_SOURCES` included, with what the running `@inventarch/language` exports. A floor that does not regenerate,
- * or regenerates to anything else, fails.
- */
-export function kernelAssessment(floor: readonly KernelSource[]): Assessment {
-  const findings: Finding[] = [];
-  const fail = (message: string): void => {
-    findings.push({
-      code: 'IA-COMP-FIXTURE-MISMATCH',
-      severity: 'error',
-      path: '.ia/src/floor',
-      line: 1,
-      message: `Kernel verification: ${message}`,
-    });
-  };
-  try {
-    const regenerated = generateKernel(floor).constants,
-      shipped: Readonly<Record<string, unknown>> = exported;
-    for (const name of [...new Set([...Object.keys(regenerated), ...Object.keys(shipped)])].sort(compare))
-      if (!(name in regenerated)) fail(`${name} is exported by the language but does not regenerate from the floor`);
-      else if (!(name in shipped)) fail(`${name} regenerates from the floor but the language does not export it`);
-      else if (stableSerialize(regenerated[name]) !== stableSerialize(shipped[name]))
-        fail(`${name} differs from regeneration`);
-  } catch (error) {
-    fail(error instanceof Error ? error.message : String(error));
-  }
-  return assess('COMP-KERNEL', 'floor', findings);
 }

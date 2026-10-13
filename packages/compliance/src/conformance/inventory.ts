@@ -1,16 +1,6 @@
 import { createHash } from 'node:crypto';
 import { stableSerialize } from '@inventarch/graph';
 
-/** Every file name suffix a language fixture may have: its source and the companions it is compared with. */
-export const FIXTURE_SUFFIXES = Object.freeze([
-  '.ia',
-  '.ast.json',
-  '.records.json',
-  '.pool.json',
-  '.diagnostics.json',
-  '.formatted.txt',
-  '.candidate.txt',
-] as const);
 /** The companions a fixture of this clause and mode may have, besides its `.ia` source. */
 export function companionSuffixes(clause: string, mode: 'pass' | 'fail'): readonly string[] {
   const allowed = mode === 'pass' ? ['.ast.json', '.records.json', '.pool.json'] : ['.diagnostics.json', '.pool.json'];

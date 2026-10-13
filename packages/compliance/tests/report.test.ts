@@ -156,7 +156,7 @@ describe('kernel verification (C31)', () => {
   });
   it('fails when the running language exports differ from regeneration', async () => {
     vi.resetModules();
-    vi.doMock('@inventarch/language/internal/kernel.generated', async (original) => {
+    vi.doMock('@inventarch/language', async (original) => {
       const actual = await original<Record<string, unknown>>();
       return { ...actual, KINDS: [...(actual['KINDS'] as string[])].reverse() };
     });
@@ -166,7 +166,28 @@ describe('kernel verification (C31)', () => {
         'Kernel verification: KINDS differs from regeneration',
       ]);
     } finally {
-      vi.doUnmock('@inventarch/language/internal/kernel.generated');
+      vi.doUnmock('@inventarch/language');
+      vi.resetModules();
+    }
+  });
+  it('fails when the running verb phrases differ from the regenerated present phrases', async () => {
+    vi.resetModules();
+    vi.doMock('@inventarch/language', async (original) => {
+      const actual = await original<Record<string, unknown>>();
+      const verbOf = actual['verbOf'] as (phrase: string) => unknown;
+      return {
+        ...actual,
+        VERB_PHRASES: (actual['VERB_PHRASES'] as string[]).map((p) => (p === 'governs' ? 'governz' : p)),
+        verbOf: (phrase: string) => (phrase === 'governs' ? undefined : verbOf(phrase)),
+      };
+    });
+    try {
+      const mocked = await import('../src/index.js');
+      expect(mocked.verifyKernel().assessment.findings.map((f) => f.message)).toEqual([
+        'Kernel verification: PRESENT_PHRASES differs from regeneration',
+      ]);
+    } finally {
+      vi.doUnmock('@inventarch/language');
       vi.resetModules();
     }
   });
@@ -178,8 +199,12 @@ describe('package-v1 suites (C31)', () => {
       .map((f) => f.replaceAll('\\', '/'))
       .filter((f) => f.endsWith('.ts'));
     expect(files).toEqual(expect.arrayContaining(['conformance/refusals.ts', 'conformance/evidence-fixtures.ts']));
-    for (const file of files)
-      expect(readFileSync(resolve(base, file), 'utf8'), file).not.toMatch(/from '[^']*\/(tools|tests|fixtures)\//);
+    for (const file of files) {
+      const text = readFileSync(resolve(base, file), 'utf8');
+      expect(text, file).not.toMatch(/from '[^']*\/(tools|tests|fixtures)\//);
+      // A package-internal subpath resolves only to a built dist, which kernel:check and the other prebuild steps lack.
+      expect(text, file).not.toMatch(/from '@inventarch\/[^']+\/internal\//);
+    }
   });
 });
 describe('fixture verification (C31)', () => {
@@ -276,6 +301,58 @@ describe('fixture verification (C31)', () => {
       ].sort(),
     );
   });
+  it('fails a companion its clause and mode do not admit, and a fixture listed under another clause', () => {
+    const extra = '{}\n';
+    const { temp, url } = copy((root) => writeFileSync(join(root, 'identity/fail/facet-undeclared.ast.json'), extra));
+    try {
+      const companion = tampered((i) => ({
+        ...i,
+        fixtures: i.fixtures.map((f) =>
+          f.path !== 'identity/fail/facet-undeclared.ia'
+            ? f
+            : { ...f, files: { ...f.files, '.ast.json': createHash('sha256').update(extra).digest('hex') } },
+        ),
+      }));
+      // The refused fixture does not run, so the code only it observes is uncovered too.
+      expect(messages(runProfile(companion.inventory, companion.digest, url))).toEqual([
+        'No passing failing-case observation covers IA-LANG-FACET-UNDECLARED',
+        'identity/fail/facet-undeclared.ast.json: .ast.json is not a companion of identity/fail fixtures',
+      ]);
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+    const moved = tampered((i) => ({
+      ...i,
+      fixtures: i.fixtures.map((f) => (f.path !== 'records/pass/full.ia' ? f : { ...f, clause: 'strings' })),
+    }));
+    expect(messages(runProfile(moved.inventory, moved.digest, directory))).toEqual([
+      'records/pass/full.ia: listed as a strings/pass fixture',
+    ]);
+  });
+  it('is not evaluated, not failed, when one listed fixture file cannot be read', async () => {
+    const unreadable = resolve(fileURLToPath(directory), 'format/fail/lost-comment.diagnostics.json');
+    vi.resetModules();
+    vi.doMock('node:fs', async (original) => {
+      const actual = await original<typeof import('node:fs')>();
+      const readFileSync = ((path: unknown, ...rest: unknown[]) => {
+        if (resolve(String(path)) === unreadable)
+          throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+        return (actual.readFileSync as (...args: unknown[]) => unknown)(path, ...rest);
+      }) as typeof actual.readFileSync;
+      return { ...actual, default: { ...actual, readFileSync }, readFileSync };
+    });
+    try {
+      const mocked = await import('../src/conformance/verify.js');
+      const result = mocked.runProfile(INVENTORY, INVENTORY_DIGEST, directory);
+      expect(result.assessment.outcome).toBe('not-evaluated');
+      expect(result.assessment.findings.map((f) => [f.code, f.path])).toEqual([
+        ['IA-COMP-NOT-EVALUATED', 'format/fail/lost-comment.diagnostics.json'],
+      ]);
+    } finally {
+      vi.doUnmock('node:fs');
+      vi.resetModules();
+    }
+  });
   it('is not evaluated when the fixture files cannot be read', () => {
     const result = runProfile(INVENTORY, INVENTORY_DIGEST, new URL('./missing/', directory));
     expect(result.assessment.outcome).toBe('not-evaluated');
@@ -346,6 +423,11 @@ describe('evaluate binds conformance evidence to the graph (C31)', () => {
     local = floorGraph(changed),
     kernel = verifyKernel(),
     fixtures = verifyFixtures();
+  const fixturesSummary = {
+    inventoryDigest: INVENTORY_DIGEST,
+    observedCodes: fixtures.observedCodes,
+    outOfProfile: fixtures.outOfProfile,
+  };
   const verdictsOf = (report: Report) =>
     Object.fromEntries(
       report.verdicts
@@ -379,10 +461,8 @@ describe('evaluate binds conformance evidence to the graph (C31)', () => {
     expect(report.conformance).toEqual({
       profile: 'package-v1',
       toolchain: kernel.toolchain,
-      floorDigest: KERNEL_DIGEST,
-      inventoryDigest: INVENTORY_DIGEST,
-      observedCodes: fixtures.observedCodes,
-      outOfProfile: fixtures.outOfProfile,
+      kernel: { floorDigest: KERNEL_DIGEST },
+      fixtures: fixturesSummary,
     });
     expect(Object.isFrozen(report.conformance)).toBe(true);
   });
@@ -463,9 +543,16 @@ describe('evaluate binds conformance evidence to the graph (C31)', () => {
     }
   });
   it('leaves embedded-floor evidence for a local floor, and an ambiguous floor source, not evaluated', () => {
-    expect(verdictsOf(evaluate(local.graph, { conformance: { inputs: local.inputs, kernel, fixtures } }))).toEqual({
+    const onLocal = evaluate(local.graph, { conformance: { inputs: local.inputs, kernel, fixtures } });
+    expect(verdictsOf(onLocal)).toEqual({
       'COMP-FIXTURES': { outcome: 'pass', basis: 'verified', messages: [] },
       'COMP-KERNEL': notEvaluated('COMP-KERNEL', 'the kernel evidence verified another floor'),
+    });
+    // The bound fixture pass still names what the profile does not run.
+    expect(onLocal.conformance).toEqual({
+      profile: 'package-v1',
+      toolchain: kernel.toolchain,
+      fixtures: fixturesSummary,
     });
     for (const [path, location] of [
       ['.ia/src/notes.ia', floorAt],
@@ -476,7 +563,7 @@ describe('evaluate binds conformance evidence to the graph (C31)', () => {
       expect(verdictsOf(report)['COMP-KERNEL'], path).toEqual(
         notEvaluated('COMP-KERNEL', `floor source ${path} has a floor path or a floor placement, not both`),
       );
-      expect(report.conformance).toBeUndefined();
+      expect(report.conformance?.kernel).toBeUndefined();
     }
   });
   it('fails COMP-KERNEL for a local floor with one byte changed, and for language exports that differ', async () => {
@@ -486,7 +573,7 @@ describe('evaluate binds conformance evidence to the graph (C31)', () => {
     expect(verdictsOf(report)['COMP-KERNEL']).toMatchObject({ outcome: 'fail', basis: 'verified' });
     expect(report.outcome).toBe('fail');
     vi.resetModules();
-    vi.doMock('@inventarch/language/internal/kernel.generated', async (original) => {
+    vi.doMock('@inventarch/language', async (original) => {
       const actual = await original<Record<string, unknown>>();
       return { ...actual, PHASES: ['orient'] };
     });
@@ -501,7 +588,140 @@ describe('evaluate binds conformance evidence to the graph (C31)', () => {
         messages: ['Kernel verification: PHASES differs from regeneration'],
       });
     } finally {
-      vi.doUnmock('@inventarch/language/internal/kernel.generated');
+      vi.doUnmock('@inventarch/language');
+      vi.resetModules();
+    }
+  });
+  it('reads the inputs once, so getters cannot show the binding other inputs than the revision', () => {
+    // Each getter returns the tampered value first and the embedded floor or running version afterwards.
+    let sourceReads = 0,
+      textReads = 0,
+      versionReads = 0;
+    const bySources = {
+      languageVersion: local.inputs.languageVersion,
+      kernelDigest: local.inputs.kernelDigest,
+      get sources() {
+        sourceReads++;
+        return sourceReads <= 2 ? local.inputs.sources : embedded.inputs.sources;
+      },
+    };
+    const tampered = local.inputs.sources.find((s) => s.path.endsWith('/kind.ia'))!,
+      original = embedded.inputs.sources.find((s) => s.path.endsWith('/kind.ia'))!;
+    const byText = {
+      ...local.inputs,
+      sources: local.inputs.sources.map((s) =>
+        s !== tampered
+          ? s
+          : {
+              path: s.path,
+              location: s.location,
+              get text() {
+                textReads++;
+                return textReads === 1 ? tampered.text : original.text;
+              },
+            },
+      ),
+    };
+    const old = floorGraph(KERNEL_SOURCES, [], { kernelDigest: KERNEL_DIGEST, languageVersion: '0.0.1' });
+    const byVersion = {
+      sources: old.inputs.sources,
+      kernelDigest: KERNEL_DIGEST,
+      get languageVersion() {
+        versionReads++;
+        return versionReads === 1 ? '0.0.1' : LANGUAGE_VERSION;
+      },
+    };
+    for (const inputs of [bySources, byText]) {
+      const report = evaluate(local.graph, { conformance: { inputs, kernel, fixtures } });
+      expect(verdictsOf(report)['COMP-KERNEL']).toEqual(
+        notEvaluated('COMP-KERNEL', 'the kernel evidence verified another floor'),
+      );
+      expect(report.conformance?.kernel).toBeUndefined();
+    }
+    const toolchain = 'the graph was loaded for another language version or kernel digest than the running one';
+    expect(verdictsOf(evaluate(old.graph, { conformance: { inputs: byVersion, kernel, fixtures } }))).toEqual({
+      'COMP-FIXTURES': notEvaluated('COMP-FIXTURES', toolchain),
+      'COMP-KERNEL': notEvaluated('COMP-KERNEL', toolchain),
+    });
+    expect([sourceReads, textReads, versionReads]).toEqual([1, 1, 1]);
+  });
+  it('refuses revision inputs whose fields are not plain strings and locations', () => {
+    const inputs = embedded.inputs,
+      first = inputs.sources[0]!;
+    for (const bad of [
+      { ...inputs, languageVersion: 1 },
+      { ...inputs, kernelDigest: undefined },
+      { ...inputs, sources: 'not a list' },
+      { ...inputs, sources: [{ ...first, text: 1 }] },
+      { ...inputs, sources: [{ ...first, path: undefined }] },
+      { ...inputs, sources: [{ ...first, location: { ...floorAt, placement: { ...floorAt.placement, band: '10' } } }] },
+    ])
+      expect(() =>
+        evaluate(embedded.graph, { conformance: { inputs: bad, kernel, fixtures } } as unknown as ReportOptions),
+      ).toThrow(TypeError);
+  });
+  it('leaves only the stale object not evaluated when one was produced by another toolchain', () => {
+    const version = Object.getOwnPropertyDescriptor(process, 'version')!;
+    const underOtherNode = <T>(produce: () => T): T => {
+      Object.defineProperty(process, 'version', { ...version, value: 'v0.0.0' });
+      try {
+        return produce();
+      } finally {
+        Object.defineProperty(process, 'version', version);
+      }
+    };
+    const stale = 'the evidence was produced by another toolchain';
+    const oldKernel = underOtherNode(() => verifyKernel());
+    expect(oldKernel.toolchain.node).toBe('v0.0.0');
+    const first = evaluate(embedded.graph, { conformance: { inputs: embedded.inputs, kernel: oldKernel, fixtures } });
+    expect(verdictsOf(first)).toEqual({
+      'COMP-FIXTURES': { outcome: 'pass', basis: 'verified', messages: [] },
+      'COMP-KERNEL': notEvaluated('COMP-KERNEL', stale),
+    });
+    expect(first.conformance).toEqual({
+      profile: 'package-v1',
+      toolchain: kernel.toolchain,
+      fixtures: fixturesSummary,
+    });
+    const oldFixtures = underOtherNode(() => verifyFixtures());
+    const second = evaluate(embedded.graph, {
+      conformance: { inputs: embedded.inputs, kernel, fixtures: oldFixtures },
+    });
+    expect(verdictsOf(second)).toEqual({
+      'COMP-FIXTURES': notEvaluated('COMP-FIXTURES', stale),
+      'COMP-KERNEL': { outcome: 'pass', basis: 'verified', messages: [] },
+    });
+    expect(second.conformance).toEqual({
+      profile: 'package-v1',
+      toolchain: kernel.toolchain,
+      kernel: { floorDigest: KERNEL_DIGEST },
+    });
+  });
+  it('neither labels nor summarises fixture evidence that was not evaluated', async () => {
+    const root = resolve(fileURLToPath(new URL('../fixtures/language/', import.meta.url)));
+    vi.resetModules();
+    vi.doMock('node:fs', async (original) => {
+      const actual = await original<typeof import('node:fs')>();
+      const readdirSync = ((path: unknown, ...rest: unknown[]) => {
+        if (resolve(String(path)) === root)
+          throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+        return (actual.readdirSync as (...args: unknown[]) => unknown)(path, ...rest);
+      }) as typeof actual.readdirSync;
+      return { ...actual, default: { ...actual, readdirSync }, readdirSync };
+    });
+    try {
+      const mocked = await import('../src/index.js');
+      const unread = mocked.verifyFixtures();
+      expect(unread.assessment.outcome).toBe('not-evaluated');
+      const report = mocked.evaluate(embedded.graph, {
+        conformance: { inputs: embedded.inputs, kernel: mocked.verifyKernel(), fixtures: unread },
+      });
+      expect(verdictsOf(report)['COMP-FIXTURES']).toMatchObject({ outcome: 'not-evaluated', basis: undefined });
+      expect(verdictsOf(report)['COMP-KERNEL']).toMatchObject({ outcome: 'pass', basis: 'verified' });
+      expect(report.conformance?.fixtures).toBeUndefined();
+      expect(report.conformance?.kernel).toEqual({ floorDigest: KERNEL_DIGEST });
+    } finally {
+      vi.doUnmock('node:fs');
       vi.resetModules();
     }
   });

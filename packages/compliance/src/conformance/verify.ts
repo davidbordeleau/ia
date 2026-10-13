@@ -9,7 +9,7 @@ import { COMP_CODES, EVIDENCE_CODES, assess } from '../types.js';
 import type { Assessment, Finding } from '../types.js';
 import { loadCorpus } from './corpus.js';
 import { runEvidenceFixtures } from './evidence-fixtures.js';
-import { FIXTURE_SUFFIXES, fileDigest, inventoryDigest } from './inventory.js';
+import { companionSuffixes, fileDigest, inventoryDigest } from './inventory.js';
 import type { ConformanceInventory } from './inventory.js';
 import { runRefusalFixtures } from './refusals.js';
 
@@ -51,9 +51,9 @@ function listing(root: string): { files: Set<string>; strays: string[] } {
 
 /**
  * Runs the package-v1 profile `inventory` describes over the language fixture files under `directory`: every listed
- * file must exist with its listed digest and nothing else may, the corpus boundary suites must run exactly the listed
- * cases, and passing failing cases must observe every required code. Fixture files that cannot be read leave the
- * profile not evaluated. This returns an assessment, not evidence; only verifyFixtures produces evidence.
+ * file must exist with its listed digest, as a companion its clause and mode admit, and nothing else may; the corpus
+ * boundary suites must run exactly the listed cases; and passing failing cases must observe every required code. A
+ * fixture file that cannot be read is not evaluated and suspends the coverage judgement; other failures still fail. This returns an assessment, not evidence; only verifyFixtures produces evidence.
  */
 export function runProfile(inventory: ConformanceInventory, digest: string, directory: URL): ProfileResult {
   const findings: Finding[] = [];
@@ -79,6 +79,7 @@ export function runProfile(inventory: ConformanceInventory, digest: string, dire
     mismatch('', "The inventory's required codes differ from the running toolchain's");
   const listed = new Set<string>(),
     results: FixtureResult[] = [];
+  let unreadable = false;
   for (const fixture of inventory.fixtures) {
     if (listed.has(fixture.path)) {
       mismatch(fixture.path, `${fixture.path}: duplicate inventory path`);
@@ -86,17 +87,44 @@ export function runProfile(inventory: ConformanceInventory, digest: string, dire
     }
     listed.add(fixture.path);
     const stem = fixture.path.slice(0, -'.ia'.length),
-      read: Record<string, string> = {};
+      read: Record<string, string> = {},
+      folder = `${fixture.clause}/${fixture.mode}/`,
+      admitted = ['.ia', ...companionSuffixes(fixture.clause, fixture.mode)];
     let verified = fixture.path.endsWith('.ia') && Object.keys(fixture.files).includes('.ia');
+    if (!fixture.path.startsWith(folder) || fixture.path.slice(folder.length).includes('/')) {
+      mismatch(fixture.path, `${fixture.path}: listed as a ${fixture.clause}/${fixture.mode} fixture`);
+      verified = false;
+    }
     for (const [suffix, expected] of Object.entries(fixture.files)) {
       const path = stem + suffix;
-      if (!(FIXTURE_SUFFIXES as readonly string[]).includes(suffix) || !found.files.has(path)) {
+      if (!admitted.includes(suffix)) {
+        found.files.delete(path);
+        mismatch(path, `${path}: ${suffix} is not a companion of ${fixture.clause}/${fixture.mode} fixtures`);
+        verified = false;
+        continue;
+      }
+      if (!found.files.has(path)) {
         mismatch(path, `${path}: missing`);
         verified = false;
         continue;
       }
       found.files.delete(path);
-      const bytes = readFileSync(join(root, path));
+      let bytes: Buffer;
+      try {
+        bytes = readFileSync(join(root, path));
+      } catch (error) {
+        // An unreadable file is no evidence either way: it is not evaluated, and coverage is not judged.
+        unreadable = true;
+        findings.push({
+          code: 'IA-COMP-NOT-EVALUATED',
+          severity: 'warning',
+          path,
+          line: 1,
+          message: `${path}: cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        verified = false;
+        continue;
+      }
       if (fileDigest(bytes) !== expected) {
         mismatch(path, `${path}: differs from the inventory`);
         verified = false;
@@ -139,7 +167,7 @@ export function runProfile(inventory: ConformanceInventory, digest: string, dire
   }
   findings.push(
     ...results.flatMap((result) => result.assessment.findings),
-    ...fixtureCoverage(inventory.requiredCodes, results).findings,
+    ...(unreadable ? [] : fixtureCoverage(inventory.requiredCodes, results).findings),
   );
   return Object.freeze({
     assessment: assess('COMP-FIXTURES', 'package-v1', findings),

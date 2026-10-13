@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION } from '@inventarch/language';
-import { kernelAssessment, kernelDigest } from '../kernel.js';
+import { kernelDigest } from '../kernel.js';
 import type { KernelSource } from '../kernel.js';
 import type { Assessment } from '../types.js';
 import { INVENTORY, INVENTORY_DIGEST } from './inventory.generated.js';
 import type { OutOfProfileSuite } from './inventory.js';
+import { kernelAssessment } from './verify-kernel.js';
 import { runProfile } from './verify.js';
 
 /** The conformance profile a sandboxed consumer can run itself (C31). */

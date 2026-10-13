@@ -1003,6 +1003,106 @@ it("resolves this repository's participant as its default actor, granted all fiv
   expect(identities(db, { actor: own, path: 'README.md' })).toEqual([]);
 });
 
+/** The note is consumed by release preparation; its identity must remain unique across both locations. */
+function mandateReleaseNote(root: string): { summary: string; path: string } {
+  const candidates: { note: { summary: string; packages: string[] }; path: string }[] = [],
+    pending = 'releases/pending/mandate-resolution.json';
+  try {
+    const note = JSON.parse(readFileSync(resolve(root, pending), 'utf8'));
+    expect(note, pending).toMatchObject({ format: 'ia.npm-change-note.v1' });
+    candidates.push({ note, path: pending });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  for (const file of readdirSync(resolve(root, 'releases/changesets'))
+    .filter((name) => name.endsWith('.json'))
+    .sort()) {
+    const path = `releases/changesets/${file}`,
+      history = JSON.parse(readFileSync(resolve(root, path), 'utf8'));
+    expect(history, path).toMatchObject({
+      format: 'ia.npm-changeset.v1',
+      state: 'consumed',
+      changes: expect.any(Array),
+    });
+    for (const note of history.changes) if (note.id === 'mandate-resolution') candidates.push({ note, path });
+  }
+  expect(
+    candidates.map(({ path }) => path),
+    'Exactly one mandate-resolution note across pending and history',
+  ).toHaveLength(1);
+  const { note, path } = candidates[0]!;
+  expect(note, path).toMatchObject({
+    summary: expect.any(String),
+    packages: expect.arrayContaining(['@inventarch/runtime']),
+  });
+  return { summary: note.summary, path };
+}
+
+function assertMandateConsumers(text: string, where: string): void {
+  expect(text, where).not.toContain('or hook does yet');
+  expect(text, where).toContain('the edit guard');
+  expect(text, where).toContain('evaluateMandateGuard');
+  expect(text, where).toContain('no Door operation does');
+}
+
+describe('mandate release note evidence', () => {
+  const summary = 'The CLI and the edit guard (evaluateMandateGuard) consult the resolver; no Door operation does.',
+    note = { format: 'ia.npm-change-note.v1', summary, packages: ['@inventarch/runtime'] },
+    change = { id: 'mandate-resolution', summary, packages: ['@inventarch/runtime'] },
+    history = (changes: unknown[]) => ({ format: 'ia.npm-changeset.v1', state: 'consumed', changes });
+  const fixture = (pending: unknown | undefined, changes: unknown[] = []): string => {
+    const root = workspace(null);
+    put(root, 'releases/changesets/2.0.0.json', JSON.stringify(history(changes)));
+    if (pending !== undefined) put(root, 'releases/pending/mandate-resolution.json', JSON.stringify(pending));
+    return root;
+  };
+
+  it.each(['pending', 'consumed', 'later release'])('finds the original note in %s state', (state) => {
+    const root = fixture(state === 'pending' ? note : undefined, state === 'pending' ? [] : [change]);
+    if (state === 'later release') {
+      put(root, 'releases/current.json', JSON.stringify({ version: '4.0.0' }));
+      put(root, 'releases/changesets/4.0.0.json', JSON.stringify(history([{ ...change, id: 'unrelated' }])));
+    }
+    const found = mandateReleaseNote(root);
+    expect(found.summary).toBe(summary);
+    assertMandateConsumers(found.summary, found.path);
+  });
+
+  it.each([
+    ['missing', undefined, []],
+    ['unrelated identity', undefined, [{ ...change, id: 'unrelated' }]],
+    ['wrong package', undefined, [{ ...change, packages: ['@inventarch/cli'] }]],
+    ['invalid summary', undefined, [{ ...change, summary: null }]],
+    ['malformed pending with valid history', {}, [change]],
+    ['duplicate in one changeset', undefined, [change, change]],
+    ['pending and consumed ambiguity', note, [change]],
+  ])('refuses %s evidence', (_name, pending, changes) => {
+    expect(() => mandateReleaseNote(fixture(pending, changes as unknown[]))).toThrow();
+  });
+
+  it('refuses duplicate identities across historical changesets', () => {
+    const root = fixture(undefined, [change]);
+    put(root, 'releases/changesets/4.0.0.json', JSON.stringify(history([change])));
+    expect(() => mandateReleaseNote(root)).toThrow('Exactly one mandate-resolution');
+  });
+
+  it('does not fall back from invalid pending JSON to valid history', () => {
+    const root = fixture(undefined, [change]);
+    put(root, 'releases/pending/mandate-resolution.json', '{');
+    expect(() => mandateReleaseNote(root)).toThrow(SyntaxError);
+  });
+
+  it.each(['pending', 'consumed'])('rejects a semantic regression in %s prose', (state) => {
+    const broken = summary.replace('no Door operation does', 'every Door operation does'),
+      root = fixture(
+        state === 'pending' ? { ...note, summary: broken } : undefined,
+        state === 'pending' ? [] : [{ ...change, summary: broken }],
+      ),
+      found = mandateReleaseNote(root);
+    expect(() => assertMandateConsumers(found.summary, found.path)).toThrow('no Door operation does');
+  });
+});
+
 it('names the consumers the code has: the CLI mandate profile and the edit guard, and no Door operation (R21)', () => {
   const read = (path: string) => readFileSync(resolve(repository, path), 'utf8');
   const RESOLVER = /\b(?:governingMandates|defaultActor|profileRefusal|evaluateMandateGuard)\(/;
@@ -1017,19 +1117,16 @@ it('names the consumers the code has: the CLI mandate profile and the edit guard
     'mandate-guard.ts',
     'mandate-modes.ts',
   ]);
-  // SPEC R21 and the pending note say so.
+  // SPEC R21 and the note, pending or consumed into release history, say so.
   const spec = read('packages/runtime/SPEC.md')
       .split('\n')
       .find((line) => line.startsWith('R21. '))!,
-    note = (JSON.parse(read('releases/pending/mandate-resolution.json')) as { summary: string }).summary;
+    note = mandateReleaseNote(repository);
   for (const [text, where] of [
     [spec, 'SPEC R21'],
-    [note, 'releases/pending/mandate-resolution.json'],
+    [note.summary, note.path],
   ] as const) {
-    expect(text, where).not.toContain('or hook does yet');
-    expect(text, where).toContain('the edit guard');
-    expect(text, where).toContain('evaluateMandateGuard');
-    expect(text, where).toContain('no Door operation does');
+    assertMandateConsumers(text, where);
   }
 });
 

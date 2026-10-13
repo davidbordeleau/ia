@@ -2,8 +2,8 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "4b526ad389d799f8ae8af56e00d03e77041b599e",
-    "tree": "4c983a91b532b4ebd2dbb96c113767209971b6b3",
+    "commit": "d1218ff12edce01ae2a1b531b7299c1df56d1b15",
+    "tree": "122ded9ae4dc68776da7a59c5a760b7aef59f249",
     "dirty": true
   },
   "membership": {
@@ -1355,7 +1355,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "d49f48ba65dadaf7def7be81ac2d79e52afafd060b02bcd0d343a81d4817b912"
+      "sha256": "87ee4597c3553d004fa42af3a5b264aa9a5ee92b4c44aafe77a93e8af048036e"
     },
     {
       "path": "CLAUDE.md",
@@ -3247,7 +3247,7 @@
     },
     {
       "path": "nx.json",
-      "sha256": "f403d78c8ed3116719f8227e72bcd4ee2b9ff78fdaa316011761e7b8bf0fc9dc"
+      "sha256": "4be3c0b12d861b46b9477fcccfa970dd34df5fe8b3ab4b9572d73902f07dcfda"
     },
     {
       "path": "package.json",
@@ -6195,7 +6195,7 @@
     },
     {
       "path": "packages/runtime/tests/mandate-resolution.test.ts",
-      "sha256": "faab4828528ca50c73c7803f64f8d48f650582435470722ee9b1f156c6d130c4"
+      "sha256": "5b32106d0477604e39ee6ba7a538aa46893701df1f8b04c845cdc73ca1905a31"
     },
     {
       "path": "packages/runtime/tests/next.test.ts",
@@ -6675,7 +6675,7 @@
     },
     {
       "path": "releases/changesets/3.0.0.json",
-      "sha256": "18ef61dc9c2f40aa6f601bd99221fdf8d4a1176dc3dbf42b372b6bce8cd34433"
+      "sha256": "a31264f6f64f0e892b27b1a23e3f98a95275839257a57338ea82a0f74abb81a6"
     },
     {
       "path": "releases/current.json",
@@ -7431,11 +7431,11 @@
     },
     {
       "path": "tools/testing/SPEC.md",
-      "sha256": "90932ecac0f12345b4965f1a97bff3098e2c7bbc7cf65f6bc632f8a5cf7eef1f"
+      "sha256": "71ae861f07c79d8b44cda109afe7aa00f338a53590086130abca8251162697f4"
     },
     {
       "path": "tools/testing/cache.test.ts",
-      "sha256": "e455444bef7633567d95365432922479f3e10497d067080a42312490172f2c17"
+      "sha256": "e1dd18ee3ac1aae53a2e7f2b2be18cd9e71aee4145800008c55595effae8db8f"
     },
     {
       "path": "tools/testing/canonical-temp.mjs",
@@ -7499,7 +7499,7 @@
     },
     {
       "path": "tools/testing/tasks.json",
-      "sha256": "403e340fb815b83a7be2c67e0dc43ac33f621b651a1aaaac09a2bfe46c3912f4"
+      "sha256": "b8495baf83a031c63769221273d2c99f14eb72d6ac10b57b351be683b21c5948"
     },
     {
       "path": "tools/testing/timeouts.ts",
@@ -7522,5 +7522,5 @@
       "sha256": "291a1735a1bdf4a85d3baafef644f0bffe0d9bfbada49d63c648311ff4429ed1"
     }
   ],
-  "inputDigest": "151271f0e1cd0dd813af71240c2bc3d96c52f324591618ca5a403f66049a78e3"
+  "inputDigest": "cf282cafcb72d5e51049aef10948c04d1c8e9369d1ab680ebb1c7f81b317b25f"
 }

@@ -7,7 +7,7 @@
     "version": "2.0.0"
   },
   "bump": "major",
-  "summary": "Coordinated 3.0.0 release of the 23 public npm packages: Preserve attribution comments during rejected-file classification; Reserve administrative authoring and report missing source-protection declarations; An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it; `ia preview` and `ia author` admit checks structurally, as `ia validate` does; `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence; A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none; Check optional distribution files through their opened descriptors; Document removal of the exported CLI admission helper; `ia author` applies previewed permitted record edits with digest checks; Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated; `ia preview` shows what one new record, field or relationship would compile to; Remove the deprecated ia compile command in 3.0; Refuse dangling links in guarded edit paths; Explain distribution engine incompatibility and preserve exact pins during migration; replace and createFile remove their temporary file when a write fails; Declare engine marker activation incompatible with the published CLI; Require an established actor for participant mandate grants; `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined; workspace-runtime generates a claude agent file for each authored `@agent-profile`, or reports why it does not; The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`; `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them; The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared; workspace-runtime renders authored playbook skills, hook declarations and operation and harness definitions; Generated host ownership and pending journals require this release for cleanup; The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both; Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure; Run native profiles with bounded local execution and durable journals; A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`; The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile; Align native archives once and enforce independent content versions; Explain profile agents and CLI actor selection; Separate public vocabulary payloads from repository work and release controls; Repair public contract citations; Align public qualification documentation; Maintain public implementation and release contracts; Qualify separated workspace and public examples; Use native nested paths in registry advice tests; Install registry kits and adopt pinned source workspaces; Recognize repository native records and release roots; Validate retained root release controls consistently; Pin scope, evidence gate and editor byte preservation regressions; Admit bounded runner journal claims as optional runtime evidence; Recognize linked runner entry points; Preserve unowned hooks and external evidence during recovery; Keep workspace roots inert in suggested commands; `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission.",
+  "summary": "Coordinated 3.0.0 release of the 23 public npm packages: Preserve attribution comments during rejected-file classification; Reserve administrative authoring and report missing source-protection declarations; An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it; `ia preview` and `ia author` admit checks structurally, as `ia validate` does; `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence; A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none; Check optional distribution files through their opened descriptors; Document removal of the exported CLI admission helper; `ia author` applies previewed permitted record edits with digest checks; Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated; `ia preview` shows what one new record, field or relationship would compile to; Remove the deprecated ia compile command in 3.0; Refuse dangling links in guarded edit paths; Explain distribution engine incompatibility and preserve exact pins during migration; replace and createFile remove their temporary file when a write fails; Declare engine marker activation incompatible with the published CLI; Require an established actor for participant mandate grants; `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined; workspace-runtime generates a claude agent file for each authored `@agent-profile`, or reports why it does not; The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`; `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them; The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared; workspace-runtime renders authored playbook skills, hook declarations and operation and harness definitions; Generated host ownership and pending journals require this release for cleanup; The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both; Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure; Run native profiles with bounded local execution and durable journals; A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`; The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile; Align native archives once and enforce independent content versions; Explain profile agents and CLI actor selection; Separate public vocabulary payloads from repository work and release controls; Repair public contract citations; Align public qualification documentation; Maintain public implementation and release contracts; Qualify separated workspace and public examples; Use native nested paths in registry advice tests; Install registry kits and adopt pinned source workspaces; Recognize repository native records and release roots; Validate retained root release controls consistently; Pin scope, evidence gate and editor byte preservation regressions; Admit bounded runner journal claims as optional runtime evidence; Recognize linked runner entry points; Preserve unowned hooks and external evidence during recovery; Keep workspace roots inert in suggested commands; `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission; Keep runtime release checks valid after note consumption.",
   "packages": {
     "@inventarch/agent-composition-system": {
       "previous": "2.0.0",
@@ -87,7 +87,7 @@
     "@inventarch/runtime": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Preserve attribution comments during rejected-file classification. An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. Require an established actor for participant mandate grants. The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`. The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared. Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile. Separate public vocabulary payloads from repository work and release controls. Align public qualification documentation. Maintain public implementation and release contracts. Recognize repository native records and release roots. Keep workspace roots inert in suggested commands. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission."
+      "summary": "Preserve attribution comments during rejected-file classification. An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. Require an established actor for participant mandate grants. The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`. The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared. Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile. Separate public vocabulary payloads from repository work and release controls. Align public qualification documentation. Maintain public implementation and release contracts. Recognize repository native records and release roots. Keep workspace roots inert in suggested commands. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission. Keep runtime release checks valid after note consumption."
     },
     "@inventarch/service-contracts": {
       "previous": "2.0.0",
@@ -1082,6 +1082,19 @@
         "packages/compliance/",
         "packages/db/",
         "packages/runtime/"
+      ]
+    },
+    {
+      "id": "release-note-test-lifecycle",
+      "title": "Keep runtime release checks valid after note consumption",
+      "summary": "The release qualification tests continue to check the runtime mandate documentation after release notes are consumed and include that history in their cache inputs. Package behavior and APIs are unchanged.",
+      "packages": [
+        "@inventarch/runtime"
+      ],
+      "paths": [
+        "nx.json",
+        "packages/runtime/",
+        "tools/"
       ]
     },
     {
@@ -2326,7 +2339,7 @@
     },
     {
       "path": "nx.json",
-      "sha256": "f403d78c8ed3116719f8227e72bcd4ee2b9ff78fdaa316011761e7b8bf0fc9dc",
+      "sha256": "4be3c0b12d861b46b9477fcccfa970dd34df5fe8b3ab4b9572d73902f07dcfda",
       "change": "authored-revision"
     },
     {
@@ -2754,7 +2767,7 @@
     },
     {
       "path": "packages/runtime/tests/mandate-resolution.test.ts",
-      "sha256": "faab4828528ca50c73c7803f64f8d48f650582435470722ee9b1f156c6d130c4",
+      "sha256": "5b32106d0477604e39ee6ba7a538aa46893701df1f8b04c845cdc73ca1905a31",
       "change": "attribution-comment-classification"
     },
     {
@@ -3280,12 +3293,12 @@
     },
     {
       "path": "tools/testing/SPEC.md",
-      "sha256": "90932ecac0f12345b4965f1a97bff3098e2c7bbc7cf65f6bc632f8a5cf7eef1f",
+      "sha256": "71ae861f07c79d8b44cda109afe7aa00f338a53590086130abca8251162697f4",
       "change": "public-qualification-contracts"
     },
     {
       "path": "tools/testing/cache.test.ts",
-      "sha256": "e455444bef7633567d95365432922479f3e10497d067080a42312490172f2c17",
+      "sha256": "e1dd18ee3ac1aae53a2e7f2b2be18cd9e71aee4145800008c55595effae8db8f",
       "change": "local-execution-runner"
     },
     {
@@ -3295,7 +3308,7 @@
     },
     {
       "path": "tools/testing/tasks.json",
-      "sha256": "403e340fb815b83a7be2c67e0dc43ac33f621b651a1aaaac09a2bfe46c3912f4",
+      "sha256": "b8495baf83a031c63769221273d2c99f14eb72d6ac10b57b351be683b21c5948",
       "change": "checked-optional-distribution-inputs"
     }
   ]

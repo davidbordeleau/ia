@@ -1,4 +1,15 @@
-import { readFileSync, readdirSync, mkdirSync, writeFileSync, lstatSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isEntry } from '../entry/is-entry.mjs';
@@ -9,7 +20,44 @@ import { contained, portable } from '../../apps/distribution/src/files.ts';
 import { registryAddCollection } from '../../apps/distribution/src/registry-build.ts';
 import { languagePackageInputs } from '../native/public-language.ts';
 import { buildLanguageBase } from '../native/language-base.ts';
-import { DISTRIBUTION_ENGINE_VERSION } from '../../packages/db/src/distribution/index.js';
+import { DISTRIBUTION_ENGINE_VERSION, DISTRIBUTION_LIMITS } from '../../packages/db/src/distribution/index.js';
+
+const sameFile = (before, after) =>
+  after.isFile() &&
+  after.nlink === 1n &&
+  before.dev === after.dev &&
+  before.ino === after.ino &&
+  before.size === after.size &&
+  before.mtimeNs === after.mtimeNs &&
+  before.ctimeNs === after.ctimeNs;
+
+/** Bind a checked selection to the descriptor read, then refuse changed input before admitting its bytes. */
+function selectedBytes(directory, file, before) {
+  const path = relative(directory, file).replaceAll('\\', '/');
+  if (!before.isFile() || before.nlink !== 1n) throw new Error(`Expected unaliased distribution input: ${path}`);
+  if (before.size > BigInt(DISTRIBUTION_LIMITS.file)) throw new Error(`Distribution input exceeds file limit: ${path}`);
+  const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+  try {
+    if (!sameFile(before, fstatSync(fd, { bigint: true }))) throw new Error(`Distribution input changed: ${path}`);
+    const content = Buffer.alloc(Number(before.size));
+    let total = 0;
+    while (total < content.length) {
+      const count = readSync(fd, content, total, content.length - total, null);
+      if (count === 0) break;
+      total += count;
+    }
+    if (
+      total !== content.length ||
+      !sameFile(before, fstatSync(fd, { bigint: true })) ||
+      !sameFile(before, lstatSync(file, { bigint: true }))
+    )
+      throw new Error(`Distribution input changed: ${path}`);
+    contained(directory, path);
+    return content;
+  } finally {
+    closeSync(fd);
+  }
+}
 
 /** Caller-selected directory, owned systems, exact assets and descriptor. No globs select documentation or code. */
 export function packOptionalDistribution(root, options) {
@@ -26,19 +74,16 @@ export function packOptionalDistribution(root, options) {
   const files = (dir) =>
     readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
       const path = contained(directory, relative(directory, resolve(dir, entry.name)).replaceAll('\\', '/'));
-      if (
-        entry.isSymbolicLink() ||
-        (!entry.isFile() && !entry.isDirectory()) ||
-        (entry.isFile() && lstatSync(path).nlink !== 1)
-      )
+      const stat = lstatSync(path, { bigint: true });
+      if (stat.isSymbolicLink() || (!stat.isFile() && !stat.isDirectory()) || (stat.isFile() && stat.nlink !== 1n))
         throw new Error('Distribution source must be a regular file or directory');
-      return entry.isDirectory() ? files(path) : [path];
+      return stat.isDirectory() ? files(path) : [{ path, stat }];
     });
   const native = files(resolve(directory, '.ia/src'))
-    .filter((file) => file.endsWith('.ia'))
-    .map((file) => ({
+    .filter(({ path }) => path.endsWith('.ia'))
+    .map(({ path: file, stat }) => ({
       path: relative(directory, file).replaceAll('\\', '/'),
-      text: readFileSync(file, 'utf8'),
+      text: selectedBytes(directory, file, stat).toString('utf8'),
       location: { placement: { kind: 'authored', band: 100, reach: '' }, provenance: 'workspace' },
     }));
   const assets =
@@ -48,8 +93,9 @@ export function packOptionalDistribution(root, options) {
           options.assets.map((path) => {
             portable(path);
             const file = contained(directory, path);
-            if (lstatSync(file).nlink !== 1) throw new Error('Hard-linked distribution asset');
-            return [path, readFileSync(file)];
+            const stat = lstatSync(file, { bigint: true });
+            if (stat.nlink !== 1n) throw new Error('Hard-linked distribution asset');
+            return [path, selectedBytes(directory, file, stat)];
           }),
         );
   const verified = verifyArchive(language.bytes);

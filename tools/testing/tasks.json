@@ -1207,6 +1207,7 @@
         "tests/json-edit.test.ts",
         "tests/lifecycle-registration.test.ts",
         "tests/minting.test.ts",
+        "tests/optional-pack-files.test.ts",
         "tests/plugin-home.test.ts",
         "tests/product-structure.test.ts",
         "tests/projection.test.ts",

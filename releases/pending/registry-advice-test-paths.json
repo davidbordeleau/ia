@@ -1,0 +1,12 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "none",
+  "title": "Use native nested paths in registry advice tests",
+  "summary": "CLI recovery tests use the native separator for ordinary nested paths on each supported platform. This changes test fixtures only; command advice and registry selection behavior are unchanged.",
+  "packages": [
+    "@inventarch/cli"
+  ],
+  "paths": [
+    "apps/cli/"
+  ]
+}

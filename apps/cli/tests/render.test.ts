@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   atom,
   blockSymbolWidth,
@@ -178,7 +178,7 @@ it('keeps registry intent and inputs when the suggested operation needs no rebas
   expect(safeRootAdvice(same, [cwd + '(active)'], { cwd: cwd + '(active)', env: advice.env })).not.toContain(
     '--registry',
   );
-  for (const ordinary of ['workspace', 'nested\\workspace']) {
+  for (const ordinary of ['workspace', join('nested', 'workspace')]) {
     const text = `Run "ia install pkg/name --root ${quote(ordinary)} --registry ./registry".`;
     expect(safeRootAdvice(text, [ordinary, resolve(cwd, 'unused(active)')], advice)).toBe(
       safeRootAdvice(text, [ordinary]),

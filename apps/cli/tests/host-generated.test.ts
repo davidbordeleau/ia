@@ -638,7 +638,7 @@ it("falls back to the mandates that bind the fixture profile's agent when the pr
   const agent = renderProjectionFor(root, 'claude').files.find((file) => file.path === AGENT)!.text;
   expect(agent.split('\n## Mandate\n\n')[1]!.split('\n\n## ')[0]).toBe(
     [
-      "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.",
+      'This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard judges the agent by these, and refuses it where a mandate that binds another participant governs and none of these grants the move.',
       '',
       '- `agent-system/policy/mandate/reviewer-docs`',
       '  - participant `agent-system/binding/agent/reviewer`',

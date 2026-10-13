@@ -1,10 +1,21 @@
+import { createHash } from 'node:crypto';
 import { appendFileSync, cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import { KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION, LANG_CODES, parse } from '@inventarch/language';
+import {
+  KERNEL_DIGEST,
+  KERNEL_SOURCES,
+  LANGUAGE_VERSION,
+  LANG_CODES,
+  buildRegistry,
+  compile,
+  parse,
+} from '@inventarch/language';
+import type { Location } from '@inventarch/language';
 import { GRAPH_CODES, load, stableSerialize } from '@inventarch/graph';
+import type { RevisionInputs, RevisionSource } from '@inventarch/graph';
 import {
   COMP_CODES,
   EVIDENCE_CODES,
@@ -20,7 +31,7 @@ import { INVENTORY, INVENTORY_DIGEST } from '../src/conformance/inventory.genera
 import { inventoryDigest } from '../src/conformance/inventory.js';
 import type { ConformanceInventory } from '../src/conformance/inventory.js';
 import { runProfile } from '../src/conformance/verify.js';
-import type { ReportOptions } from '../src/index.js';
+import type { KernelSource, Report, ReportOptions } from '../src/index.js';
 import { inputs, records, registry, sources } from './native.js';
 
 const options = { sources: inputs, languageVersion: LANGUAGE_VERSION, kernelDigest: KERNEL_DIGEST, location: '' };
@@ -301,5 +312,197 @@ describe('conformance evidence objects (C31)', () => {
     expect(frozen(kernel)).toEqual([]);
     expect(frozen(fixtures)).toEqual([]);
     expect(() => (fixtures.observedCodes as string[]).push('IA-COMP-INVENTED')).toThrow();
+  });
+});
+describe('evaluate binds conformance evidence to the graph (C31)', () => {
+  const floorAt: Location = { placement: { kind: 'floor', band: 10, reach: '' }, provenance: 'bootstrap' };
+  const authoredAt: Location = { placement: { kind: 'authored', band: 100, reach: '' }, provenance: 'workspace' };
+  /** A graph over `floor` and `extra`, loaded for the given toolchain, with the revision inputs it was loaded from. */
+  function floorGraph(
+    floor: readonly KernelSource[],
+    extra: readonly RevisionSource[] = [],
+    toolchain = { kernelDigest: KERNEL_DIGEST as string, languageVersion: LANGUAGE_VERSION as string },
+  ) {
+    const sources = [...floor.map((s) => ({ path: s.path, text: s.text, location: floorAt })), ...extra];
+    const parsed = sources.map((s) => ({ ...parse(s.text, s.path), location: s.location }));
+    const vocabulary = buildRegistry(parsed).registry;
+    const first = parsed.flatMap((s) => compile(s.ast, vocabulary, s.location, []).records);
+    const compiled = parsed.flatMap(
+      (s) =>
+        compile(
+          s.ast,
+          vocabulary,
+          s.location,
+          first.filter((r) => r.source.path !== s.ast.path),
+        ).records,
+    );
+    const inputs: RevisionInputs = { sources, ...toolchain };
+    return { graph: load(compiled, vocabulary, { ...inputs, location: '' }), inputs };
+  }
+  const changed = KERNEL_SOURCES.map((s) =>
+    s.path.endsWith('/kind.ia') ? { ...s, text: s.text.replace("A standing 'ought'", "A standing 'Ought'") } : s,
+  );
+  const embedded = floorGraph(KERNEL_SOURCES),
+    local = floorGraph(changed),
+    kernel = verifyKernel(),
+    fixtures = verifyFixtures();
+  const verdictsOf = (report: Report) =>
+    Object.fromEntries(
+      report.verdicts
+        .filter((v) => v.check === 'COMP-KERNEL' || v.check === 'COMP-FIXTURES')
+        .map((v) => [v.check, { outcome: v.outcome, basis: v.basis, messages: v.findings.map((f) => f.message) }]),
+    );
+  const notEvaluated = (check: string, reason: string) => ({
+    outcome: 'not-evaluated',
+    basis: undefined,
+    messages: [`${check}: ${reason}`],
+  });
+  const digest = (value: unknown) => createHash('sha256').update(stableSerialize(value)).digest('hex');
+  it('keeps the outcome and digest of reports that pass neither option', () => {
+    expect(digest(evaluate(graph))).toBe('8e69c28ba69346eb2255f5dc9de2dad566f54d13b44f33129ebc06f7dfade3e1');
+    expect(digest(evaluate(graph, { sourceDiagnostics: [], folders }))).toBe(
+      '1fd0f152b514a73108fbd82f4a1920881d52fc6d38ecb20afa86181c7ad502c4',
+    );
+    const report = evaluate(embedded.graph);
+    expect(report.conformance).toBeUndefined();
+    expect(verdictsOf(report)).toEqual({
+      'COMP-FIXTURES': notEvaluated('COMP-FIXTURES', 'matching-revision verification evidence was not supplied'),
+      'COMP-KERNEL': notEvaluated('COMP-KERNEL', 'matching-revision verification evidence was not supplied'),
+    });
+  });
+  it('passes both checks with verified evidence for the graph and reports the conformance summary', () => {
+    const report = evaluate(embedded.graph, { conformance: { inputs: embedded.inputs, kernel, fixtures } });
+    expect(verdictsOf(report)).toEqual({
+      'COMP-FIXTURES': { outcome: 'pass', basis: 'verified', messages: [] },
+      'COMP-KERNEL': { outcome: 'pass', basis: 'verified', messages: [] },
+    });
+    expect(report.conformance).toEqual({
+      profile: 'package-v1',
+      toolchain: kernel.toolchain,
+      floorDigest: KERNEL_DIGEST,
+      inventoryDigest: INVENTORY_DIGEST,
+      observedCodes: fixtures.observedCodes,
+      outOfProfile: fixtures.outOfProfile,
+    });
+    expect(Object.isFrozen(report.conformance)).toBe(true);
+  });
+  it('labels results from the caller-asserted evidence map without changing their outcome', () => {
+    const report = evaluate(graph, { sourceDiagnostics: [], folders, evidence });
+    expect(verdictsOf(report)).toEqual({
+      'COMP-FIXTURES': { outcome: 'pass', basis: 'caller-asserted', messages: [] },
+      'COMP-KERNEL': { outcome: 'pass', basis: 'caller-asserted', messages: [] },
+    });
+    expect(report.conformance).toBeUndefined();
+    const claimed = new Map([...evidence!].map(([check, v]) => [check, { ...v, basis: 'verified' as const }]));
+    expect(verdictsOf(evaluate(graph, { evidence: claimed }))['COMP-KERNEL']!.basis).toBe('caller-asserted');
+  });
+  it('refuses hand-built, copied or swapped evidence, malformed inputs, and evidence with conformance', () => {
+    const inputs = embedded.inputs;
+    for (const conformance of [
+      { inputs, kernel: { ...kernel }, fixtures },
+      { inputs, kernel: structuredClone(kernel), fixtures },
+      { inputs, kernel, fixtures: { ...fixtures } },
+      { inputs, kernel: { ...kernel, assessment: { ...kernel.assessment, outcome: 'pass' } }, fixtures },
+      { inputs, kernel: fixtures, fixtures: kernel },
+      { inputs, kernel: fixtures, fixtures },
+      { inputs, kernel, fixtures: kernel },
+      { inputs: undefined, kernel, fixtures },
+    ])
+      expect(() => evaluate(embedded.graph, { conformance } as unknown as ReportOptions)).toThrow(TypeError);
+    expect(() => evaluate(embedded.graph, { evidence, conformance: { inputs, kernel, fixtures } })).toThrow('not both');
+  });
+  it("leaves another graph's evidence and a foreign toolchain not evaluated", () => {
+    const revision = "the conformance inputs do not recompute this graph's revision";
+    expect(verdictsOf(evaluate(graph, { conformance: { inputs: embedded.inputs, kernel, fixtures } }))).toEqual({
+      'COMP-FIXTURES': notEvaluated('COMP-FIXTURES', revision),
+      'COMP-KERNEL': notEvaluated('COMP-KERNEL', revision),
+    });
+    const toolchain = 'the graph was loaded for another language version or kernel digest than the running one';
+    for (const foreign of [
+      floorGraph(KERNEL_SOURCES, [], { kernelDigest: 'f'.repeat(64), languageVersion: LANGUAGE_VERSION }),
+      floorGraph(KERNEL_SOURCES, [], { kernelDigest: KERNEL_DIGEST, languageVersion: '0.9' }),
+    ])
+      expect(
+        verdictsOf(evaluate(foreign.graph, { conformance: { inputs: foreign.inputs, kernel, fixtures } })),
+      ).toEqual({
+        'COMP-FIXTURES': notEvaluated('COMP-FIXTURES', toolchain),
+        'COMP-KERNEL': notEvaluated('COMP-KERNEL', toolchain),
+      });
+  });
+  it('leaves evidence produced by a stale toolchain not evaluated', async () => {
+    const running = { kernelDigest: KERNEL_DIGEST as string, languageVersion: LANGUAGE_VERSION as string };
+    vi.resetModules();
+    vi.doMock('@inventarch/language', async (original) => {
+      const actual = await original<Record<string, unknown>>();
+      return Object.defineProperties(
+        { ...actual },
+        {
+          KERNEL_DIGEST: { get: () => running.kernelDigest, enumerable: true },
+          LANGUAGE_VERSION: { get: () => running.languageVersion, enumerable: true },
+        },
+      );
+    });
+    try {
+      const mocked = await import('../src/index.js');
+      const stale = { kernel: mocked.verifyKernel(), fixtures: mocked.verifyFixtures() };
+      expect(stale.kernel.toolchain.kernelDigest).toBe(KERNEL_DIGEST);
+      for (const change of [{ kernelDigest: 'e'.repeat(64) }, { languageVersion: '1.1' }]) {
+        Object.assign(running, change);
+        const current = floorGraph(KERNEL_SOURCES, [], { ...running });
+        expect(
+          verdictsOf(mocked.evaluate(current.graph, { conformance: { inputs: current.inputs, ...stale } })),
+        ).toEqual({
+          'COMP-FIXTURES': notEvaluated('COMP-FIXTURES', 'the evidence was produced by another toolchain'),
+          'COMP-KERNEL': notEvaluated('COMP-KERNEL', 'the evidence was produced by another toolchain'),
+        });
+        Object.assign(running, { kernelDigest: KERNEL_DIGEST, languageVersion: LANGUAGE_VERSION });
+      }
+    } finally {
+      vi.doUnmock('@inventarch/language');
+      vi.resetModules();
+    }
+  });
+  it('leaves embedded-floor evidence for a local floor, and an ambiguous floor source, not evaluated', () => {
+    expect(verdictsOf(evaluate(local.graph, { conformance: { inputs: local.inputs, kernel, fixtures } }))).toEqual({
+      'COMP-FIXTURES': { outcome: 'pass', basis: 'verified', messages: [] },
+      'COMP-KERNEL': notEvaluated('COMP-KERNEL', 'the kernel evidence verified another floor'),
+    });
+    for (const [path, location] of [
+      ['.ia/src/notes.ia', floorAt],
+      ['.ia/src/floor/notes.ia', authoredAt],
+    ] as const) {
+      const ambiguous = floorGraph(KERNEL_SOURCES, [{ path, text: '#! ia 1.0\n', location }]);
+      const report = evaluate(ambiguous.graph, { conformance: { inputs: ambiguous.inputs, kernel, fixtures } });
+      expect(verdictsOf(report)['COMP-KERNEL'], path).toEqual(
+        notEvaluated('COMP-KERNEL', `floor source ${path} has a floor path or a floor placement, not both`),
+      );
+      expect(report.conformance).toBeUndefined();
+    }
+  });
+  it('fails COMP-KERNEL for a local floor with one byte changed, and for language exports that differ', async () => {
+    const report = evaluate(local.graph, {
+      conformance: { inputs: local.inputs, kernel: verifyKernel(changed), fixtures },
+    });
+    expect(verdictsOf(report)['COMP-KERNEL']).toMatchObject({ outcome: 'fail', basis: 'verified' });
+    expect(report.outcome).toBe('fail');
+    vi.resetModules();
+    vi.doMock('@inventarch/language/internal/kernel.generated', async (original) => {
+      const actual = await original<Record<string, unknown>>();
+      return { ...actual, PHASES: ['orient'] };
+    });
+    try {
+      const mocked = await import('../src/index.js');
+      const mismatched = mocked.evaluate(embedded.graph, {
+        conformance: { inputs: embedded.inputs, kernel: mocked.verifyKernel(), fixtures: mocked.verifyFixtures() },
+      });
+      expect(verdictsOf(mismatched)['COMP-KERNEL']).toEqual({
+        outcome: 'fail',
+        basis: 'verified',
+        messages: ['Kernel verification: PHASES differs from regeneration'],
+      });
+    } finally {
+      vi.doUnmock('@inventarch/language/internal/kernel.generated');
+      vi.resetModules();
+    }
   });
 });

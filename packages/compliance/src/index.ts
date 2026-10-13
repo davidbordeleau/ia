@@ -90,6 +90,7 @@ export type {
 } from './evidence.js';
 export { evaluate } from './report.js';
 export type { Report, ReportOptions } from './report.js';
+export type { ConformanceOptions, ConformanceSummary } from './conformance/bind.js';
 export { runLanguageFixture, fixtureCoverage } from './fixtures.js';
 export type { FixtureResult, LanguageFixture } from './fixtures.js';
 export { CLAUDE_MARKETPLACE, CLAUDE_PLUGIN, PLUGIN_MARKER, renderClaudePlugin } from './host-plugin.js';

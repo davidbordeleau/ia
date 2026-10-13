@@ -1,11 +1,8 @@
 /**
- * `ia compile`: docs/specs/consumer-cli-contract/README.md §2.4, deprecated in favour of `ia capture`.
- *
- * The deprecated alias of `ia capture` remains available in this release. `runCompile` runs the capture and adds
- * one deprecation line on stderr. Of the 1.x options, `--force` maps
- * onto the capture, which always writes, and `--out <file>` and `--stdout` refuse naming the `ia capture` command to
- * run instead, because the capture writes one snapshot at a fixed place. 1.x kept the verb unchanged with that line
- * (decision release-bump).
+ * Legacy programmatic helpers retained at `@inventarch/cli/internal/compile`.
+ * The `ia compile` command was removed in 3.0. `runCompile` remains a deprecated capture adapter
+ * for existing imports; it is no longer registered as a CLI command. Its legacy options and exported
+ * signatures remain available to programmatic callers.
  *
  * The `ia.compiled.v1` writer below stays exported, so `@inventarch/cli/internal/compile` keeps its
  * published signatures, but no command writes the artifact any more. One deterministic document, `ia.compiled.v1`. Determinism is a requirement on this writer, not a hope: records
@@ -163,10 +160,10 @@ export function renderCompile(view: CompileView, path: string, caps: Capabilitie
 }
 
 /**
- * Decision compile-verb-fate: `ia compile` prints this one line on stderr whenever it runs to a result, in both output
- * modes, so stdout is exactly what `ia capture` writes there; a refusal prints only the refusal.
+ * The legacy programmatic adapter adds this line whenever it returns a capture result; a refusal prints only
+ * the refusal. The removed CLI command does not call this adapter.
  */
-export const DEPRECATION = `Deprecated: ia compile is an alias of "ia capture"; run "ia capture", which writes the admitted snapshot to ${CAPTURE_CURRENT}.\n`;
+export const DEPRECATION = `Deprecated: runCompile is a compatibility helper; the ia compile command was removed in 3.0. Use "ia capture", which writes the admitted snapshot to ${CAPTURE_CURRENT}.\n`;
 
 /**
  * The 1.x options the capture has no place for, refused as usage before the workspace is read. The remedy names the
@@ -179,7 +176,7 @@ function unmapped(context: Context): void {
     capture = `ia capture${root === undefined ? '' : ` --root ${quote(root)}`}`;
   throw new Refusal(
     'IA-CLI-USAGE',
-    `ia compile is an alias of ia capture, which writes the admitted snapshot only to ${CAPTURE_CURRENT}, so --${option} has no equivalent`,
+    `The legacy runCompile helper delegates to ia capture, which writes the admitted snapshot only to ${CAPTURE_CURRENT}, so --${option} has no equivalent`,
     2,
     null,
     `Run "${capture}" to write the admitted snapshot.`,

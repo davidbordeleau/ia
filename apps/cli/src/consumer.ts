@@ -25,7 +25,6 @@ import {
   RESERVED_TOKEN,
 } from './commands.js';
 import { runCapture } from './capture.js';
-import { runCompile } from './compile.js';
 import { runDistribute } from './distribute.js';
 import { runDoctor } from './doctor.js';
 import { runFormat } from './format.js';
@@ -359,10 +358,12 @@ export function renderHelp(host: Host, caps: Capabilities, namespaces: readonly 
       ...fieldRows(
         [
           { label: 'ia <operation> --help', value: words('Parameters, refusals and an example for one operation') },
-          ...namespaces.map((namespace) => ({
-            label: `ia ${namespace.token} --help`,
-            value: words(namespace.summary),
-          })),
+          ...namespaces
+            .filter((namespace) => !CORE_TOKENS.has(namespace.token))
+            .map((namespace) => ({
+              label: `ia ${namespace.token} --help`,
+              value: words(namespace.summary),
+            })),
         ],
         { depth: 1 },
         caps,
@@ -514,7 +515,6 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   vocabulary: runVocabulary,
   format: runFormat,
   capture: runCapture,
-  compile: runCompile,
   validate: runValidate,
   preview: runPreview,
   author: runAuthor,
@@ -698,6 +698,19 @@ export async function dispatch(
       dispose?.();
     }
   }
+  if (token === 'compile')
+    return renderRefusal(
+      new Refusal(
+        'IA-CLI-USAGE',
+        'The ia compile command was removed in 3.0; use ia capture.',
+        2,
+        null,
+        'Run "ia capture --help" for the supported capture command.',
+        'ia compile',
+      ),
+      caps,
+      wantsJson(argv),
+    );
   if (token === RESERVED_TOKEN)
     return renderRefusal(
       new Refusal(

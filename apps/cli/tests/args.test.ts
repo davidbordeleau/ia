@@ -184,7 +184,6 @@ it('tags the agent commands for the packet catalog in table order, each naming o
     'ia next',
   );
   expect(COMMANDS.filter((command) => command.catalog === undefined).map((command) => command.name)).toEqual([
-    'compile',
     'format',
     'inspect',
     'vocabulary',

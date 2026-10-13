@@ -864,7 +864,6 @@ describe('the mandate profile on every gated mode', () => {
       [['author', '--set', '@milestone m1', 'work.owner=x', '--digest', fake], 'author', 'Synthesis'],
       [['capture'], 'effect', 'Execution'],
       [['capture', '--preview'], 'effect', 'Execution'],
-      [['compile'], 'effect', 'Execution'],
       [['project', 'claude'], 'effect', 'Execution'],
     ] as const) {
       const refusal = await refused(root, argv, 'IA-RUNTIME-MANDATE-MOVE');
@@ -1164,7 +1163,6 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
       ['author', '--set', '@milestone m1', 'work.owner=x', '--digest', fake],
       ['capture'],
       ['capture', '--preview'],
-      ['compile'],
       ['project', 'claude'],
       ['host', 'claude', '--apply', '--yes'],
     ])

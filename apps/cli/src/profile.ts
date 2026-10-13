@@ -17,8 +17,8 @@
  * that record, workspace-wide, and names the admission report (`ia report --root <root>`, a machine route no mandate
  * gates): a position cannot seat at a record admission refused.
  *
- * Read (`ia read`, `ia next`), validate (`ia validate`, `ia preview`), author (`ia author`) and effect (`ia capture`, its
- * `ia compile` alias, `ia project`) are gated; `ia position` is not, and neither is a command outside those modes. A gated
+ * Read (`ia read`, `ia next`), validate (`ia validate`, `ia preview`), author (`ia author`) and effect (`ia capture`,
+ * `ia project`) are gated; `ia position` is not, and neither is a command outside those modes. A gated
  * command's profile stays on the invocation's gate, so a refusal it raises later names only a command the same actor may
  * run there (`gatedNext`): one the profile refuses is replaced by the governance position, and one that needs the
  * actor named by `--actor` carries it.
@@ -54,7 +54,6 @@ export const GATED_MODES: Readonly<Record<string, Mode>> = Object.freeze({
   preview: 'validate',
   author: 'author',
   capture: 'effect',
-  compile: 'effect',
   project: 'effect',
 });
 /**

@@ -1018,7 +1018,7 @@ function invocations(): readonly {
     },
     { code: 'IA-DB-PATH-UNSAFE', argv: ['inspect', '--root', linked], command: `ia validate --root ${unreadable}` },
     { code: 'IA-DB-PATH-UNSAFE', argv: ['capture', '--root', linked], command: `ia validate --root ${unreadable}` },
-    { code: 'IA-DB-PATH-UNSAFE', argv: ['compile', '--root', linked], command: `ia validate --root ${unreadable}` },
+    { code: 'IA-CLI-USAGE', argv: ['compile', '--root', linked], command: 'ia capture --help' },
     { code: 'IA-DB-PATH-UNSAFE', argv: ['position', '--root', linked], command: `ia validate --root ${unreadable}` },
     {
       code: 'IA-DB-PATH-UNSAFE',
@@ -1113,28 +1113,13 @@ function invocations(): readonly {
       argv: ['capture', '--root', floorBroken],
       command: `ia validate --root ${quote(floorBroken)}`,
     },
-    // Decision compile-verb-fate: `ia compile` is the deprecated alias of `ia capture`, so it refuses as the capture
-    // does, names the capture for a 1.x option the capture has no place for, and --out with --stdout its own help.
-    {
-      code: 'IA-DB-ROOT-INVALID',
-      argv: ['compile', '--root', empty],
-      command: `ia init ${quote(realpathSync(empty))}`,
-    },
-    {
-      code: 'IA-CLI-USAGE',
-      argv: ['compile', '--out', '.ia/work/x.json', '--root', FIXTURE],
-      command: `ia capture --root ${root}`,
-    },
-    {
-      code: 'IA-CLI-USAGE',
-      argv: ['compile', '--stdout', '--root', FIXTURE],
-      command: `ia capture --root ${root}`,
-    },
-    {
-      code: 'IA-CLI-USAGE',
-      argv: ['compile', '--out', '.ia/work/x.json', '--stdout', '--root', FIXTURE],
-      command: 'ia compile --help',
-    },
+    // Removed commands refuse before workspace access and always name supported capture help.
+    ...[
+      ['compile', '--root', empty],
+      ['compile', '--out', '.ia/work/x.json', '--root', FIXTURE],
+      ['compile', '--stdout', '--root', FIXTURE],
+      ['compile', '--out', '.ia/work/x.json', '--stdout', '--root', FIXTURE],
+    ].map((argv) => ({ code: 'IA-CLI-USAGE', argv, command: 'ia capture --help' })),
   ];
 }
 

@@ -268,7 +268,7 @@ export function previewCapture(root: string, given?: string, gate?: SessionGate)
   };
 }
 
-/** As `ia compile` does: the snapshot is written even when admission has errors; the exit class carries the verdict. */
+/** The snapshot is written even when admission has errors; the exit class carries the verdict. */
 export const captureExit = (view: CaptureView): 0 | 1 => (view.snapshot.counts.errors === 0 ? 0 : 1);
 
 /** A preview adds `preview: true` and the identities its counts count; a capture's keys are the 1.x ones. */

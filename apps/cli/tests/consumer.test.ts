@@ -66,6 +66,75 @@ const extensions: readonly Extension[] = [
 const run = (argv: readonly string[], options: HostOptions = {}): Promise<Result> =>
   dispatch(argv, makeHost(options), legacy, extensions);
 
+it('refuses the removed compile command before workspace access and prevents extension takeover', async () => {
+  const empty = scratch('removed-compile'),
+    absent = resolve(empty, 'absent'),
+    home = resolve(empty, 'home');
+  let entered = 0,
+    delegated = 0;
+  const host = {
+    ...makeHost({ cwd: absent, env: { IA_HOME: home } }),
+    onConsumerRoute: () => {
+      entered++;
+    },
+  };
+  const shadows: readonly Extension[] = [
+    {
+      token: 'compile',
+      summary: 'A removed command must not become an extension',
+      run: async () => {
+        delegated++;
+        return { exitCode: 42, stdout: '' };
+      },
+    },
+  ];
+  const oldRoute = () => {
+    delegated++;
+    return { exitCode: 42, stdout: '' };
+  };
+  for (const options of [
+    [],
+    ['--help'],
+    ['--preview'],
+    ['--force'],
+    ['--out', 'output.json'],
+    ['--stdout'],
+    ['--out', 'output.json', '--stdout'],
+  ]) {
+    for (const json of [false, true]) {
+      const result = await dispatch(
+        ['compile', ...options, '--root', absent, ...(json ? ['--json'] : [])],
+        host,
+        oldRoute,
+        shadows,
+      );
+      expect(result.exitCode, options.join(' ')).toBe(2);
+      if (json) {
+        expect(result.stderr).toBe('');
+        expect(JSON.parse(result.stdout)).toMatchObject({ code: 'IA-CLI-USAGE', exit: 2, ok: false });
+        expect(JSON.parse(result.stdout).message).toContain('removed in 3.0');
+        expect(JSON.parse(result.stdout).next).toContain('"ia capture --help"');
+      } else {
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toContain('removed in 3.0');
+        expect(result.stderr).toContain('ia capture --help');
+      }
+    }
+  }
+  expect(entered).toBe(0);
+  expect(delegated).toBe(0);
+  expect(existsSync(absent)).toBe(false);
+  expect(existsSync(home)).toBe(false);
+  expect(COMMANDS.some((command) => command.name === 'compile')).toBe(false);
+  expect(CORE_TOKENS.has('compile')).toBe(true);
+  for (const argv of [[], ['--help'], ['-h']]) {
+    const help = await dispatch(argv, host, oldRoute, [...shadows, ...extensions]);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).not.toContain('ia compile --help');
+    expect(help.stdout).toContain('ia sandbox --help');
+  }
+});
+
 it('keeps the selected registry when typo guidance requires another working directory', async () => {
   const cwd = resolve('registry-advice'),
     root = 'workspace(active)',

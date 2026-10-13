@@ -195,7 +195,6 @@ it('opens a --root reached through a link at its real path for every verb, and s
   for (const argv of [
     ['format', '--write'],
     ['capture'],
-    ['compile'],
     ['pack', '--descriptor', descriptor],
     ['pack', '--descriptor', descriptor, '--force'],
   ]) {
@@ -204,7 +203,7 @@ it('opens a --root reached through a link at its real path for every verb, and s
   }
   expect(readFileSync(formattable, 'utf8')).toBe(formatted);
   expect(existsSync(resolve(root, '.ia/work/snapshot/current.json'))).toBe(true);
-  // `ia compile` is the capture's alias since 2.0 (decision compile-verb-fate), so no 1.x artifact appears.
+  // Capture writes its snapshot, so no 1.x compiled artifact appears.
   expect(existsSync(resolve(root, '.ia/work/compiled.json'))).toBe(false);
   expect(readdirSync(resolve(root, '.ia/work/dist'))).toHaveLength(1);
   const env = { IA_HOME: resolve(scratch('linked-doctor-home'), '.ia') };

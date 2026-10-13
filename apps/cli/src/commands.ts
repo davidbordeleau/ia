@@ -301,28 +301,6 @@ export const COMMANDS: readonly CommandSpec[] = [
     ]),
   },
   {
-    // The deprecated `ia capture` alias remains available in this release.
-    // The 1.x options stay in the grammar so a 1.x invocation meets its mapping or its refusal, never an unknown flag.
-    name: 'compile',
-    group: 'workspace',
-    // Short enough that its global help row fits 80 columns, so no wrapped fragment reads as a command name.
-    summary: 'Deprecated alias of capture',
-    syntax: ['ia compile [--preview] [--force] [--json]'],
-    grammar: grammar([
-      option({ name: 'preview', kind: 'boolean', summary: 'As ia capture --preview' }),
-      option({
-        name: 'out',
-        kind: 'value',
-        conflicts: ['stdout'],
-        placeholder: '<file>',
-        summary: 'Refused: ia capture writes only .ia/work/snapshot/current.json',
-      }),
-      option({ name: 'stdout', kind: 'boolean', summary: 'Refused: ia capture writes only its snapshot file' }),
-      option({ name: 'force', kind: 'boolean', summary: 'Accepted and ignored: ia capture always writes' }),
-      ACTOR,
-    ]),
-  },
-  {
     name: 'format',
     group: 'workspace',
     summary: 'Check or rewrite record formatting',
@@ -781,6 +759,8 @@ export const CORE_TOKENS: ReadonlySet<string> = new Set<string>([
   ...LEGACY_OPERATIONS,
   ...COMMANDS.map((command) => command.name),
   RESERVED_TOKEN,
+  // Removed in 3.0; extensions must not revive this command.
+  'compile',
   '--help',
   '-h',
   '--version',

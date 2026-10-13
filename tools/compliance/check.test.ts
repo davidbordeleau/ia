@@ -1,6 +1,9 @@
-import { resolve } from 'node:path';
+import { appendFileSync, cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { checkCompliance, readFixtures } from './check.js';
+import { checkInventory } from './inventory.js';
 import { EVIDENCE_CODES, fixtureCoverage } from '../../packages/compliance/src/index.js';
 import { KERNEL_DIGEST, LANGUAGE_VERSION } from '../../packages/language/src/index.js';
 import { load } from '../../packages/graph/src/index.js';
@@ -58,5 +61,35 @@ it('requires a successful producer observation for every evaluator evidence code
       row.observedCodes.includes(code) ? { ...row, assessment: { ...row.assessment, outcome: 'fail' as const } } : row,
     );
     expect(fixtureCoverage(EVIDENCE_CODES, failed).outcome, code).toBe('fail');
+  }
+});
+
+it('fails the inventory gate after any fixture, companion or corpus edit until it is regenerated', () => {
+  const temp = mkdtempSync(join(tmpdir(), 'ia-inventory-'));
+  try {
+    for (const path of [
+      'packages/compliance/fixtures/language',
+      'examples/conformance/native',
+      'examples/public-language/manifest.json',
+      'packages/compliance/src/conformance/inventory.generated.ts',
+    ])
+      cpSync(resolve(root, path), join(temp, path), { recursive: true });
+    const first = checkInventory(temp);
+    expect(first.digest).toBe(checkInventory(root).digest);
+    expect(first.fixtures).toBe(179);
+    const digests = new Set([first.digest]);
+    for (const path of [
+      'packages/compliance/fixtures/language/identity/fail/facet-undeclared.ia',
+      'packages/compliance/fixtures/language/format/fail/lost-comment.candidate.txt',
+      'examples/conformance/native/systems/agent-system/system.ia',
+    ]) {
+      appendFileSync(join(temp, path), '\n');
+      expect(() => checkInventory(temp), path).toThrow('Inventory drift');
+      digests.add(checkInventory(temp, true).digest);
+      expect(checkInventory(temp).digest).toBe([...digests].at(-1));
+    }
+    expect(digests.size).toBe(4);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
   }
 });

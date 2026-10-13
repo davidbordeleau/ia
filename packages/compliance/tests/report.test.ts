@@ -1,9 +1,24 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { appendFileSync, cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import { KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION, parse } from '@inventarch/language';
-import { load, stableSerialize } from '@inventarch/graph';
-import { evaluate, fixtureCoverage, runLanguageFixture, verdict, verifyKernel } from '../src/index.js';
+import { KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION, LANG_CODES, parse } from '@inventarch/language';
+import { GRAPH_CODES, load, stableSerialize } from '@inventarch/graph';
+import {
+  COMP_CODES,
+  EVIDENCE_CODES,
+  evaluate,
+  fixtureCoverage,
+  runLanguageFixture,
+  verdict,
+  verifyFixtures,
+  verifyKernel,
+} from '../src/index.js';
+import { INVENTORY, INVENTORY_DIGEST } from '../src/conformance/inventory.generated.js';
+import { inventoryDigest } from '../src/conformance/inventory.js';
+import type { ConformanceInventory } from '../src/conformance/inventory.js';
+import { runProfile } from '../src/conformance/verify.js';
 import type { ReportOptions } from '../src/index.js';
 import { inputs, records, registry, sources } from './native.js';
 
@@ -153,5 +168,105 @@ describe('package-v1 suites (C31)', () => {
     expect(files).toEqual(expect.arrayContaining(['conformance/refusals.ts', 'conformance/evidence-fixtures.ts']));
     for (const file of files)
       expect(readFileSync(resolve(base, file), 'utf8'), file).not.toMatch(/from '[^']*\/(tools|tests|fixtures)\//);
+  });
+});
+describe('fixture verification (C31)', () => {
+  const directory = new URL('../fixtures/language/', import.meta.url);
+  const messages = (result: { assessment: { findings: readonly { message: string }[] } }) =>
+    result.assessment.findings.map((f) => f.message).sort();
+  const tampered = (change: (inventory: ConformanceInventory) => ConformanceInventory) => {
+    const inventory = change(INVENTORY);
+    return { inventory, digest: inventoryDigest(inventory) };
+  };
+  const copy = (edit: (root: string) => void) => {
+    const temp = mkdtempSync(join(tmpdir(), 'ia-profile-'));
+    cpSync(fileURLToPath(directory), temp, { recursive: true });
+    edit(temp);
+    return { temp, url: pathToFileURL(temp + '/') };
+  };
+  it('passes the package-v1 profile, observes every required code and lists what it does not run', () => {
+    const evidence = verifyFixtures();
+    expect(evidence.assessment).toMatchObject({ check: 'COMP-FIXTURES', scope: 'package-v1', outcome: 'pass' });
+    expect(evidence.profile).toBe('package-v1');
+    expect(evidence.inventoryDigest).toBe(INVENTORY_DIGEST);
+    expect(INVENTORY.requiredCodes).toHaveLength(
+      LANG_CODES.length + GRAPH_CODES.length + COMP_CODES.length + EVIDENCE_CODES.length,
+    );
+    expect(evidence.observedCodes).toEqual(expect.arrayContaining([...INVENTORY.requiredCodes]));
+    expect(evidence.outOfProfile.map((s) => s.suite)).toEqual(['HOOK', 'RUNTIME', 'escalation', 'EXEC', 'PUBLICATION']);
+    expect(evidence.outOfProfile.every((s) => s.codes.length > 0 && s.reason.length > 0)).toBe(true);
+  });
+  it('fails a changed companion file', () => {
+    const { temp, url } = copy((root) => appendFileSync(join(root, 'format/fail/lost-comment.candidate.txt'), ' '));
+    try {
+      expect(messages(runProfile(INVENTORY, INVENTORY_DIGEST, url))).toEqual([
+        'No passing failing-case observation covers IA-LANG-FORMAT-LOSSY',
+        'format/fail/lost-comment.candidate.txt: differs from the inventory',
+      ]);
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  });
+  it('fails when the sole failing case for a code is removed', () => {
+    const { inventory, digest } = tampered((i) => ({
+      ...i,
+      fixtures: i.fixtures.filter((f) => f.path !== 'format/fail/lost-comment.ia'),
+    }));
+    const { temp, url } = copy((root) => {
+      for (const suffix of ['.ia', '.diagnostics.json', '.candidate.txt'])
+        rmSync(join(root, 'format/fail/lost-comment' + suffix));
+    });
+    try {
+      expect(messages(runProfile(inventory, digest, url))).toEqual([
+        'No passing failing-case observation covers IA-LANG-FORMAT-LOSSY',
+      ]);
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  });
+  it('fails an extra path, a missing file and a duplicate inventory path', () => {
+    const { temp, url } = copy((root) => {
+      writeFileSync(join(root, 'format/fail/extra.txt'), '');
+      rmSync(join(root, 'format/pass/token-spacing.formatted.txt'));
+    });
+    try {
+      expect(messages(runProfile(INVENTORY, INVENTORY_DIGEST, url))).toEqual([
+        'format/fail/extra.txt: unexpected fixture entry or orphan companion',
+        'format/pass/token-spacing.formatted.txt: missing',
+      ]);
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+    const { inventory, digest } = tampered((i) => ({ ...i, fixtures: [...i.fixtures, i.fixtures[0]!] }));
+    expect(messages(runProfile(inventory, digest, directory))).toEqual([
+      `${INVENTORY.fixtures[0]!.path}: duplicate inventory path`,
+    ]);
+  });
+  it('fails an inventory that differs from its digest, or from the running code inventories', () => {
+    const changed = { ...INVENTORY, outOfProfile: INVENTORY.outOfProfile.slice(1) };
+    expect(messages(runProfile(changed, INVENTORY_DIGEST, directory))).toEqual([
+      'The inventory differs from the digest it is pinned by',
+    ]);
+    const { inventory, digest } = tampered((i) => ({ ...i, requiredCodes: i.requiredCodes.slice(1) }));
+    expect(messages(runProfile(inventory, digest, directory))).toEqual([
+      "The inventory's required codes differ from the running toolchain's",
+    ]);
+  });
+  it('fails a boundary case the inventory does not list, or one that no longer runs', () => {
+    const { inventory, digest } = tampered((i) => ({
+      ...i,
+      boundaries: [...i.boundaries.slice(1), 'boundary/IA-COMP-INVENTED'].sort(),
+    }));
+    expect(messages(runProfile(inventory, digest, directory))).toEqual(
+      [
+        'boundary/IA-COMP-INVENTED: listed boundary case did not run',
+        `${INVENTORY.boundaries[0]}: boundary case is not in the inventory`,
+      ].sort(),
+    );
+  });
+  it('is not evaluated when the fixture files cannot be read', () => {
+    const result = runProfile(INVENTORY, INVENTORY_DIGEST, new URL('./missing/', directory));
+    expect(result.assessment.outcome).toBe('not-evaluated');
+    expect(result.assessment.findings.map((f) => f.code)).toEqual(['IA-COMP-NOT-EVALUATED']);
   });
 });

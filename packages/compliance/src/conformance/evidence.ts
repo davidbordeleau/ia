@@ -3,6 +3,9 @@ import { KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION } from '@inventarch/lan
 import { kernelAssessment, kernelDigest } from '../kernel.js';
 import type { KernelSource } from '../kernel.js';
 import type { Assessment } from '../types.js';
+import { INVENTORY, INVENTORY_DIGEST } from './inventory.generated.js';
+import type { OutOfProfileSuite } from './inventory.js';
+import { runProfile } from './verify.js';
 
 /** The conformance profile a sandboxed consumer can run itself (C31). */
 export const CONFORMANCE_PROFILE = 'package-v1';
@@ -20,6 +23,18 @@ export interface KernelEvidence {
   readonly toolchain: ConformanceToolchain;
   /** `kernelDigest` of the floor this evidence verified. */
   readonly floorDigest: string;
+  readonly assessment: Assessment;
+}
+export interface FixtureEvidence {
+  readonly subject: 'COMP-FIXTURES';
+  readonly profile: ConformanceProfile;
+  readonly toolchain: ConformanceToolchain;
+  /** `INVENTORY_DIGEST` of the inventory this evidence ran. */
+  readonly inventoryDigest: string;
+  /** The codes passing failing cases observed. */
+  readonly observedCodes: readonly string[];
+  /** The suites the profile does not run, so a pass says nothing about them. */
+  readonly outOfProfile: readonly OutOfProfileSuite[];
   readonly assessment: Assessment;
 }
 
@@ -83,5 +98,23 @@ export function verifyKernel(floor: readonly KernelSource[] = KERNEL_SOURCES): K
     toolchain: runningToolchain(),
     floorDigest: kernelDigest(sources),
     assessment: kernelAssessment(sources),
+  });
+}
+
+/**
+ * Verifies COMP-FIXTURES in this process for the package-v1 profile: runs the language fixtures this package ships
+ * against its generated inventory, and the refusal and evidence suites over the conformance corpus it embeds. It reads
+ * the package's own fixture files and writes nothing.
+ */
+export function verifyFixtures(): FixtureEvidence {
+  const result = runProfile(INVENTORY, INVENTORY_DIGEST, new URL('../../fixtures/language/', import.meta.url));
+  return freeze({
+    subject: 'COMP-FIXTURES' as const,
+    profile: CONFORMANCE_PROFILE,
+    toolchain: runningToolchain(),
+    inventoryDigest: INVENTORY_DIGEST,
+    observedCodes: [...result.observedCodes],
+    outOfProfile: INVENTORY.outOfProfile.map((suite) => ({ ...suite, codes: [...suite.codes] })),
+    assessment: result.assessment,
   });
 }

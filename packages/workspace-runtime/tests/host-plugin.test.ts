@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emitFrontmatter, isPlain, parseFrontmatter } from '../src/host-plugin/frontmatter.js';
+import { emitFrontmatter, isPlain, parseFrontmatter, sameValue } from '../src/host-plugin/frontmatter.js';
 
 const b = (text: string): Buffer => Buffer.from(text, 'utf8');
 
@@ -37,5 +37,42 @@ describe('frontmatter (A4)', () => {
     for (const text of ['true', '12', '[x]', 'a: b', 'a #b', '-x', ' padded']) expect(isPlain(text)).toBe(false);
     for (const text of ['Read, Grep, Glob', "isn't it", 'Use when a game feels flat.'])
       expect(isPlain(text)).toBe(true);
+  });
+  it('lists non-UTF-8 bytes as unresolved instead of throwing', () => {
+    const bytes = Buffer.from([0x2d, 0x2d, 0x2d, 0x0a, 0xff, 0x0a, 0x2d, 0x2d, 0x2d, 0x0a]);
+    let parsed: ReturnType<typeof parseFrontmatter> | undefined;
+    expect(() => {
+      parsed = parseFrontmatter(bytes, 'skills/a/SKILL.md');
+    }).not.toThrow();
+    expect(parsed?.unresolved[0]).toContain('not UTF-8');
+    expect(parsed?.fields).toEqual([]);
+  });
+  it('lists double-quoted values with trailing text or non-canonical escapes as unresolved', () => {
+    const trailing = parseFrontmatter(b('---\nname: "a"  \n---\n'), 'p');
+    expect(trailing.unresolved).toHaveLength(1);
+    expect(trailing.fields).toEqual([]);
+    const escaped = parseFrontmatter(b('---\ndescription: "a\\/b"\n---\n'), 'p');
+    expect(escaped.unresolved).toHaveLength(1);
+    expect(escaped.fields).toEqual([]);
+  });
+  it('reads an empty frontmatter block as zero fields and keeps the body', () => {
+    const parsed = parseFrontmatter(b('---\n---\nbody\n'), 'p');
+    expect(parsed.fields).toEqual([]);
+    expect(parsed.unresolved).toEqual([]);
+    expect(parsed.body.toString('utf8')).toBe('body\n');
+    const back = parseFrontmatter(b(emitFrontmatter([]) + 'body\n'), 'p');
+    expect(back.fields).toEqual([]);
+    expect(back.unresolved).toEqual([]);
+    expect(back.body.toString('utf8')).toBe('body\n');
+  });
+  it('compares values by kind and content, not by style', () => {
+    const plain = { kind: 'string', text: 'a', style: 'plain' } as const;
+    const double = { kind: 'string', text: 'a', style: 'double' } as const;
+    expect(sameValue(plain, double)).toBe(true);
+    expect(sameValue(plain, { kind: 'boolean', value: true })).toBe(false);
+    expect(sameValue(plain, { kind: 'list', items: ['a'] })).toBe(false);
+    expect(sameValue({ kind: 'list', items: ['a'] }, { kind: 'boolean', value: false })).toBe(false);
+    expect(sameValue({ kind: 'list', items: ['a', 'b'] }, { kind: 'list', items: ['a', 'b'] })).toBe(true);
+    expect(sameValue({ kind: 'boolean', value: true }, { kind: 'boolean', value: false })).toBe(false);
   });
 });

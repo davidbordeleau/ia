@@ -42,7 +42,10 @@ function parseValue(raw: string): FrontValue | null {
   if (raw.startsWith('"')) {
     try {
       const parsed: unknown = JSON.parse(raw);
-      return typeof parsed === 'string' ? { kind: 'string', text: parsed, style: 'double' } : null;
+      // Only the canonical spelling is admitted: trailing text or non-canonical escapes would not regenerate byte-exact.
+      return typeof parsed === 'string' && JSON.stringify(parsed) === raw
+        ? { kind: 'string', text: parsed, style: 'double' }
+        : null;
     } catch {
       return null;
     }
@@ -66,7 +69,7 @@ const only = (bytes: Buffer, reason: string): Frontmatter => ({ fields: [], body
 
 export function parseFrontmatter(bytes: Buffer, path: string): Frontmatter {
   const text = bytes.toString('utf8');
-  if (!Buffer.from(text, 'utf8').equals(bytes)) throw new HostPluginError('IA-PLUGIN-INPUT', `${path} is not UTF-8`);
+  if (!Buffer.from(text, 'utf8').equals(bytes)) return only(bytes, `${path}: not UTF-8`);
   if (text.charCodeAt(0) === 0xfeff) return only(bytes, `${path}: a byte-order mark precedes the frontmatter`);
   if (text.includes('\r')) return only(bytes, `${path}: CRLF line endings; lowering keeps bytes exact and needs LF`);
   if (!text.startsWith('---\n')) return { fields: [], body: bytes, unresolved: [] };
@@ -75,7 +78,9 @@ export function parseFrontmatter(bytes: Buffer, path: string): Frontmatter {
   const fields: FrontField[] = [];
   const unresolved: string[] = [];
   const seen = new Set<string>();
-  for (const line of text.slice(4, end).split('\n')) {
+  // An empty block (`---\n---\n`) has no lines; `''.split('\n')` would otherwise yield one bogus empty line.
+  const lines = end === 3 ? [] : text.slice(4, end).split('\n');
+  for (const line of lines) {
     const colon = line.indexOf(':');
     const key = colon < 0 ? '' : line.slice(0, colon);
     if (!KEY.test(key) || line[colon + 1] !== ' ') {

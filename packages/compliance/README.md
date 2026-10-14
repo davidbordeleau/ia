@@ -1,9 +1,76 @@
 # @inventarch/compliance
 
-Pure checks over compiled IA records and graph views. validateSchema supports bootstrap; validateGraphSchema uses admitted active graph relationships. Schema/system admission, fragments, declared coverage, selectors, exact variant ambiguity, check declarations and structural adoption feed evaluate(graph, options), which returns a stable immutable revision report.
+[![npm](https://img.shields.io/npm/v/@inventarch/compliance?label=npm)](https://www.npmjs.com/package/@inventarch/compliance) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-Supply source diagnostics, discovered system folders and matching-revision kernel/fixture evidence explicitly. Missing observations or adoption clause evaluators produce not-evaluated. Case declarations establish coverage, not execution. Only supplied clause evaluators can establish adoption results. No filesystem I/O, model loop or capability execution occurs here.
+> Checks over compiled IA records and graphs: schema conformance, system admission, fragments, coverage, selectors, variants and contract adoption with supplied evaluators, assembled into one revision report. It also resolves obligations against an optional evaluator catalog and qualifies evidence receipts.
+>
+> It consumes [`@inventarch/graph`](../graph/README.md); [`@inventarch/db`](../db/README.md) uses its verdicts to admit a workspace.
 
-An optional trusted evaluator catalog (createEvaluatorCatalog, SPEC C25–C29) lets a host register namespaced evaluators for a check's evaluator id (check.implementation, else check.runs), resolve adopted obligations (including the strict-typing-v1 profile), validate evidence receipts and decide whether a transition may be admitted. These are pure functions. The host supplies implementations, codecs, predicates, facts, receipts, the minimum receipt trust, a service-receipt verifier and the current time. It owns execution, scheduling and persistence. Calls without a catalog behave exactly as before. The exported Finding code union now also includes EVIDENCE_CODES; those codes are outside the repository fixture gate (SPEC C29).
+## ⚡ Quick start
 
-[SPEC.md](SPEC.md) owns interfaces, refusal codes and delivery evidence. The package depends on @inventarch/language and @inventarch/graph. Run pnpm compliance:check at the workspace root to verify the real native corpus, kernel, conformance pairs and refusal-code boundaries. --json emits the report; the command prints unavailable checks and exits unsuccessfully on failed checks.
+```sh
+npm install @inventarch/language @inventarch/graph @inventarch/compliance
+```
+
+```js
+import { buildRegistry, compile, KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION, parse } from '@inventarch/language';
+import { load } from '@inventarch/graph';
+import { evaluate } from '@inventarch/compliance';
+
+const location = { placement: { kind: 'floor', band: 10, reach: '' }, provenance: 'bootstrap' };
+const sources = KERNEL_SOURCES.map((source) => ({ ...source, location }));
+const parsed = sources.map((source) => ({ ...parse(source.text, source.path), location }));
+const registered = buildRegistry(parsed);
+const compiled = parsed.map((source) => compile(source.ast, registered.registry, location, []));
+const graph = load(
+  compiled.flatMap((result) => result.records),
+  registered.registry,
+  { sources, languageVersion: LANGUAGE_VERSION, kernelDigest: KERNEL_DIGEST, location: '' },
+);
+
+const report = evaluate(graph, {
+  sourceDiagnostics: [...registered.diagnostics, ...compiled.flatMap((result) => result.diagnostics)],
+});
+console.log(report.outcome); // not-evaluated
+for (const verdict of report.verdicts.filter((v) => v.outcome !== 'pass'))
+  console.log(verdict.check, '|', verdict.findings[0].message);
+// COMP-FIXTURES | COMP-FIXTURES: matching-revision verification evidence was not supplied
+// COMP-KERNEL | COMP-KERNEL: matching-revision verification evidence was not supplied
+// COMP-STEWARD | System folder discovery observations were not supplied
+// COMP-SYSTEM | System folder discovery observations were not supplied
+```
+
+Every other verdict passes, yet the report is `not-evaluated`, not `pass`: the kernel and fixture checks need verification evidence at the graph's revision (`evidence`), and the system and steward checks need the discovered system folders (`folders`). Nothing here runs a verification to fill those gaps.
+
+## 🧭 What it does
+
+| Area | Exports |
+| --- | --- |
+| Revision report | `evaluate(graph, options?)` returns an immutable report keyed to `graph.revision`: `outcome`, `verdicts`, `findings` and `shadows`. `fail` dominates `not-evaluated`, which dominates `pass`. |
+| Schema checks | `validateSchema(record, registry, pool)` for bootstrap without a graph and `validateGraphSchema` on a graph: sections, fields, value types and narrowings (`matchesType`, `matchesForm`) and relationship cardinality. |
+| System admission | `validateSystems(folders, registry, pool)`: one `@system` per folder, words from systems the folder does not require, steward coverage, schema enrolment and declared consent. |
+| Graph checks | `validateFragments`, `validateCoverage`, `validateSelectors`, `validateVariants`, `validateConsent`, `validateIdentity`, `validateParse`, and `validateCheck` (built-in or catalog evaluator ids) or `validateCheckStructure` (any one named evaluator). |
+| Contract adoption | `validateAdoption` calls the clause evaluators you supply, keyed by contract and requirement. |
+| Evaluator catalog | `createEvaluatorCatalog`, `selectEvaluator` and `bindEvaluators` register a host's trusted, namespaced evaluators for the id a `@check` names. |
+| Obligations and receipts | `resolveObligations`, `inspectObligations`, `profileOccurrences`, `validateReceipt`, `acceptEvaluatorOutput`, `adaptBuiltinVerdict` and `admitTransition` decide which obligations apply, whether a receipt is valid and current, and whether a transition may be admitted. |
+| Fixtures | `runLanguageFixture` and `fixtureCoverage` run conformance fixtures you read yourself. The package ships its conformance fixtures under `fixtures/`. |
+| Host plugin | `renderClaudePlugin` returns the files of the user-level Claude Code plugin that `ia host claude --user` installs. |
+
+Finding codes are `COMP_CODES` and `EVIDENCE_CODES` (`IA-COMP-*`); language and graph findings keep their own codes. The `./internal/*` subpaths are published for IA's own toolchain; use the root entry point.
+
+## ⚖️ What it does not do
+
+- **No I/O or execution.** It reads no files, network or clock, schedules and persists nothing, and calls only host functions you supply, such as evaluators, codecs and predicates. The caller also supplies source diagnostics, system folders, verification evidence and the current time.
+- **`not-evaluated` is never a pass.** Missing evidence, a missing or throwing clause evaluator, an unavailable catalog evaluator and an unresolved relationship that could change an answer all leave a check `not-evaluated`.
+- **Declarations are not results.** A `@case` establishes declared coverage, not an executed test, and coverage never satisfies adoption. A `@check` names an evaluator; it does not run it, and `bindEvaluators` invokes nothing.
+- **Trust is never self-asserted.** A service-associated receipt counts only when the host's verifier accepts it, and a resolution digest is an integrity check, not authentication.
+- **Conformance is not truth.** A passing report establishes that records conform to their schemas and that their relationships resolve with consent, not that their prose is true or complete.
+
+## 📚 Learn more
+
+- [SPEC.md](SPEC.md): the package contract, refusal codes and the evaluator catalog, obligation and receipt clauses
+- [LANGUAGE.md](LANGUAGE.md): the packaged summary of the words this release ships
+- [Architecture reference](../../docs/reference/architecture/README.md#which-package-to-use) and the [host plugin specification](../../docs/specs/host-plugin-distribution/README.md)
+- Neighbours in the dependency direction: [`@inventarch/language`](../language/README.md) and [`@inventarch/graph`](../graph/README.md) before it; [`@inventarch/db`](../db/README.md) after it
+- In this repository, `pnpm compliance:check` runs these checks over the native corpus and the conformance fixtures
+- [Root README](../../README.md)

@@ -1,107 +1,128 @@
 # IA architecture and ownership
 
-IA separates vocabulary declarations, the toolchain that reads them, and host implementations that execute work. A native record's owning system comes from its word registration. Its source folder determines capture and release membership. An npm package can carry native declarations, executable code, or both.
+[![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](../../../LICENSE)
+
+> This reference explains how IA divides the work: which package to use for what, which native system owns each word and what executes it, when to consult a steward, and where a declaration stops and enforcement starts. The [root README](../../../README.md) introduces the concepts; each package's colocated `SPEC.md` defines its behavior.
+
+IA keeps three things apart: vocabulary declarations in `.ia` files, the toolchain that reads them, and the host implementations that execute work. A record's owning system comes from its word's registration. Its source folder decides capture and release membership. An npm package can carry native declarations, executable code, or both.
 
 ## Which package to use
 
-| Package | Use it for | Public entrypoints |
+| Package | Use it for | Public entry points |
 | --- | --- | --- |
-| `@inventarch/language` | Parse, scan, register, compile and format IA text; inspect identities and the language floor. | Root; `./editor` |
+| `@inventarch/language` | Parse, scan, register, compile and format IA text; inspect identities and the language floor; edit one record in place. | Root; `./editor` |
 | `@inventarch/graph` | Resolve admitted identities and references; traverse relationships; inspect claims, conditions and record digests. | Root |
-| `@inventarch/compliance` | Run structural checks; evaluate adopted contracts with supplied evaluators; qualify obligation and evidence receipts. | Root |
-| `@inventarch/db` | Discover source trees; open scoped read handles; inspect admission, membership and retained snapshots. | Root; `./editor`, `./distribution`, `./descriptors` |
-| `@inventarch/runtime` | Read records/documents, deliver position and work views, assemble host packets and expose the Door protocol. | Root; `./editor`, `./authoring`, `./authoring-execution`, `./entry` |
-| `@inventarch/workspace-runtime` | Capture/adopt workspaces; resolve teaching resources, lifecycle context, templates and publication; bind operations and generate host artifacts. | Root; `./bind`, resource, authoring, lifecycle, source, template, projection and publication subpaths; generation is a toolchain implementation subpath |
-| `@inventarch/service-contracts` | Validate service request/response shapes, including sources, tenancy, sessions, proposals, marketplace and installation. | Root; `./sources`, `./tenancy`, `./session-lifecycle`, `./source-apply`, `./marketplace`, `./installation` |
+| `@inventarch/compliance` | Run structural checks; evaluate adopted contracts with supplied evaluators; resolve obligations and qualify evidence receipts. | Root |
+| `@inventarch/db` | Discover source trees; open scoped read handles; inspect admission, membership and snapshots; preview changes; bind checks and read or write evidence. | Root; `./editor`, `./distribution`, `./descriptors` |
+| `@inventarch/runtime` | Read records, deliver position and plan views, resolve mandates, render host packets and serve the Door protocol. | Root; `./editor`, `./authoring`, `./authoring-execution`, `./entry` |
+| `@inventarch/workspace-runtime` | Capture and adopt workspaces; resolve teaching resources, lifecycle, templates and publication; join execution bindings with installed implementations. | Root; `./bind`, and resource, authoring, lifecycle, source, template, projection and publication subpaths |
+| `@inventarch/service-contracts` | Validate service request and response shapes, including sources, tenancy, sessions, source application, marketplace and installation. | Root; `./sources`, `./tenancy`, `./session-lifecycle`, `./source-apply`, `./marketplace`, `./installation` |
 
-The main source dependency direction is `language → graph → compliance → db → runtime → workspace-runtime`: each package to the right consumes earlier mechanisms. Some packages also import earlier layers directly. `service-contracts` has a separate Zod-based, browser-safe boundary. Its schemas validate message shape; an application host supplies authentication, authorization, disclosure and native execution.
+The main dependency direction is `language → graph → compliance → db → runtime → workspace-runtime`: each package consumes the mechanisms to its left, and some also import earlier layers directly. `service-contracts` stands apart: it depends only on Zod and is browser-safe. Its schemas validate message shape; an application host supplies authentication, authorization, disclosure and native execution.
 
-CLI, MCP and VS Code consume the same runtime/database mechanisms. The CLI plans and applies filesystem effects; the MCP door exposes scoped runtime calls; the editor uses the runtime editor surface. Distribution tooling qualifies archives and installed closures using database distribution contracts.
+The apps consume these packages:
 
-Use package entrypoints rather than `./internal/*` implementation subpaths. The latter are published for specific toolchain consumers and expose details that ordinary integrations do not need.
+| App | Built on | Role |
+| --- | --- | --- |
+| `ia` ([`@inventarch/cli`](../../../apps/cli/README.md)) | `db`, `runtime`, `workspace-runtime`, `compliance`, `distribution` | Plans and applies filesystem effects |
+| `ia-mcp-door` ([`@inventarch/mcp-door`](../../../apps/mcp-door/README.md)) | `runtime` | Serves scoped, read-only runtime calls over stdio |
+| [VS Code extension](../../../apps/vscode/README.md) | `runtime` | Uses the runtime editor surface |
+| `ia-distribution` ([`@inventarch/distribution`](../../../apps/distribution/README.md)) | `db`, `workspace-runtime` | Packs, installs and qualifies archives with the `db` distribution contracts |
+| `ia-runner` ([`@inventarch/runner`](../../../apps/runner/README.md)) | `db`, `runtime`, `workspace-runtime` and the executable systems | Runs one admitted agent profile with a durable journal |
+| [Steward hook](../../../apps/steward-hook/README.md) | `db`, `runtime`, `workspace-runtime` | The host edit guard |
+
+Use package entry points rather than the `./internal/*` subpaths. Those are published for specific toolchain consumers, such as the CLI's use of `@inventarch/workspace-runtime/internal/generate`, and expose details ordinary integrations do not need.
 
 ### Read a workspace
 
-These imports are the public APIs that the CLI and runtime use:
+This script reads the [quick start](../../../README.md#-quick-start) project: the position for one task and the delivery view of its plan. Run it from the project root with `@inventarch/db` and `@inventarch/runtime` installed:
 
-```ts
+```js
 import { open } from '@inventarch/db';
 import { deliveryView, position } from '@inventarch/runtime';
 
-const workspace = open(projectRoot, { cache: false, checks: 'structural' });
+const workspace = open('.', { cache: false });
 try {
   const scope = workspace.resolveScope();
   const context = position(workspace, scope.token, {
-    seat: taskIdentity,
+    seat: 'work-system/definition/task/write-schema',
     shape: 'sequence',
   });
-  const delivery = deliveryView(workspace, scope.token, planIdentity);
-  // Inspect context.body and delivery; these reads do not execute the task.
+  const delivery = deliveryView(workspace, scope.token, 'work-system/definition/plan/public-api');
+  console.log(context.digest, delivery.ok);
 } finally {
   workspace.close();
 }
 ```
 
-For syntax-only work, use `parse`, `scan` or `format` from `@inventarch/language`. For semantic admission, open a database handle or explicitly build the registry and compile the complete selected corpus. Parsing one file cannot establish cross-file reference resolution.
+`position` returns the body, its digest and the host note; `deliveryView` returns the plan's milestones and tasks with their verdicts. Both are reads: they execute no task, and with `cache: false` the script writes nothing. `open` admits checks strictly by default, as every reader except `ia validate`, `ia preview` and `ia author` does.
+
+For syntax only, use `parse`, `scan` or `format` from `@inventarch/language`. For admission, open a database handle: parsing one file cannot resolve references across files.
 
 ## Native systems and executable owners
 
 | Native system | Owned words | Executable package behavior |
 | --- | --- | --- |
-| agent-system | agent, mandate | `Engine`, action validation and execution manifest handling |
-| session-system | run | Journal store, replay/reducer, memory and SQLite backends |
-| authoring-system | authoring-guide, operation | Validate and format drafts inside a disclosed workspace scope |
-| agent-composition-system | voice, capability, agent-profile, harness, execution-binding | Compile a harness and execution manifest; bind installed captured-source reads |
-| template-system | template | Validate and render scalar/structured templates |
-| compliance-system | contract, check, case | Native declarations consumed by `@inventarch/compliance` |
-| governance-system | law, principle, convention, playbook | Native declarations delivered and evaluated by selected consumers |
-| hook-authoring-system | hook | Native event/tool/path declarations for a host adapter |
-| learning-system | observation, improvement | Native evidence and proposed-learning declarations |
-| work-system | plan, milestone, task, decision, spec | Native work declarations consumed by runtime delivery views |
-| workspace-system | workspace, distribution | Native composition and release-root declarations |
+| agent-system | agent, mandate | `Engine`, action parsing and validation, execution manifest digests |
+| session-system | run | Journal store, replay and reducer, in-memory and SQLite backends |
+| authoring-system | authoring-guide, operation | Validate and format drafts |
+| agent-composition-system | voice, capability, agent-profile, harness, execution-binding | `compileHarness` and `executionManifest`; captured-source read adapters |
+| template-system | template | Validate and render scalar and structured templates |
+| compliance-system | contract, check, case | Declarations only; `@inventarch/compliance` evaluates them |
+| governance-system | law, principle, convention, playbook | Declarations only; position delivery selects them |
+| hook-authoring-system | hook | Declarations only; `ia host claude` registers edit guards from them |
+| learning-system | observation, improvement | Declarations only; `ia validate` writes check evidence as `@observation` records |
+| work-system | plan, milestone, task, decision, spec | Declarations only; `ia next` and the runtime delivery view read them |
+| workspace-system | workspace, distribution | Declarations only; capture and packing read them |
 
-The six packages described as native declarations export `./native.ia.tgz` and `./system-package.json`. The five executable owners export JavaScript APIs as well as qualified native payloads. Native dependency declarations and npm implementation dependencies are distinct graphs. Whole-system packing can add npm dependencies from native references, so source package manifests alone do not determine the final archive graph.
+The six declaration-only packages export `./native.ia.tgz` and `./system-package.json`. The five executable owners export JavaScript APIs and ship their native payload beside them. Native dependencies (`requires` in `system.ia`) and npm dependencies are separate graphs: release packaging adds the npm dependency that each native requirement implies, so a source package manifest alone does not determine the published dependency graph.
 
-In generation-binding, `workspace-runtime` also owns generic generation and operation-binding joins. The CLI uses those joins for preview, author and generated host projection. Check implementations are joined from built-ins and the installed implementation catalogue; a binding receipt establishes compatibility, not that an operation or custom evaluator ran. The generic execution runner has a separate application boundary; these package APIs do not establish that a runner service has been deployed.
+`@inventarch/workspace-runtime` also owns host-artifact generation and the execution-binding join. `ia project`, `ia host` and `ia doctor` render agents, skills and hook registrations through its generation subpath. `ia validate` and `ia-runner` join each `@execution-binding` with the installed implementation catalog through `./bind`, which loads and executes nothing: a bound result says an implementation is installed, not that it ran.
 
-Importing `Engine` from `@inventarch/agent-system` or `compileHarness` from `@inventarch/agent-composition-system` exposes implementations. Execution still requires a host-supplied manifest, model/operation adapters, principal, authority and session store. A record naming an implementation never installs it or grants its effects.
+Importing `Engine` from `@inventarch/agent-system` or `compileHarness` from `@inventarch/agent-composition-system` gives you implementations, not authority. An `Engine` runs only with a host-supplied manifest, session store, model and operation adapters, and an `authorize` callback for the acting principal. A record naming an implementation never installs it or grants its effects.
 
 ## When to consult a steward
 
-Every declared system names a local steward accountable for its vocabulary, canonical schemas, relationship consent and direct system dependencies. Reach the relevant system with:
+Every system names a local steward accountable for its vocabulary, canonical schemas, relationship consent and direct system dependencies. Reach a system and its steward with:
 
 ```sh
 ia position --seat floor/definition/system/work-system
 ```
 
-Consult that steward when changing what a word means, its fields, registration, allowed relationships or vocabulary dependencies. A participant can author ordinary instances of adopted words—such as a release task or a decision—under the repository's work boundary. This does not require creating a new vocabulary owner or a new agent for every file. An example may assign a task to a steward, but that is an explicit task-owner choice; vocabulary stewardship does not make the steward the writer of every instance.
+Consult that steward before changing what a word means, its fields, its registration, its permitted relationships or its vocabulary dependencies. Ordinary records of an adopted word, such as a task or a decision, need no new vocabulary owner and no new agent per file. A task may name a steward as its owner; that is the task author's choice, and stewardship does not make the steward the writer of every record of its words.
 
-The returned steward identity is readable ownership metadata. It does not spawn an agent, authenticate the current writer or grant host permissions. Structural checks require a matching local steward and coverage of minted words. A host that enforces writer identity must bind and authenticate that identity separately.
+The steward identity is readable ownership metadata. It spawns no agent, authenticates no writer and grants no host permission. Admission requires exactly one local steward per system whose `governance.applies` covers every word the system registers (`IA-COMP-STEWARD-MISSING`). A host that enforces writer identity must bind and authenticate that identity itself.
 
 ## Hooks, laws and actual enforcement
 
-A `@hook` declares an event, tools, paths and a message. Registration and execution require a host adapter. The generation-binding implementation derives agents, skills and hook definitions from admitted profiles and bindings. Claude receives supported agent profiles, skills and authored PreToolUse hook groups selecting Write, Edit or MultiEdit, with the mandate guard. Codex receives skills and the position packet; generated agents and hooks are reported unsupported. The legacy per-system steward guard is compatibility code and is retired when the current generated registration replaces it. Inspect the generated receipt and host registration before claiming a hook is active.
+A `@hook` declares an event, tools, paths and a message; a host adapter registers it. `ia host claude` writes agents generated from `@agent-profile` records, skills generated from playbooks and one PreToolUse guard group per authored `@hook` that selects `Write`, `Edit` or `MultiEdit`; the guard judges those edits against the `@mandate` that governs each path. `ia host codex` writes skills and the position packet and reports generated agents and hooks as unsupported. A 1.x per-system steward guard applies only where a 1.x registration survives. Before claiming a hook is active, check its host registration and receipt with `ia doctor`.
 
-`@law`, `@principle`, `@convention` and `@playbook` records carry guidance. Position delivery can reserve blocking guidance and select procedure cells. Structural admission checks shapes and relationships; it does not establish that a rule's prose is true or that a filesystem action obeyed it. Machine enforcement requires a selected evaluator or host boundary with observable evidence. A contract requirement with no available evaluator remains `not-evaluated`.
+`@law`, `@principle`, `@convention` and `@playbook` records carry guidance. Position delivery reserves applicable blocking guidance outside its budget and selects procedure cells. Admission checks shapes and relationships; it does not establish that a rule's prose is true or that a filesystem action obeyed it. Machine enforcement needs a selected evaluator or a host boundary with observable evidence, and a contract requirement with no available evaluator stays `not-evaluated`.
 
-This repository does not adopt an `.ia/governance.json` ledger. Its root records declare a release-selection law and an architecture contract, check and positive/refusal cases. `pnpm native:check` runs concrete repository lints that enforce their source-placement and release-selection requirements. `ia validate` binds built-in and installed-catalog evaluators, aggregates available built-in admission verdicts and records pass/fail evidence at the authored revision. Custom catalog entries remain not-evaluated without a host execution implementation. A successful coverage verdict establishes declared requirement coverage, not execution of these repository lints. For read-only inspection, use the structural read session rather than invoking validation. These repository checks do not register a host hook.
+The CLI checks commands against the acting participant's mandates:
 
-The CLI's mandate profile checks read/next, validate/preview, author, capture/compile/project and workspace host application against the acting participant's declared moves and path restrictions; position remains available to inspect a refusal. The generated mandate guard uses the same refusal model. Naming an actor is a local declaration; the host still owns authentication and filesystem permissions. Native restrictions never grant those permissions. The repository participant retains all five declared moves selected for generation-binding.
+| Commands | Move the mandate must grant |
+| --- | --- |
+| `ia read`, `ia next` | Observation |
+| `ia validate`, `ia preview` | Verification |
+| `ia author` | Synthesis |
+| `ia capture`, `ia project`, and `ia host --apply` for a workspace | Execution |
+| `ia position` | None: never checked, so the command a refusal names always runs |
 
-Release qualification uses the selected release configuration and qualification receipts. The repository release-work lint also refuses copied version/count literals in active release intent, including literals that happen to match today's selection. A fixed version in an old decision is historical evidence, not a standing choice for future releases. Keep historical decisions scoped to immutable release evidence and use current release inputs for prospective work.
+`--actor <agent>` names the acting participant; by default it is the workspace steward or its one participant. `ia author` also refuses the administrative words `workspace`, `agent`, `mandate`, `system`, `schema`, `agent-profile` and `hook`. The generated edit guard applies the same mandates to file edits. Mandates are cooperative restrictions, not authentication or a sandbox: naming an actor is a local declaration, and the host still owns authentication and filesystem permissions.
+
+This repository's own [policy records](../../../.ia/src/records/repository-policy.ia) declare a release-selection `@law` and an architecture `@contract` with its `@check` and success and refusal `@case` records. `pnpm native:check` runs the repository lints that enforce them: work and example placement, the release policy source, and version and package-count literals in active release work. The `@check` binds the built-in `COMP-COVERAGE` evaluator, so `ia validate` establishes that the requirements have declared cases, not that the lints ran. A fixed version in an immutable historical record is evidence; current release inputs decide prospective releases. The repository participant holds all five moves.
 
 ## Source and release boundaries
 
-The live `.ia/src/systems/<system>/` trees hold canonical vocabulary, schemas, teaching guidance and their implemented operation/binding contracts. Repository-specific maintenance work belongs under the workspace's authored root, outside those vocabulary trees. Its native identity is preserved when the file moves because registration owns the word.
+`.ia/src/systems/<system>/` holds each public system's canonical vocabulary, schemas, teaching guidance and implemented operation contracts. Repository work, such as plans, tasks and decisions, lives under `.ia/src/records/`, outside those trees, and `pnpm native:check` refuses it inside them (`IA-NATIVE-WORK-PLACEMENT`). A record keeps its identity when its file moves, because the word's registration owns it.
 
-Neutral examples live under `examples/public-language`, outside the live discovery tree. `publicLanguageInputs` selects them explicitly and maps them to stable native paths for conformance and teaching. Test fixtures materialize that selected corpus through `tools/native/public-fixture.ts`; tests do not need production example copies. Fixture-only release selectors stay under `examples/public-language/fixtures` and are separate from the public language-base selection.
+Neutral examples live under [`examples/public-language`](../../../examples/public-language/README.md), outside the live discovery tree. `publicLanguageInputs` in `tools/native/public-language.ts` selects them from the manifest and maps them to stable native paths for conformance and teaching; `tools/native/public-fixture.ts` materializes that corpus for tests. Fixture-only release selectors stay under `examples/public-language/fixtures`, apart from the public language base.
 
-`composition.sources` describes capture membership, while `composition.systems` names vocabulary owners. Only one repository workspace should declare the source roots used to select the default repository seat. Multiple source-declaring workspaces leave that default ambiguous. Composing systems does not automatically capture every record that uses their words.
+`composition.sources` decides which source roots a workspace captures; `composition.systems` names its vocabulary owners. Composing a system does not capture every record that uses its words. Declare a source root in one `@workspace` only: when two workspaces declare the same root, `ia position` without `--seat` can no longer pick the default workspace seat.
 
-A distribution selects native release roots. Packing expands selected system folders and resolves their dependencies; its selector is a release control, not a claim that every workspace instance should ship. Installed archive bytes and manifests carry the exact qualified closure. Keep repository work, examples and release controls outside vocabulary payloads so adopters receive language definitions rather than the repository's current tasks.
+A `@distribution` selects native release roots. Packing expands the selected system folders and resolves their dependencies; the archive's bytes and manifest carry the exact closure. Root release-control sources at `.ia/src/releases/<distribution-name>.ia` contain exactly their distribution declaration and its system roots, and archive verification enforces that profile. Keep repository work, examples and release controls outside vocabulary payloads, so adopters receive language definitions rather than this repository's tasks.
 
-Package-set archives retain exactly one pinned root release-control source alongside their selected vocabulary payload. The source profile requires the corresponding distribution-engine capability; it does not change the npm cohort, native system or language syntax versions. Older native-folder archives remain supported. Installed metadata still needs workspace vocabulary, and shared teaching guides retain real cross-system dependencies; the package graph is not universally acyclic.
+The current CLI reads a compatible lock written by a 2.x CLI without rewriting it. Its first applied `init`, `install` or `update` moves the lock to a newer distribution engine that the 2.x CLI cannot read, and each archive's minimum engine requirement still applies.
 
-Released engine locks carrying the exact producer marker `0.1.0` are retained within the `0.1` compatibility line. Each archive is still checked against the actual reader capability; accepting a historical lock does not waive a newer archive's minimum engine requirement.
-
-See the [language reference](../language/README.md), [public examples](../../../examples/public-language/README.md), [runtime contract](../../../packages/runtime/SPEC.md), [database contract](../../../packages/db/SPEC.md) and [npm release process](../../../tools/distribution/NPM-PUBLISHING.md) for their detailed contracts.
+See the [language guide](../language/README.md), [public examples](../../../examples/public-language/README.md), [runtime contract](../../../packages/runtime/SPEC.md), [database contract](../../../packages/db/SPEC.md), [workspace runtime contract](../../../packages/workspace-runtime/SPEC.md) and [npm publishing guide](../../../tools/distribution/NPM-PUBLISHING.md) for the detailed contracts.

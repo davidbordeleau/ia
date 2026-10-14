@@ -47,6 +47,18 @@ export function renderPlugin(
     );
   const d = products[0]!;
   const out: PluginFile[] = [];
+  /** A plugin-relative output path that is the same on every host: relative, POSIX, with no dot segment. */
+  const portable = (output: string): string => {
+    if (
+      output === '' ||
+      output.startsWith('/') ||
+      output.includes('\\') ||
+      /^[A-Za-z]:/.test(output) ||
+      output.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')
+    )
+      throw new HostPluginError('IA-PLUGIN-PRODUCT', `${output} is not a portable plugin path`);
+    return output;
+  };
   const add = (path: string, bytes: Buffer): void => {
     if (out.some((file) => file.path === path))
       throw new HostPluginError('IA-PLUGIN-PRODUCT', `Two sources render ${path}`);
@@ -125,7 +137,7 @@ export function renderPlugin(
     for (const reference of resources.filter(
       (r) => r.owner === capability.identity && r.delivery === 'installed-reference',
     ))
-      add(reference.output, reference.bytes);
+      add(portable(reference.output), reference.bytes);
   }
   const nodes = new Map(records.map((node) => [node.identity, node]));
   // An agent-profile without an invocation mode is not a plugin entry point (ruling R3).
@@ -158,6 +170,6 @@ export function renderPlugin(
     ];
     add(`agents/${profile.name}.md`, Buffer.concat([Buffer.from(emitFrontmatter(fields)), bodyOf(profile.identity)]));
   }
-  for (const asset of assets) add(asset.output, asset.bytes);
+  for (const asset of assets) add(portable(asset.output), asset.bytes);
   return Object.freeze(out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)));
 }

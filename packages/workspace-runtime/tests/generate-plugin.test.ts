@@ -132,3 +132,116 @@ it('does not render an authored agent-profile that states no invocation (R3)', (
   );
   expect(files.some((file) => file.path.startsWith('agents/'))).toBe(false);
 });
+
+const PROBE_BODY = {
+  owner: 'agent-composition-system/definition/capability/probe-run',
+  role: 'body',
+  delivery: 'inline',
+  output: '',
+  bytes: Buffer.from('\nRun it.\n'),
+} as const;
+const AGENT_RECORDS = [
+  '@agent probe-agent',
+  '  meaning',
+  '    says "The probe agent."',
+  '    answers "Who probes?"',
+  '  governance',
+  '    applies []',
+  '',
+  '@capability probe-agent-tools',
+  '  meaning',
+  '    says "Read access for the probe agent."',
+  '    answers "What may the probe agent do?"',
+  '  execution',
+  '    effects [read]',
+  '',
+  '@agent-profile probe-agent',
+  '  meaning',
+  '    says "Probes one target."',
+  '    answers "Which profile probes?"',
+  '  composition',
+  '    agent @agent probe-agent',
+  '    voice @voice reviewer-voice',
+  '    mandate @mandate demo-mandate',
+  '    capabilities [@capability probe-agent-tools]',
+  '  execution',
+  '    role prober',
+  '    outcomes probe-findings-v1',
+  '    mandate-contract probe-v1',
+  '  invocation',
+  '    mode model',
+  '',
+].join('\n');
+
+it('renders an agent-profile with its tools and inline body, with no marker line (A8)', () => {
+  const { db, within } = fixture({ '.ia/src/probe.ia': `${RECORDS}\n${AGENT_RECORDS}` });
+  const files = renderPlugin(
+    db,
+    within,
+    [
+      PROBE_BODY,
+      {
+        owner: 'agent-composition-system/binding/agent-profile/probe-agent',
+        role: 'body',
+        delivery: 'inline',
+        output: '',
+        bytes: Buffer.from('\nYou probe.\n'),
+      },
+    ],
+    [],
+  );
+  const agent = files.find((file) => file.path === 'agents/probe-agent.md')!;
+  expect(agent.bytes.toString('utf8')).toBe(
+    '---\nname: probe-agent\ndescription: Probes one target.\ntools: Read, Grep, Glob\n---\n\nYou probe.\n',
+  );
+});
+it('writes an installed reference and an asset at their output paths with their bytes (A8)', () => {
+  const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS });
+  const files = renderPlugin(
+    db,
+    within,
+    [
+      PROBE_BODY,
+      {
+        owner: PROBE_BODY.owner,
+        role: 'reference',
+        delivery: 'installed-reference',
+        output: 'skills/probe-run/references/guide.md',
+        bytes: Buffer.from('guide\n'),
+      },
+    ],
+    [{ output: 'CODEX.md', bytes: Buffer.from('codex\n') }],
+  );
+  const bytes = (path: string): string => files.find((file) => file.path === path)!.bytes.toString('utf8');
+  expect(bytes('skills/probe-run/references/guide.md')).toBe('guide\n');
+  expect(bytes('CODEX.md')).toBe('codex\n');
+});
+it('refuses two sources that render one path', () => {
+  const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS });
+  expect(() =>
+    renderPlugin(db, within, [PROBE_BODY], [{ output: 'skills/probe-run/SKILL.md', bytes: Buffer.from('x') }]),
+  ).toThrow(/Two sources render/);
+});
+it('refuses an output path that is not portable', () => {
+  const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS });
+  for (const output of ['../escape.md', 'C:/x.md', '/abs.md', './a.md', 'a//b.md', 'a\\b.md', ''])
+    expect(() => renderPlugin(db, within, [PROBE_BODY], [{ output, bytes: Buffer.from('x') }])).toThrow(
+      /not a portable plugin path/,
+    );
+});
+it('renders the Claude manifest with the product fields only', () => {
+  const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS });
+  const files = renderPlugin(db, within, [PROBE_BODY], []);
+  expect(files.find((file) => file.path === '.claude-plugin/plugin.json')!.bytes.toString('utf8')).toBe(
+    `${JSON.stringify({ name: 'probe-plugin', displayName: 'Probe Plugin', version: '0.1.0', description: 'A probe plugin.' }, null, 2)}\n`,
+  );
+});
+it('refuses a delegated capability with IA-PROJECT-FEATURE', () => {
+  const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS.replace('mode user', 'mode delegated') });
+  expect(() => renderPlugin(db, within, [PROBE_BODY], [])).toThrow(/delegated skills are rendered from slice 2/);
+  try {
+    renderPlugin(db, within, [PROBE_BODY], []);
+  } catch (error) {
+    expect((error as { code?: string }).code).toBe('IA-PROJECT-FEATURE');
+  }
+});

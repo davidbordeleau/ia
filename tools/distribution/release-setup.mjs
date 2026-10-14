@@ -1,6 +1,6 @@
 import '../temp/physical-temp.mjs';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -227,7 +227,60 @@ export function accessState(listing, name) {
 }
 // Keep diagnostics to error codes: npm errors can include credentials or sensitive response bodies.
 const errorCode = (error) =>
-  failure(error).match(/\bE(?:404|401|403|OTP|NOTFOUND|CONNRESET|TIMEDOUT)\b/)?.[0] ?? 'read failed';
+  failure(error).match(
+    /\bE(?:404|401|403|OTP|NOTTY|AUTHFAILED|AUTHRESULT|CANCELED|NPMVERSION|NOTFOUND|CONNRESET|TIMEDOUT)\b/,
+  )?.[0] ?? 'read failed';
+const AUTH_RECOVERY =
+  'Run pnpm npm:setup --interactive-auth --skip-github in a terminal with stdin and stdout attached. ' +
+  `It uses pinned npm ${NPM_VERSION}; PATH npm may not support trust. Do not pipe or redirect the run, pass OTPs as arguments, or repeat --apply.`;
+
+/** Accept only a completed helper result from its dedicated channel, never terminal output or an exit code alone. */
+export function interactiveTrustResult(result) {
+  let response;
+  try {
+    response = JSON.parse(String(result.output?.[3] ?? ''));
+  } catch {}
+  if (result.error || result.signal || result.status !== 0 || response?.ok !== true) {
+    const code = ['EOTP', 'E401', 'E403', 'E404', 'ENOTTY', 'ECANCELED', 'ENPMVERSION'].includes(response?.code)
+      ? response.code
+      : 'EAUTHFAILED';
+    throw new Error(code + ': interactive trust inspection did not complete; readiness remains unverified');
+  }
+  if (typeof response.listing !== 'string') throw new Error('EAUTHRESULT: no structured trust result');
+  return response.listing;
+}
+
+/** Recover only the failed read itself. npm's request-scoped OTP cannot authenticate a later piped process. */
+export function npmWithInteractiveAuth(
+  npm,
+  recoverTrust,
+  {
+    enabled = false,
+    stdinIsTTY = Boolean(process.stdin.isTTY),
+    stdoutIsTTY = Boolean(process.stdout.isTTY),
+    log = console.error,
+  } = {},
+) {
+  assert.ok(!enabled || (stdinIsTTY && stdoutIsTTY), 'ENOTTY: ' + AUTH_RECOVERY);
+  let recoveryFailed = false;
+  return (args, options) => {
+    try {
+      return npm(args, options);
+    } catch (error) {
+      const trustRead = args.length === 4 && args[0] === 'trust' && args[1] === 'list' && args[3] === '--json';
+      if (!enabled || !trustRead || errorCode(error) !== 'EOTP') throw error;
+      if (recoveryFailed) throw new Error('EAUTHFAILED: earlier interactive inspection failed; no further prompts');
+      assert.match(args[2], NAME, 'Unexpected package name');
+      log(args[2] + ': npm requires 2FA for this read; complete or cancel the terminal challenge.');
+      try {
+        return recoverTrust(args[2]);
+      } catch (error) {
+        recoveryFailed = true;
+        throw new Error(errorCode(error) + ': interactive trust inspection failed; no further prompts this run');
+      }
+    }
+  };
+}
 export async function inspectNpm(npm, names, readPublic = registryPackage) {
   const state = {};
   for (const name of names) {
@@ -237,7 +290,7 @@ export async function inspectNpm(npm, names, readPublic = registryPackage) {
         return parse(npm(args, { stdio: 'pipe' }));
       } catch (error) {
         const code = errorCode(error);
-        errors.push(`${args.slice(0, 2).join(' ')}: ${code}`);
+        errors.push(`${args.slice(0, 2).join(' ')}: ${code}${code === 'EOTP' ? '; ' + AUTH_RECOVERY : ''}`);
         return code === 'E404' && absent !== undefined ? absent : undefined;
       }
     };
@@ -316,10 +369,9 @@ function npmNode(override) {
 }
 /** The pinned publishing CLI. Trust and staged publishing need a newer npm than Node 22 bundles. */
 function pinnedNpm(override, node) {
-  if (override) return resolve(override);
   const prefix = resolve(realpathSync(tmpdir()), `ia-npm-cli-${NPM_VERSION}`);
-  const cli = resolve(prefix, 'node_modules/npm/bin/npm-cli.js');
-  if (!existsSync(cli)) {
+  const cli = override ? resolve(override) : resolve(prefix, 'node_modules/npm/bin/npm-cli.js');
+  if (!override && !existsSync(cli)) {
     mkdirSync(prefix, { recursive: true });
     run(process.execPath, [
       bundledNpm(),
@@ -547,6 +599,7 @@ if (isEntry(process.argv[1], import.meta.url)) {
   const { values } = parseArgs({
     options: {
       apply: { type: 'boolean', default: false },
+      'interactive-auth': { type: 'boolean', default: false },
       'bootstrap-name': { type: 'string', multiple: true, default: [] },
       'npm-cli': { type: 'string' },
       node: { type: 'string' },
@@ -567,7 +620,21 @@ if (isEntry(process.argv[1], import.meta.url)) {
     } else if (node !== process.execPath) console.log(`Running npm ${NPM_VERSION} with ${node}`);
     const nodeBin = node ?? process.execPath,
       cli = pinnedNpm(values['npm-cli'], nodeBin),
-      npm = (args, options = {}) => run(nodeBin, [cli, ...args, '--registry', REGISTRY], options);
+      npm = npmWithInteractiveAuth(
+        (args, options = {}) => run(nodeBin, [cli, ...args, '--registry', REGISTRY], options),
+        (name) =>
+          interactiveTrustResult(
+            spawnSync(nodeBin, [resolve(import.meta.dirname, 'release-setup-auth.mjs'), cli, name], {
+              cwd: root,
+              encoding: 'utf8',
+              stdio: ['inherit', 'inherit', 'inherit', 'pipe'],
+              windowsHide: true,
+              timeout: 5 * 60 * 1000,
+              maxBuffer: 1024 * 1024,
+            }),
+          ),
+        { enabled: values['interactive-auth'] },
+      );
     let user = null;
     try {
       user = npm(['whoami'], { stdio: 'pipe' }).trim();

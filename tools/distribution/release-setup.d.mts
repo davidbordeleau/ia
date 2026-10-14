@@ -36,6 +36,17 @@ export type SetupPlan = NpmState & {
 };
 export type NpmCommand = (args: string[], options?: object) => string;
 export type PublicLookup = (name: string) => Promise<unknown>;
+export declare function interactiveTrustResult(result: {
+  status: number | null;
+  signal?: string | null;
+  error?: unknown;
+  output?: readonly (string | Buffer | null)[];
+}): string;
+export declare function npmWithInteractiveAuth(
+  npm: NpmCommand,
+  recoverTrust: (name: string) => string,
+  options?: { enabled?: boolean; stdinIsTTY?: boolean; stdoutIsTTY?: boolean; log?: (message: string) => void },
+): NpmCommand;
 export declare function accessState(listing: string, name: string): NpmState['access'];
 export declare function stageState(listing: string, name: string): Stages;
 export declare function inspectNpm(

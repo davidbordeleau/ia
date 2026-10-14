@@ -20,8 +20,8 @@ concurrency:
 
 jobs:
   review:
-    # This switch admits the caller, not the API or a model. Deployment/binding/model
-    # prerequisites and the proposed history-aware review entry are in tools/review/README.md.
+    # This switch admits the caller, not the API or a model. Setup variables, behavior
+    # and limits are in tools/review/README.md.
     if: vars.IA_REVIEW_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'pull_request')
     runs-on: ubuntu-latest
     timeout-minutes: 30

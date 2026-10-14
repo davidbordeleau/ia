@@ -1,11 +1,9 @@
 # Product authoring
 
-Install the exact language dependency and explicitly adopt product-structure before
-authoring @product. Read schemas/product.SPEC.md and SPEC.md. Use real local agent
-and plan references; run generic native admission and the product reader. A numeric
-format other than 1 or a dangling reference must refuse the reader even if generic
-admission only warns. Preserve archive identities in the consumer lock.
+Install `inventarch/product-structure`, with its exact `inventarch/language` dependency, before you author a `@product`. Read the [`@product` schema guide](schemas/product.SPEC.md) and the [product architecture](SPEC.md) first.
 
-Local extensions use a separate system and explicit references. Base schema edits,
-duplicate word registration and native grants are unsupported. A guide declaration
-does not establish an observed fresh-agent teaching journey.
+Author each `@product` in a system of your own that requires `product-system`. Point `owner` at a real local `@agent` and `plans` at real local `@plan` records. Then run generic native admission and the product reader, `readProduct` from `consumer.mjs`. Admission may only warn about a dangling reference; the reader refuses it, along with a `format` other than `1`, a blank title and a repeated plan. Keep both archive identities pinned in the consumer's `.ia/distributions.lock.json`.
+
+To extend products, add a separate local system with explicit references. Editing the installed schema and registering `@product` a second time are unsupported, and the distribution carries no grants. `owner` is not authenticated membership, and `retired` deletes or revokes nothing.
+
+This guide declares how to author a product. It does not show that an agent reading it for the first time will author one correctly.

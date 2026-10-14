@@ -192,7 +192,7 @@ export function publicationPlan(release, registryPackages) {
     assert.ok(
       remote,
       entry.name +
-        ': create the package and configure its trusted publisher first with pnpm npm:setup --apply; see tools/distribution/NPM-PUBLISHING.md',
+        ': public registry metadata is missing; inspect with pnpm npm:setup before owner-authorized recovery; see tools/distribution/NPM-PUBLISHING.md',
     );
     const previous = release.baselineVersions?.[entry.name];
     if (previous) assert.ok(compareVersions(entry.version, previous) > 0, 'Release did not advance published baseline');

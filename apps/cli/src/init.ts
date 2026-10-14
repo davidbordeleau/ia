@@ -1,3 +1,7 @@
+import { registryWorkspace } from './adopt.js';
+import { adoptedBindings } from '@inventarch/db';
+import { adoptionId, planAdoption, applyAdoption } from '@inventarch/distribution/registry';
+import type { WorkspaceRelease } from '@inventarch/distribution/registry';
 import { readBase, PIN_PATH, PACKAGE_ID, DAMAGED } from './bundled-base.js';
 import type { Base, BasePin } from './bundled-base.js';
 export { readBase, PIN_PATH, baseArchivePath, PACKAGE_ID } from './bundled-base.js';
@@ -72,6 +76,7 @@ import {
   unlinkSync,
 } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { inertCommandRoot } from '@inventarch/runtime';
 import {
   decodeReleaseDescriptor,
   deriveGenerationInputs,
@@ -133,7 +138,7 @@ import { located } from './home-remedy.js';
 import { findProgram, programEnv, programHome } from './program.js';
 import type { Session } from './session.js';
 import { codeOf, openSession } from './session.js';
-import type { Capabilities, Field, SymbolName } from './render.js';
+import type { AdviceContext, Capabilities, Field, SymbolName } from './render.js';
 import {
   atom,
   blockSymbolWidth,
@@ -142,6 +147,7 @@ import {
   fieldRows,
   headerLine,
   quote,
+  safeRootAdvice,
   sectionLabel,
   truncateDigest,
   words,
@@ -222,6 +228,7 @@ export interface Starter {
   readonly provenance: Provenance;
 }
 export interface InitView {
+  readonly adoption?: { readonly id: string; readonly release: WorkspaceRelease };
   readonly root: string;
   readonly owns: readonly { readonly path: string; readonly purpose: string }[];
   readonly state: TargetState;
@@ -551,7 +558,7 @@ export function starterSystem(name: string): string {
  * The participant `@agent` implies no host permission, and its `@mandate` grants it closed moves over that workspace;
  * the mandate's one prose clause claims nothing. Every name is the workspace's (decision identity-namespace).
  */
-export function starterRecords(name: string, systems: readonly string[]): string {
+export function starterRecords(name: string, systems: readonly string[], sources: readonly string[] = []): string {
   return [
     '#! ia 1.0',
     '',
@@ -561,7 +568,7 @@ export function starterRecords(name: string, systems: readonly string[]): string
     '    answers "Which systems does this workspace compose?"',
     '  composition',
     `    systems [${systems.map((system) => `@system ${system}`).join(', ')}]`,
-    '    sources [".ia/src @authored"]',
+    `    sources [${['.ia/src @authored', ...sources].map((source) => JSON.stringify(source)).join(', ')}]`,
     `    steward @agent ${name}`,
     '',
     `@agent ${name}`,
@@ -611,10 +618,11 @@ export function starterFiles(
   name: string,
   systems: readonly string[],
   system: boolean,
+  sources: readonly string[] = [],
 ): Pick<Starter, 'files' | 'records'> {
   return {
     files: [
-      { path: WORKSPACE_PATH, text: starterRecords(name, system ? [...systems, name] : systems) },
+      { path: WORKSPACE_PATH, text: starterRecords(name, system ? [...systems, name] : systems, sources) },
       ...(system
         ? [
             { path: systemPath(name), text: starterSystem(name) },
@@ -775,6 +783,7 @@ function filesBelow(root: string, path: string): readonly string[] {
 }
 
 export interface InitRequest {
+  readonly adoption?: { readonly id: string; readonly release: WorkspaceRelease };
   readonly root: string;
   readonly host: HostSelection;
   readonly id?: string | undefined;
@@ -799,7 +808,15 @@ export function collectInit(request: InitRequest): InitView {
   if (identity.conflict !== null) conflicts.push(identity.conflict);
   const { name, id } = identity;
   const provenance = readProvenance(request.git);
-  const { files, records } = name === null ? { files: [], records: [] } : starterFiles(name, base.systems, system);
+  const sources = present
+    ? adoptedBindings(root).map((binding) => `${binding.tree}/.ia/src @${binding.placement ?? 'adopted'}`)
+    : [];
+  if (request.adoption) {
+    const source = `.ia/open/${adoptionId(request.adoption.id)}/${request.adoption.release.revision}/.ia/src @open`;
+    if (!sources.includes(source)) sources.push(source);
+  }
+  const { files, records } =
+    name === null ? { files: [], records: [] } : starterFiles(name, base.systems, system, sources);
   // M5.2 §4.3: a temporary file `createFile` left beside one of this initialization's own targets.
   const targets = new Set([...files.map((file) => file.path), IGNORE_PATH, DESCRIPTOR_PATH]);
   // `.<uuid>.tmp` is 41 characters: the dot, a 36-character UUID and `.tmp`.
@@ -903,6 +920,7 @@ export function collectInit(request: InitRequest): InitView {
     ...(host === 'none' ? [] : [{ id: 'project', status: 'pending', paths: [] } as const]),
   ];
   return {
+    ...(request.adoption ? { adoption: request.adoption } : {}),
     root,
     owns: ownedPaths(name, system),
     state,
@@ -999,6 +1017,7 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
   if (step('install').status === 'pending')
     await installBase(root, base, 'install', { signal: options.signal, checkpoint }, resume);
   boundary('install');
+  if (view.adoption) applyAdoption(planAdoption(root, view.adoption.id, view.adoption.release, false));
   // Step 4, author: create-only, so a starter file already present with these bytes is skipped and nothing is ever
   // rewritten. The ignore file is written only where none exists; one the target already holds is its own.
   for (const file of starter.files)
@@ -1112,7 +1131,10 @@ const conflictMessage = (conflicts: readonly Conflict[], blocked: string): strin
 function initializedNext(view: InitView): string | null {
   if (!view.conflicts.some((row) => row.path === DESCRIPTOR_PATH && row.reason === 'The target is already initialized'))
     return null;
-  return `${existsSync(resolve(view.root, WORKSPACE_PATH)) || existsSync(resolve(view.root, SYSTEMS)) ? '' : 'Restore the authored .ia/src/workspace.ia from source control first. '}Run "ia position --root ${quote(view.root)}" to inspect this initialized workspace.`;
+  return safeRootAdvice(
+    `${existsSync(resolve(view.root, WORKSPACE_PATH)) || existsSync(resolve(view.root, SYSTEMS)) ? '' : 'Restore the authored .ia/src/workspace.ia from source control first. '}Run "ia position --root ${quote(view.root)}" to inspect this initialized workspace.`,
+    [view.root],
+  );
 }
 function conflictRefusal(view: InitView): Refusal {
   return new Refusal(
@@ -1132,6 +1154,18 @@ export function initEnvelope(view: InitView, apply: boolean, applied: Applied | 
     root: view.root,
     apply,
     plan: {
+      ...(view.adoption
+        ? {
+            adoption: {
+              id: view.adoption.id,
+              version: view.adoption.release.version,
+              revision: view.adoption.release.revision,
+              placement: 'open',
+              band: 50,
+              files: view.adoption.release.files.map((file) => file.path),
+            },
+          }
+        : {}),
       state: view.state,
       ...(initializedNext(view) === null ? {} : { next: initializedNext(view) }),
       owns: view.owns.map((row) => row.path),
@@ -1316,16 +1350,46 @@ const planBlocks = (view: InitView, caps: Capabilities): readonly (readonly stri
   ];
 };
 
-export function renderInit(view: InitView, caps: Capabilities): string {
-  const next =
+export function renderInit(view: InitView, caps: Capabilities, supplied?: string, advice?: AdviceContext): string {
+  const next = safeRootAdvice(
     view.state === 'conflict'
       ? (initializedNext(view) ?? `Resolve the conflicts above, then run "${view.invocation} --apply --yes".`)
-      : `Apply with "${view.invocation} --apply --yes".${view.state === 'resumable' ? ' Completed steps are skipped.' : ''}`;
+      : `Apply with "${view.invocation} --apply --yes".${view.state === 'resumable' ? ' Completed steps are skipped.' : ''}`,
+    [view.root, supplied],
+    advice,
+  );
   return document(
     [
       headerLine('Plan', 'init', [{ text: view.root, column: 50 }], caps),
       entry([words('This is a preview. Nothing has been written.')], { depth: 1 }, caps),
+      ...(view.adoption
+        ? [
+            entry(
+              [
+                words(
+                  `Adopt ${view.adoption.id}@${view.adoption.release.version}, pinned ${view.adoption.release.revision}, as source-only material at @open (band 50).`,
+                ),
+              ],
+              { depth: 1 },
+              caps,
+            ),
+          ]
+        : []),
       ...planBlocks(view, caps),
+      ...(view.directory === 'absent' &&
+      (!inertCommandRoot(view.root) || (supplied !== undefined && !inertCommandRoot(supplied)))
+        ? [
+            entry(
+              [
+                words(
+                  'Create the target directory without pasting its path into a shell, then enter it before running the suggested command.',
+                ),
+              ],
+              { depth: 0 },
+              caps,
+            ),
+          ]
+        : []),
       entry([words(next)], { depth: 0, symbol: 'step' }, caps),
     ],
     { leadingBlank: true },
@@ -1419,11 +1483,20 @@ export function renderApplied(view: InitView, applied: Applied, caps: Capabiliti
     { leadingBlank: true },
   );
 }
-const renderDeclined = (view: Pick<InitView, 'invocation'>, caps: Capabilities): string =>
+const renderDeclined = (
+  view: Pick<InitView, 'invocation' | 'root'>,
+  caps: Capabilities,
+  supplied?: string,
+  advice?: AdviceContext,
+): string =>
   document(
     [
       entry([words('Nothing was applied.')], { depth: 0, symbol: 'info' }, caps),
-      entry([words(`Apply with "${view.invocation} --apply --yes".`)], { depth: 0, symbol: 'step' }, caps),
+      entry(
+        [words(safeRootAdvice(`Apply with "${view.invocation} --apply --yes".`, [view.root, supplied], advice))],
+        { depth: 0, symbol: 'step' },
+        caps,
+      ),
     ],
     { leadingBlank: true },
   );
@@ -1433,6 +1506,10 @@ function invocationOf(context: Context): string {
   const parts = ['ia init', ...args.positionals.map(quote)];
   const id = args.value('id'),
     host = args.value('host');
+  for (const option of ['adopt', 'registry']) {
+    const value = args.value(option);
+    if (value !== undefined) parts.push(`--${option}`, quote(value));
+  }
   if (id !== undefined) parts.push('--id', quote(id));
   if (args.flag('migrate')) parts.push('--migrate');
   if (args.flag('system')) parts.push('--system');
@@ -1443,6 +1520,8 @@ function invocationOf(context: Context): string {
 export async function runInit(context: Context): Promise<Result> {
   const { args, host } = context;
   const id = args.value('id');
+  if (args.value('registry') !== undefined && args.value('adopt') === undefined)
+    throw new UsageError('ia init --registry requires --adopt');
   // A malformed identity is usage (§3), decided before the target is read.
   if (id !== undefined && (!PACKAGE_ID.test(id) || id.includes('..')))
     throw new UsageError(`--id must be <provider/name>; got ${id}`);
@@ -1477,7 +1556,10 @@ async function initialize(context: Context, root: string, id: string | undefined
   const selected = (args.value('host') ?? 'none') as HostSelection;
   const apply = args.flag('apply');
   const existing = statSync(root, { throwIfNoEntry: false }) === undefined ? dirname(root) : root;
+  const adoption =
+    args.value('adopt') === undefined ? undefined : await registryWorkspace(context, root, args.value('adopt')!);
   const view = collectInit({
+    ...(adoption ? { adoption } : {}),
     root,
     host: selected,
     id,
@@ -1491,7 +1573,8 @@ async function initialize(context: Context, root: string, id: string | undefined
       ? { exitCode: 0, stdout: JSON.stringify(initEnvelope(view, apply, applied)) + '\n', stderr: '' }
       : {
           exitCode: 0,
-          stdout: applied === null ? renderInit(view, caps) : renderApplied(view, applied, caps),
+          stdout:
+            applied === null ? renderInit(view, caps, args.positionals[0], host) : renderApplied(view, applied, caps),
           stderr: '',
         };
   // §2.1: conflicts are reported inside the plan and are not an error class, so a plan is always exit 0.
@@ -1499,7 +1582,7 @@ async function initialize(context: Context, root: string, id: string | undefined
   if (view.state !== 'fresh' && view.state !== 'resumable') throw conflictRefusal(view);
   // §2.8 rule 3, as `ia install` asks it: parsing already refused every `--apply` whose question cannot be answered.
   if (!args.flag('yes') && !(await confirm(host.interaction, renderInitSummary(view, caps), CONFIRMATION)))
-    return { exitCode: 0, stdout: renderDeclined(view, caps), stderr: '' };
+    return { exitCode: 0, stdout: renderDeclined(view, caps, args.positionals[0], host), stderr: '' };
   // The project effect, last (position-and-projection §3): the `ia host` path, whose apply writes the receipt.
   const project = selected === 'none' ? undefined : (done: string) => registerHost(context, selected, root, done);
   try {
@@ -2557,11 +2640,13 @@ const migrationBlocks = (view: MigrationView, caps: Capabilities): readonly (rea
 };
 const migrationHeader = (view: MigrationView, caps: Capabilities): readonly string[] =>
   headerLine('Plan', `init --migrate from ${MIGRATES_FROM}`, [{ text: view.root, column: 50 }], caps);
-export function renderMigration(view: MigrationView, caps: Capabilities): string {
-  const next =
+export function renderMigration(view: MigrationView, caps: Capabilities, supplied?: string): string {
+  const next = safeRootAdvice(
     view.conflicts.length > 0
       ? `Resolve the conflicts above, then run "${view.invocation} --apply --yes".`
-      : `Apply with "${view.invocation} --apply --yes".`;
+      : `Apply with "${view.invocation} --apply --yes".`,
+    [view.root, supplied],
+  );
   return document(
     [
       migrationHeader(view, caps),
@@ -2657,13 +2742,14 @@ async function migrate(context: Context, root: string): Promise<Result> {
       ? { exitCode: 0, stdout: JSON.stringify(migrationEnvelope(view, apply, applied)) + '\n', stderr: '' }
       : {
           exitCode: 0,
-          stdout: applied === null ? renderMigration(view, caps) : renderMigrated(view, applied, caps),
+          stdout:
+            applied === null ? renderMigration(view, caps, args.positionals[0]) : renderMigrated(view, applied, caps),
           stderr: '',
         };
   if (!apply) return rendered(null);
   if (view.conflicts.length > 0) throw migrationRefusal(view);
   if (!args.flag('yes') && !(await confirm(host.interaction, renderMigrationSummary(view, caps), CONFIRMATION)))
-    return { exitCode: 0, stdout: renderDeclined(view, caps), stderr: '' };
+    return { exitCode: 0, stdout: renderDeclined(view, caps, args.positionals[0]), stderr: '' };
   return rendered(await applyMigration(view, { packageRoot: host.packageRoot, signal: host.signal }));
 }
 

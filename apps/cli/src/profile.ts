@@ -13,22 +13,34 @@
  * Every refusal names one next command that runs in the state that caused it: the command again with an `--actor` whose
  * mandates allow it, or the governance position of the mandate or workspace concerned. `ia position` is never gated,
  * so a position is always a command that runs. With no governing mandate nothing is restricted and the profile carries
- * the runtime's notice instead.
+ * the runtime's notice instead. While an authored `@mandate` fails admission (lane D), every gated command refuses at
+ * that record, workspace-wide, and names the admission report (`ia report --root <root>`, a machine route no mandate
+ * gates): a position cannot seat at a record admission refused.
  *
- * Read (`ia read`, `ia next`), validate (`ia validate`, `ia preview`), author (`ia author`) and effect (`ia capture`, its
- * `ia compile` alias, `ia project`) are gated; `ia position` is not, and neither is a command outside those modes. A gated
+ * Read (`ia read`, `ia next`), validate (`ia validate`, `ia preview`), author (`ia author`) and effect (`ia capture`,
+ * `ia project`) are gated; `ia position` is not, and neither is a command outside those modes. A gated
  * command's profile stays on the invocation's gate, so a refusal it raises later names only a command the same actor may
  * run there (`gatedNext`): one the profile refuses is replaced by the governance position, and one that needs the
  * actor named by `--actor` carries it.
  */
 import type { ReadHandle } from '@inventarch/db';
 import { pathKey } from '@inventarch/db';
-import { defaultActor, governingMandates, MODE_MOVES, profileRefusal, RuntimeError } from '@inventarch/runtime';
+import { realpathSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
+import {
+  defaultActor,
+  governingMandates,
+  isAdmissionRefusal,
+  MODE_MOVES,
+  profileRefusal,
+  RuntimeError,
+} from '@inventarch/runtime';
 import type { GoverningMandate, Mode, ProfileVerdict } from '@inventarch/runtime';
 import type { Context } from './consumer.js';
 import { findCommand } from './commands.js';
 import { Refusal, respell } from './consumer.js';
-import { quote } from './render.js';
+import { commandArguments, ADVICE_COMMAND, quote, safeRootAdvice } from './render.js';
+import type { AdviceContext } from './render.js';
 import type { Session } from './session.js';
 
 /**
@@ -42,7 +54,6 @@ export const GATED_MODES: Readonly<Record<string, Mode>> = Object.freeze({
   preview: 'validate',
   author: 'author',
   capture: 'effect',
-  compile: 'effect',
   project: 'effect',
 });
 /**
@@ -60,6 +71,8 @@ export interface GateState {
   readonly mandates: readonly GoverningMandate[];
   /** ` --root <root>` as the invocation gave it, or nothing. */
   readonly rooted: string;
+  readonly roots?: readonly (string | undefined)[];
+  readonly advice?: AdviceContext;
 }
 /** One invocation's gate: empty until a gated command's profile allows it. */
 export interface Gate {
@@ -86,7 +99,9 @@ export interface ProfileRequest {
   /** A scope token of the whole workspace; it need not be clean. */
   readonly within: string;
   /** The invocation, so a next command carries what it supplied (design row 27). */
-  readonly context: Pick<Context, 'command' | 'args' | 'gate'>;
+  readonly context: Pick<Context, 'command' | 'args' | 'gate'> & {
+    readonly host?: Pick<Context['host'], 'cwd'> & Partial<Pick<Context['host'], 'env'>>;
+  };
   readonly mode: Mode;
   /** The words the command authors or previews: excluded words apply to them. */
   readonly words?: readonly string[];
@@ -119,38 +134,101 @@ function namedAgent(reader: ReadHandle, within: string, spelled: string): string
 const seatOf = (next: string): string | undefined => /--seat (\S+)/.exec(next)?.[1];
 
 /**
- * A governing mandate whose authority the runtime cannot read (IA-RUNTIME-REQUEST-INVALID, such as `authority.moves []`,
- * which admission accepts) refuses the command rather than failing it: the governance position of that mandate shows it
- * and is never gated.
+ * A mandate the runtime cannot read refuses the command rather than failing it (IA-RUNTIME-REQUEST-INVALID, exit 1),
+ * classified by its cause, which the runtime marks (`isAdmissionRefusal`; review D-R2), and located where the runtime
+ * located it (`RuntimeError.where`); no message is parsed for either:
+ * - A record a mandate resolution reads failed admission (lane D, operator ruling 2026-10-12): an authored `@mandate`,
+ *   or the `@agent` or `@workspace` an admitted one depends on. Every gated command fails closed, workspace-wide. No
+ *   in-tool repair exists, as `ia preview` and `ia author` cannot target a record admission refused, so the message says
+ *   a hand edit corrects it. The next command is the admission report, the version 1 machine route `ia report`, which no
+ *   mandate gates and whose findings show the refused record's: `ia validate` is gated, and a position cannot seat at a
+ *   refused record (or would seat at an admitted one of another band that shares its identity). The route opens its
+ *   `--root` or the working directory, never an ancestor, so the command carries the invocation's `--root` as every next
+ *   command does (review C2-R8), or else `reportRoot`'s, inert by construction (review D-R1).
+ * - An admitted mandate whose authority the resolver cannot read (a child under one of its `authority` fields, which
+ *   admission admits): its governance position, never gated, shows that authority.
  */
 function unreadable(
   error: RuntimeError,
   reader: ReadHandle,
-  within: string,
   workspace: string | undefined,
   rooted: string,
+  cwd?: string,
 ) {
-  const message = error.message.replace(/^IA-RUNTIME-[A-Z-]+: /, '');
-  const named = /^([a-z][a-z0-9-]*\/[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*\/[a-z0-9][a-z0-9-]*): /.exec(message)?.[1];
-  const seat = named !== undefined && reader.get(named, { within })?.discriminator === 'mandate' ? named : workspace;
+  const message = error.message.replace(/^IA-RUNTIME-[A-Z-]+: /, ''),
+    where = error.where;
+  if (isAdmissionRefusal(error)) {
+    const root = rooted === '' ? reportRoot(reader.root, cwd) : rooted;
+    const run =
+      root === undefined
+        ? `Run "ia report" from the workspace root for the admission findings`
+        : `Run "ia report${root}" for the admission findings`;
+    return new Refusal(
+      error.code,
+      `The mandate profile cannot be read: ${message}; correct it by hand${where === undefined ? '' : ` in ${where.path}`}, since ia preview and ia author cannot target a record admission refused`,
+      1,
+      where ?? null,
+      `${run}, the refused record's among them; correct its source by hand, then run this command again.`,
+    );
+  }
+  const seat = where?.identity ?? workspace;
   return new Refusal(
     error.code,
     `The mandate profile cannot be read: ${message}`,
     1,
-    seat === undefined ? null : { identity: seat },
+    where ?? (seat === undefined ? null : { identity: seat }),
     seat === undefined
       ? `Run "ia position${rooted}" for the repository's position and the mandates it reads.`
       : `Run "ia position --seat ${seat} --shape governance${rooted}" to see the mandate authority the profile cannot read; correct it, then run this command again.`,
   );
 }
+/**
+ * Review D-R1 and D2-R1: ` --root <root>` for the workspace an invocation without `--root` found from its working
+ * directory, spelled relative to that directory so it is inert by construction (`.` or `..` segments only), and printed
+ * only when it resolves there to this very root as the route resolves it: lexically against the working directory as
+ * given (which on win32 keeps a junction's spelling), then the real path (db `workspaceRoot`). The lexical candidate is
+ * tried first, then the one relative to the working directory's own real path; neither resolving there, or the cwd
+ * unknown, there is none, and the command is run from the workspace root with no path printed.
+ */
+function reportRoot(root: string, cwd: string | undefined): string | undefined {
+  if (cwd === undefined) return undefined;
+  const real = (path: string): string | undefined => {
+    try {
+      return realpathSync(path);
+    } catch {
+      return undefined;
+    }
+  };
+  const target = real(root) ?? root;
+  const candidates = [relative(cwd, root)];
+  try {
+    candidates.push(relative(realpathSync.native(cwd), root));
+  } catch {
+    // An unreadable cwd offers its lexical candidate alone.
+  }
+  for (const candidate of candidates) {
+    const spelled = candidate.replaceAll('\\', '/') || '.';
+    if (/^(?:\.|\.\.(?:\/\.\.)*)$/.test(spelled) && real(resolve(cwd, spelled)) === target) return ` --root ${spelled}`;
+  }
+  return undefined;
+}
 
 /** An `ia author` form's `--digest`: the target file's sha256 as 64 lowercase hex digits. */
 export const DIGEST = /^[0-9a-f]{64}$/;
-/** Whether an `ia author` form's `--digest` can be checked: 64 lowercase hex digits, or absent for a starter system. */
+/** Authority-bearing words whose mutations require an administrative source edit for every declared actor. */
+export const ADMINISTRATIVE_WORDS: readonly string[] = Object.freeze([
+  'workspace',
+  'agent',
+  'mandate',
+  'system',
+  'schema',
+  'agent-profile',
+  'hook',
+]);
+/** Whether an `ia author` form's `--digest` can be checked: 64 lowercase hex digits. */
 function usableDigest(args: Context['args']): boolean {
   const digest = args.value('digest');
-  if (digest !== undefined) return DIGEST.test(digest);
-  return !args.flag('relate') && !args.flag('set') && args.positionals[0] === 'system';
+  return digest !== undefined && DIGEST.test(digest);
 }
 /** The profile `request.mode` meets for its actor, or the refusal it gives (exit 1, IA-RUNTIME-MANDATE-*). */
 export function requireProfile(request: ProfileRequest): Profile {
@@ -174,11 +252,14 @@ export function requireProfile(request: ProfileRequest): Profile {
     return { mandates, verdict: profileRefusal(mandates, mode, words) };
   };
   /**
-   * Review C3-R2: an `ia author` form without a usable `--digest` (absent, unless it writes a starter system, or not 64
+   * Review C3-R2: an `ia author` form without a usable `--digest` (absent, or not 64
    * lowercase hex digits) would refuse again when named as it is, so an actor choice names its preview, which prints the
    * digest: the actor must be allowed that preview too.
    */
   const previewFirst = context.command.name === 'author' && !usableDigest(context.args);
+  const administrative = mode === 'author' && words.some((word) => ADMINISTRATIVE_WORDS.includes(word));
+  const administrativeNext = (): string =>
+    `Run "ia position${workspace === undefined ? '' : ` --seat ${workspace} --shape governance`}${rooted}" to inspect the workspace's authority; an owner must change administrative records in source and validate them.`;
   const allows = (actor: string | undefined): boolean =>
     judge(actor).verdict.refusal === undefined &&
     (!previewFirst || profileRefusal(governing(actor, request.path), 'validate', words).refusal === undefined);
@@ -189,6 +270,7 @@ export function requireProfile(request: ProfileRequest): Profile {
       : respell(context, { options: { actor } });
   /** The next command after an open or refused actor choice: this one as the first participant allowed to run it. */
   const choose = (participants: readonly string[]): string => {
+    if (administrative) return administrativeNext();
     const allowed = participants.find(allows);
     if (allowed !== undefined)
       return previewFirst
@@ -204,6 +286,7 @@ export function requireProfile(request: ProfileRequest): Profile {
    * is open, the first participant allowed (`choose`).
    */
   const mistyped = (participants: readonly string[]): string => {
+    if (administrative) return administrativeNext();
     const fallback = workspace === undefined ? undefined : defaultActor(reader, within, workspace);
     if (fallback?.actor !== undefined)
       return allows(fallback.actor)
@@ -278,6 +361,8 @@ export function requireProfile(request: ProfileRequest): Profile {
         ...(by === undefined ? {} : { by }),
         mandates: request.path === undefined ? mandates : governing(actor, undefined),
         rooted,
+        roots: [reader.root, context.args.value('root')],
+        ...(context.host === undefined ? {} : { advice: { cwd: context.host.cwd, env: context.host.env ?? {} } }),
       });
     return Object.freeze({
       ...(workspace === undefined ? {} : { workspace }),
@@ -289,7 +374,7 @@ export function requireProfile(request: ProfileRequest): Profile {
     });
   } catch (error) {
     if (error instanceof RuntimeError && error.code === 'IA-RUNTIME-REQUEST-INVALID')
-      throw unreadable(error, reader, within, workspace, rooted);
+      throw unreadable(error, reader, workspace, rooted, context.host?.cwd);
     throw error;
   }
 }
@@ -332,19 +417,40 @@ function wordOf(args: Context['args']): string | undefined {
  * Review C-R2: a refusal of `ia preview` or `ia author`, or a mandate refusal of any command, whose next command would
  * repeat a value holding shell syntax (`$(...)`, a backtick, `%`, a quote, `;` and the like) names an inert command in its
  * place: the word's preview, keeping an `--actor` the command named, or else the repository's position. The `--root` value
- * is the invocation's own and is repeated as every command repeats it: only that value, as the option before any `--`, is
- * exempt (review C2-R8). Every token the command keeps is spelled by `spelled`, so a bare `#` or `@` token is quoted; one opening with `~` is never repeated.
+ * is matched as known data before parsing this guidance: a shell-active root becomes `.` with an explicit workspace-cwd
+ * instruction. An ordinary root keeps its existing spelling (review C2-R8). Every other token the command keeps is spelled
+ * by `spelled`, so a bare `#` or `@` token is quoted; one opening with `~` is never repeated.
  */
-export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | 'args'>): Refusal {
+export function inertNext(
+  refusal: Refusal,
+  context: Pick<Context, 'command' | 'args'> & { readonly host?: AdviceContext },
+): Refusal {
+  if (refusal.next !== null) {
+    const next = safeRootAdvice(
+      refusal.next,
+      [context.args.value('root')],
+      context.host === undefined ? undefined : { ...context.host, registryIntent: refusal.registryIntent },
+    );
+    if (next !== refusal.next)
+      refusal = new Refusal(
+        refusal.code,
+        refusal.message,
+        refusal.exit,
+        refusal.where,
+        next,
+        refusal.at,
+        refusal.registryIntent,
+      );
+  }
   const verb = context.command.name;
   if (
     refusal.next === null ||
     (verb !== 'preview' && verb !== 'author' && !refusal.code.startsWith('IA-RUNTIME-MANDATE-'))
   )
     return refusal;
-  const match = QUOTED.exec(refusal.next);
+  const match = ADVICE_COMMAND.exec(refusal.next);
   if (match === null) return refusal;
-  const argv = argumentsOf(match[1]!);
+  const argv = commandArguments(match[1]!);
   const supplied = context.args.value('root'),
     end = argv.indexOf('--'),
     own = (index: number): boolean =>
@@ -360,6 +466,7 @@ export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | '
           refusal.where,
           refusal.next.replace(match[0], `"${command}"`),
           refusal.at,
+          refusal.registryIntent,
         );
   }
   const rooted = supplied === undefined ? '' : ` --root ${quote(supplied)}`,
@@ -378,32 +485,6 @@ export function inertNext(refusal: Refusal, context: Pick<Context, 'command' | '
   );
 }
 
-const QUOTED = /"(ia(?: (?:"(?:[^"\\]|\\.)*"|[^\s"]+))*)"/;
-/**
- * The arguments of a next command's body, its `"…"` JSON strings decoded and its bare `[^\s"]+` tokens as written, in
- * one pass. QUOTED matched the body, so every quoted token closes. A global regex would retry its quoted branch at every
- * quote, which is quadratic on a value full of `\"` (CodeQL js/polynomial-redos).
- */
-function argumentsOf(body: string): string[] {
-  const argv: string[] = [];
-  let at = 0;
-  while (at < body.length) {
-    if (/\s/.test(body[at]!)) {
-      at += 1;
-    } else if (body[at] === '"') {
-      let end = at + 1;
-      while (end < body.length && body[end] !== '"') end += body[end] === '\\' ? 2 : 1;
-      argv.push(JSON.parse(body.slice(at, end + 1)) as string);
-      at = end + 1;
-    } else {
-      let end = at;
-      while (end < body.length && body[end] !== '"' && !/\s/.test(body[end]!)) end += 1;
-      argv.push(body.slice(at, end));
-      at = end;
-    }
-  }
-  return argv;
-}
 /**
  * Design row 27 under the profile: the next action a gated command printed, a refusal's or (review C2-N11) its own after
  * a success, judged by the profile that let the command run. A next command of a gated mode the profile refuses (its
@@ -411,12 +492,22 @@ function argumentsOf(body: string): string[] {
  * one the profile allows carries `--actor`, the participant it resolved, when the command named its actor so. A next
  * action printed before any profile, or naming an ungated command, is returned as it is.
  */
-export function judgedNext(next: string, gate: Gate | undefined): string {
+export function judgedNext(
+  next: string,
+  gate: Gate | undefined,
+  registryIntent?: AdviceContext['registryIntent'],
+): string {
+  const roots = gate?.state?.roots ?? [];
+  const advice = gate?.state?.advice;
+  const context = advice === undefined ? undefined : { ...advice, registryIntent };
+  return safeRootAdvice(judgeNext(safeRootAdvice(next, roots, context), gate), roots, context);
+}
+function judgeNext(next: string, gate: Gate | undefined): string {
   const state = gate?.state;
   if (state === undefined) return next;
-  const match = QUOTED.exec(next);
+  const match = ADVICE_COMMAND.exec(next);
   if (match === null) return next;
-  const argv = argumentsOf(match[1]!);
+  const argv = commandArguments(match[1]!);
   const verb = argv[1] ?? '',
     mode = verb === 'host' ? hostMode(argv) : GATED_MODES[verb];
   if (mode === undefined) return next;
@@ -440,8 +531,8 @@ export function judgedNext(next: string, gate: Gate | undefined): string {
 /** A refusal a gated command raised, its next command judged by `judgedNext`. */
 export function gatedNext(refusal: Refusal, gate: Gate | undefined): Refusal {
   if (refusal.next === null) return refusal;
-  const next = judgedNext(refusal.next, gate);
+  const next = judgedNext(refusal.next, gate, refusal.registryIntent);
   return next === refusal.next
     ? refusal
-    : new Refusal(refusal.code, refusal.message, refusal.exit, refusal.where, next, refusal.at);
+    : new Refusal(refusal.code, refusal.message, refusal.exit, refusal.where, next, refusal.at, refusal.registryIntent);
 }

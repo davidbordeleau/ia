@@ -6,6 +6,7 @@
 - The [language guide](docs/reference/language/README.md) and [vocabulary catalogue](docs/reference/language/vocabulary.md) explain every word, its schema and how validation results read.
 - The [CLI guide](apps/cli/README.md), [MCP server guide](apps/mcp-door/README.md) and [VS Code extension guide](apps/vscode/README.md) cover each tool. `ia --help` and `ia <command> --help` are the authoritative command syntax.
 - `ia doctor` reports the runtime, workspace, installation and host state it observes, with the repair it suggests for each problem.
+- If a host or migration apply was interrupted, follow the recovery command named by the refusal before retrying with `--apply`. Do not remove an unowned hook or replace foreign generated files; the plan must identify the owned path first.
 
 ## Ask
 
@@ -23,4 +24,4 @@ Do not report security problems in an issue. Use the process in [SECURITY.md](SE
 
 ## What this repository does not cover
 
-Hosted InventArch services and the private marketplace are separate products. Questions about them belong with their operators, not in this repository.
+Questions about separately operated hosted services belong with their operators.

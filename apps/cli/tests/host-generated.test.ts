@@ -17,14 +17,14 @@ import {
 } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
-import { PACKET_MARKER } from '@inventarch/runtime';
+import { PACKET_MARKER, admissionReport } from '@inventarch/runtime';
 import { hookGroupDigest } from '@inventarch/distribution/guard-registration';
 import { sha256 } from '@inventarch/distribution/services';
 import { runBounded } from '@tools/testing/subprocess.js';
 import { ProjectionError } from '@inventarch/workspace-runtime/projections';
 import { applyHostProjection, HOOK_KEPT, renderProjectionFor } from '../src/host-projection.js';
-import { quote } from '../src/render.js';
-import { cleanup, cli, nextArgv, run } from './workspace-fixture.js';
+
+import { quoteCommandRoot as quote, cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
 import {
   doctor,
   GUARD_STATE,
@@ -175,6 +175,101 @@ async function guarded(
   return output.hookSpecificOutput?.permissionDecisionReason;
 }
 const codeOf = (reason: string | undefined): string | undefined => reason?.split(':')[0];
+
+it('follows shell-safe registered guard removal and unreadable ownership repairs', async () => {
+  const { root: initial, env } = await composed(),
+    root = resolve(scratch('active-hook-root'), 'ws-$(Write-Output SENTINEL)'),
+    source = read(initial, '.ia/src/hooks.ia');
+  cpSync(initial, root, { recursive: true });
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  const foreign = { matcher: 'Read', hooks: [{ command: 'foreign-handler', args: ['preserve'] }] };
+  const current = settings(root);
+  current.hooks!.PreToolUse!.push(foreign);
+  writeFileSync(resolve(root, SETTINGS), JSON.stringify(current));
+  put(root, '.ia/src/hooks.ia', 'this is not an IA source');
+  const denied = await guarded(root, hookGroups(root).get(HOOK), 'docs/guide.md');
+  expect(denied).toContain('"ia host claude --root . --remove --apply --yes"');
+  expect(denied).not.toContain('SENTINEL');
+  const removed = await run([...nextArgv(denied!), '--json'], { cwd: root, env });
+  expect(removed.exitCode, removed.stdout + removed.stderr).toBe(0);
+  expect(hookGroups(root).size).toBe(0);
+  expect(settings(root).hooks!.PreToolUse).toContainEqual(foreign);
+  expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+  put(root, '.ia/src/hooks.ia', source);
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  put(root, HOOK_STATE, '{}');
+  const before = snapshot(root, [SETTINGS, HOOK_STATE, AGENT, SKILL, PROJECTION]);
+  const refusal = await host(root, env, 'claude', '--apply', '--yes');
+  expect(refusal.exitCode).not.toBe(0);
+  const next = JSON.parse(refusal.stdout).next as string;
+  expect(next).toContain('--root .');
+  expect(next).not.toContain('SENTINEL');
+  expect(snapshot(root, Object.keys(before))).toEqual(before);
+  // The located manual repair removes only IA's damaged state and hook groups, preserving the foreign group.
+  rmSync(resolve(root, HOOK_STATE));
+  withoutHookGroups(root);
+  const followed = await run([...nextArgv(next), '--yes', '--json'], { cwd: root, env });
+  expect(followed.exitCode, followed.stdout + followed.stderr).toBe(0);
+  expect(settings(root).hooks!.PreToolUse).toContainEqual(foreign);
+});
+
+it('refuses removal when hook ownership is lost and preserves the active group until manual recovery', async () => {
+  const { root, env } = await composed();
+  const unrelated = { permissions: { allow: ['Bash(ls)'] } };
+  put(root, SETTINGS, JSON.stringify(unrelated) + '\n');
+  await apply(root, env);
+  rmSync(resolve(root, HOOK_STATE));
+  const group = hookGroups(root).get(HOOK);
+  expect(codeOf(await guarded(root, group, 'docs/guide.md', reviewer))).toBe('IA-HOOK-NOT-MANDATED');
+  expect((await doctor(root, env)).checks.find((row) => row.id === `projection-claude-hook:${HOOK}`)).toMatchObject({
+    status: 'warn',
+    detail: expect.stringContaining('delete only this unowned group manually'),
+    remedy: null,
+  });
+  const paths = [
+      SETTINGS,
+      HOOK_STATE,
+      PROJECTION,
+      RECEIPT_PATH,
+      '.ia/distributions/hosts/joins.json',
+      '.ia/distributions/hosts/guard-pending.json',
+      '.mcp.json',
+      AGENT,
+      SKILL,
+      ...PACKET,
+    ],
+    before = snapshot(root, paths);
+  for (const flags of [[], ['--apply', '--yes']]) {
+    const result = await host(root, env, 'claude', '--remove', ...flags);
+    if (flags.length === 0) {
+      expect(result.exitCode, result.stdout).toBe(0);
+      expect(projection(result.stdout)).toMatchObject({
+        action: 'refused',
+        conflict: { code: 'IA-DIST-LOCAL-MODIFICATION', path: SETTINGS },
+      });
+    } else {
+      expect(result.exitCode, result.stdout).toBe(3);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        code: 'IA-DIST-LOCAL-MODIFICATION',
+        where: { path: SETTINGS },
+        next: expect.stringContaining(`Delete only the unowned IA hook group for ${HOOK}`),
+      });
+    }
+    expect(snapshot(root, paths)).toEqual(before);
+  }
+  expect(codeOf(await guarded(root, hookGroups(root).get(HOOK), 'docs/guide.md', reviewer))).toBe(
+    'IA-HOOK-NOT-MANDATED',
+  );
+  // The refusal does not authorize adopting or deleting the whole settings file. Remove just the identified group.
+  const repaired = settings(root);
+  repaired.hooks!.PreToolUse = repaired.hooks!.PreToolUse!.filter(
+    (entry) => entry !== undefined && !entry.hooks.some((handler) => handler.args?.includes(HOOK)),
+  );
+  put(root, SETTINGS, JSON.stringify(repaired) + '\n');
+  expect((await host(root, env, 'claude', '--remove', '--apply', '--yes')).exitCode).toBe(0);
+  expect(settings(root)['permissions']).toEqual(unrelated.permissions);
+  expect(hookGroups(root).size).toBe(0);
+});
 
 it('applies the packet, one agent, one skill and one hook group through the one writer, and a second apply writes nothing', async () => {
   const { root, env } = await composed();
@@ -543,7 +638,7 @@ it("falls back to the mandates that bind the fixture profile's agent when the pr
   const agent = renderProjectionFor(root, 'claude').files.find((file) => file.path === AGENT)!.text;
   expect(agent.split('\n## Mandate\n\n')[1]!.split('\n\n## ')[0]).toBe(
     [
-      "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.",
+      'This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard judges the agent by these, and refuses it where a mandate that binds another participant governs and none of these grants the move.',
       '',
       '- `agent-system/policy/mandate/reviewer-docs`',
       '  - participant `agent-system/binding/agent/reviewer`',
@@ -617,13 +712,23 @@ it('restores editing with the removal the guard names when a broken record keeps
   // A syntax error in the hook's own record: it is no admitted @hook, and the workspace no longer admits.
   edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
   const refused = await guarded(root, group, '.ia/src/hooks.ia', {}, 'Edit');
-  expect(codeOf(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
-  // Re-registering would refuse here, so it is not named; ia validate, which shows why, is.
+  // hooks.ia holds docs-mandate and reviewer-docs too, which admission refuses with it, so the edit fails closed at the
+  // first of them (review D-N1), and `ia validate`, mandate-gated, refuses there (lane D). Re-registering would refuse
+  // too, so it is not named: the admission report, which shows why, is named instead, and runs.
+  expect(codeOf(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+  expect(refused).toContain('agent-system/policy/mandate/docs-mandate (.ia/src/hooks.ia:15) failed admission');
   expect(refused).not.toContain(`"ia host claude --root ${JSON.stringify(root)} --apply --yes"`);
-  expect(refused).toContain(`"ia validate --root ${JSON.stringify(root)}"`);
+  expect(refused).not.toContain('ia validate');
+  expect(refused).toContain(`"${admissionReport(root).command}"`);
   const validated = await run(['validate', '--root', root, '--json']);
-  expect(validated.exitCode).not.toBe(0);
-  expect(validated.stdout).toContain('hooks.ia');
+  expect(validated.exitCode).toBe(1);
+  expect(JSON.parse(validated.stdout)).toMatchObject({
+    code: 'IA-RUNTIME-REQUEST-INVALID',
+    where: { path: '.ia/src/hooks.ia' },
+  });
+  const report = await run(['report', '--root', root]);
+  expect(report.stderr).toBe('');
+  expect(report.stdout).toContain('hooks.ia');
   expect(await lifted(root, env, refused)).toBe(0);
 
   // The lift a main-session refusal names works whatever the records say: an ambiguous default actor and a source error.
@@ -638,10 +743,16 @@ it('restores editing with the removal the guard names when a broken record keeps
   // effect (review C2-R7), so the registration names its actor; the guarded edits below are judged as before.
   await apply(second.root, second.env, '--actor', 'agent-system/binding/agent/demo');
   const ambiguous = hookGroups(second.root).get(HOOK);
-  put(second.root, '.ia/src/broken.ia', '#! ia 1.0\n\n@playbook broken\n  meaning\n    says "x"\nzzz not ia\n');
+  // The source error is inside a record db identifies: a stray top-level line would be a record it cannot identify,
+  // possibly a @mandate, which fails the edit closed at it instead (review D2-R2), and the lift works then too.
+  put(second.root, '.ia/src/broken.ia', '#! ia 1.0\n\n@playbook broken\n  meaning\n    says "x"\n   not ia\n');
   const lift = await guarded(second.root, ambiguous, 'docs/guide.md');
   expect(codeOf(lift)).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
-  expect(await lifted(second.root, second.env, lift)).toBe(0);
+  put(second.root, '.ia/src/broken.ia', '#! ia 1.0\n\n@playbook broken\n  meaning\n    says "x"\nzzz not ia\n');
+  const closed = await guarded(second.root, ambiguous, 'docs/guide.md');
+  expect(codeOf(closed)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+  expect(closed).toContain('an unidentified record at .ia/src/broken.ia:6, possibly a @mandate, failed admission');
+  expect(await lifted(second.root, second.env, closed)).toBe(0);
 });
 
 it('refuses no more than the last registered selection when the records cannot open, and the removal it names works (H-R8)', async () => {
@@ -1055,7 +1166,9 @@ it('names the state repair when the hook ownership state cannot be read and the 
   writeFileSync(resolve(root, HOOK_STATE), '{ not json');
   edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
   const refused = await guarded(root, group, 'src/app.ts');
-  expect(codeOf(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  // hooks.ia holds docs-mandate and reviewer-docs too, so the edit fails closed at the first of them (review D-N1).
+  expect(codeOf(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+  expect(refused).toContain('agent-system/policy/mandate/docs-mandate (.ia/src/hooks.ia:15) failed admission');
   expect(refused).toContain(
     `from a shell, delete ${HOOK_STATE} and every IA hook group in ${SETTINGS} (each runs the guard for one authored @hook) to restore editing, then run "ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`,
   );

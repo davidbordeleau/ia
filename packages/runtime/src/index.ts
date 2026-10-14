@@ -1,5 +1,5 @@
 export { RUNTIME_CODES, RUNTIME_ESCALATIONS, RuntimeError } from './errors.js';
-export type { RuntimeCode } from './errors.js';
+export type { RuntimeCode, RuntimeWhere } from './errors.js';
 export { classify, scoreShapes, defaultClassifier } from './classify.js';
 export type { Classifier, Shape } from './classify.js';
 export { prepareCoordinate, COORDINATE_DOMAINS } from './coordinate.js';
@@ -94,7 +94,7 @@ export type {
 } from './machine-protocol.js';
 export { HOOK_CODES, evaluateSteward } from './steward.js';
 export type { HookCode, StewardActor, StewardDecision } from './steward.js';
-export { evaluateMandateGuard, mandateGuardSelects } from './mandate-guard.js';
+export { admissionReport, inertCommandRoot, evaluateMandateGuard, mandateGuardSelects } from './mandate-guard.js';
 export type { MandateGuardDecision, MandateGuardRequest } from './mandate-guard.js';
 export { validateCandidate } from './candidate.js';
 export type { CandidateEnvelope, CandidateScope, CandidateValidation } from './candidate.js';
@@ -115,10 +115,14 @@ export {
   MOVES,
   defaultActor,
   governingMandates,
+  isAdmissionRefusal,
   isMode,
   mandateAuthorityOf,
   mandateRefusal,
   profileRefusal,
+  refusedDependencies,
+  refusedMandates,
+  requireMandatesAdmitted,
   seatedWorkspace,
 } from './mandate-modes.js';
 export type {
@@ -132,6 +136,8 @@ export type {
   Move,
   ProfileMandate,
   ProfileVerdict,
+  RefusedDependency,
+  RefusedMandate,
 } from './mandate-modes.js';
 // The markdown and fragment helpers stay on the ./internal/locator subpath; the root names the reader and its terms.
 export { READ_CODES, SOURCE_LOCATORS, parseLocator, readBody } from './locator.js';

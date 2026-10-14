@@ -1,4 +1,5 @@
 import '../temp/physical-temp.mjs';
+import { compiledSystemFolders } from '../native/public-systems.mjs';
 import { packageManagerCommand } from '../entry/package-manager.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -11,8 +12,7 @@ const root = resolve(import.meta.dirname, '../..'),
   pnpm = process.env.npm_execpath;
 if (!pnpm) throw new Error('Build first, then run pnpm projections:qualify');
 const temporary = mkdtempSync(resolve(tmpdir(), 'ia-packed-projections-'));
-// --keep (with --distribution) retains the consumer, its installed distribution CLI and its descriptors for later host qualification.
-// Declared above the public export's cut at `const distribution`, so the public copy keeps the cleanup branch (keep is false there).
+// Supported public qualification accepts no optional modes, so its temporary consumer is always removed.
 const keep = process.argv.includes('--keep');
 const run = (args, cwd) => {
   const invocation = packageManagerCommand(pnpm, args);
@@ -24,12 +24,9 @@ const folders = [
   'packages/compliance',
   'packages/db',
   'packages/runtime',
-  '.ia/src/systems/session-system',
-  '.ia/src/systems/agent-system',
   'packages/workspace-runtime',
-  '.ia/src/systems/agent-composition-system',
+  ...compiledSystemFolders(root),
 ];
-folders.push('.ia/src/systems/template-system', '.ia/src/systems/authoring-system');
 if (process.argv.length !== 2)
   throw new Error('Public projection qualification accepts no optional private or live-host modes');
 try {

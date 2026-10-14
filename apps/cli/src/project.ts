@@ -48,7 +48,7 @@ import {
   STATE,
   unsupportedRows,
 } from './host.js';
-import type { Capabilities, Field } from './render.js';
+import type { AdviceContext, Capabilities, Field } from './render.js';
 import {
   atom,
   commandFacts,
@@ -58,6 +58,7 @@ import {
   headerLine,
   indentOf,
   quote,
+  safeRootAdvice,
   remedyWords,
   sectionLabel,
   truncateDigest,
@@ -216,7 +217,7 @@ function planBlocks(view: ProjectView, caps: Capabilities): readonly (readonly s
             symbol: 'error' as const,
             label: 'refused',
             value: words(`${conflict.code} ${conflict.reason}`),
-            action: remedyWords(conflictNext(view, conflict)),
+            action: remedyWords(safeRootAdvice(conflictNext(view, conflict), [view.root, view.given])),
           },
         ]),
   ];
@@ -233,7 +234,7 @@ function planBlocks(view: ProjectView, caps: Capabilities): readonly (readonly s
   ];
 }
 const applyFacts = (view: ProjectView, caps: Capabilities) =>
-  commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps);
+  commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps, [view.root, view.given]);
 
 /** The plan as a terminal reads it: it says nothing was written, and names the apply only when nothing refuses it. */
 export function renderProjectPlan(view: ProjectView, caps: Capabilities): string {
@@ -258,7 +259,12 @@ const renderProjectSummary = (view: ProjectView, caps: Capabilities): string =>
  * foreign files left in place and the guard's retirement. It says what was written, never that the host read it
  * (design §4, adapter rule 3).
  */
-export function renderProjectApplied(view: ProjectView, receipt: PacketReceipt, caps: Capabilities): string {
+export function renderProjectApplied(
+  view: ProjectView,
+  receipt: PacketReceipt,
+  caps: Capabilities,
+  advice?: AdviceContext,
+): string {
   const digest = (value: string): string => truncateDigest(value, caps.ascii);
   const listed = (
     label: string,
@@ -310,7 +316,15 @@ export function renderProjectApplied(view: ProjectView, receipt: PacketReceipt, 
       (receipt.unsupported ?? []).length === 0
         ? []
         : [sectionLabel('Not taken', caps), ...unsupportedRows(receipt.unsupported ?? [], indentOf(1), caps)],
-      entry([remedyWords(`Run "${doctor}" for the observed projection state.`)], { depth: 0, symbol: 'step' }, caps),
+      entry(
+        [
+          remedyWords(
+            safeRootAdvice(`Run "${doctor}" for the observed projection state.`, [view.root, view.given], advice),
+          ),
+        ],
+        { depth: 0, symbol: 'step' },
+        caps,
+      ),
     ],
     { leadingBlank: true },
   );
@@ -339,7 +353,7 @@ export async function runProject(context: Context): Promise<Result> {
       ? { exitCode: 0, stdout: JSON.stringify(projectEnvelope(view, applied)) + '\n', stderr: '' }
       : {
           exitCode: 0,
-          stdout: applied === null ? renderProjectPlan(view, caps) : renderProjectApplied(view, applied, caps),
+          stdout: applied === null ? renderProjectPlan(view, caps) : renderProjectApplied(view, applied, caps, host),
           stderr: '',
         };
   // §4: a plan with a conflict is a successful report; only --apply refuses it, before it asks anything.

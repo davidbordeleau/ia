@@ -2,11 +2,18 @@ import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { dispatch } from '../src/consumer.js';
 import type { Extension, Host, Result } from '../src/consumer.js';
+import { runCli } from '../src/main.js';
+import { quote } from '../src/render.js';
 import { scratch } from './scratch-fixture.js';
 export { cleanup, scratch } from './scratch-fixture.js';
 
 export const repository = resolve(import.meta.dirname, '../../..');
 export const cli = resolve(repository, 'apps/cli');
+/** Expected shell arguments address a Windows root with portable separators; diagnostic paths retain native bytes. */
+export const commandRoot = (root: string): string => (process.platform === 'win32' ? root.replaceAll('\\', '/') : root);
+export const quoteCommandRoot = (root: string): string => quote(commandRoot(root));
+export const commandRoots = (argv: readonly string[]): readonly string[] =>
+  argv.map((value, index) => (argv[index - 1] === '--root' ? commandRoot(value) : value));
 export const FIXTURE = resolve(repository, 'packages/compliance/fixtures/loop');
 /** The fixture's one deliberately foreign record; removing it leaves a workspace that admits. */
 export const FOREIGN = '.ia/src/systems/agent-system/records/foreign.ia';
@@ -143,14 +150,30 @@ function refusalNext(result: Result): string | null {
   return result.stderr.replace(/\s+/g, ' ').split('→ ')[1]?.trim() ?? null;
 }
 
-const legacy = () => ({ exitCode: 2, stdout: '' });
+/**
+ * The version 1 machine routes run as the binary runs them (`runCli`), from the invocation's cwd, so a next action naming
+ * one, such as the `ia report --root <root>` a refused `@mandate`'s refusal names (lane D), runs here as it would from
+ * a shell there: a relative `--root` is read against that cwd, and without one the route opens the cwd. stdin is never
+ * read: a route given `--params -` reads an empty object.
+ */
+const legacyFrom =
+  (cwd: string) =>
+  (argv: readonly string[]): ReturnType<typeof runCli> => {
+    const at = argv.indexOf('--root');
+    const rooted =
+      at === -1
+        ? [...argv, '--root', cwd]
+        : argv.map((token, index) => (index === at + 1 ? resolve(cwd, token) : token));
+    return runCli(rooted, () => '{}');
+  };
 const extensions: readonly Extension[] = [];
 /**
  * One in-process invocation. Every refusal any suite provokes is held to design row 27 here, so a next action a verb
  * computes at run time is checked wherever a test reaches it, not only where a test asserts its text.
  */
 export async function run(argv: readonly string[], options: HostOptions = {}): Promise<Result> {
-  const result = await dispatch(argv, makeHost(options), legacy, extensions);
+  const host = makeHost(options),
+    result = await dispatch(argv, host, legacyFrom(host.cwd), extensions);
   const next = refusalNext(result),
     defect = next === null ? null : nextDefect(next);
   if (defect !== null)

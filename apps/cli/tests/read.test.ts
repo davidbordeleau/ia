@@ -27,8 +27,17 @@ import type { DoorOptions, DoorResponse, ReadBody } from '@inventarch/runtime';
 import { parseArguments } from '../src/args.js';
 import { findCommand } from '../src/commands.js';
 import { NOT_CERTIFIED, readEnvelope, readOptions, readRefusal } from '../src/read.js';
-import { quote } from '../src/render.js';
-import { cleanup, commandsIn, nextArgv, repository, run, scratch, workspace } from './workspace-fixture.js';
+
+import {
+  quoteCommandRoot as quote,
+  cleanup,
+  commandsIn,
+  nextArgv,
+  repository,
+  run,
+  scratch,
+  workspace,
+} from './workspace-fixture.js';
 
 afterAll(cleanup);
 

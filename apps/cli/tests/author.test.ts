@@ -18,10 +18,11 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { open } from '@inventarch/db';
+import { open, readInputs } from '@inventarch/db';
+import { digestValue } from '@inventarch/runtime/authoring';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Result } from '../src/consumer.js';
-import { cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
+import { commandRoots, cleanup, cli, commandsIn, nextArgv, repository, run, scratch } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 240_000, hookTimeout: 240_000 });
 afterAll(cleanup);
@@ -194,6 +195,22 @@ const onlyChanged = (before: ReadonlyMap<string, string>, after: ReadonlyMap<str
   [...new Set([...before.keys(), ...after.keys()])].filter((id) => before.get(id) !== after.get(id)).sort();
 
 describe('ia author', () => {
+  it('does not treat its attribution comment as a mandate when the work file holding it later fails parsing', async () => {
+    const root = workspace();
+    await authored(root, ['--set', '@plan p1', 'work.title=Retitled']);
+    const written = readFileSync(resolve(root, '.ia/src/work.ia'), 'utf8');
+    expect(written).toMatch(/# authored-by @agent demo under @mandate demo-mandate at [0-9a-f]{64}\n@plan p1/);
+    rewrite(root, '.ia/src/work.ia', (text) => text.replace('says "The demo plan."', 'says "unfinished'));
+    expect((await unchanged(root, ['read', participant])).exitCode).toBe(0);
+    const validated = await unchanged(root, ['validate']);
+    expect(validated.exitCode).toBe(1);
+    expect(validated.stdout).toContain('IA-LANG-STRING-UNTERMINATED');
+    expect(validated.stdout).not.toContain('IA-RUNTIME-REQUEST-INVALID');
+    // The comment does not exempt an unidentified declaration in the same rejected file.
+    rewrite(root, '.ia/src/work.ia', (text) => `${text}\n@ mandate hidden\n`);
+    await refused(root, ['read', participant], 'IA-RUNTIME-REQUEST-INVALID');
+    expect(readFileSync(resolve(root, '.ia/src/work.ia'), 'utf8')).toContain('# authored-by ');
+  });
   it('writes one relationship row with its attribution, and the workspace still validates', async () => {
     const root = workspace();
     const work = readFileSync(resolve(root, '.ia/src/work.ia'), 'utf8');
@@ -268,7 +285,7 @@ describe('ia author', () => {
     const { before, after } = await authored(root, ['--set', '@milestone m1', 'work.owner=Tom']);
     expect(onlyChanged(before, after)).toEqual([milestone('m1')]);
   });
-  it('writes a starter system, whose next command composes it into the workspace', async () => {
+  it('previews a starter system but reserves its authority-bearing records for an owner source edit', async () => {
     const root = workspace();
     const guidance = body(await ia(root, ['preview', 'system']));
     expect(guidance).toMatchObject({ word: 'system', system: 'floor', template: '.ia/src/systems/<name>/system.ia' });
@@ -279,29 +296,127 @@ describe('ia author', () => {
       'head.describes',
     ]);
     expect(body(await ia(root, ['preview', 'schema']))).toMatchObject({ word: 'schema', system: 'floor' });
-    const before = digests(root);
-    const result = await ia(root, ['author', 'system', 'notes']);
+    const result = await unchanged(root, ['preview', 'system', 'notes']);
     expect(result.exitCode, result.stdout).toBe(0);
     const view = body(result);
     expect(view).toMatchObject({
-      created: true,
+      exists: false,
       path: '.ia/src/systems/notes/system.ia',
       identity: 'floor/definition/system/notes',
     });
-    expect(onlyChanged(before, digests(root))).toEqual([
-      'agent-system/binding/agent/notes-steward',
-      'floor/definition/system/notes',
-    ]);
-    const next = nextArgv(view['next'] as string);
-    expect(next.slice(0, 4)).toEqual(['author', '--set', demo, 'composition.systems+=@system notes']);
-    const composed = await run([...next, '--json']);
-    expect(composed.exitCode, composed.stdout).toBe(0);
-    expect(readFileSync(resolve(root, '.ia/src/workspace.ia'), 'utf8')).toContain(
-      '@system workspace-system, @system notes]',
+    await refused(root, ['author', 'system', 'notes'], 'IA-CLI-EDIT-AUTHORITY');
+  });
+});
+
+describe('administrative authority is not writable through ia author', () => {
+  it('blocks indirect escalation without authored exclusions and does not accept another actor as approval', async () => {
+    const root = workspace((at) => {
+      moves(at, 'Observation, Verification, Synthesis');
+      writeFileSync(
+        resolve(at, '.ia/src/ops.ia'),
+        `#! ia 1.0\n${AGENT('ops')}${MANDATE('ops-mandate', ['participant @agent ops', 'scope [@workspace demo]'])}`,
+      );
+    });
+    for (const form of [
+      ['--set', '@workspace demo', 'composition.sources=[".ia/src/work.ia @authored"]'],
+      ['--set', '@workspace demo', 'composition.steward=@agent ops'],
+      ['--set', '@workspace demo', 'composition.systems=[@system work-system]'],
+      ['agent', 'free', 'meaning.says=Unbound.', 'meaning.answers=Who?', 'governance.applies=[]'],
+      ['mandate', 'open', 'meaning.says=Open.', 'meaning.answers=Who?', 'authority.moves=[Execution]'],
+      ['--set', '@mandate ops-mandate', 'authority.scope=[]'],
+      ['--set', '@mandate ops-mandate', 'authority.covers=["**"]'],
+      ['--set', '@mandate ops-mandate', 'authority.excluded-words=[]'],
+      ['--set', '@agent ops', 'meaning.says=Changed.'],
+      ['--relate', '@workspace demo', 'cites', '@agent ops'],
+      ['system', 'free-system'],
+    ]) {
+      const refusedEdit = await refused(root, ['author', ...form, '--digest', EMPTY], 'IA-CLI-EDIT-AUTHORITY');
+      expect(refusedEdit['next']).toContain('An owner must make this administrative change in source');
+      expect(refusedEdit['next']).toContain('naming an actor does not authorize it');
+    }
+    await refused(
+      root,
+      [
+        'author',
+        '--set',
+        '@workspace demo',
+        'composition.steward=@agent ops',
+        '--actor',
+        '@agent ops',
+        '--digest',
+        EMPTY,
+      ],
+      'IA-CLI-EDIT-AUTHORITY',
     );
-    expect((await ia(root, ['validate'])).exitCode).toBe(0);
-    // The file now exists, so a second one refuses.
-    await refused(root, ['author', 'system', 'notes'], 'IA-CLI-EDIT-INVALID');
+    // Normal work records remain writable under the same restricted actor.
+    await authored(root, ['--set', '@milestone m1', 'work.owner=Tom']);
+  });
+  it('freezes host actor mappings and guard declarations, including changes made without any mandate', async () => {
+    const root = workspace((at) => {
+      rmSync(resolve(at, '.ia/src/hooks.ia'));
+      rewrite(at, '.ia/src/workspace.ia', (text) => text.slice(0, text.indexOf('@mandate demo-mandate')));
+      writeFileSync(
+        resolve(at, '.ia/src/protection.ia'),
+        `#! ia 1.0\n\n@hook protect\n  meaning\n    says "Protect records."\n    answers "What is selected?"\n  hook\n    event PreToolUse\n    tools [Write, Edit, MultiEdit]\n    paths [".ia/src/**"]\n    message "Review the mandate."\n\n@agent-profile worker\n  meaning\n    says "Worker."\n    answers "Who works?"\n  composition\n    agent @agent demo\n    capabilities []\n  execution\n    role author\n    outcomes test-v1\n    mandate-contract test-v1\n`,
+      );
+    });
+    for (const form of [
+      ['--set', '@hook protect', 'hook.paths=["docs/**"]'],
+      ['--set', '@hook protect', 'hook.tools=[Write]'],
+      ['--set', '@agent-profile worker', 'composition.agent=@agent demo'],
+      ['--set', '@workspace demo', 'composition.sources=[]'],
+    ])
+      await refused(root, ['author', ...form, '--digest', EMPTY], 'IA-CLI-EDIT-AUTHORITY');
+  });
+});
+
+describe('doctor makes source protection declarations visible', () => {
+  const hook = (paths: string, tools = '[Write, Edit, MultiEdit]', event = 'PreToolUse') =>
+    `#! ia 1.0\n\n@hook protect\n  meaning\n    says "Protect records."\n    answers "What is selected?"\n  hook\n    event ${event}\n    tools ${tools}\n    paths ["${paths}"]\n    message "Review the mandate."\n`;
+  async function protection(root: string) {
+    const result = await unchanged(root, ['doctor']);
+    return (body(result)['checks'] as { id: string; status: string; detail: string; remedy: string | null }[]).find(
+      (check) => check.id === 'source-protection',
+    )!;
+  }
+  it('warns without a selecting hook and does not treat narrow or unsupported hooks as protection', async () => {
+    const root = workspace((at) => moves(at, 'Observation, Verification, Synthesis'));
+    expect(await protection(root)).toMatchObject({ status: 'warn', remedy: expect.stringContaining('--root') });
+    for (const declaration of [
+      hook('docs/**'),
+      hook('.ia/src/*'),
+      hook('.ia/src/**', '[Write]'),
+      hook('.ia/src/**', '[Write, Edit, MultiEdit]', 'PostToolUse'),
+    ]) {
+      writeFileSync(resolve(root, '.ia/src/protect.ia'), declaration);
+      expect(await protection(root)).toMatchObject({ status: 'warn' });
+    }
+    writeFileSync(resolve(root, '.ia/src/protect.ia'), hook('.ia/src/**'));
+    expect(await protection(root)).toMatchObject({
+      status: 'info',
+      detail: expect.stringContaining('not host registration or enforcement'),
+    });
+  });
+  it('distinguishes unrestricted, excluded-word, execution-limit and invalid mandate states', async () => {
+    const root = workspace((at) => rmSync(resolve(at, '.ia/src/hooks.ia')));
+    expect(await protection(root)).toMatchObject({
+      status: 'info',
+      detail: expect.stringContaining('No authored mandate'),
+    });
+    const path = resolve(root, '.ia/src/workspace.ia'),
+      original = readFileSync(path, 'utf8');
+    writeFileSync(
+      path,
+      original.replace('    scope [@workspace demo]', '    scope [@workspace demo]\n    excluded-words [task]'),
+    );
+    expect(await protection(root)).toMatchObject({ status: 'warn' });
+    writeFileSync(path, `${original}\n  execution\n    limit-operations 0\n`);
+    expect(await protection(root)).toMatchObject({ status: 'warn' });
+    writeFileSync(
+      path,
+      original.replace('moves [Observation, Verification, Synthesis, Delegation, Execution]', 'moves [Bogus]'),
+    );
+    expect(await protection(root)).toMatchObject({ status: 'unknown', detail: expect.stringContaining('IA-RUNTIME-') });
   });
 });
 
@@ -404,11 +519,13 @@ describe('the next command after an author (review C2-N11, C2-N13)', () => {
   });
   it('carries a named actor as the participant it resolved, not as spelled', async () => {
     const root = workspace();
-    const written = await ia(root, ['author', 'system', 'notes', '--actor', '@agent demo']);
+    const form = ['--set', '@milestone m1', 'work.owner=Tom'];
+    const digest = await previewed(root, form);
+    const written = await ia(root, ['author', ...form, '--digest', digest, '--actor', '@agent demo']);
     expect(written.exitCode, written.stdout).toBe(0);
     const next = nextArgv(body(written).next!),
       at = next.indexOf('--actor');
-    expect(next.slice(0, 4)).toEqual(['author', '--set', demo, 'composition.systems+=@system notes']);
+    expect(next[0]).toBe('validate');
     expect(next.slice(at, at + 2)).toEqual(['--actor', participant]);
     expect(body(written).next).not.toContain('@agent demo');
   });
@@ -419,14 +536,9 @@ describe('ia author refusals, each writing nothing', () => {
     const root = workspace();
     const form = ['--set', '@milestone m1', 'work.owner=Tom'];
     const missing = await refused(root, ['author', ...form], 'IA-CLI-USAGE');
-    expect(nextArgv(missing['next'] as string)).toEqual([
-      'preview',
-      '@milestone m1',
-      'work.owner=Tom',
-      '--set',
-      '--root',
-      root,
-    ]);
+    expect(nextArgv(missing['next'] as string)).toEqual(
+      commandRoots(['preview', '@milestone m1', 'work.owner=Tom', '--set', '--root', root]),
+    );
     await refused(root, ['author', ...form, '--digest', 'abc'], 'IA-CLI-USAGE');
     const digest = await previewed(root, form);
     rewrite(root, '.ia/src/work.ia', (text) =>
@@ -584,7 +696,7 @@ describe('ia author refusals, each writing nothing', () => {
     await refused(excluded, ['author', ...form, '--digest', digest], 'IA-RUNTIME-MANDATE-WORD');
     await refused(excluded, ['author', 'system', 'notes'], 'IA-RUNTIME-MANDATE-WORD');
   });
-  it('refuses a change to a @mandate that binds the acting participant, and allows one for another (review C2-R6)', async () => {
+  it('retains the binding-mandate guard and refuses authoring another participant mandate too', async () => {
     const root = workspace((at) => writeFileSync(resolve(at, '.ia/src/ops.ia'), `#! ia 1.0\n${AGENT('ops')}`));
     const draft = (name: string, authority: readonly string[]) => [
       'mandate',
@@ -618,14 +730,23 @@ describe('ia author refusals, each writing nothing', () => {
         .digest('hex');
       await refused(root, ['author', ...form, '--digest', digest], 'IA-CLI-EDIT-MANDATE');
     }
-    // A mandate for another participant is written, and so is a change to it that keeps it another's.
+    // Another participant's mandate can be previewed but must be changed administratively in source.
     const other = draft('ops-mandate', [
       'authority.participant=@agent ops',
       'authority.moves=[Observation]',
       'authority.scope=[@workspace demo]',
     ]);
-    expect((await authored(root, other)).view['identity']).toBe(mandate('ops-mandate'));
-    await authored(root, ['--set', '@mandate ops-mandate', 'authority.moves=[Observation, Verification]']);
+    const otherDigest = await previewed(root, other);
+    await refused(root, ['author', ...other, '--digest', otherDigest], 'IA-CLI-EDIT-AUTHORITY');
+    writeFileSync(
+      resolve(root, '.ia/src/ops-mandate.ia'),
+      `#! ia 1.0\n${MANDATE('ops-mandate', ['participant @agent ops', 'moves [Observation]', 'scope [@workspace demo]'])}`,
+    );
+    await refused(
+      root,
+      ['author', '--set', '@mandate ops-mandate', 'authority.moves=[Observation, Verification]', '--digest', EMPTY],
+      'IA-CLI-EDIT-AUTHORITY',
+    );
     // Handing it to demo would bind the actor, so that is refused.
     await refused(
       root,
@@ -679,16 +800,18 @@ describe('ia author refusals, each writing nothing', () => {
     for (const digest of [[], ['--digest', 'abc']]) {
       const open = await refused(ambiguous, ['author', ...form, ...digest], 'IA-RUNTIME-MANDATE-ACTOR');
       const named = nextArgv(open['next'] as string);
-      expect(named, open['next'] as string).toEqual([
-        'preview',
-        '@milestone m1',
-        'work.owner=Tom',
-        '--set',
-        '--actor',
-        participant,
-        '--root',
-        ambiguous,
-      ]);
+      expect(named, open['next'] as string).toEqual(
+        commandRoots([
+          'preview',
+          '@milestone m1',
+          'work.owner=Tom',
+          '--set',
+          '--actor',
+          participant,
+          '--root',
+          ambiguous,
+        ]),
+      );
       const preview = await run([...named, '--json'], { env: HOMES });
       expect(preview.exitCode, preview.stdout).toBe(0);
       const printed = body(preview)['digest'] as string;
@@ -741,22 +864,15 @@ describe('the mandate profile on every gated mode', () => {
       [['author', '--set', '@milestone m1', 'work.owner=x', '--digest', fake], 'author', 'Synthesis'],
       [['capture'], 'effect', 'Execution'],
       [['capture', '--preview'], 'effect', 'Execution'],
-      [['compile'], 'effect', 'Execution'],
       [['project', 'claude'], 'effect', 'Execution'],
     ] as const) {
       const refusal = await refused(root, argv, 'IA-RUNTIME-MANDATE-MOVE');
       expect(refusal['message'], argv.join(' ')).toBe(
         `${mandate('demo-mandate')} allows Delegation; ${mode} needs ${move}`,
       );
-      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual([
-        'position',
-        '--seat',
-        mandate('demo-mandate'),
-        '--shape',
-        'governance',
-        '--root',
-        root,
-      ]);
+      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual(
+        commandRoots(['position', '--seat', mandate('demo-mandate'), '--shape', 'governance', '--root', root]),
+      );
     }
     expect((await ia(root, ['position'])).exitCode).toBe(0);
     expect((await ia(root, ['position', '--seat', mandate('demo-mandate'), '--shape', 'governance'])).exitCode).toBe(0);
@@ -830,7 +946,7 @@ describe('the mandate profile on every gated mode', () => {
     expect(nextArgv(refusal['next'] as string).slice(0, 3)).toEqual(['position', '--seat', demo]);
     // Where the actor-less profile allows the command, the next is that command.
     const read = await refused(root, ['read', participant, '--actor', 'nobody'], 'IA-RUNTIME-MANDATE-ACTOR');
-    expect(nextArgv(read['next'] as string)).toEqual(['read', participant, '--root', root]);
+    expect(nextArgv(read['next'] as string)).toEqual(commandRoots(['read', participant, '--root', root]));
   });
   it('judges excluded words only for preview and author, leaving read, validate, next and capture alone (review C2-N10)', async () => {
     const root = workspace((at) =>
@@ -863,18 +979,12 @@ describe('the mandate profile on every gated mode', () => {
       });
     const allowed = noPlan('Observation, Verification');
     const named = body(await unchanged(allowed, ['next']));
-    expect(nextArgv(named.next!)).toEqual(['preview', 'plan', '--root', allowed]);
+    expect(nextArgv(named.next!)).toEqual(commandRoots(['preview', 'plan', '--root', allowed]));
     const readOnly = noPlan('Observation');
     const refusal = await refused(readOnly, ['next'], 'IA-RUNTIME-NEXT-NO-PLAN');
-    expect(nextArgv(refusal['next'] as string)).toEqual([
-      'position',
-      '--seat',
-      mandate('demo-mandate'),
-      '--shape',
-      'governance',
-      '--root',
-      readOnly,
-    ]);
+    expect(nextArgv(refusal['next'] as string)).toEqual(
+      commandRoots(['position', '--seat', mandate('demo-mandate'), '--shape', 'governance', '--root', readOnly]),
+    );
     expect(refusal['next']).toContain('preview needs Verification and @plan');
     // Review C-R6: an excluded @plan is no command the profile allows either.
     const excluded = workspace((at) => {
@@ -895,7 +1005,9 @@ describe('the mandate profile on every gated mode', () => {
       );
     });
     const actor = await refused(open, ['next', '--actor', participant], 'IA-RUNTIME-NEXT-NO-PLAN');
-    expect(nextArgv(actor['next'] as string)).toEqual(['preview', 'plan', '--root', open, '--actor', participant]);
+    expect(nextArgv(actor['next'] as string)).toEqual(
+      commandRoots(['preview', 'plan', '--root', open, '--actor', participant]),
+    );
     // ops may read but not preview: its next names no preview.
     const ops = await refused(open, ['next', '--actor', 'agent-system/binding/agent/ops'], 'IA-RUNTIME-NEXT-NO-PLAN');
     expect(nextArgv(ops['next'] as string)[0]).toBe('position');
@@ -953,7 +1065,7 @@ describe('the mandate profile on every gated mode', () => {
     );
     expect(nextArgv(seat['next'] as string)).toContain('--actor');
   });
-  it('lets an ambiguous workspace name its steward with --actor and the preview digest, then run without one', async () => {
+  it('previews an ambiguous workspace steward choice but requires an administrative source edit to apply it', async () => {
     const root = workspace((at) => {
       rewrite(at, '.ia/src/workspace.ia', (text) => text.replace('    steward @agent demo\n', ''));
       writeFileSync(
@@ -964,43 +1076,384 @@ describe('the mandate profile on every gated mode', () => {
     const form = ['--set', `@workspace demo`, 'composition.steward=@agent demo'];
     // The preview refuses the open choice and names itself with the first participant allowed to run it.
     const ambiguous = await refused(root, ['preview', ...form], 'IA-RUNTIME-MANDATE-ACTOR');
-    expect(nextArgv(ambiguous['next'] as string)).toEqual([
-      'preview',
-      '@workspace demo',
-      'composition.steward=@agent demo',
-      '--set',
-      '--actor',
-      participant,
-      '--root',
-      root,
-    ]);
+    expect(nextArgv(ambiguous['next'] as string)).toEqual(
+      commandRoots([
+        'preview',
+        '@workspace demo',
+        'composition.steward=@agent demo',
+        '--set',
+        '--actor',
+        participant,
+        '--root',
+        root,
+      ]),
+    );
     const digest = await previewed(root, [...form, '--actor', participant]);
-    // The author without --actor refuses the same way, and its next command is the author naming demo, which writes.
+    // No actor choice can authorize an administrative write, so the remedy must remain a read.
     const author = await refused(root, ['author', ...form, '--digest', digest], 'IA-RUNTIME-MANDATE-ACTOR');
-    expect(nextArgv(author['next'] as string)).toContain('--actor');
+    expect(nextArgv(author['next'] as string)[0]).toBe('position');
+    await refused(root, ['author', ...form, '--digest', digest, '--actor', participant], 'IA-CLI-EDIT-AUTHORITY');
+    rewrite(root, '.ia/src/workspace.ia', (text) =>
+      text.replace('  composition\n', '  composition\n    steward @agent demo\n'),
+    );
     expect(readFileSync(resolve(root, '.ia/src/workspace.ia'), 'utf8')).toContain('    steward @agent demo\n');
     // The workspace names its steward now, so commands resolve the default actor again.
     expect((await ia(root, ['validate'])).exitCode).toBe(0);
     expect(body(await ia(root, ['preview', 'task']))).toMatchObject({ profile: { actor: participant, by: 'steward' } });
   });
-  it('refuses every gated mode, rather than failing, under a mandate whose authority the resolver cannot read', async () => {
+  it('refuses every gated mode, rather than failing, under an admitted mandate whose authority the resolver cannot read', async () => {
+    // A child under `authority.moves`: admission admits the record, the resolver refuses the field.
+    const root = workspace((at) =>
+      writeFileSync(
+        resolve(at, '.ia/src/unreadable.ia'),
+        `#! ia 1.0\n${MANDATE('unreadable-mandate', ['participant @agent demo', 'moves [Observation]', '  note x', 'scope [@workspace demo]'])}`,
+      ),
+    );
+    for (const argv of [['read', participant], ['validate'], ['next'], ['capture'], ['project', 'claude']]) {
+      const refusal = await refused(root, argv, 'IA-RUNTIME-REQUEST-INVALID');
+      expect(refusal['where'], argv.join(' ')).toEqual({
+        path: '.ia/src/unreadable.ia',
+        line: 3,
+        identity: mandate('unreadable-mandate'),
+      });
+      // Its governance position runs, as the seat is admitted, and shows the authority the profile cannot read.
+      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual(
+        commandRoots(['position', '--seat', mandate('unreadable-mandate'), '--shape', 'governance', '--root', root]),
+      );
+    }
+  });
+});
+
+describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)', () => {
+  /** The probe: demo-mandate states an unknown move and excludes task, so admission refuses it. */
+  const probe = (at: string): void => {
+    moves(at, 'Bogus');
+    rewrite(at, '.ia/src/workspace.ia', (text) =>
+      text.replace('moves [Bogus]', 'moves [Bogus]\n    excluded-words [task]'),
+    );
+  };
+  /** A refusal of a mandate that failed admission: located at it, naming the admission report, which runs and shows it. */
+  async function failedClosed(
+    root: string,
+    argv: readonly string[],
+    where: { readonly path: string; readonly line: number; readonly identity: string },
+    code: string,
+  ): Promise<Record<string, unknown>> {
+    const refusal = await refused(root, argv, 'IA-RUNTIME-REQUEST-INVALID');
+    const label = argv.join(' ');
+    expect(refusal['exit'], label).toBe(1);
+    expect(refusal['where'], label).toEqual(where);
+    expect(refusal['message'], label).toContain(
+      `${where.identity} (${where.path}:${where.line}) failed admission: ${code}`,
+    );
+    expect(refusal['message'], label).toContain('correct it by hand');
+    expect(refusal['message'], label).toContain('ia preview and ia author cannot target a record admission refused');
+    expect(nextArgv(refusal['next'] as string), label).toEqual(commandRoots(['report', '--root', root]));
+    return refusal;
+  }
+  it('refuses every gated mode at the refused mandate, naming an admission report that runs and shows it', async () => {
+    const root = workspace(probe);
+    const fake = 'a'.repeat(64),
+      where = { path: '.ia/src/workspace.ia', line: 19, identity: mandate('demo-mandate') };
+    for (const argv of [
+      ['read', participant],
+      ['next'],
+      ['validate'],
+      ['preview', 'task'],
+      ['author', '--set', '@milestone m1', 'work.owner=x', '--digest', fake],
+      ['capture'],
+      ['capture', '--preview'],
+      ['project', 'claude'],
+      ['host', 'claude', '--apply', '--yes'],
+    ])
+      await failedClosed(root, argv, where, 'IA-COMP-FIELD-VALUE');
+    // The report the refusals name runs for the same actor in the same state, writes nothing, and shows the finding.
+    const report = await run(['report', '--root', root], { env: HOMES });
+    expect(report.exitCode).toBe(1);
+    expect(report.stderr).toBe('');
+    const shown = JSON.parse(report.stdout) as { ok: boolean; result: { findings: Record<string, unknown>[] } };
+    expect(shown.ok).toBe(true);
+    expect(shown.result.findings).toContainEqual(
+      expect.objectContaining({ code: 'IA-COMP-FIELD-VALUE', path: '.ia/src/workspace.ia', line: 27 }),
+    );
+    // Position is never gated, and a removal still restores editing.
+    expect((await ia(root, ['position'])).exitCode).toBe(0);
+    expect((await ia(root, ['position', '--seat', demo, '--shape', 'governance'])).exitCode).toBe(0);
+    const removal = await ia(root, ['host', 'claude', '--remove', '--apply', '--yes']);
+    expect(removal.exitCode, removal.stdout).toBe(0);
+  });
+  it('restores editing with ia host claude --remove --apply while a refused mandate is present', async () => {
+    const root = workspace();
+    const applied = await ia(root, ['host', 'claude', '--apply', '--yes']);
+    expect(applied.exitCode, applied.stdout).toBe(0);
+    expect(existsSync(resolve(root, '.ia/distributions/hosts/claude-hooks-workspace.json'))).toBe(true);
+    probe(root);
+    await failedClosed(
+      root,
+      ['host', 'claude', '--apply', '--yes'],
+      { path: '.ia/src/workspace.ia', line: 19, identity: mandate('demo-mandate') },
+      'IA-COMP-FIELD-VALUE',
+    );
+    const removed = await ia(root, ['host', 'claude', '--remove', '--apply', '--yes']);
+    expect(removed.exitCode, removed.stdout).toBe(0);
+    expect(existsSync(resolve(root, '.ia/distributions/hosts/claude-hooks-workspace.json'))).toBe(false);
+  });
+  it('refuses a stated empty move list through admission, with the same shape', async () => {
     const root = workspace((at) =>
       writeFileSync(
         resolve(at, '.ia/src/empty.ia'),
         `#! ia 1.0\n${MANDATE('empty-mandate', ['participant @agent demo', 'moves []', 'scope [@workspace demo]'])}`,
       ),
     );
-    for (const argv of [['read', participant], ['validate'], ['next'], ['capture'], ['project', 'claude']]) {
-      const refusal = await refused(root, argv, 'IA-RUNTIME-REQUEST-INVALID');
-      expect(nextArgv(refusal['next'] as string), argv.join(' ')).toEqual([
-        'position',
-        '--seat',
-        mandate('empty-mandate'),
-        '--shape',
-        'governance',
-        '--root',
+    for (const argv of [
+      ['read', participant],
+      ['validate'],
+      ['next'],
+      ['preview', 'task'],
+      ['capture'],
+      ['project', 'claude'],
+    ]) {
+      const refusal = await failedClosed(
         root,
-      ]);
+        argv,
+        { path: '.ia/src/empty.ia', line: 3, identity: mandate('empty-mandate') },
+        'IA-COMP-FIELD-VALUE',
+      );
+      expect(refusal['message'], argv.join(' ')).toContain(
+        "'authority.moves' must name at least one kernel move when stated",
+      );
+    }
+    expect((await ia(root, ['position'])).exitCode).toBe(0);
+  });
+  it('fails closed for a mandate in a file refused whole, and names it with no identity when only its text shows it', async () => {
+    const root = workspace((at) =>
+      writeFileSync(resolve(at, '.ia/src/header.ia'), '#! ia 1.0\n\n@mandate Bad_Name!\n  meaning\n    says "x"\n'),
+    );
+    const refusal = await refused(root, ['preview', 'task'], 'IA-RUNTIME-REQUEST-INVALID');
+    expect(refusal['where']).toEqual({ path: '.ia/src/header.ia', line: 3, identity: null });
+    expect(refusal['message']).toContain(
+      'the @mandate at .ia/src/header.ia:3 failed admission: IA-LANG-HEADER-MALFORMED',
+    );
+    expect(nextArgv(refusal['next'] as string)).toEqual(commandRoots(['report', '--root', root]));
+    // A parse error in a file that declares no mandate fails nothing closed: the preview runs.
+    const plain = workspace((at) =>
+      writeFileSync(resolve(at, '.ia/src/plain.ia'), '#! ia 1.0\n\n@agent plain\n  meaning\n    says "x\n'),
+    );
+    const previewed = await ia(plain, ['preview', 'task']);
+    expect(previewed.exitCode, previewed.stdout).toBe(0);
+  });
+  it('fails closed when a record an admitted mandate depends on fails admission: the D8 probes (D9)', async () => {
+    const OPS = `#! ia 1.0\n${AGENT('ops')}${MANDATE('ops-mandate', ['participant @agent ops', 'moves [Observation, Verification, Synthesis, Delegation, Execution]', 'scope [@workspace demo]'])}`;
+    /** An undeclared section after `anchor` in workspace.ia, so admission refuses the record holding it. */
+    const broken = (at: string, anchor: string): void =>
+      rewrite(at, '.ia/src/workspace.ia', (text) => text.replace(anchor, `${anchor}  bogus\n    note x\n`));
+    // Before: demo-mandate observes only, so the steward's preview and validate refuse its move.
+    const intact = workspace((at) => {
+      moves(at, 'Observation');
+      writeFileSync(resolve(at, '.ia/src/ops.ia'), OPS);
+    });
+    expect(body(await ia(intact, ['preview', 'task']))).toMatchObject({ code: 'IA-RUNTIME-MANDATE-MOVE' });
+    // The steward participant's @agent fails admission: the default actor would switch to ops, which may make every move.
+    const agent = workspace((at) => {
+      moves(at, 'Observation');
+      writeFileSync(resolve(at, '.ia/src/ops.ia'), OPS);
+      broken(at, '    applies []\n');
+    });
+    for (const argv of [['preview', 'task'], ['validate']]) {
+      const refusal = await failedClosed(
+        agent,
+        argv,
+        { path: '.ia/src/workspace.ia', line: 12, identity: participant },
+        'IA-COMP-SECTION-UNKNOWN',
+      );
+      expect(refusal['message'], argv.join(' ')).toContain('depends on @agent demo through');
+    }
+    // The workspace demo-mandate is scoped to fails admission: the mandate would govern nowhere.
+    const scoped = workspace((at) => {
+      moves(at, 'Observation');
+      broken(at, '    steward @agent demo\n');
+    });
+    for (const argv of [['preview', 'task'], ['validate']]) {
+      const refusal = await failedClosed(
+        scoped,
+        argv,
+        { path: '.ia/src/workspace.ia', line: 3, identity: demo },
+        'IA-COMP-SECTION-UNKNOWN',
+      );
+      expect(refusal['message'], argv.join(' ')).toContain(
+        `${mandate('demo-mandate')} depends on @workspace demo through authority.scope`,
+      );
+    }
+    expect((await ia(scoped, ['position'])).exitCode).toBe(0);
+  });
+  it('runs beside an unrelated refused @agent and a never-authored participant reference (D9)', async () => {
+    const root = workspace((at) => {
+      writeFileSync(
+        resolve(at, '.ia/src/stray.ia'),
+        `#! ia 1.0\n${AGENT('stray').replace('    applies []\n', '    applies []\n  bogus\n    note x\n')}`,
+      );
+      writeFileSync(
+        resolve(at, '.ia/src/ghost.ia'),
+        `#! ia 1.0\n${MANDATE('ghost-mandate', ['participant @agent ghost', 'moves [Observation]', 'covers ["ghost/"]'])}`,
+      );
+    });
+    const db = open(root, { cache: false });
+    try {
+      expect(db.refused.map((record) => record.identity)).toContain('agent-system/binding/agent/stray');
+    } finally {
+      db.close();
+    }
+    const previewed = await ia(root, ['preview', 'task']);
+    expect(previewed.exitCode, previewed.stdout).toBe(0);
+    expect(body(previewed)).toMatchObject({ profile: { actor: participant, by: 'steward' } });
+    // ia validate runs too and reports the stray agent's admission error, as before.
+    const validated = await ia(root, ['validate']);
+    expect(validated.exitCode).toBe(1);
+    expect(body(validated)).toMatchObject({ status: 'refused' });
+  });
+  it('names an admission report that runs from the cwd alone, printing no character of the root (review D-R1, D-N2, D-N6)', async () => {
+    // Construct the final directory directly: Windows may refuse a fixture-tree rename after its files were opened.
+    const copyUnicode = (source: string, target: string): void => {
+      mkdirSync(target, { recursive: true });
+      for (const item of readdirSync(source, { withFileTypes: true })) {
+        const from = resolve(source, item.name),
+          to = resolve(target, item.name);
+        if (item.isDirectory()) copyUnicode(from, to);
+        else {
+          expect(item.isFile()).toBe(true);
+          writeFileSync(to, readFileSync(from));
+        }
+      }
+    };
+    const unicode = `caf${String.fromCharCode(0xe9)}`;
+    for (const [name, omitted] of [
+      ['amp&er', true],
+      ['par(en', true],
+      ['dol$lar', true],
+      ['back`tick', true],
+      ['sp ace', false],
+      [unicode, false],
+    ] as const) {
+      const parent = scratch('author-roots'),
+        root = resolve(parent, name);
+      // Direct byte copying also preserves the Unicode destination spelling on Windows.
+      if (name === unicode) copyUnicode(base, root);
+      else cpSync(base, root, { recursive: true });
+      probe(root);
+      mkdirSync(resolve(root, 'docs'), { recursive: true });
+      // Without --root the workspace is found from the cwd, and the report is named relative to it, `.` or `..`.
+      for (const [cwd, relative] of [
+        [root, '.'],
+        [resolve(root, 'docs'), '..'],
+      ] as const)
+        for (const argv of [['preview', 'task'], ['validate']]) {
+          const label = `${name} ${argv[0]} from ${relative}`;
+          const refusal = body(await run([...argv, '--json'], { cwd, env: HOMES }));
+          expect(refusal, label).toMatchObject({
+            code: 'IA-RUNTIME-REQUEST-INVALID',
+            where: { path: '.ia/src/workspace.ia', line: 19, identity: mandate('demo-mandate') },
+          });
+          expect(commandsIn(refusal.next!), label).toEqual([`ia report --root ${relative}`]);
+          const followed = await run(nextArgv(refusal.next!), { cwd, env: HOMES });
+          expect(followed.exitCode, label).toBe(1);
+          expect(followed.stderr, label).toBe('');
+          expect(
+            (JSON.parse(followed.stdout) as { result: { findings: Record<string, unknown>[] } }).result.findings,
+            label,
+          ).toContainEqual(
+            expect.objectContaining({ code: 'IA-COMP-FIELD-VALUE', path: '.ia/src/workspace.ia', line: 27 }),
+          );
+        }
+      // A supplied shell-active root is omitted, with the required cwd stated; inert roots keep their value.
+      const given = body(await run(['validate', '--root', root, '--json'], { env: HOMES }));
+      expect(nextArgv(given.next!), name).toEqual(
+        omitted ? ['report', '--root', '.'] : commandRoots(['report', '--root', root]),
+      );
+      if (omitted) expect(given.next, name).toContain('from the workspace root');
+      expect((await run(nextArgv(given.next!), { cwd: root, env: HOMES })).exitCode, name).toBe(1);
+    }
+    // Review D2-R1: a cwd reached through a link inside the workspace keeps the link's spelling, and the CLI and db read
+    // a relative --root lexically against it, so the next names a root that resolves there to the workspace: a junction
+    // (a directory symlink off win32) to a deeper folder, and a pnpm-style one under node_modules; and (review D2 recheck
+    // F5) one above the root, a link to the workspace itself that the cwd is spelled through.
+    const linked = workspace(probe);
+    mkdirSync(resolve(linked, 'a/b/c'), { recursive: true });
+    mkdirSync(resolve(linked, 'packages/pkg'), { recursive: true });
+    mkdirSync(resolve(linked, 'node_modules'), { recursive: true });
+    mkdirSync(resolve(linked, 'docs/deep'), { recursive: true });
+    const kind = process.platform === 'win32' ? 'junction' : 'dir';
+    let links = true;
+    try {
+      symlinkSync(resolve(linked, 'a/b/c'), resolve(linked, 'j'), kind);
+      symlinkSync(resolve(linked, 'packages/pkg'), resolve(linked, 'node_modules/pkg'), kind);
+      symlinkSync(linked, resolve(linked, '../jroot'), kind);
+    } catch {
+      links = false;
+    }
+    if (links)
+      for (const [via, relative] of [
+        ['j', '..'],
+        ['node_modules/pkg', '../..'],
+        ['../jroot/docs/deep', '../..'],
+      ] as const)
+        for (const argv of [['preview', 'task'], ['validate']]) {
+          const cwd = resolve(linked, via),
+            label = `${argv[0]} from ${via}`;
+          const refusal = body(await run([...argv, '--json'], { cwd, env: HOMES }));
+          expect(refusal, label).toMatchObject({ code: 'IA-RUNTIME-REQUEST-INVALID' });
+          expect(commandsIn(refusal.next!), label).toEqual([`ia report --root ${relative}`]);
+          const followed = await run(nextArgv(refusal.next!), { cwd, env: HOMES });
+          expect(followed.exitCode, label).toBe(1);
+          expect(
+            (JSON.parse(followed.stdout) as { result: { findings: Record<string, unknown>[] } }).result.findings,
+            label,
+          ).toContainEqual(
+            expect.objectContaining({ code: 'IA-COMP-FIELD-VALUE', path: '.ia/src/workspace.ia', line: 27 }),
+          );
+        }
+  });
+  it('names the admission report and a hand edit for a refused authored mandate shadowing an admitted installed one (review D-R2)', async () => {
+    // The installed sample-mandate is admitted at band 90; an authored override of it fails admission.
+    const root = resolve(scratch('author-shadow'), 'shadow'),
+      vendor = 'vendor/foundation';
+    cpSync(resolve(repository, 'examples/conformance/native'), resolve(root, vendor, '.ia/src'), { recursive: true });
+    const pinned = readInputs(resolve(root, vendor), { adopted: [] })
+      .sources.filter((source) => !source.path.startsWith('.ia/src/floor/'))
+      .map(({ path, text }) => ({ path, text }));
+    mkdirSync(resolve(root, '.ia/src'), { recursive: true });
+    writeFileSync(
+      resolve(root, '.ia/workspace.json'),
+      JSON.stringify({ version: 1, adopted: [{ id: 'foundation', path: vendor, revision: digestValue(pinned) }] }),
+    );
+    writeFileSync(
+      resolve(root, '.ia/src/workspace.ia'),
+      readFileSync(resolve(repository, 'packages/runtime/tests/fixtures/packet/workspace.ia'), 'utf8'),
+    );
+    writeFileSync(
+      resolve(root, '.ia/src/override.ia'),
+      readFileSync(
+        resolve(repository, 'examples/conformance/native/systems/agent-system/records/sample-mandate.ia'),
+        'utf8',
+      ).replace('moves [Observation, Verification]', 'moves [Bogus]'),
+    );
+    const db = open(root, { cache: false });
+    try {
+      expect(db.get(mandate('sample-mandate'))?.band).toBe(90);
+    } finally {
+      db.close();
+    }
+    for (const argv of [['validate'], ['preview', 'task']]) {
+      const refusal = await refused(root, argv, 'IA-RUNTIME-REQUEST-INVALID');
+      expect(refusal['where'], argv[0]).toEqual({
+        path: '.ia/src/override.ia',
+        line: 3,
+        identity: mandate('sample-mandate'),
+      });
+      expect(refusal['message'], argv[0]).toContain('correct it by hand in .ia/src/override.ia');
+      expect(nextArgv(refusal['next'] as string), argv[0]).toEqual(commandRoots(['report', '--root', root]));
+      const report = await run(nextArgv(refusal['next'] as string), { env: HOMES });
+      expect(report.stdout, argv[0]).toContain('override.ia');
+      expect(report.stdout, argv[0]).toContain('Bogus');
     }
   });
 });

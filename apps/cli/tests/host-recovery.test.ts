@@ -6,10 +6,11 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { rootedNext } from '../src/host.js';
-import { quote } from '../src/render.js';
+
+import { quote as serviceQuote } from '../src/render.js';
 import { put, read, initialized, host, deadPid, HOST_LOCK, lockNext, doctor, row, RECEIPT } from './host-fixture.js';
 import { afterAll, expect, it, vi } from 'vitest';
-import { cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
+import { quoteCommandRoot as quote, cleanup, cli, commandRoot, nextArgv, run, scratch } from './workspace-fixture.js';
 import { runBounded } from '@tools/testing/subprocess.js';
 import { applyGuardRegistration, planGuardRegistration } from '@inventarch/distribution/guard-registration';
 import { legacyRegistration, STEWARD, LEGACY_FILES } from './host-fixture.js';
@@ -84,7 +85,7 @@ it('names the rerun after a failure past the first element, the lock recovery, o
   expect(busy).toMatchObject({
     code: 'IA-DIST-INSTALL-BUSY',
     where: { path: '.ia/distributions/hosts/lock.json' },
-    next: lockNext(root),
+    next: lockNext(root, false),
   });
   rmSync(lock);
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
@@ -97,7 +98,7 @@ it('names the rerun after a failure past the first element, the lock recovery, o
     code: 'IA-DIST-RECOVERY-REQUIRED',
     where: { path: '.ia/distributions/hosts/guard-pending.json' },
   });
-  expect(pending.next).toBe(`Run "ia recover guard --root ${quote(other.root)}", then rerun.`);
+  expect(pending.next).toBe(`Run "ia recover guard --root ${serviceQuote(other.root)}", then rerun.`);
 });
 
 it('names recover-host for a leftover host lock in apply, removal and doctor, and the named recovery converges', async () => {
@@ -340,7 +341,7 @@ it('refuses receipts it cannot read before writing anything, and the deletion it
     expect(JSON.parse(refused.stdout), extra.join(' ')).toMatchObject({
       ok: false,
       where: { path: JOINS },
-      next: `Delete ${JOINS}, then run "${rootedNext(`"ia host claude${extra.length ? ' --remove' : ''} --apply"`, 'claude', root).slice(1, -1)}".`,
+      next: `Delete ${JOINS}, then run "${rootedNext(`"ia host claude${extra.length ? ' --remove' : ''} --apply"`, 'claude', commandRoot(root)).slice(1, -1)}".`,
     });
   }
   // Nothing was registered, projected or materialized, and the receipts were left as they were.

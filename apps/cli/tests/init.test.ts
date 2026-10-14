@@ -56,8 +56,19 @@ import {
 
 import { GUARD_SCOPE, MACHINE_LOCAL, MCP_APPROVAL, rootedNext } from '../src/host.js';
 import { renderProjectionFor } from '../src/host-projection.js';
-import { quote } from '../src/render.js';
-import { cleanup, cli, commandsIn, makeHost, nextArgv, repository, run, scratch } from './workspace-fixture.js';
+
+import { quote as serviceQuote } from '../src/render.js';
+import {
+  quoteCommandRoot as quote,
+  cleanup,
+  cli,
+  commandsIn,
+  makeHost,
+  nextArgv,
+  repository,
+  run,
+  scratch,
+} from './workspace-fixture.js';
 import type { HostOptions } from './workspace-fixture.js';
 
 afterEach(() => {
@@ -670,7 +681,17 @@ it('keeps the verified starter shape and its minimum refusals', async () => {
       edited = edit(text);
     expect(edited).not.toBe(text);
     writeFileSync(resolve(root, path), edited);
-    const result = json(await run(['validate', '--root', root, '--json']));
+    let result = json(await run(['validate', '--root', root, '--json']));
+    // Lane D: a starter @mandate that fails admission, or the starter @agent its mandate and workspace name (D9), fails
+    // `ia validate` closed at that record; the admission report its refusal names, which runs in that state, lists the
+    // findings.
+    if (result.ok === false) {
+      expect(result).toMatchObject({ code: 'IA-RUNTIME-REQUEST-INVALID', where: { path: '.ia/src/workspace.ia' } });
+      expect(['agent-system/policy/mandate/demo-mandate', 'agent-system/binding/agent/demo']).toContain(
+        result.where.identity,
+      );
+      result = json(await run(nextArgv(result.next))).result;
+    }
     return result.findings
       .filter((finding: { severity: string }) => finding.severity === 'error')
       .map((finding: { code: string }) => finding.code);
@@ -701,7 +722,7 @@ it('keeps the verified starter shape and its minimum refusals', async () => {
 });
 
 it('admits one plan, milestone, task and decision in a fresh workspace with no edit to the starter (WS-A05)', async () => {
-  // docs/specs/work-system/README.md §9.4 WS-A05: the neutral public example records are admitted as written. In a
+  // .ia/src/systems/work-system/LANGUAGE.md, WS-A05: the neutral public example records are admitted as written. In a
   // default workspace they sit beside the starter records, outside every system folder, where a record's word decides
   // its system; in a --system workspace's folder the local system requires work-system, without which each is
   // IA-COMP-DISCRIMINATOR-FOREIGN.
@@ -857,7 +878,7 @@ it('stops at the capture boundary on a signal once initialized, naming ia captur
   });
   // The descriptor is the completion point, so a rerun of init would refuse the target: the effect names its own verb.
   await expect(interrupted).rejects.toMatchObject({
-    next: `The workspace is initialized. Run "ia capture --root ${quote(root)}" to capture it.`,
+    next: `The workspace is initialized. Run "ia capture --root ${serviceQuote(root)}" to capture it.`,
   });
   expect(existsSync(resolve(root, '.ia/release.json'))).toBe(true);
   expect(existsSync(resolve(root, '.ia/work'))).toBe(false);

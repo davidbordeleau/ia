@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -602,6 +603,57 @@ it(
     // The runtime's host adapter tests compare the repository target's skills with these committed files.
     await probe('.claude/skills/ia-authoring/SKILL.md', ['runtime:test']);
     await probe('.agents/skills/ia-authoring/SKILL.md', ['runtime:test']);
+    // R21 reads pending notes and discovers consumed history without import edges. Exercise
+    // existing content, new membership, deletion and exact restoration without version bumps.
+    const historical = readdirSync(resolve(root, 'releases/changesets'))
+      .filter((name) => name.endsWith('.json'))
+      .sort()[0]!;
+    for (const file of [
+      'releases/pending/mandate-resolution.json',
+      `releases/changesets/${historical}`,
+      'releases/changesets/cache-probe.json',
+    ]) {
+      const path = resolve(root, file),
+        original = existsSync(path) ? readFileSync(path) : null,
+        document =
+          original === null
+            ? file.startsWith('releases/pending/')
+              ? {
+                  format: 'ia.npm-change-note.v1',
+                  bump: 'none',
+                  title: 'Cache probe',
+                  packages: ['@inventarch/runtime'],
+                  paths: ['packages/runtime/'],
+                }
+              : { format: 'ia.npm-changeset.v1', state: 'consumed', changes: [] }
+            : JSON.parse(original.toString());
+      const changedRuntime = async (previousHash: string): Promise<string> => {
+        const changed = await hashes();
+        expect(changed['runtime:test'], file).not.toBe(previousHash);
+        expect(changed['language:build'], file).toBe(baseline['language:build']);
+        return changed['runtime:test']!;
+      };
+      try {
+        mkdirSync(dirname(path), { recursive: true });
+        writeInput(
+          path,
+          JSON.stringify({ ...document, summary: 'the edit guard evaluateMandateGuard; no Door operation does' }),
+        );
+        const first = await changedRuntime(baseline['runtime:test']!);
+        writeInput(
+          path,
+          JSON.stringify({ ...document, summary: 'the edit guard evaluateMandateGuard; every Door operation does' }),
+        );
+        await changedRuntime(first);
+        rmSync(path);
+        if (original === null) expect(await hashes(), `Removed new ${file}`).toEqual(baseline);
+        else await changedRuntime(baseline['runtime:test']!);
+      } finally {
+        if (original === null) rmSync(path, { force: true });
+        else writeInput(path, original);
+        expect(await hashes(), `Restored ${file}`).toEqual(baseline);
+      }
+    }
     // The workspace-runtime generator tests render the authored records of apps/cli's composition fixture.
     await probe('apps/cli/tests/fixtures/composition-workspace/.ia/src/composition.ia', ['workspace-runtime:test']);
   },

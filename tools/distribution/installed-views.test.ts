@@ -73,6 +73,6 @@ it('meets the installed-CLI expectations of packages:qualify with the built CLI'
     'read/next observe uncaptured edits',
     'read/next no writes',
     'read/capture/next refusals',
-    'compile alias of capture',
+    'removed compile command',
   ]);
 }, 600_000);

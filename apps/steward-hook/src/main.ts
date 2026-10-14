@@ -11,7 +11,19 @@ import {
   type BigIntStats,
 } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { evaluateMandateGuard, evaluateSteward, isEntry, mandateGuardSelects, openDatabase } from '@inventarch/runtime';
+import {
+  admissionReport,
+  inertCommandRoot,
+  evaluateMandateGuard,
+  evaluateSteward,
+  isAdmissionRefusal,
+  isEntry,
+  mandateGuardSelects,
+  openDatabase,
+  refusedDependencies,
+  refusedMandates,
+  requireMandatesAdmitted,
+} from '@inventarch/runtime';
 import type { HookCode } from '@inventarch/runtime';
 import { pathKey, sameFile, unaliased } from '@inventarch/db';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
@@ -62,13 +74,15 @@ function local(root: string, target: string): string | undefined {
 function physical(path: string): string {
   try {
     lstatSync(path);
-    return realpathSync.native(path);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     const parent = dirname(path);
     if (parent === path) throw error;
     return resolve(physical(parent), relative(parent, path));
   }
+  // An existing link whose target is absent is not an ordinary missing component. Its realpath failure must refuse
+  // the edit, including when this is an ancestor of a missing leaf or another link; never rebuild its lexical name.
+  return realpathSync.native(path);
 }
 type Rule = { projection?: true; system?: string; invalid?: true };
 /** Consumer-mode ownership: the files a projection state owns (folded) and whether a Codex registration exists. */
@@ -809,17 +823,39 @@ export function evaluateHook(root: string, event: unknown, actorsPath?: string):
   }
 }
 /**
+ * Whether the workspace admits; when it does not, whether what admission refused fails the mandate resolvers closed: an
+ * authored `@mandate`, or a record an admitted mandate or workspace depends on (lane D, D2 and D9).
+ */
+type Admission = 'admits' | 'refuses' | 'mandate';
+/** The workspace's admission as `recovery` names it, read from an open database. */
+const admissionOf = (db: ReturnType<typeof openDatabase>): Admission =>
+  !db.report.findings.some((finding) => finding.severity === 'error')
+    ? 'admits'
+    : refusedMandates(db).length > 0 || refusedDependencies(db).length > 0
+      ? 'mandate'
+      : 'refuses';
+/**
  * The commands that bring a registration whose hook or records cannot be read back in step, each runnable from a shell in
  * that very state (review findings G-R7, H-R2 and H-R8): removing the host registration, which restores editing and
  * needs neither an admitting workspace nor readable records; and, only where the workspace admits, re-registering its
- * current hooks, which removes a group whose record is gone. Where it does not admit, `ia validate` shows why.
+ * current hooks, which removes a group whose record is gone. Where it does not admit, `ia validate` shows why; where an
+ * authored `@mandate`, or a record a mandate resolution reads, failed admission, `ia validate` refuses like every
+ * mandate-gated command (lane D), so the admission report, the version 1 machine route `ia report`, shows it instead,
+ * its root spelled only when inert unquoted, else run from the workspace root (runtime `admissionReport`; review D-R1).
  */
-const recovery = (root: string, admits: boolean): string => {
-  const quoted = JSON.stringify(root),
-    remove = `"ia host claude --root ${quoted} --remove --apply --yes"`;
-  return admits
-    ? `run "ia host claude --root ${quoted} --apply --yes" from a shell to register the workspace's current hooks, or ${remove} to remove the registration and restore editing`
-    : `run ${remove} from a shell to remove the registration and restore editing, and "ia validate --root ${quoted}" to see why the workspace does not admit before registering again`;
+const rootCommand = (command: string, root: string, tail = ''): string =>
+  inertCommandRoot(root)
+    ? `"${command} --root ${JSON.stringify(root)}${tail}"`
+    : `"${command} --root .${tail}" from the workspace root`;
+const recovery = (root: string, admission: Admission): string => {
+  const remove = rootCommand('ia host claude', root, ' --remove --apply --yes');
+  if (admission === 'admits')
+    return `run ${rootCommand('ia host claude', root, ' --apply --yes')} from a shell to register the workspace's current hooks, or ${remove} to remove the registration and restore editing`;
+  if (admission === 'mandate') {
+    const report = admissionReport(root);
+    return `run ${remove} from a shell to remove the registration and restore editing, and "${report.command}"${report.fromRoot ? ' from the workspace root' : ''} for the admission findings, the refused record's among them, before registering again`;
+  }
+  return `run ${remove} from a shell to remove the registration and restore editing, and ${rootCommand('ia validate', root)} to see why the workspace does not admit before registering again`;
 };
 /**
  * The `@mandate` guard (milestone generation-binding, plan amendments C9 and C10): one authored `@hook`'s group runs
@@ -869,7 +905,7 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
   // What cannot be read refuses no more than the selection the hook was registered with, which the hook ownership state
   // recorded (guard review finding G-N4, review finding H-R8): edits elsewhere, the repair among them unless that
   // selection holds it, proceed. With no recorded selection, every edit under the root is refused.
-  const unavailable = (code: HookCode, why: string, admits: boolean): HookOutput => {
+  const unavailable = (code: HookCode, why: string, admission: Admission): HookOutput => {
     let selection: readonly string[] | undefined, unreadable: string | undefined;
     try {
       selection = registeredSelection(edit.base, hook);
@@ -893,11 +929,11 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     if (unreadable !== undefined)
       return deny(
         code,
-        `${why}; the hook ownership state ${unreadable} cannot be read, so every edit under the root is refused; from a shell, delete ${unreadable} and every IA hook group in .claude/settings.local.json (each runs the guard for one authored @hook) to restore editing, then run "ia host claude --root ${JSON.stringify(edit.base)} --remove --apply --yes" to remove the rest of the registration`,
+        `${why}; the hook ownership state ${unreadable} cannot be read, so every edit under the root is refused; from a shell, delete ${unreadable} and every IA hook group in .claude/settings.local.json (each runs the guard for one authored @hook) to restore editing, then run ${rootCommand('ia host claude', edit.base, ' --remove --apply --yes')} to remove the rest of the registration`,
       );
     return deny(
       code,
-      `${why}; ${selection === undefined ? 'no registered selection is recorded, so every edit under the root is refused' : 'this edit is under its last registered selection'}; ${recovery(edit.base, admits)}`,
+      `${why}; ${selection === undefined ? 'no registered selection is recorded, so every edit under the root is refused' : 'this edit is under its last registered selection'}; ${recovery(edit.base, admission)}`,
     );
   };
   const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -908,13 +944,15 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     return unavailable(
       'IA-HOOK-MANDATE-UNAVAILABLE',
       `The workspace's records cannot be read: ${message(error)}`,
-      false,
+      'refuses',
     );
   }
   try {
-    let within: string, nodes: ReturnType<typeof db.records>, admits: boolean;
+    let within: string, nodes: ReturnType<typeof db.records>;
+    // Review D-R4: the admission is read first, so records that then cannot be read still name what runs there.
+    let admission: Admission = 'refuses';
     try {
-      admits = !db.report.findings.some((finding) => finding.severity === 'error');
+      admission = admissionOf(db);
       within = db.resolveScope().token;
       nodes = db
         .records({ within })
@@ -923,17 +961,35 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
       return unavailable(
         'IA-HOOK-MANDATE-UNAVAILABLE',
         `The workspace's records cannot be read: ${message(error)}`,
-        false,
+        admission,
       );
     }
-    if (nodes.length !== 1)
-      return unavailable('IA-HOOK-DECLARATION-UNAVAILABLE', `${hook} is not an admitted authored @hook`, admits);
+    /**
+     * Review D-N1: a hook that cannot be decided while a record a mandate resolution reads failed admission (the hook in
+     * the refused mandate's own file, say) fails closed at that record, as a decided edit would.
+     */
+    const undecided = (why: string): HookOutput => {
+      try {
+        requireMandatesAdmitted(db, within);
+      } catch (error) {
+        if (isAdmissionRefusal(error))
+          return unavailable(
+            'IA-HOOK-MANDATE-UNAVAILABLE',
+            `${why}, and the mandates that would decide it cannot be read: ${error.message}`,
+            admission,
+          );
+        throw error;
+      }
+      return unavailable('IA-HOOK-DECLARATION-UNAVAILABLE', why, admission);
+    };
+    if (nodes.length !== 1) return undecided(`${hook} is not an admitted authored @hook`);
     let declaration: ReturnType<typeof hookDeclaration>;
     try {
       declaration = hookDeclaration(nodes[0]!);
     } catch (error) {
-      return unavailable('IA-HOOK-DECLARATION-UNAVAILABLE', message(error), admits);
+      return undecided(message(error));
     }
+    // `root` spells the registration's root into a next command that cannot find it (`ia report`; lane D, D4).
     const request = {
       hook: declaration,
       tool: event.tool_name,
@@ -941,6 +997,7 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
       agentId: event['agent_id'],
       agentType: event['agent_type'],
       fold,
+      root: edit.base,
     };
     if (!mandateGuardSelects(request)) return {};
     if (!unaliased(edit.target, edit.actual))
@@ -952,13 +1009,16 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     // session's to resolve.
     const lift =
       event['agent_id'] === undefined
-        ? `; the main session can lift every hook from a shell with "ia host claude --root ${JSON.stringify(edit.base)} --remove --apply --yes"`
+        ? `; the main session can lift every hook from a shell with ${rootCommand('ia host claude', edit.base, ' --remove --apply --yes')}`
         : '';
     return deny(decision.code!, decision.message + lift);
   } catch (error) {
+    // `ia validate` is mandate-gated and may refuse in the very state that failed here (lane D); the admission report,
+    // the version 1 machine route, never is. Its root is spelled only when inert unquoted (review D-R1, D-N2).
+    const report = admissionReport(edit.base);
     return deny(
       'IA-HOOK-MANDATE-UNAVAILABLE',
-      `The records that decide this edit cannot be read: ${message(error)}. Next: ia validate`,
+      `The records that decide this edit cannot be read: ${message(error)}. Next: ${report.command}${report.fromRoot ? ', run from the workspace root' : ''}`,
     );
   } finally {
     db.close();

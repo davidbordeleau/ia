@@ -96,7 +96,7 @@ import {
   SETTINGS,
 } from './host.js';
 import { codeOf } from './session.js';
-import type { Capabilities, SymbolName } from './render.js';
+import type { AdviceContext, Capabilities, SymbolName } from './render.js';
 import {
   atom,
   commandFacts,
@@ -305,6 +305,10 @@ async function acquiring<T>(run: () => Promise<T>, where: string | null, route: 
         4,
         at,
         cachedFile !== null ? deleteCached(cachedFile, reruns) : unavailable(message, route, reruns),
+        null,
+        cachedFile === null && message.startsWith('Registry document ') && reruns.chosen === 'variable'
+          ? 'reselect'
+          : undefined,
       );
     if (code === '')
       throw new Refusal(
@@ -716,7 +720,7 @@ export async function collectPlan(request: PlanRequest): Promise<PlanView> {
     );
   } else {
     const updated = operation === 'update' ? request.ids[0]! : undefined;
-    const requests =
+    let requests =
       updated !== undefined
         ? repin(previous, updated, request.to, reruns)
         : request.requestsFile === undefined
@@ -758,6 +762,7 @@ export async function collectPlan(request: PlanRequest): Promise<PlanView> {
       const resolution = await acquiring(
         () =>
           resolveFromRegistries({
+            allowKits: operation === 'install',
             root,
             requests,
             engine: DISTRIBUTION_ENGINE_VERSION,
@@ -771,6 +776,7 @@ export async function collectPlan(request: PlanRequest): Promise<PlanView> {
         'registry',
         reruns,
       );
+      requests = resolution.expandedRequests ?? requests;
       choices = resolution.candidates;
       registries = registrySources(resolution.sources.values());
     }
@@ -1005,7 +1011,7 @@ const hostLine = (view: PlanView): string =>
           : `, and the steward guard an earlier release registered was retired first (${view.retired.join(', ')})`
       }; run "ia doctor" for host state.`;
 
-export function renderPlan(view: PlanView, caps: Capabilities): string {
+export function renderPlan(view: PlanView, caps: Capabilities, supplied?: string, advice?: AdviceContext): string {
   const blocks: (readonly string[])[] = [
     headerBlock(view, caps),
     view.applied === null
@@ -1035,7 +1041,15 @@ export function renderPlan(view: PlanView, caps: Capabilities): string {
     entry(
       view.applied === null
         ? [
-            ...commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps),
+            ...commandFacts(
+              'Apply with "',
+              `${view.invocation} --apply --yes`,
+              '".',
+              3,
+              caps,
+              [view.root, supplied],
+              advice,
+            ),
             words(`Save the plan for review with --plan-out .ia/work/${view.operation}-plan.json.`),
           ]
         : [words('Run "ia validate" to check the installed workspace, or "ia doctor" for the installed state.')],
@@ -1070,12 +1084,12 @@ export const renderSummary = (view: PlanView, caps: Capabilities): string =>
  * that and exits 0. The summary was on stderr, so what stdout carries is the outcome and the way to get the other
  * one. `--plan-out` was already written, because a declined apply is exactly the plan-only run rule 1 describes.
  */
-export const renderDeclined = (view: PlanView, caps: Capabilities): string =>
+export const renderDeclined = (view: PlanView, caps: Capabilities, supplied?: string, advice?: AdviceContext): string =>
   document(
     [
       entry([words('Nothing was applied.')], { depth: 0, symbol: 'info' }, caps),
       entry(
-        commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps),
+        commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps, [view.root, supplied], advice),
         { depth: 0, symbol: 'step' },
         caps,
       ),
@@ -1189,14 +1203,14 @@ export function runDistribute(operation: Operation): (context: Context) => Promi
     const rendered = (view: PlanView): Result =>
       json
         ? { exitCode: 0, stdout: JSON.stringify(planEnvelope(view)) + '\n', stderr: '' }
-        : { exitCode: 0, stdout: renderPlan(view, caps), stderr: '' };
+        : { exitCode: 0, stdout: renderPlan(view, caps, args.value('root'), host), stderr: '' };
     host.signal?.throwIfAborted();
     if (!args.flag('apply')) return rendered(planned);
     // §2.8 rule 3. Parsing has already refused every `--apply` whose question could not be asked or answered —
     // no terminal, or `--json` — so the only two states left here are "answer it" and "`--yes` says skip it".
     // A declined answer therefore cannot occur under `--json`, which is why there is no JSON shape for one.
     if (!args.flag('yes') && !(await confirm(host.interaction, renderSummary(planned, caps), CONFIRMATION)))
-      return { exitCode: 0, stdout: renderDeclined(planned, caps), stderr: '' };
+      return { exitCode: 0, stdout: renderDeclined(planned, caps, args.value('root'), host), stderr: '' };
     host.signal?.throwIfAborted();
     return rendered(applyPlan(planned));
   };

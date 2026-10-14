@@ -28,7 +28,7 @@
  * with the catalog of the payload that host's registration names. Both only read; no handler is imported or run.
  *
  * The support row compares an observed platform and version against the declaration at
- * docs/reports/open-source-v1/2026-09-30/decisions.md:13. It says "matches the declared target", never "qualified", because
+ * docs/specs/host-registration/README.md §7. It says "matches the declared target", never "qualified", because
  * that declaration says the minimum must be validated before being advertised. A platform outside it is `warn`,
  * never `fail`, and the word "unsupported" is not used about it.
  *
@@ -93,6 +93,7 @@ import type { Context, Result } from './consumer.js';
 import { discoverRoot, iaHomeOf } from './consumer.js';
 import { UNMAPPED } from './distribute.js';
 import { userRows } from './doctor-user.js';
+import { sourceProtectionCheck } from './doctor-authority.js';
 import type { HostName } from './host-projection.js';
 import { HOOK_KEPT, planRetirement, readReceipt, renderProjectionFor } from './host-projection.js';
 import {
@@ -115,7 +116,7 @@ import {
 import type { Pinned } from './host.js';
 import { codeOf } from './session.js';
 import type { Capabilities, Field, SymbolName } from './render.js';
-import { atom, document, entry, fieldRows, sectionLabel, words } from './render.js';
+import { atom, document, entry, fieldRows, safeRootAdvice, sectionLabel, words } from './render.js';
 
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'unknown' | 'info';
 export type Section = 'Environment' | 'Workspace' | 'Installation';
@@ -611,8 +612,8 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
             `projection-${host}-hook:${hook}`,
             title,
             'warn',
-            `${SETTINGS} holds a guard hook group for ${hook}, which this workspace's registration does not own; it is left in place`,
-            apply,
+            `${SETTINGS} holds a guard hook group for ${hook}, which this workspace's registration does not own; it is left in place and may still enforce protection. Explicit host removal refuses until you delete only this unowned group manually, preserving every other group and setting.`,
+            null,
           )
         : installation(
             `projection-${host}-hook:${hook}`,
@@ -1068,6 +1069,8 @@ function portableLock(root: string): DistributionLock | undefined {
   }
 }
 
+import { sourceBindingRows } from './doctor-mounts.js';
+
 export function collectDoctor(request: DoctorRequest): DoctorView {
   const checks: Check[] = [...environment(request)];
   const supplied =
@@ -1092,6 +1095,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
         : `${supplied} is not an existing directory`,
     remedy: usable ? null : 'ia init',
   });
+  if (usable) checks.push(...sourceBindingRows(root));
   const pending = usable && existsSync(resolve(root, INSTALL_PATHS.pending));
   const pinned = pinnedRelease(request.packageRoot);
   // One verification per payload directory for the whole report: host, catalog and join rows share it (B-N7).
@@ -1133,6 +1137,17 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
       });
     }
   }
+
+  if (usable && !pending) checks.push(sourceProtectionCheck(root));
+  else
+    checks.push(
+      unchecked(
+        'source-protection',
+        'Workspace',
+        'Source protection',
+        pending ? 'installation recovery is required first' : 'no workspace',
+      ),
+    );
 
   if (!usable) {
     for (const [id, title] of [
@@ -1252,6 +1267,14 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
     channel: request.channel,
   });
   checks.push(...user.checks);
+  for (let index = 0; index < checks.length; index += 1) {
+    const check = checks[index]!;
+    checks[index] = {
+      ...check,
+      detail: safeRootAdvice(check.detail, [root, supplied, request.root], request),
+      remedy: check.remedy === null ? null : safeRootAdvice(check.remedy, [root, supplied, request.root], request),
+    };
+  }
   const briefing =
     request.host === undefined
       ? undefined
@@ -1259,7 +1282,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
           request.host,
           checks,
           user,
-          { root: workspaceRoot, supplied, enclosing: enclosing ?? null },
+          { root: workspaceRoot, supplied, enclosing: enclosing ?? null, advice: request },
           version,
         );
   return { checks, counts: count(checks), ...(briefing === undefined ? {} : { briefing }) };
@@ -1302,7 +1325,7 @@ function briefingFor(
   host: string,
   checks: readonly Check[],
   user: ReturnType<typeof userRows>,
-  where: Pick<BriefInput, 'root' | 'supplied' | 'enclosing'>,
+  where: Pick<BriefInput, 'root' | 'supplied' | 'enclosing' | 'advice'>,
   version: string,
 ): ReturnType<typeof brief> {
   const state = hostState(host, checks);

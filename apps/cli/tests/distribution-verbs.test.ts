@@ -21,11 +21,22 @@ import {
 import { resolve, sep } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { DISTRIBUTION_ENGINE_VERSION } from '@inventarch/db/distribution';
-import { cleanup, cli, FORMATTABLE, makeHost, packable, run, scratch, workspace } from './workspace-fixture.js';
+import {
+  cleanup,
+  cli,
+  FORMATTABLE,
+  makeHost,
+  packable,
+  run,
+  scratch,
+  workspace,
+  quoteCommandRoot as quote,
+} from './workspace-fixture.js';
 import { dispatch } from '../src/consumer.js';
 import { collectPlan } from '../src/distribute.js';
 import { collectDoctor } from '../src/doctor.js';
-import { quote } from '../src/render.js';
+
+import { quote as serviceQuote } from '../src/render.js';
 
 it('doctor keeps real discovery by default and explicit roots precede fixture observations', () => {
   const root = workspace(),
@@ -184,7 +195,6 @@ it('opens a --root reached through a link at its real path for every verb, and s
   for (const argv of [
     ['format', '--write'],
     ['capture'],
-    ['compile'],
     ['pack', '--descriptor', descriptor],
     ['pack', '--descriptor', descriptor, '--force'],
   ]) {
@@ -193,7 +203,7 @@ it('opens a --root reached through a link at its real path for every verb, and s
   }
   expect(readFileSync(formattable, 'utf8')).toBe(formatted);
   expect(existsSync(resolve(root, '.ia/work/snapshot/current.json'))).toBe(true);
-  // `ia compile` is the capture's alias since 2.0 (decision compile-verb-fate), so no 1.x artifact appears.
+  // Capture writes its snapshot, so no 1.x compiled artifact appears.
   expect(existsSync(resolve(root, '.ia/work/compiled.json'))).toBe(false);
   expect(readdirSync(resolve(root, '.ia/work/dist'))).toHaveLength(1);
   const env = { IA_HOME: resolve(scratch('linked-doctor-home'), '.ia') };
@@ -479,7 +489,7 @@ it('keeps the 1.x collectPlan request form of @inventarch/cli/internal/distribut
     next: `Run "ia install ${ID}@^0.2.0 --catalog .ia/work/catalog.json --offline" first.`,
   });
   await expect(collectPlan({ ...request, rooted: true })).rejects.toMatchObject({
-    next: `Run "ia install ${ID}@^0.2.0 --catalog .ia/work/catalog.json --offline --root ${quote(root)}" first.`,
+    next: `Run "ia install ${ID}@^0.2.0 --catalog .ia/work/catalog.json --offline --root ${serviceQuote(root)}" first.`,
   });
 });
 
@@ -818,7 +828,7 @@ it('doctor --root <workspace subdirectory> stays literal and only names the encl
   expect(report.checks.find((check: { id: string }) => check.id === 'root').detail).toBe(nested);
   expect(report.checks.find((check: { id: string }) => check.id === 'workspace-decision')).toBeUndefined();
   expect(report.session.context).toContain(
-    `${nested} is inside InventArch workspace ${root}; run ia doctor --root ${quote(root)} for its state.`,
+    `${nested} is inside InventArch workspace ${root}; run "ia doctor --root ${quote(root)}" for its state.`,
   );
   expect(report.session.context.join(' ')).not.toContain('not an InventArch workspace');
   expect(report.session.notice).toBeNull();

@@ -16,16 +16,41 @@ export const RUNTIME_CODES = [
 ] as const;
 export type RuntimeCode = (typeof RUNTIME_CODES)[number];
 export const RUNTIME_ESCALATIONS = ['coordinate-incomplete', 'deny-wins-tie', 'no-candidate'] as const;
+/** Where in the workspace's sources a refusal is located: a path, its line, and the record's identity when known. */
+export interface RuntimeWhere {
+  readonly path: string;
+  readonly line: number;
+  readonly identity?: string;
+}
 export class RuntimeError extends Error {
   /** The one command to run after the refusal (design row 27), when the code refusing names one; else absent. */
   declare readonly next?: string;
+  /**
+   * Where the refusal is located, frozen, when it concerns one source record (a `@mandate` whose authority cannot be
+   * read, or one that failed admission): a caller locates it from this, never from the message. Absent otherwise.
+   */
+  declare readonly where?: RuntimeWhere;
+  /**
+   * Present on the refusal a mandate resolver raises while an authored record it reads failed admission (lane D, runtime
+   * R23): the cause a caller branches on (review D-R2), never read from `where` or the message.
+   */
+  declare readonly admission?: 'refused';
   constructor(
     readonly code: RuntimeCode,
     message: string,
     next?: string,
+    where?: RuntimeWhere,
+    admission?: 'refused',
   ) {
     super(`${code}: ${message}`);
     this.name = 'RuntimeError';
     if (next !== undefined) this.next = next;
+    if (where !== undefined)
+      this.where = Object.freeze({
+        path: where.path,
+        line: where.line,
+        ...(where.identity === undefined ? {} : { identity: where.identity }),
+      });
+    if (admission !== undefined) this.admission = admission;
   }
 }

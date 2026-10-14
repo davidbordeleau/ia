@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { afterAll, afterEach, expect, it, vi } from 'vitest';
 import { open } from '@inventarch/db';
 import type { Handle } from '@inventarch/db';
-import { PACKET_MARKER } from '@inventarch/runtime';
+import { defaultActor, PACKET_MARKER } from '@inventarch/runtime';
 import { adoptWorkspace } from '../src/corpus.js';
 import { generateAgentProfiles } from '../src/generate/index.js';
 import type { GeneratedFile, GeneratedSet } from '../src/generate/index.js';
@@ -34,11 +34,13 @@ const put = (root: string, path: string, text: string): void => {
 };
 /**
  * The fixture over the adopted conformance corpus: `authored` replaces or adds files under the workspace root, and
- * `adopted` adds files to the base before it is pinned. Admission must find no error.
+ * `adopted` adds files to the base before it is pinned. Admission must find exactly the error codes `errors` names, by
+ * default none.
  */
 function fixture(
   authored: Readonly<Record<string, string | null>> = {},
   adopted: Readonly<Record<string, string>> = {},
+  errors: readonly string[] = [],
 ): { readonly root: string; readonly db: Handle; readonly within: string } {
   const base = mkdtempSync(join(temporary, 'w-')),
     root = join(base, 'root'),
@@ -51,7 +53,9 @@ function fixture(
     else put(root, path, text);
   const db = open(root, { cache: false, adopted: [adoptWorkspace(vendor, 'foundation')] });
   handles.push(db);
-  expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+  expect(db.report.findings.filter((finding) => finding.severity === 'error').map((finding) => finding.code)).toEqual(
+    errors,
+  );
   return { root, db, within: db.resolveScope().token };
 }
 /** The fixture's composition records with `edit` applied, which must change them. */
@@ -63,6 +67,19 @@ const composition = (edit: (text: string) => string): string => {
 const claude = (db: Handle, within: string): readonly GeneratedFile[] =>
   generateAgentProfiles(db, within, 'claude').files;
 const rendered = (db: Handle, within: string): GeneratedSet => generateAgentProfiles(db, within, 'claude');
+
+it('distinguishes a profile agent from the workspace CLI actor', () => {
+  const { db, within } = fixture(),
+    text = rendered(db, within).files[0]!.text,
+    actor = defaultActor(db, within, 'workspace-system/definition/workspace/demo');
+  expect(actor.actor).toBe('agent-system/binding/agent/demo');
+  expect(actor.actors).not.toContain('agent-system/binding/agent/reviewer');
+  expect(text).toContain('CLI commands choose an authored workspace participant or steward.');
+  expect(text).toContain(
+    "Omitting --actor uses the workspace's default actor; it does not select this profile's agent.",
+  );
+  expect(text).not.toContain("the edit guard and the CLI's mandate profile");
+});
 
 const AGENT_FILE = `---
 name: "reviewer"
@@ -79,13 +96,15 @@ Binds the reviewer to a bounded host contract under the demo mandate.
 - profile \`${PROFILE}\`
 - agent \`agent-system/binding/agent/reviewer\`
 
+CLI commands choose an authored workspace participant or steward. Omitting --actor uses the workspace's default actor; it does not select this profile's agent.
+
 ## Mandate
 
 - \`agent-system/policy/mandate/demo-mandate\`
   - participant \`agent-system/binding/agent/demo\`
   - moves Observation, Verification, Synthesis, Delegation, Execution
   - scope \`workspace-system/definition/workspace/demo\`
-  - binds \`agent-system/binding/agent/demo\`, not this profile's agent \`agent-system/binding/agent/reviewer\`: the edit guard and the CLI's mandate profile judge the agent by the mandates that bind it
+  - binds \`agent-system/binding/agent/demo\`, not this profile's agent \`agent-system/binding/agent/reviewer\`: the edit guard judges the agent by the mandates that bind it
 
 ## Voice
 
@@ -129,7 +148,7 @@ const unmandated = (extra = ''): string =>
 /** The Mandate section of an agent file, up to the next section. */
 const mandateSection = (text: string): string => text.split('\n## Mandate\n\n')[1]!.split('\n\n## ')[0]!;
 const FALLBACK =
-  "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.";
+  'This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard judges the agent by these, and refuses it where a mandate that binds another participant governs and none of these grants the move.';
 
 it("falls back to the authored mandates that bind the profile's agent, as the guard judges a subagent (A-R8)", () => {
   // The reviewer subagent acts as the reviewer @agent (OD4): reviewer-docs binds it; demo-mandate and docs-mandate bind
@@ -178,27 +197,37 @@ it('includes a participant-less mandate in the fallback, one group per mandate, 
     ),
   });
   expect(mandateSection(claude(none.db, none.within)[0]!.text)).toBe(
-    "This profile names no mandate. Fallback: no authored mandate binds its agent `agent-system/binding/agent/reviewer`; wherever a mandate governs, the edit guard and the CLI's mandate profile refuse it.",
+    'This profile names no mandate. Fallback: no authored mandate binds its agent `agent-system/binding/agent/reviewer`; wherever a mandate governs, the edit guard refuses it.',
   );
 });
 
 it('resolves the fallback only for a profile that needs it, and says when it is unavailable rather than failing (A-R7)', () => {
-  // An admitted mandate whose empty move list C1 cannot read: a profile that names its own mandate, and a workspace with
-  // no profile, never read it; a profile that needs the fallback says it is unavailable, and every profile still renders.
-  const empty =
-    '\n@mandate empty-moves\n  meaning\n    says "No moves."\n    answers "Which?"\n  governance\n    requires "None."\n  authority\n    participant @agent reviewer\n    moves []\n';
-  const named = fixture({ '.ia/src/composition.ia': composition((text) => text + empty) });
+  // An admitted mandate whose move list C1 cannot read (a child under it, which admission admits): a profile that names
+  // its own mandate, and a workspace with no profile, never read it; a profile that needs the fallback says it is
+  // unavailable, and every profile still renders.
+  const unreadable =
+    '\n@mandate empty-moves\n  meaning\n    says "No moves."\n    answers "Which?"\n  governance\n    requires "None."\n  authority\n    participant @agent reviewer\n    moves [Observation]\n      note x\n';
+  const named = fixture({ '.ia/src/composition.ia': composition((text) => text + unreadable) });
   expect(claude(named.db, named.within).map((file) => file.text)).toEqual([AGENT_FILE]);
   const bare = fixture({
     '.ia/src/hooks.ia': null,
-    '.ia/src/composition.ia': composition((text) => text.replace(/\n@agent-profile reviewer[\s\S]*$/, '\n') + empty),
+    '.ia/src/composition.ia': composition(
+      (text) => text.replace(/\n@agent-profile reviewer[\s\S]*$/, '\n') + unreadable,
+    ),
   });
   expect(rendered(bare.db, bare.within)).toEqual({ files: [], unsupported: [] });
-  const fallback = fixture({ '.ia/src/composition.ia': unmandated(empty) });
+  const fallback = fixture({ '.ia/src/composition.ia': unmandated(unreadable) });
   const set = rendered(fallback.db, fallback.within);
   expect(set.unsupported).toEqual([]);
   expect(mandateSection(set.files[0]!.text)).toBe(
-    'This profile names no mandate. Fallback unavailable: IA-RUNTIME-REQUEST-INVALID: agent-system/policy/mandate/empty-moves: authority.moves must name at least one kernel move',
+    'This profile names no mandate. Fallback unavailable: IA-RUNTIME-REQUEST-INVALID: agent-system/policy/mandate/empty-moves: authority.moves must be an unconditional inline value',
+  );
+  // A stated empty move list fails admission (compliance C05), and a mandate that fails admission fails C1 closed
+  // (lane D): the fallback is unavailable, naming it. Generation reaches this only past a gate that admits errors.
+  const empty = unreadable.replace('    moves [Observation]\n      note x\n', '    moves []\n');
+  const refused = fixture({ '.ia/src/composition.ia': unmandated(empty) }, {}, ['IA-COMP-FIELD-VALUE']);
+  expect(mandateSection(rendered(refused.db, refused.within).files[0]!.text)).toMatch(
+    /^This profile names no mandate\. Fallback unavailable: IA-RUNTIME-REQUEST-INVALID: agent-system\/policy\/mandate\/empty-moves \(\.ia\/src\/composition\.ia:\d+\) failed admission: IA-COMP-FIELD-VALUE /,
   );
   // A profile whose agent no admitted record answers has no agent to bind.
   const ghost = fixture({
@@ -429,6 +458,8 @@ Binds the reviewer to a bounded host contract under the demo mandate.
 
 - profile \`${PROFILE}\`
 - agent \`@agent reviewer\`: not admitted in this scope
+
+CLI commands choose an authored workspace participant or steward. Omitting --actor uses the workspace's default actor; it does not select this profile's agent.
 
 ## Mandate
 

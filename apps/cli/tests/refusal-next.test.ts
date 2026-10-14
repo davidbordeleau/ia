@@ -6,17 +6,31 @@
  * `next`; human output prints it on the `→` line. `run` (workspace-fixture.ts) holds every refusal any suite provokes
  * to the same rule.
  */
-import { mkdirSync, readdirSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import ts from 'typescript';
 import { afterAll, expect, it } from 'vitest';
 import { COMP_CODES, EVIDENCE_CODES } from '@inventarch/compliance';
 import { DB_CODES } from '@inventarch/db';
+import { canonicalDistributionJson, generationDigest } from '@inventarch/db/distribution';
 import { HOOK_CODES, RUNTIME_CODES } from '@inventarch/runtime';
-import { UsageError } from '../src/args.js';
+import { parseArguments, UsageError } from '../src/args.js';
+import { findCommand } from '../src/commands.js';
 import { dispatch, Refusal, refusalOf, renderRefusal } from '../src/consumer.js';
-import { quote, resolveCapabilities } from '../src/render.js';
+import { gatedNext, inertNext } from '../src/profile.js';
+import { quote as argumentQuote, resolveCapabilities } from '../src/render.js';
+import { collectValidation, DEFAULT_OPTIONS, renderValidation } from '../src/validate.js';
 import {
+  commandRoots,
   cleanup,
   commandsIn,
   delivery,
@@ -34,7 +48,319 @@ import {
 
 afterAll(cleanup);
 
+it('names a compatible IA installation for an unsupported lock, without suggesting restore as an engine upgrade', async () => {
+  const root = workspace();
+  const lock = { formatVersion: 1 as const, engine: '^9.0.0', requests: [], packages: [] };
+  const inputs = { formatVersion: 1 as const, bundles: [], systems: [] };
+  const generation = generationDigest(lock, inputs, null);
+  const directory = resolve(root, '.ia/distributions/generations', generation);
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(resolve(directory, 'lock.json'), canonicalDistributionJson(lock));
+  writeFileSync(resolve(directory, 'inputs.json'), canonicalDistributionJson(inputs));
+  const locked = resolve(root, '.ia/distributions.lock.json');
+  writeFileSync(locked, canonicalDistributionJson(lock));
+  writeFileSync(
+    resolve(root, '.ia/distributions/active.json'),
+    canonicalDistributionJson({ formatVersion: 1, generation, previous: null, counter: 1 }),
+  );
+  const before = readFileSync(locked);
+  const result = await run(['validate', '--root', root, '--json']);
+  expect(result.exitCode).toBe(3);
+  const refusal = JSON.parse(result.stdout);
+  expect(refusal.code).toBe('IA-DB-SOURCE-UNAVAILABLE');
+  expect(refusal.message).toContain('requires distribution engine ^9.0.0');
+  expect(refusal.next).toContain('Use an IA installation supporting the required distribution engine');
+  expect(refusal.next).toContain('restore cannot upgrade the running CLI');
+  expect(refusal.next).not.toContain('ia restore');
+  expect(nextArgv(refusal.next)).toEqual(commandRoots(['validate', '--root', root]));
+  expect(readFileSync(locked)).toEqual(before);
+});
+
 const flat = (text: string): string => text.replace(/\s+/g, ' ').trim();
+/** Windows command roots use portable separators; filesystem diagnostic data keeps its native spelling. */
+const quote = (value: string): string =>
+  argumentQuote(process.platform === 'win32' ? value.replaceAll('\\', '/') : value);
+
+it('omits shell-active roots from unknown-command advice (shell follow-up)', async () => {
+  const root = 'ws-$(Write-Output SENTINEL)',
+    outside = scratch('shell-reruns'),
+    unknown = await run(['doctro', '--root', root, '--json'], { cwd: outside });
+  expect(JSON.parse(unknown.stdout).next).not.toContain('SENTINEL');
+});
+
+it.runIf(process.platform === 'win32')(
+  'keeps relative recovery and apply commands in their original directory',
+  async () => {
+    const cwd = scratch('relative(parent)'),
+      given = 'nested\\workspace',
+      env = { IA_HOST_HOME: scratch('relative-home') };
+    mkdirSync(resolve(cwd, 'nested'));
+    const initialized = await run(
+      ['init', given, '--id', 'test/workspace', '--host', 'none', '--apply', '--yes', '--json'],
+      {
+        cwd,
+        env,
+      },
+    );
+    expect(initialized.exitCode, initialized.stdout + initialized.stderr).toBe(0);
+    for (const json of [true, false]) {
+      const result = await run(['positon', '--root', given, ...(json ? ['--json'] : [])], { cwd, env }),
+        advice = json ? (JSON.parse(result.stdout).next as string) : flat(result.stderr),
+        replay = nextArgv(advice);
+      expect(result.exitCode).toBe(2);
+      expect(replay).toContain('nested/workspace');
+      expect(advice).not.toContain('from the workspace root');
+      const recovered = await run(replay, { cwd, env });
+      expect(recovered.exitCode, recovered.stdout + recovered.stderr).toBe(0);
+    }
+    const project = await run(['project', 'codex', '--root', given], { cwd, env }),
+      apply = flat(project.stdout).split('Apply with')[1]!;
+    expect(project.exitCode, project.stdout + project.stderr).toBe(0);
+    expect(nextArgv(apply)).toEqual(['project', 'codex', '--root', 'nested/workspace', '--apply', '--yes']);
+    expect(apply).not.toContain('from the workspace root');
+  },
+  30_000,
+);
+
+it('preserves registry selection and reselection through the first profile advice rewrite', () => {
+  const cwd = resolve('registry-advice'),
+    root = 'workspace(active)',
+    host = makeHost({ cwd, env: { IA_REGISTRY: './registry' } }),
+    command = findCommand('install')!,
+    args = parseArguments(['pkg/name', '--root', root], command.grammar),
+    next = `Run "ia install pkg/name --root ${root}" again.`,
+    gate = { state: { mandates: [], rooted: ` --root ${root}`, roots: [root], advice: host } };
+  for (const registryIntent of [undefined, 'reselect'] as const) {
+    const source = new Refusal('IA-DIST-LIMIT-EXCEEDED', 'refused', 4, null, next, null, registryIntent);
+    for (const early of [gatedNext(source, gate), inertNext(source, { command, args, host })]) {
+      const result = renderRefusal(early, resolveCapabilities(host.stdout), true, {
+          command: 'install',
+          root,
+          advice: host,
+        }),
+        printed = JSON.parse(result.stdout).next as string;
+      expect(printed).toContain('--root .');
+      if (registryIntent === 'reselect') expect(nextArgv(printed)).not.toContain('--registry');
+      else expect(nextArgv(printed)).toContain(resolve(cwd, 'registry').replaceAll('\\', '/'));
+    }
+  }
+  const online = inertNext(new Refusal('IA-DIST-INTEGRITY', 'refused', 3, null, next), {
+    command,
+    args: parseArguments(['pkg/name', '--root', root, '--offline'], command.grammar),
+    host,
+  });
+  expect(nextArgv(online.next!)).toContain(resolve(cwd, 'registry').replaceAll('\\', '/'));
+});
+
+it('omits shell-active roots from interrupted reruns (shell follow-up)', async () => {
+  const root = 'ws-$(Write-Output SENTINEL)',
+    outside = scratch('shell-interruption');
+  for (const argv of [
+    ['doctor', `--root=${root}`, '--json'],
+    ['init', '--host', 'none', root, '--json'],
+    ['init', '--host', 'none', '--json', '--', `-${root}`],
+  ]) {
+    const abort = new AbortController();
+    abort.abort();
+    const result = await dispatch(
+      argv,
+      { ...makeHost({ cwd: outside }), signal: abort.signal },
+      () => ({ exitCode: 0, stdout: '' }),
+      [],
+    );
+    const next = JSON.parse(result.stdout).next as string;
+    expect(result.exitCode).toBe(130);
+    expect(next).not.toContain('SENTINEL');
+    expect(next).toContain('from the workspace root');
+    expect(nextArgv(next)).toContain('.');
+  }
+});
+
+it.each([
+  ['doctor', 'doctro', 'root', '--json'],
+  ['doctor', 'doctro', 'root', '--help'],
+  ['doctor', 'doctro', 'root', '-h'],
+  ['doctor', 'doctro', 'root', '-q'],
+  ['vocabulary', 'vocabulry', 'search', '--json'],
+  ['doctor', 'doctro', 'root', '--unrecognized-directory'],
+  ['vocabulary', 'vocabulry', 'search', '--unrecognized-term'],
+])('replays option-like values in %s advice: %s %s=%s (recovery syntax)', async (verb, typo, option, value) => {
+  const cwd = scratch('option-value-replay'),
+    tail = [`--${option}=${value}`, '--json'],
+    abort = new AbortController();
+  abort.abort();
+  const results = [
+    await run([typo, ...tail], { cwd }),
+    await dispatch(
+      [verb, ...tail],
+      { ...makeHost({ cwd }), signal: abort.signal },
+      () => ({ exitCode: 0, stdout: '' }),
+      [],
+    ),
+  ];
+  expect(results.map((result) => result.exitCode)).toEqual([2, 130]);
+  for (const result of results) {
+    const replay = nextArgv(JSON.parse(result.stdout).next as string);
+    expect(replay[0]).toBe(verb);
+    const parsed = parseArguments(replay.slice(1), findCommand(verb)!.grammar);
+    expect(parsed.value(option)).toBe(value);
+    expect(parsed.flag('json')).toBe(true);
+    expect(parsed.flag('help')).toBe(false);
+    const interrupted = await dispatch(
+      replay,
+      { ...makeHost({ cwd }), signal: abort.signal },
+      () => ({ exitCode: 0, stdout: '' }),
+      [],
+    );
+    expect(interrupted.exitCode).toBe(130);
+  }
+});
+
+it.runIf(process.platform === 'win32')('replays normalized leading-dash init targets (recovery syntax)', async () => {
+  const cwd = scratch('dash-target-replay'),
+    target = '-target\\child',
+    tail = ['--host', 'none', '--json', '--', target],
+    abort = new AbortController();
+  abort.abort();
+  const results = [
+    await run(['inti', ...tail], { cwd }),
+    await dispatch(
+      ['init', ...tail],
+      { ...makeHost({ cwd }), signal: abort.signal },
+      () => ({ exitCode: 0, stdout: '' }),
+      [],
+    ),
+  ];
+  expect(results.map((result) => result.exitCode)).toEqual([2, 130]);
+  for (const result of results) {
+    const replay = nextArgv(JSON.parse(result.stdout).next as string),
+      parsed = parseArguments(replay.slice(1), findCommand('init')!.grammar);
+    expect(parsed.positionals).toHaveLength(1);
+    expect(resolve(cwd, parsed.positionals[0]!)).toBe(resolve(cwd, target));
+    expect(parsed.value('host')).toBe('none');
+    const interrupted = await dispatch(
+      replay,
+      { ...makeHost({ cwd }), signal: abort.signal },
+      () => ({ exitCode: 0, stdout: '' }),
+      [],
+    );
+    expect(interrupted.exitCode).toBe(130);
+  }
+});
+
+it.runIf(process.platform === 'win32')('normalizes inert Windows roots in suggestions (shell follow-up)', () => {
+  const result = renderRefusal(
+    new Refusal('IA-CLI-FAILED', 'Fixture', 3, null, 'Run "ia doctor --root C:\\work\\ws".'),
+    resolveCapabilities({ env: {}, isTTY: false }, {}),
+    true,
+    { command: 'doctor', root: 'C:\\work\\ws' },
+  );
+  expect(JSON.parse(result.stdout).next).toBe('Run "ia doctor --root C:/work/ws".');
+});
+
+it('keeps shell-active roots inert in successful previews, position and delivery guidance', async () => {
+  const outside = scratch('shell-previews'),
+    supplied = 'ws-$(Write-Output SENTINEL)',
+    root = resolve(outside, supplied),
+    env = { IA_HOST_HOME: scratch('shell-home') };
+  const preview = await run(['init', supplied, '--host', 'none'], { cwd: outside, env });
+  expect(preview.exitCode).toBe(0);
+  expect(flat(preview.stdout).split('Apply with')[1]).toContain('"ia init . --apply --yes"');
+  expect(flat(preview.stdout)).toContain(
+    'Create the target directory without pasting its path into a shell, then enter it',
+  );
+  mkdirSync(root);
+  const apply = nextArgv(flat(preview.stdout).split('Apply with')[1]!);
+  const applied = await run([...apply, '--json'], { cwd: root, env });
+  expect(applied.exitCode, applied.stdout + applied.stderr).toBe(0);
+  for (const args of [
+    ['host', 'claude'],
+    ['project', 'codex'],
+    ['update', 'inventarch/language', '--offline'],
+  ]) {
+    const result = await run([...args, '--root', supplied], { cwd: outside, env });
+    expect(result.exitCode, result.stdout + result.stderr).toBe(0);
+    const advice = flat(result.stdout).split('Apply with')[1]!;
+    expect(advice, args.join(' ')).toContain('--root .');
+    expect(advice).toContain('from the workspace root');
+    expect(advice).not.toContain('SENTINEL');
+  }
+  const position = await run(['position', '--root', supplied], { cwd: outside, env });
+  expect(position.exitCode).toBe(0);
+  expect(flat(position.stdout)).toContain('--root ."');
+  expect(flat(position.stdout)).toContain('from the workspace root');
+  const projected = await run(['project', 'codex', '--root', supplied, '--apply', '--yes'], { cwd: outside, env });
+  expect(projected.exitCode, projected.stdout + projected.stderr).toBe(0);
+  expect(flat(projected.stdout)).toContain('"ia doctor --root ."');
+  const validation = collectValidation(root, null);
+  const damaged = {
+    ...validation,
+    bindings: {
+      ...validation.bindings,
+      catalog: {
+        status: 'damaged' as const,
+        consumer: 'claude' as const,
+        release: 'a'.repeat(64),
+        payload: '/private-cache/payload',
+        reason: 'fixture integrity mismatch',
+      },
+    },
+  };
+  const rendered = flat(renderValidation(damaged, DEFAULT_OPTIONS, resolveCapabilities({ env: {}, isTTY: false }, {})));
+  expect(rendered).toContain('"ia host claude --root . --apply"');
+  expect(rendered).toContain('from the workspace root');
+  const workRoot = resolve(outside, 'delivery-$(Write-Output SENTINEL)');
+  cpSync(delivery(), workRoot, { recursive: true });
+  const next = await run(['next', '--root', workRoot], { cwd: outside, env });
+  expect(next.exitCode, next.stderr).toBe(0);
+  expect(flat(next.stdout)).toContain('--root ."');
+  expect(flat(next.stdout)).toContain('from the workspace root');
+  cpSync(resolve(repository, 'apps/cli/tests/fixtures/workspace-1.1.0'), root, { recursive: true });
+  const migration = await run(['init', supplied, '--migrate'], { cwd: outside, env });
+  expect(migration.exitCode, migration.stdout + migration.stderr).toBe(0);
+  expect(flat(migration.stdout)).toContain('"ia init . --migrate --apply --yes"');
+  expect(flat(migration.stdout)).toContain('from the workspace root');
+});
+
+it('keeps actual mandate and recovery suggestions inert at a shell-active workspace root', async () => {
+  const root = resolve(scratch('shell-root'), 'ws-$(Write-Output SENTINEL)-`echo`-%PATH%-!PATH!-a&b,^;'),
+    outside = scratch('shell-outside');
+  cpSync(workspace(), root, { recursive: true });
+  writeFileSync(resolve(root, '.ia/src/refused.ia'), '#! ia 1.0\n@mandate rejected\n');
+  const result = await run(['read', 'agent-system/binding/agent/missing', '--root', root, '--json'], { cwd: outside });
+  const refusal = JSON.parse(result.stdout) as { code: string; next: string };
+  expect(refusal.code).toBe('IA-RUNTIME-REQUEST-INVALID');
+  expect(refusal.next).toContain('"ia report --root ."');
+  expect(refusal.next).toContain('from the workspace root');
+  expect(refusal.next).not.toContain('SENTINEL');
+  const report = await run(nextArgv(refusal.next), { cwd: root });
+  expect(report.exitCode).toBe(1);
+  expect(report.stderr).toBe('');
+  const doctor = JSON.parse((await run(['doctor', '--root', root, '--json'], { cwd: outside })).stdout) as {
+    checks: { id: string; remedy: string | null }[];
+  };
+  const remedy = doctor.checks.find((row) => row.id === 'source-protection')!.remedy!;
+  expect(remedy).toContain('ia position --shape governance --root .');
+  expect(remedy).toContain('from the workspace root');
+  expect(remedy).not.toContain('SENTINEL');
+  const human = await run(['read', 'agent-system/binding/agent/missing', '--root', root], { cwd: outside });
+  expect(human.stderr).toContain('ia report --root .');
+  mkdirSync(resolve(root, '.ia/distributions/hosts'), { recursive: true });
+  writeFileSync(resolve(root, '.ia/distributions/hosts/pending.json'), '{}');
+  const recovery = JSON.parse((await run(['recover', 'host', '--root', root, '--json'], { cwd: outside })).stdout);
+  expect(recovery.ok).toBe(false);
+  expect(recovery.next).toContain('"ia recover host --root ."');
+  expect(recovery.next).not.toContain('SENTINEL');
+  expect(recovery.next).toContain('from the workspace root');
+  const initialized = resolve(scratch('shell-init'), 'ws-$(Write-Output SENTINEL)');
+  expect((await run(['init', initialized, '--host', 'none', '--apply', '--yes', '--json'])).exitCode).toBe(0);
+  const { plan } = JSON.parse((await run(['init', initialized, '--json'])).stdout) as { plan: { next: string } };
+  expect(plan.next).toContain('"ia position --root ."');
+  expect(plan.next).toContain('from the workspace root');
+  const preview = await run(['capture', '--preview', '--root', initialized]);
+  expect(preview.exitCode).toBe(0);
+  expect(preview.stdout).toContain('"ia capture --root ." from the workspace root');
+});
 
 /** Every `.ts` file under a source directory, recursively. */
 const sources = (directory: string): readonly string[] =>
@@ -317,6 +643,14 @@ function resolveText(expression: ts.Expression, bindings: Bindings, depth = 0): 
     if (ts.isPropertyAccessExpression(callee) && STRING_METHODS.has(callee.name.text)) return next(callee.expression);
     const fn = functionOf(declarationOf(callee));
     if (fn === undefined) return null;
+    // Root repair changes only path arguments and appends cwd prose. Check the original next action at its source;
+    // the runtime regressions above separately verify that the repair preserves one command and inert roots.
+    if (
+      resolve(fn.getSourceFile().fileName) === resolve(repository, 'apps/cli/src/render.ts') &&
+      ts.isFunctionDeclaration(fn) &&
+      (fn.name?.text === 'safeRootAdvice' || fn.name?.text === 'safeRootCommand')
+    )
+      return expression.arguments[0] === undefined ? null : next(expression.arguments[0]);
     const scope = new Map(bindings);
     fn.parameters.forEach((parameter, index) => {
       const argument = expression.arguments[index];
@@ -684,7 +1018,7 @@ function invocations(): readonly {
     },
     { code: 'IA-DB-PATH-UNSAFE', argv: ['inspect', '--root', linked], command: `ia validate --root ${unreadable}` },
     { code: 'IA-DB-PATH-UNSAFE', argv: ['capture', '--root', linked], command: `ia validate --root ${unreadable}` },
-    { code: 'IA-DB-PATH-UNSAFE', argv: ['compile', '--root', linked], command: `ia validate --root ${unreadable}` },
+    { code: 'IA-CLI-USAGE', argv: ['compile', '--root', linked], command: 'ia capture --help' },
     { code: 'IA-DB-PATH-UNSAFE', argv: ['position', '--root', linked], command: `ia validate --root ${unreadable}` },
     {
       code: 'IA-DB-PATH-UNSAFE',
@@ -779,28 +1113,13 @@ function invocations(): readonly {
       argv: ['capture', '--root', floorBroken],
       command: `ia validate --root ${quote(floorBroken)}`,
     },
-    // Decision compile-verb-fate: `ia compile` is the deprecated alias of `ia capture`, so it refuses as the capture
-    // does, names the capture for a 1.x option the capture has no place for, and --out with --stdout its own help.
-    {
-      code: 'IA-DB-ROOT-INVALID',
-      argv: ['compile', '--root', empty],
-      command: `ia init ${quote(realpathSync(empty))}`,
-    },
-    {
-      code: 'IA-CLI-USAGE',
-      argv: ['compile', '--out', '.ia/work/x.json', '--root', FIXTURE],
-      command: `ia capture --root ${root}`,
-    },
-    {
-      code: 'IA-CLI-USAGE',
-      argv: ['compile', '--stdout', '--root', FIXTURE],
-      command: `ia capture --root ${root}`,
-    },
-    {
-      code: 'IA-CLI-USAGE',
-      argv: ['compile', '--out', '.ia/work/x.json', '--stdout', '--root', FIXTURE],
-      command: 'ia compile --help',
-    },
+    // Removed commands refuse before workspace access and always name supported capture help.
+    ...[
+      ['compile', '--root', empty],
+      ['compile', '--out', '.ia/work/x.json', '--root', FIXTURE],
+      ['compile', '--stdout', '--root', FIXTURE],
+      ['compile', '--out', '.ia/work/x.json', '--stdout', '--root', FIXTURE],
+    ].map((argv) => ({ code: 'IA-CLI-USAGE', argv, command: 'ia capture --help' })),
   ];
 }
 

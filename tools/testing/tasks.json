@@ -55,7 +55,7 @@
     "selected-tests": "Owning production sources, every non-test helper, shared configuration and dependency sources; exclude only declared sibling test files, retaining selected and unassigned files.",
     "selected-tests-workspace-records": "selected-tests plus authored workspace records, teaching resources and native fixture inventories read through the filesystem.",
     "language-conformance": "workspace-records plus the compliance language fixtures read by the language formatter and conformance suites.",
-    "host-adapters": "workspace-records plus this repository's committed ia-authoring skills under .claude/skills and .agents/skills, which the runtime's host adapter tests compare the repository target's skills with through the filesystem, since no import edge names them.",
+    "host-adapters": "workspace-records plus this repository's committed ia-authoring skills under .claude/skills and .agents/skills, the pending mandate-resolution note and consumed changeset history read by runtime tests through the filesystem, since no import edge names them.",
     "composition-fixture": "workspace-records plus apps/cli's composition workspace fixture, whose authored records the workspace-runtime generator tests render through the filesystem, since no import edge names them."
   },
   "tasks": [
@@ -852,6 +852,16 @@
       "resourceClass": "subprocess",
       "covers": [
         "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tests/render.test.ts > preserves the command directory when only root separators change",
+          "reason": "The fixture asserts Windows separator normalization and command-directory preservation and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        }
       ]
     },
     {
@@ -1009,6 +1019,7 @@
       "kind": "vitest",
       "project": "apps/cli",
       "files": [
+        "tests/adopt.test.ts",
         "tests/init-migrate.test.ts",
         "tests/init.test.ts"
       ],
@@ -1117,6 +1128,38 @@
           "platforms": [
             "linux"
           ]
+        },
+        {
+          "case": "tests/capture.test.ts > prints capture preview roots that replay at the same Windows target",
+          "reason": "The fixture replays capture roots with native Windows path semantics and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/refusal-next.test.ts > keeps relative recovery and apply commands in their original directory",
+          "reason": "The fixture resolves relative backslash-separated recovery targets on Windows and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/refusal-next.test.ts > normalizes inert Windows roots in suggestions (shell follow-up)",
+          "reason": "The fixture asserts the win32 branch that normalizes Windows command roots and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/refusal-next.test.ts > replays normalized leading-dash init targets (recovery syntax)",
+          "reason": "The fixture replays a backslash-separated leading-dash init target with Windows path semantics and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
         }
       ]
     },
@@ -1206,11 +1249,13 @@
         "tests/json-edit.test.ts",
         "tests/lifecycle-registration.test.ts",
         "tests/minting.test.ts",
+        "tests/optional-pack-files.test.ts",
         "tests/plugin-home.test.ts",
         "tests/product-structure.test.ts",
         "tests/projection.test.ts",
         "tests/publication.test.ts",
         "tests/registry-build.test.ts",
+        "tests/registry-collections.test.ts",
         "tests/registry-config.test.ts",
         "tests/registry-layout.test.ts",
         "tests/registry-resolve.test.ts",
@@ -1680,6 +1725,7 @@
         "tests/membership.test.ts",
         "tests/preview.test.ts",
         "tests/retention.test.ts",
+        "tests/runner-evidence.test.ts",
         "tests/scope.test.ts",
         "tests/seat.test.ts",
         "tests/view.test.ts",
@@ -2634,7 +2680,8 @@
         "tools/native/repository-architecture.test.ts",
         "tools/native/work-example.test.ts",
         "tools/native/check.test.ts",
-        "tools/native/language-base.test.ts"
+        "tools/native/language-base.test.ts",
+        "tools/native/public-systems.test.ts"
       ],
       "profile": "corpus",
       "platforms": [
@@ -3445,6 +3492,170 @@
       "dependsOn": [],
       "outputs": [
         "artifacts/tests/tools-test-npm-release"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "runner:build",
+      "kind": "command",
+      "project": "apps/runner",
+      "command": "pnpm build",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "agent-composition-system:build",
+        "agent-system:build",
+        "session-system:build",
+        "workspace-runtime:build",
+        "runtime:build",
+        "db:build"
+      ],
+      "outputs": [
+        "apps/runner/dist",
+        "artifacts/tests/runner-build"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm -r build"
+      ]
+    },
+    {
+      "id": "runner:typecheck",
+      "kind": "command",
+      "project": "apps/runner",
+      "command": "pnpm typecheck",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "runner:build"
+      ],
+      "outputs": [
+        "artifacts/tests/runner-typecheck"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm -r typecheck"
+      ]
+    },
+    {
+      "id": "runner:test",
+      "kind": "vitest",
+      "project": "apps/runner",
+      "files": [
+        "tests/response.test.ts",
+        "tests/runner.test.ts"
+      ],
+      "profile": "database",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "runner:build"
+      ],
+      "outputs": [
+        "artifacts/tests/runner-test"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "native:release-check",
+      "kind": "command",
+      "project": ".",
+      "command": "pnpm native:release:check",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "repository-inventory",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/native-release-check"
+      ],
+      "cache": false,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "node --conditions=development --import tsx tools/release/native-version.ts --check"
+      ],
+      "reason": "Published Git tag availability and native archive digests must be checked fresh for each qualification."
+    },
+    {
+      "id": "tools:test-public-release",
+      "kind": "vitest",
+      "project": ".",
+      "files": [
+        "tools/release/public-content.test.ts"
+      ],
+      "profile": "corpus",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "repository-inventory",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/tools-test-public-release"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "tools:test-native-release",
+      "kind": "vitest",
+      "project": ".",
+      "files": [
+        "tools/release/native-version.test.ts"
+      ],
+      "profile": "corpus",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "repository-inventory",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/tools-test-native-release"
       ],
       "cache": true,
       "workerLimit": 1,

@@ -48,7 +48,8 @@ import {
   starterDistribution,
   starterRecords,
 } from '../src/init.js';
-import { quote } from '../src/render.js';
+
+import { quote as serviceQuote } from '../src/render.js';
 import {
   doctor,
   GUARD_STATE,
@@ -64,7 +65,16 @@ import {
   STEWARD,
 } from './host-fixture.js';
 import { baseCompanionArchive } from './registry-fixture.js';
-import { cleanup, cli, commandsIn, makeHost, nextArgv, run, scratch } from './workspace-fixture.js';
+import {
+  quoteCommandRoot as quote,
+  cleanup,
+  cli,
+  commandsIn,
+  makeHost,
+  nextArgv,
+  run,
+  scratch,
+} from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
 afterAll(cleanup);
@@ -469,7 +479,7 @@ it("keeps the descriptor's other dependency rows, replacing only the base's, and
 it('stops after the base install on a signal, naming the rerun, which finds the base installed and finishes', async () => {
   const { root } = await onLegacyBase();
   const controller = new AbortController(),
-    invocation = `ia init ${quote(root)} --migrate`;
+    invocation = `ia init ${serviceQuote(root)} --migrate`;
   const interrupted = applyMigration(collectMigration({ root, packageRoot: cli, invocation }), {
     packageRoot: cli,
     signal: controller.signal,
@@ -492,7 +502,7 @@ it('stops after the base install on a signal, naming the rerun, which finds the 
 
 it('says the base install was all it made when the first record write fails, naming the rerun, which finishes', async () => {
   const { root } = await onLegacyBase();
-  const invocation = `ia init ${quote(root)} --migrate`;
+  const invocation = `ia init ${serviceQuote(root)} --migrate`;
   // A file where the user record moves, appearing once the base is installed: the first record write refuses it.
   const appear = (name: string): void => {
     if (name === 'migrate:install') put(root, '.ia/src/notes.ia', '#! ia 1.0\n');
@@ -1081,7 +1091,7 @@ it('stops at the capture boundary on a signal once migrated, naming ia capture, 
   });
   await expect(interrupted).rejects.toBeInstanceOf(Interrupted);
   await expect(interrupted).rejects.toMatchObject({
-    next: `The workspace is migrated. Run "ia init ${quote(root)} --migrate --apply --yes" to finish migrating.`,
+    next: `The workspace is migrated. Run "ia init ${serviceQuote(root)} --migrate --apply --yes" to finish migrating.`,
   });
   expect(read(root, '.ia/src/workspace.ia')).toBe(starterRecords('demo', base.systems));
   expect(existsSync(resolve(root, '.ia/work'))).toBe(false);
@@ -1112,7 +1122,7 @@ it('leaves the migration in place when its capture fails, with the location and 
 
 it('says which writes and deletes a file step made when a later one fails, since nothing is rolled back', async () => {
   const { root } = await legacyWorkspace();
-  const view = collectMigration({ root, packageRoot: cli, invocation: `ia init ${quote(root)} --migrate` });
+  const view = collectMigration({ root, packageRoot: cli, invocation: `ia init ${serviceQuote(root)} --migrate` });
   await expect(
     applyMigration(view, {
       packageRoot: cli,
@@ -1122,7 +1132,7 @@ it('says which writes and deletes a file step made when a later one fails, since
     }),
   ).rejects.toMatchObject({
     message: 'disk full',
-    next: expect.stringContaining(`ia init ${quote(root)} --migrate --apply --yes`),
+    next: expect.stringContaining(`ia init ${serviceQuote(root)} --migrate --apply --yes`),
   });
   expect(existsSync(resolve(root, LOCAL))).toBe(true);
   expect(existsSync(resolve(root, '.ia/src/workspace.ia'))).toBe(true);
@@ -1141,7 +1151,7 @@ it('says neither effect ran when the migrated workspace fails admission, naming 
   ).rejects.toMatchObject({
     code: 'IA-CLI-FAILED',
     message: expect.stringMatching(/^The migrated workspace failed admission with \d+ error findings; first: IA-/),
-    next: `The workspace is migrated but neither captured nor projected. Run "ia validate --root ${quote(root)}" for the findings.`,
+    next: `The workspace is migrated but neither captured nor projected. Run "ia validate --root ${serviceQuote(root)}" for the findings.`,
   });
   expect(existsSync(resolve(root, '.ia/work'))).toBe(false);
   expect(guardGroups(root)).toBe(1);

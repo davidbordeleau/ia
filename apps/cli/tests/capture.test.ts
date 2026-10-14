@@ -1,6 +1,6 @@
 /**
  * `ia capture` (position-and-projection §5, design rows 3 and 20), end to end against copies of the committed loop
- * fixture. From 2.0 `ia compile` is its deprecated alias (decision compile-verb-fate; tests/workspace-verbs.test.ts).
+ * fixture. The removed `ia compile` command refuses without changing capture state.
  *
  * The exit evidence of plan task ia-capture-verb: two captures with no edit between them report 0 changed, and an edit
  * reports exactly the edited record changed and rotates the prior capture into `previous.json`, as db D08 rotates its
@@ -20,7 +20,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { afterAll, expect, it, vi } from 'vitest';
 import { readInputs } from '@inventarch/db';
@@ -40,9 +40,18 @@ import {
   writeRepair,
 } from '../src/capture.js';
 import { COMMANDS } from '../src/commands.js';
-import { DEFAULT_OUT, DEPRECATION } from '../src/compile.js';
-import { quote } from '../src/render.js';
-import { cleanup, commandsIn, nextArgv, repository, run, scratch, workspace } from './workspace-fixture.js';
+import { DEFAULT_OUT } from '../src/compile.js';
+
+import {
+  quoteCommandRoot as quote,
+  cleanup,
+  commandsIn,
+  nextArgv,
+  repository,
+  run,
+  scratch,
+  workspace,
+} from './workspace-fixture.js';
 
 afterAll(cleanup);
 
@@ -517,13 +526,13 @@ it('refuses a root whose own sources declare no @workspace, writing nothing, and
   expect(human.stderr).toContain('IA-DB-ROOT-INVALID');
   expect(flat(human.stderr)).toContain(`→ Run "ia init ${quote(realpathSync(systems))}"`);
   expect(existsSync(resolve(systems, '.ia/work'))).toBe(false);
-  // `ia compile`, its alias since 2.0, refuses there as the capture does and names the same command.
-  const aliased = await run(['compile', '--root', systems, '--json']);
-  expect(aliased.exitCode).toBe(3);
-  expect(aliased.stderr).toBe('');
-  const aliasedBody = JSON.parse(aliased.stdout) as { code: string; next: string };
-  expect(aliasedBody.code).toBe('IA-DB-ROOT-INVALID');
-  expect(commandsIn(aliasedBody.next)).toEqual([`ia init ${quote(realpathSync(systems))}`]);
+  // Removal takes precedence even over an invalid workspace.
+  const removed = await run(['compile', '--root', systems, '--json']);
+  expect(removed.exitCode).toBe(2);
+  expect(removed.stderr).toBe('');
+  const removedBody = JSON.parse(removed.stdout) as { code: string; next: string };
+  expect(removedBody.code).toBe('IA-CLI-USAGE');
+  expect(commandsIn(removedBody.next)).toEqual(['ia capture --help']);
   expect(existsSync(resolve(systems, '.ia/work'))).toBe(false);
 });
 
@@ -553,11 +562,25 @@ it('refuses a floor input that fails to parse, keeping both snapshot files, and 
   const repaired = await capture(root);
   expect(repaired).toMatchObject({ changed: 0, rotated: false, prior: snapshotAt(root).revision });
   expect(bytesAt(root, PREVIOUS)).toEqual(previous);
-  // A source the workspace authors that fails to parse is a finding the snapshot records, never a refusal.
-  writeFileSync(resolve(root, PRINCIPLE), `${readFileSync(resolve(root, PRINCIPLE), 'utf8')}\n@@@ not a record\n`);
+  // A source the workspace authors that fails to parse inside a record db identifies is a finding the snapshot records,
+  // never a refusal.
+  const principle = readFileSync(resolve(root, PRINCIPLE), 'utf8');
+  writeFileSync(resolve(root, PRINCIPLE), `${principle}   misindented\n`);
   const recorded = await capture(root, 1);
   expect(recorded.admission.errors).toBeGreaterThan(0);
   expect(recorded.rotated).toBe(true);
+  // Review D2-R2: a stray line there is a record db cannot identify, possibly a @mandate, so capture, mandate-gated,
+  // fails closed at it, leaving the snapshot as it was.
+  writeFileSync(resolve(root, PRINCIPLE), `${principle}\n@@@ not a record\n`);
+  const [held, before] = [bytesAt(root, CURRENT), bytesAt(root, PREVIOUS)];
+  const closed = await run(['capture', '--root', root, '--json']);
+  expect(closed.exitCode, closed.stdout).toBe(1);
+  expect(JSON.parse(closed.stdout)).toMatchObject({
+    code: 'IA-RUNTIME-REQUEST-INVALID',
+    where: { path: PRINCIPLE },
+  });
+  expect(JSON.parse(closed.stdout).message).toContain('possibly a @mandate');
+  expect([bytesAt(root, CURRENT), bytesAt(root, PREVIOUS)]).toEqual([held, before]);
 });
 
 /** A workspace at `<scratch>/workspace` whose own sources are the native conformance corpus, which declares a @workspace. */
@@ -860,6 +883,26 @@ it('refuses a file where the snapshot directory or .ia/work belongs, writing not
   }
 });
 
+it.skipIf(process.platform !== 'win32')(
+  'prints capture preview roots that replay at the same Windows target',
+  async () => {
+    const root = workspace();
+    await capture(root);
+    const cwd = dirname(dirname(root));
+    for (const given of [root, relative(cwd, root)]) {
+      const before = pairAt(root);
+      const human = await run(['capture', '--preview', '--root', given], { cwd });
+      expect(human.exitCode, human.stdout).toBe(0);
+      const commands = commandsIn(unwrapped(human.stdout));
+      expect(commands).toEqual([`ia capture --root ${given.replaceAll('\\', '/')}`]);
+      expect(pairAt(root)).toEqual(before);
+      const followed = await run([...nextArgv(`Run "${commands[0]}".`), '--json'], { cwd });
+      expect(followed.exitCode, followed.stdout).toBe(0);
+      expect(JSON.parse(followed.stdout).snapshot).toBe(resolve(realpathSync(root), CURRENT));
+    }
+  },
+);
+
 it('previews exactly the edited record as changed and writes nothing: both snapshot files keep their bytes and mtimes', async () => {
   // Decision capture-preview-placement: the counts and the changed, new and removed identities, without writing.
   const root = workspace();
@@ -1121,7 +1164,7 @@ it('escapes the terminal controls a prior capture identity carries in the human 
   expect(pairAt(root)).toEqual(pair);
 });
 
-it('lists ia capture in the help, and ia compile as its deprecated alias', async () => {
+it('lists ia capture in help and refuses help for the removed compile command', async () => {
   const global = (await run(['--help'])).stdout;
   expect(global).toContain('capture');
   // Every command row fits the 80 columns piped help is rendered at, so no wrapped fragment reads as a command name.
@@ -1134,23 +1177,24 @@ it('lists ia capture in the help, and ia compile as its deprecated alias', async
   const help = await run(['capture', '--help']);
   expect(help.stdout).toContain('ia capture [--preview] [--actor <agent>] [--json]');
   expect(flat(help.stdout)).toContain('--preview Report what the capture would write; write nothing');
-  // Decision compile-verb-fate: from 2.0 `ia compile` is the deprecated alias of `ia capture`, removed in 3.0.
+  expect(global).not.toMatch(/^\s+compile\s/m);
   const compile = await run(['compile', '--help']);
-  expect(compile.stdout).toContain('ia compile [--preview] [--force] [--json]');
-  expect(flat(compile.stdout)).toContain('Deprecated alias of capture, removed in 3.0');
+  expect(compile.exitCode).toBe(2);
+  expect(compile.stdout).toBe('');
+  expect(flat(compile.stderr)).toContain('removed in 3.0');
+  expect(flat(compile.stderr)).toContain('ia capture --help');
 });
 
-it('makes ia compile write the capture snapshot pair, never the 1.x compiled artifact', async () => {
-  const root = workspace();
+it('refuses the removed compile command without creating a capture or the 1.x artifact', async () => {
+  const root = workspace(),
+    before = tree(root);
   const compiled = await run(['compile', '--root', root, '--json']);
-  expect(compiled.exitCode).toBe(0);
-  expect(compiled.stderr).toBe(DEPRECATION);
-  expect(DEPRECATION).toContain(CURRENT);
+  expect(compiled.exitCode).toBe(2);
+  expect(compiled.stderr).toBe('');
+  expect(JSON.parse(compiled.stdout)).toMatchObject({ code: 'IA-CLI-USAGE', ok: false });
+  expect(tree(root)).toEqual(before);
   expect(existsSync(resolve(root, DEFAULT_OUT))).toBe(false);
-  expect(snapshotAt(root).format).toBe(SNAPSHOT_FORMAT);
-  // A capture after it is the second capture of an unchanged workspace: it sees the alias's snapshot as its prior.
   const captured = await capture(root);
-  expect(captured.prior).not.toBeNull();
-  expect(captured.changed).toBe(0);
-  expect(existsSync(resolve(root, DEFAULT_OUT))).toBe(false);
+  expect(captured.prior).toBeNull();
+  expect(snapshotAt(root).format).toBe(SNAPSHOT_FORMAT);
 });

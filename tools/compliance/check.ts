@@ -1,4 +1,5 @@
 import '../temp/physical-temp.mjs';
+import { publicSystemNames } from '../native/public-systems.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isEntry } from '../entry/is-entry.mjs';
@@ -96,19 +97,7 @@ export function readFixtures(root: string): { fixtures: LanguageFixture[]; stray
 export function checkCompliance(root: string) {
   const native = {
       inputs: fixtureInputs,
-      folders: [
-        'agent-system',
-        'compliance-system',
-        'workspace-system',
-        'governance-system',
-        'session-system',
-        'authoring-system',
-        'agent-composition-system',
-        'template-system',
-        'hook-authoring-system',
-        'learning-system',
-        'work-system',
-      ],
+      folders: publicSystemNames(root),
     },
     corpus = compileNative(native.inputs);
   const graph = load(corpus.records, corpus.registry, {

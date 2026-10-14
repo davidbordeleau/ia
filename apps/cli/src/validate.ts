@@ -1,5 +1,5 @@
 /**
- * `ia validate`: docs/specs/consumer-cli-contract/README.md §2.5, rendered per §6.5 and §7.4/§7.5.
+ * `ia validate`: docs/specs/consumer-cli-contract/README.md §2.4–2.5 (capture and validation), §4 (refusals) and §6 (terminal rendering).
  *
  * Admission is whole-workspace by construction, so positionals restrict reporting and never admission: the
  * summary always states the true total and the exit class is computed from the unfiltered finding set.
@@ -46,6 +46,7 @@ import {
   errorBlock,
   headerLine,
   quote,
+  safeRootAdvice,
   sectionLabel,
   statusSymbol,
   truncateDigest,
@@ -65,9 +66,9 @@ export type ReportOutcome = 'pass' | 'fail' | 'not-evaluated';
 export const NOT_EVALUATED: ReadonlySet<string> = new Set(['IA-COMP-EDGE-UNRESOLVED', 'IA-COMP-NOT-EVALUATED']);
 
 /**
- * §6.5's next action "names a command, a file, or a specific thing to change". These are the codes for which one
+ * The “Refusals” contract requires a runnable repair where one exists. These are the codes for which one
  * sentence is true of every instance; a code that has no such sentence gets none rather than a filler. Nothing
- * here infers a cause across findings — §7.5's "both errors come from one edit" is an authoring-history claim the
+ * here infers a cause across findings — “Both errors come from one edit” is an authoring-history claim the
  * finding shape cannot support, so it is not reproduced.
  */
 const ACTIONS: Readonly<Record<string, string>> = {
@@ -91,7 +92,7 @@ const countsOf = (findings: readonly Finding[]) => ({
 const findingKey = (finding: Finding): string =>
   JSON.stringify([finding.code, finding.path, finding.line, finding.message]);
 
-/** §6.5 element 1: a finding with no location of its own is rendered beside the check that produced it. */
+/** Terminal rendering: a finding with no location of its own is rendered beside the check that produced it. */
 export const checkNames = (
   verdicts: readonly { readonly check: string; readonly findings: readonly Finding[] }[],
 ): ReadonlyMap<string, string> => {
@@ -182,7 +183,7 @@ function evidenceRefusal(error: unknown, root: string): Refusal {
     3,
     { path: located },
     code === 'IA-DB-PATH-UNSAFE'
-      ? `Replace ${located}, a link, junction or entry of the wrong kind, with a directory of this workspace, then run "${rerun}".`
+      ? `Replace only the unsafe entry ${located}, without following it or deleting its target, with a plain entry of the required kind inside this workspace, then run "${rerun}".`
       : `Make ${EVIDENCE_DIRECTORY} writable, then run "${rerun}".`,
   );
 }
@@ -376,7 +377,7 @@ const element = (view: ValidationView, finding: Finding, width: number): ErrorEl
   };
 };
 
-/** §7.4's collapse: findings differing only in the fragment their message names are one row plus a dim tail. */
+/** Terminal rendering: findings differing only in the fragment their message names are one row plus a dim tail. */
 const FRAGMENT = /#[A-Za-z0-9][A-Za-z0-9-]*/;
 const recordKey = (finding: Finding): string =>
   JSON.stringify([finding.code, finding.path, finding.line, finding.identity ?? null]);
@@ -402,8 +403,8 @@ const collapseTail = (rest: readonly Finding[]): string => {
 };
 
 /**
- * §6.5's grouping rule: "When several findings share a next action, the action is printed once under the group
- * rather than repeated per finding." A next action is keyed by finding code, so an adjacent run of one code is
+ * Terminal rendering groups a shared next action once under the findings rather than repeating it per finding.
+ * A next action is keyed by finding code, so an adjacent run of one code is
  * one group and its action is attached to the group's last rendered entry, where errorBlock places it.
  */
 const severitySection = (view: ValidationView, rows: readonly Finding[], caps: Capabilities): readonly string[] => {
@@ -549,7 +550,13 @@ export function renderValidation(view: ValidationView, options: ValidationOption
   if (view.bindings.results.length > 0) blocks.push(bindingsSection(view.bindings, caps));
   blocks.push(
     entry(
-      [words(closing(view, total.errors, bound.revoked + checked.revoked, checked.notEvaluated))],
+      [
+        words(
+          safeRootAdvice(closing(view, total.errors, bound.revoked + checked.revoked, checked.notEvaluated), [
+            view.root,
+          ]),
+        ),
+      ],
       {
         depth: 0,
         symbol: 'step',

@@ -14,8 +14,10 @@ import {
   declaresPermissions,
   githubSetupPlan,
   inspectNpm,
+  interactiveTrustResult,
   npmEngineSupported,
   npmSetupPlan,
+  npmWithInteractiveAuth,
   stageState,
   trustArgs,
   trustState,
@@ -83,6 +85,130 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 afterEach(() => vi.restoreAllMocks());
+
+const terminalAuth = { enabled: true, stdinIsTTY: true, stdoutIsTTY: true, log: vi.fn() };
+
+it('keeps default EOTP inspection read-only and gives a pinned terminal recovery command', async () => {
+  const fixture = registryFixture([{ ...ready, trust: new Error('EOTP token=fixture-secret') }]);
+  const recover = vi.fn();
+  const npm = npmWithInteractiveAuth(fixture.npm, recover);
+  const state = await inspectNpm(npm, [name], fixture.readPublic);
+  expect(state[name]!.trust.state).toBe('unknown');
+  expect(state[name]!.errors.join(' ')).toContain('pnpm npm:setup --interactive-auth --skip-github');
+  expect(state[name]!.errors.join(' ')).toContain('pinned npm 12.2.0');
+  expect(JSON.stringify(state)).not.toContain('fixture-secret');
+  expect(npmSetupPlan([name], state)[0]!.ready).toBe(false);
+  expect(recover).not.toHaveBeenCalled();
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each([
+  [false, false],
+  [false, true],
+  [true, false],
+])('refuses interactive recovery with stdin TTY %s and stdout TTY %s', (stdinIsTTY, stdoutIsTTY) => {
+  const npm = vi.fn();
+  const recover = vi.fn();
+  expect(() => npmWithInteractiveAuth(npm, recover, { ...terminalAuth, stdinIsTTY, stdoutIsTTY })).toThrow(
+    /ENOTTY.*terminal/,
+  );
+  expect(npm).not.toHaveBeenCalled();
+  expect(recover).not.toHaveBeenCalled();
+});
+
+it('uses the authenticated structured result in each fresh inspection without assuming a cached OTP', async () => {
+  const fixture = registryFixture([{ ...ready, trust: new Error('EOTP') }]);
+  const recover = vi.fn(() => JSON.stringify(publisher));
+  const npm = npmWithInteractiveAuth(fixture.npm, recover, terminalAuth);
+  const result = await applyNpm(npm, [name], fixture);
+  expect(result[0]!.ready).toBe(true);
+  expect(recover.mock.calls).toEqual([[name], [name]]);
+  expect(fixture.npm.mock.calls.filter(([args]) => args[0] === 'trust')).toHaveLength(2);
+  expect(fixture.readPublic).toHaveBeenCalledTimes(2);
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each(['ECANCELED', 'EAUTHFAILED', 'EOTP'])(
+  'blocks after %s without leaking errors or repeatedly prompting',
+  async (code) => {
+    const fixture = registryFixture([{ ...ready, trust: new Error('EOTP') }]);
+    const recover = vi.fn(() => {
+      throw new Error(code + ' token=fixture-secret');
+    });
+    const npm = npmWithInteractiveAuth(fixture.npm, recover, terminalAuth);
+    const state = await inspectNpm(npm, [name], fixture.readPublic);
+    expect(state[name]!.trust.state).toBe('unknown');
+    expect(JSON.stringify(state)).not.toContain('fixture-secret');
+    await expect(applyNpm(npm, [name], fixture)).rejects.toThrow(/inspection failed/);
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(fixture.writes).toEqual([]);
+    expect(fixture.log).not.toHaveBeenCalledWith(expect.stringContaining('readiness verified'));
+  },
+);
+
+it.each(['not-json', JSON.stringify({ ...publisher, environment: 'other' })])(
+  'does not accept an unverified resumed trust result: %s',
+  async (listing) => {
+    const fixture = registryFixture([{ ...ready, trust: new Error('EOTP') }]);
+    const npm = npmWithInteractiveAuth(fixture.npm, () => listing, terminalAuth);
+    await expect(applyNpm(npm, [name], fixture)).rejects.toThrow();
+    expect(fixture.writes).toEqual([]);
+  },
+);
+
+it('keeps private/public-404 state blocked after successful authentication', async () => {
+  const fixture = registryFixture([
+    { ...ready, access: { [name]: 'private' }, public: null, trust: new Error('EOTP') },
+  ]);
+  const npm = npmWithInteractiveAuth(fixture.npm, () => JSON.stringify(publisher), terminalAuth);
+  await expect(applyNpm(npm, [name], fixture)).rejects.toThrow(/exists but is private/);
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each([
+  [['trust', 'github', name], 'EOTP'],
+  [['stage', 'publish', 'placeholder'], 'EOTP'],
+  [['access', 'get', 'status', name, '--json'], 'EOTP'],
+  [['trust', 'list', name, '--json'], 'E401'],
+  [['trust', 'list', name, '--json'], 'E403'],
+] as [string[], string][])('never uses auth recovery to retry writes or unrelated failures: %j %s', (args, code) => {
+  const original = vi.fn(() => {
+    throw new Error(code);
+  });
+  const recover = vi.fn();
+  const npm = npmWithInteractiveAuth(original, recover, terminalAuth);
+  expect(() => npm(args, { stdio: 'pipe' })).toThrow(code);
+  expect(original).toHaveBeenCalledTimes(1);
+  expect(recover).not.toHaveBeenCalled();
+});
+
+it('requires a successful dedicated result channel independently of terminal output', () => {
+  const listing = JSON.stringify(publisher);
+  expect(
+    interactiveTrustResult({
+      status: 0,
+      output: [null, 'terminal challenge', null, JSON.stringify({ ok: true, listing })],
+    }),
+  ).toBe(listing);
+  for (const result of [
+    { status: 0, output: [null, JSON.stringify({ ok: true, listing })] },
+    { status: 1, output: [null, null, null, JSON.stringify({ ok: true, listing })] },
+    { status: 0, signal: 'SIGINT', output: [null, null, null, JSON.stringify({ ok: true, listing })] },
+    { status: 0, error: new Error('fixture-secret') },
+    { status: 0, output: [null, null, null, JSON.stringify({ ok: true })] },
+    {
+      status: 1,
+      output: [null, null, null, JSON.stringify({ ok: false, code: 'ECANCELED', message: 'fixture-secret' })],
+    },
+  ]) {
+    expect(() => interactiveTrustResult(result)).toThrow();
+    try {
+      interactiveTrustResult(result);
+    } catch (error) {
+      expect(String(error)).not.toContain('fixture-secret');
+    }
+  }
+});
 
 it('trusts exactly the publishing workflow, environment and repository', () => {
   expect(trustArgs('@inventarch/cli')).toEqual([

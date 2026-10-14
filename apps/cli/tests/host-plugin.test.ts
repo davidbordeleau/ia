@@ -736,11 +736,49 @@ describe('final review: ia init --from', () => {
         '  relationships',
         '    implements @contract sample-guide-triggers#REQ-SAMPLE-01',
         '',
+        // Item 17b: a trigger evaluation's result, a learning-system word, in the one lowered system.
+        '@observation sample-guide-trigger-run',
+        '  meaning',
+        '    says "One trigger evaluation of the sample-guide skill."',
+        '    answers "Did the skill trigger as its contract requires?"',
+        '  evidence',
+        '    origin check',
+        '    actor "eval-triggers.mjs"',
+        '    observed-at "2026-10-14T00:00:00Z"',
+        '    captured-at "2026-10-14T00:00:00Z"',
+        '    workspace "sample-kit"',
+        '    locator "sample-guide-triggers#REQ-SAMPLE-01"',
+        '    revision "unversioned"',
+        '    bundle ".ia/learning/observations/sample-guide-trigger-run.json"',
+        '    digest "0000000000000000000000000000000000000000000000000000000000000000"',
+        '    availability unavailable',
+        '    verdict success',
+        '  interpretation',
+        '    applies "The two sample-guide trigger cases only."',
+        '    limits "A fixture observation; no host session ran."',
+        '    reason "Trigger results are recorded as evidence beside the cases they evaluate."',
+        '    basis inference',
+        '  retention',
+        '    status retained',
+        '  relationships',
+        '    cites @contract sample-guide-triggers#REQ-SAMPLE-01',
+        '',
       ].join('\n'),
     );
     const validated = await validate(kit);
     expect(validated.exitCode, validated.stdout).toBe(0);
     expect(json(validated.stdout)['ok'] ?? true).toBe(true);
+    // The observation is admitted, not merely parsed: inspecting its file lists it.
+    const inspected = await run([
+      'inspect',
+      '--path',
+      '.ia/src/systems/sample-kit/records/triggers.ia',
+      '--root',
+      kit,
+      '--json',
+    ]);
+    expect(inspected.exitCode, inspected.stdout).toBe(0);
+    expect(inspected.stdout).toContain('sample-guide-trigger-run');
     const result = await run([
       'project',
       'claude',

@@ -528,11 +528,13 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       `  describes "The ${name ?? system} plugin, lowered into records by ia init --from."`,
       `  steward @agent ${system}-steward`,
       '  requires',
-      // Sorted; compliance-system lets authored trigger `@contract` and `@case` records live beside the lowered ones
+      // Sorted. compliance-system and learning-system let authored trigger `@contract` and `@case` records and the
+      // `@observation` records of trigger evaluations live beside the lowered ones (a lowered workspace holds one system)
       // without a hand edit of this lowered file, which would break the round trip's fixed point.
       '    - agent-composition-system',
       '    - agent-system',
       '    - compliance-system',
+      '    - learning-system',
       '    - workspace-system',
       '',
       `@agent ${system}-steward`,

@@ -562,11 +562,11 @@ describe('final review: lowering admits only what the renderer reproduces', () =
     expect(text).toMatch(/icon\.bin: .*not lowered by this version of ia/);
     expect(text).toMatch(/memory is not lowered by this version of ia/);
   });
-  it('requires compliance-system, so authored trigger contracts can live beside the lowered records', () => {
+  it('requires compliance-system and learning-system, sorted, so trigger contracts and observations can live beside the lowered records', () => {
     const plan = lowerPlugin(readPlugin(SAMPLE), 'sample-kit');
     const system = plan.files.find((file) => file.path === '.ia/src/systems/sample-kit/system.ia')!.bytes.toString();
     expect(system).toContain(
-      '  requires\n    - agent-composition-system\n    - agent-system\n    - compliance-system\n    - workspace-system\n',
+      '  requires\n    - agent-composition-system\n    - agent-system\n    - compliance-system\n    - learning-system\n    - workspace-system\n',
     );
   });
 });

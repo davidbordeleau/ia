@@ -2,8 +2,8 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "fe61e2166bbed083175a07ab9622c4c90addbb4e",
-    "tree": "f6b90cd3d9fd0089c24e9ac4e27216a577e27133",
+    "commit": "24342d8e3d6dc457b7c12cad80b8b9e2f91d0e05",
+    "tree": "2f0390312f3d39b35c445a7f3d1798248269be22",
     "dirty": true
   },
   "membership": {
@@ -6675,7 +6675,7 @@
     },
     {
       "path": "releases/changesets/3.0.0.json",
-      "sha256": "2467f95cf8163cac20c99371a9ee6785058a3245925080c4b61571fdf0180b9c"
+      "sha256": "24dd1cd5c91384cf8b8986bbeb5581970017a4602a36c63959258c0bc109ab1f"
     },
     {
       "path": "releases/current.json",
@@ -6747,11 +6747,11 @@
     },
     {
       "path": "tools/distribution/NPM-PUBLISHING.md",
-      "sha256": "d281fc7448cdc69eba06c249ffdfa4dd715ffef91d48a5d9f006103c4251cc9c"
+      "sha256": "60991d355c1273ac615bd441d91301df40e43ff1c84834abf5faea40435f9dbc"
     },
     {
       "path": "tools/distribution/SPEC.md",
-      "sha256": "fefaa567149bf440e95e2efb5c3dd559027e7977646411c8ef988266165c1c3b"
+      "sha256": "35fa71295c90084711319c2fbe0d2abd79a037a471b330142057fc9d268c4ba0"
     },
     {
       "path": "tools/distribution/generate-public.d.mts",
@@ -6823,11 +6823,11 @@
     },
     {
       "path": "tools/distribution/npm-release.mjs",
-      "sha256": "5572b7a777cd89c823c28c2dc3d95941d16b32af8284bd776e96d5d40a6cd774"
+      "sha256": "d235625b972219fe5ab9bff477cb96c4182066c0acbb1ef28efda8af6399e981"
     },
     {
       "path": "tools/distribution/npm-release.test.ts",
-      "sha256": "99b911abdf6f7560b04e67e42bcf0f8550213c303ac2b695d8b555bee30fe6ff"
+      "sha256": "13fa96f7e34b779e558333202b37e9ca6ca1fab5dc56c91abcac320a52205494"
     },
     {
       "path": "tools/distribution/public-content-policy.json",
@@ -6863,7 +6863,7 @@
     },
     {
       "path": "tools/distribution/release-hygiene.test.ts",
-      "sha256": "61e92893da14776d589b36bc4214b4605edf94d116b2658c39bc77b4ffe37878"
+      "sha256": "18af7880cf6b17411c71f5c969eef674a00681015928d8d3b20dc9347fcccfcb"
     },
     {
       "path": "tools/distribution/release-notes.d.mts",
@@ -6886,16 +6886,28 @@
       "sha256": "c32bc53ba09b80b3d27b313aeabff768b039be22e9361b6491318f1c9e7ec943"
     },
     {
+      "path": "tools/distribution/release-setup-auth.d.mts",
+      "sha256": "9496a66247882b70911c836f1ee5a3b0b0750b9939dd74b9fcd7a648f905ca64"
+    },
+    {
+      "path": "tools/distribution/release-setup-auth.mjs",
+      "sha256": "eae0ac9c32f06d2f407796f0157162c0b325f6fdf346aa1b9345f082690edc88"
+    },
+    {
+      "path": "tools/distribution/release-setup-auth.test.ts",
+      "sha256": "ef55e3c01a288b19dc730040d5712e669a0b018ce4adfb2bccfd104698bbff97"
+    },
+    {
       "path": "tools/distribution/release-setup.d.mts",
-      "sha256": "ca9c5495971c80cb77cb73a8bbdfac0f867bdce7ca9bed69aaa73bc5ad4ab44f"
+      "sha256": "72e46466b4af8bc002768d7a8b044669b2fdaef8abeecab8cfff8480f9760f5e"
     },
     {
       "path": "tools/distribution/release-setup.mjs",
-      "sha256": "3083619e12dce7098e6ebf66014431b06c45caa3213be11e04fd2a7d67399085"
+      "sha256": "954cf29a9593f4fdf0d50806dad34d042a7b30baa35a5835f56301544fb7063a"
     },
     {
       "path": "tools/distribution/release-setup.test.ts",
-      "sha256": "2f048ad88746b05a1b3040b05e49c3f180201201c5b7a6eda79b2def45bfcbf5"
+      "sha256": "7c5474fe25875284ede1982c7eac6c541920fc3f318492b9242009b4f76c78e5"
     },
     {
       "path": "tools/distribution/release-version.d.mts",
@@ -6903,11 +6915,11 @@
     },
     {
       "path": "tools/distribution/release-version.mjs",
-      "sha256": "4e96e35d5846b7c6cb5ed9180acace8e700b1f1b87f794f82ac8f38d06019c7a"
+      "sha256": "83e34d8176bc33bb10cdddeb7e77a66e210358aef364365f6fdd78c0de1595d2"
     },
     {
       "path": "tools/distribution/release-versioning.test.ts",
-      "sha256": "1a9b9292a933c01f3ba94bf85dad044184d4cbb276575c493f6a755d626b960b"
+      "sha256": "e366886cfa566ec6ea48425c5f0122afd75600509a89a005ac00bb52be6e7833"
     },
     {
       "path": "tools/distribution/resources.mjs",
@@ -7443,7 +7455,7 @@
     },
     {
       "path": "tools/testing/inventory.test.ts",
-      "sha256": "9331c82365935b4dcc54efbf3f088ea87bad828e57e5a98edbfd8279ab4341df"
+      "sha256": "111cc98cfb7bc1444a79b68c360e755fa176d774ede3e75566e337562472c99a"
     },
     {
       "path": "tools/testing/inventory.ts",
@@ -7499,7 +7511,7 @@
     },
     {
       "path": "tools/testing/tasks.json",
-      "sha256": "b8495baf83a031c63769221273d2c99f14eb72d6ac10b57b351be683b21c5948"
+      "sha256": "e7fc1665bce65430cdc9c2726dc9e0431e8c6d0a2a081ff6f1071334e57a9d29"
     },
     {
       "path": "tools/testing/timeouts.ts",
@@ -7522,5 +7534,5 @@
       "sha256": "291a1735a1bdf4a85d3baafef644f0bffe0d9bfbada49d63c648311ff4429ed1"
     }
   ],
-  "inputDigest": "28d862f1551da368ac183309a244dcf49a86bb4f4e1756c21b7ae8f7fc6569f9"
+  "inputDigest": "232e6c206ca4b6bc88a916fab3c2d6b78b7b88d6b8e76ab4da2e5d460f69b7e4"
 }

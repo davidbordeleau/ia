@@ -2973,12 +2973,12 @@
     },
     {
       "path": "tools/distribution/NPM-PUBLISHING.md",
-      "sha256": "d281fc7448cdc69eba06c249ffdfa4dd715ffef91d48a5d9f006103c4251cc9c",
+      "sha256": "60991d355c1273ac615bd441d91301df40e43ff1c84834abf5faea40435f9dbc",
       "change": "local-execution-runner"
     },
     {
       "path": "tools/distribution/SPEC.md",
-      "sha256": "fefaa567149bf440e95e2efb5c3dd559027e7977646411c8ef988266165c1c3b",
+      "sha256": "35fa71295c90084711319c2fbe0d2abd79a037a471b330142057fc9d268c4ba0",
       "change": "local-execution-runner"
     },
     {
@@ -3013,12 +3013,12 @@
     },
     {
       "path": "tools/distribution/npm-release.mjs",
-      "sha256": "5572b7a777cd89c823c28c2dc3d95941d16b32af8284bd776e96d5d40a6cd774",
+      "sha256": "d235625b972219fe5ab9bff477cb96c4182066c0acbb1ef28efda8af6399e981",
       "change": "local-execution-runner"
     },
     {
       "path": "tools/distribution/npm-release.test.ts",
-      "sha256": "99b911abdf6f7560b04e67e42bcf0f8550213c303ac2b695d8b555bee30fe6ff",
+      "sha256": "13fa96f7e34b779e558333202b37e9ca6ca1fab5dc56c91abcac320a52205494",
       "change": "local-execution-runner"
     },
     {
@@ -3034,6 +3034,51 @@
     {
       "path": "tools/distribution/release-fixtures.ts",
       "sha256": "7e538cc98ab2306f6a77633a07295dc551a9fe46f16e15f660a65e7c2e2bf08a",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-hygiene.test.ts",
+      "sha256": "18af7880cf6b17411c71f5c969eef674a00681015928d8d3b20dc9347fcccfcb",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-setup-auth.d.mts",
+      "sha256": "9496a66247882b70911c836f1ee5a3b0b0750b9939dd74b9fcd7a648f905ca64",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-setup-auth.mjs",
+      "sha256": "eae0ac9c32f06d2f407796f0157162c0b325f6fdf346aa1b9345f082690edc88",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-setup-auth.test.ts",
+      "sha256": "ef55e3c01a288b19dc730040d5712e669a0b018ce4adfb2bccfd104698bbff97",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-setup.d.mts",
+      "sha256": "72e46466b4af8bc002768d7a8b044669b2fdaef8abeecab8cfff8480f9760f5e",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-setup.mjs",
+      "sha256": "954cf29a9593f4fdf0d50806dad34d042a7b30baa35a5835f56301544fb7063a",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-setup.test.ts",
+      "sha256": "7c5474fe25875284ede1982c7eac6c541920fc3f318492b9242009b4f76c78e5",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-version.mjs",
+      "sha256": "83e34d8176bc33bb10cdddeb7e77a66e210358aef364365f6fdd78c0de1595d2",
+      "change": "local-execution-runner"
+    },
+    {
+      "path": "tools/distribution/release-versioning.test.ts",
+      "sha256": "e366886cfa566ec6ea48425c5f0122afd75600509a89a005ac00bb52be6e7833",
       "change": "local-execution-runner"
     },
     {
@@ -3288,12 +3333,12 @@
     },
     {
       "path": "tools/testing/inventory.test.ts",
-      "sha256": "9331c82365935b4dcc54efbf3f088ea87bad828e57e5a98edbfd8279ab4341df",
+      "sha256": "111cc98cfb7bc1444a79b68c360e755fa176d774ede3e75566e337562472c99a",
       "change": "checked-optional-distribution-inputs"
     },
     {
       "path": "tools/testing/tasks.json",
-      "sha256": "b8495baf83a031c63769221273d2c99f14eb72d6ac10b57b351be683b21c5948",
+      "sha256": "e7fc1665bce65430cdc9c2726dc9e0431e8c6d0a2a081ff6f1071334e57a9d29",
       "change": "checked-optional-distribution-inputs"
     }
   ]

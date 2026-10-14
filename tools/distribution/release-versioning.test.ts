@@ -17,6 +17,7 @@ import type { PublicPackage } from './npm-release.mjs';
 import {
   collectChanges,
   releaseChanges,
+  releaseNotes,
   releaseStatus,
   renderChangelog,
   validateChangesetStructure,
@@ -24,8 +25,8 @@ import {
   type ReleasePolicy,
 } from './release-changes.mjs';
 import { bumpVersion, draftNote, inferBump, maxBump, notePaths, releaseBump, validateNote } from './release-notes.mjs';
-import { a, b, c, refusal } from './release-fixtures.js';
-import { versionRelease } from './release-version.mjs';
+import { a, b, c, changeset, refusal } from './release-fixtures.js';
+import { pullRequestBody, versionRelease, type VersionResult } from './release-version.mjs';
 
 const names = ['@inventarch/a', '@inventarch/b'];
 const note = (bump: string, packages: string[], title: string) => ({
@@ -35,6 +36,105 @@ const note = (bump: string, packages: string[], title: string) => ({
   summary: `${title} for package consumers.`,
   packages,
   paths: packages.map((name) => `packages/${name.slice(12)}/`),
+});
+
+/** Rendering does not need a Git checkout and must never alter the reviewed release files. */
+function withReleaseBody(run: (root: string, entry: Changeset, result: VersionResult, save: () => void) => void) {
+  const root = realpathSync(mkdtempSync(resolve(realpathSync(tmpdir()), 'ia-release-pr-body-'))),
+    entry = changeset(),
+    result: VersionResult = {
+      action: 'version',
+      state: 'published',
+      version: entry.version,
+      baseline: entry.baseline,
+      bump: 'minor',
+      changeset: `releases/changesets/${entry.version}.json`,
+      sha256: 'b'.repeat(64),
+      files: 42,
+      notes: ['runtime'],
+    };
+  mkdirSync(resolve(root, 'releases/changesets'), { recursive: true });
+  const save = () => {
+    writeFileSync(resolve(root, result.changeset!), JSON.stringify(entry, null, 2) + '\n');
+    writeFileSync(resolve(root, 'CHANGELOG.md'), renderChangelog([entry]));
+  };
+  try {
+    save();
+    run(root, entry, result, save);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+it('retains complete inline notes and metadata when the whole PR description fits', () => {
+  withReleaseBody((root, _entry, result) => {
+    for (const notes of [['runtime'], []]) {
+      const body = pullRequestBody(root, { ...result, notes });
+      expect(body).toContain(releaseNotes(root, result.version));
+      expect(body).toContain(`| Notes consumed | ${notes.length ? '`runtime`' : 'none'} |`);
+      expect(body).toContain(`| Changeset SHA256 | \`${result.sha256}\` |`);
+      expect(body).toContain('### Review');
+      expect(body).toContain('### After merge');
+      expect(body).toContain('environment approval');
+      expect(Buffer.byteLength(body, 'utf8')).toBeLessThan(65_536);
+    }
+  });
+});
+
+it('includes the entire envelope in the exact UTF-8 budget and falls back one byte above it', () => {
+  withReleaseBody((root, entry, result, save) => {
+    entry.summary = 'x';
+    save();
+    const overhead = Buffer.byteLength(pullRequestBody(root, result), 'utf8') - 1;
+    entry.summary = 'x'.repeat(60_000 - overhead);
+    save();
+    const exact = pullRequestBody(root, result);
+    expect(Buffer.byteLength(exact, 'utf8')).toBe(60_000);
+    expect(exact).toContain(releaseNotes(root, result.version));
+    entry.summary += 'x';
+    save();
+    const compact = pullRequestBody(root, result);
+    expect(Buffer.byteLength(compact, 'utf8')).toBeLessThan(60_000);
+    expect(compact).toContain('exceed the inline description budget');
+    expect(compact).not.toContain(entry.summary);
+  });
+});
+
+it.each(['é', '中', '🚀'])('preserves oversized %s notes in linked files without slicing Unicode', (character) => {
+  withReleaseBody((root, entry, result, save) => {
+    entry.summary = character.repeat(30_000);
+    entry.changes[0]!.summary = `Complete final note: ${character}`;
+    save();
+    const files = [result.changeset!, 'CHANGELOG.md'],
+      before = files.map((path) => readFileSync(resolve(root, path))),
+      full = releaseNotes(root, result.version),
+      body = pullRequestBody(root, result);
+    expect(Buffer.byteLength(body, 'utf8')).toBeLessThanOrEqual(60_000);
+    expect(body.length).toBeLessThan(65_536);
+    expect([...body].length).toBeLessThan(65_536);
+    expect(body).toContain('[changelog](https://github.com/inventarch/ia/blob/release/next/CHANGELOG.md)');
+    expect(body).toContain(`[changeset](https://github.com/inventarch/ia/blob/release/next/${result.changeset})`);
+    expect(body).toContain(`| Changeset SHA256 | \`${result.sha256}\` |`);
+    expect(body).toContain('| Notes consumed | 1 (see the complete changeset) |');
+    expect(body).toContain('### Review');
+    expect(body).toContain('### After merge');
+    expect(body).toContain('environment approval');
+    expect(body).not.toContain('�');
+    expect(releaseNotes(root, result.version)).toBe(full);
+    expect(full).toContain(entry.changes[0]!.summary);
+    expect(files.map((path) => readFileSync(resolve(root, path)))).toEqual(before);
+  });
+});
+
+it('bounds an oversized consumed-note list even when the release prose is short', () => {
+  withReleaseBody((root, _entry, result) => {
+    result.notes = Array.from({ length: 10_000 }, (_, i) => `note-${i}`);
+    const body = pullRequestBody(root, result);
+    expect(Buffer.byteLength(body, 'utf8')).toBeLessThanOrEqual(60_000);
+    expect(body).toContain('| Notes consumed | 10000 (see the complete changeset) |');
+    expect(body).not.toContain('`note-9999`');
+    expect(body).toContain('[changeset](');
+  });
 });
 
 it('derives the next version from the largest pending bump and refuses skipped versions', () => {
@@ -285,6 +385,7 @@ it('versions, amends and protects a release from pending notes in a real reposit
       bump: 'minor',
       notes: ['a-tests', 'faster-a'],
     });
+    expect(pullRequestBody(root, versioned)).toContain(releaseNotes(root, '1.2.0'));
     expect(projects().map((project) => project.manifest.version)).toEqual(['1.2.0', '1.2.0']);
     expect(read('releases/current.json').baseline).toEqual({ commit: published, version: '1.1.0' });
     expect(existsSync(resolve(root, 'releases/pending/faster-a.json'))).toBe(false);

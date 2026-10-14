@@ -1,5 +1,10 @@
+import { cpSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { emitFrontmatter, isPlain, parseFrontmatter, sameValue } from '../src/host-plugin/frontmatter.js';
+import { readPlugin } from '../src/host-plugin/inventory.js';
 
 const b = (text: string): Buffer => Buffer.from(text, 'utf8');
 
@@ -74,5 +79,56 @@ describe('frontmatter (A4)', () => {
     expect(sameValue({ kind: 'list', items: ['a'] }, { kind: 'boolean', value: false })).toBe(false);
     expect(sameValue({ kind: 'list', items: ['a', 'b'] }, { kind: 'list', items: ['a', 'b'] })).toBe(true);
     expect(sameValue({ kind: 'boolean', value: true }, { kind: 'boolean', value: false })).toBe(false);
+  });
+});
+
+const SAMPLE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../tools/projections/fixtures/host-plugin/sample',
+);
+const copy = (): string => {
+  const target = join(mkdtempSync(join(tmpdir(), 'ia-host-plugin-')), 'sample');
+  cpSync(SAMPLE, target, { recursive: true });
+  return target;
+};
+
+describe('plugin inventory (A5)', () => {
+  it('classifies manifests, skills with their owned files, agents and other files', () => {
+    const inventory = readPlugin(SAMPLE);
+    expect(Object.keys(inventory.manifests).sort()).toEqual(['claude', 'codex', 'grok']);
+    expect(inventory.skills.map((skill) => [skill.name, skill.owned.map((entry) => entry.path)])).toEqual([
+      ['sample-guide', ['skills/sample-guide/assets/templates/card.md', 'skills/sample-guide/references/guide.md']],
+      ['sample-run', []],
+    ]);
+    expect(inventory.agents.map((agent) => agent.name)).toEqual(['sample-reader']);
+    expect(inventory.other.map((entry) => entry.path)).toEqual([
+      'CODEX.md',
+      'LICENSE',
+      'README.md',
+      'tests/sample.check.mjs',
+    ]);
+    expect(inventory.unresolved).toEqual([]);
+  });
+  it('lists hooks and commands as unresolved', () => {
+    const root = copy();
+    mkdirSync(join(root, 'hooks'));
+    writeFileSync(join(root, 'hooks/hooks.json'), '{}\n');
+    mkdirSync(join(root, 'commands'));
+    writeFileSync(join(root, 'commands/x.md'), 'x\n');
+    expect(readPlugin(root).unresolved).toHaveLength(2);
+  });
+  it('refuses a symbolic link', () => {
+    const linked = copy();
+    try {
+      symlinkSync(join(linked, 'README.md'), join(linked, 'LINK.md'));
+    } catch {
+      return; // Windows without symlink privilege: only this test is skipped
+    }
+    expect(() => readPlugin(linked)).toThrow(/symbolic link/);
+  });
+  it('refuses a .git directory before reading on', () => {
+    const git = copy();
+    mkdirSync(join(git, '.git'));
+    expect(() => readPlugin(git)).toThrow(/not plugin content/);
   });
 });

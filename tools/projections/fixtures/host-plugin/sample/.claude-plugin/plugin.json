@@ -1,0 +1,10 @@
+{
+  "name": "sample-plugin",
+  "displayName": "Sample Plugin",
+  "version": "0.1.0",
+  "description": "A public fixture plugin that exercises every lowering row.",
+  "author": {
+    "name": "InventArch fixtures"
+  },
+  "license": "Apache-2.0"
+}

@@ -1009,6 +1009,7 @@
       "kind": "vitest",
       "project": "apps/cli",
       "files": [
+        "tests/adopt.test.ts",
         "tests/init-migrate.test.ts",
         "tests/init.test.ts"
       ],
@@ -1206,11 +1207,13 @@
         "tests/json-edit.test.ts",
         "tests/lifecycle-registration.test.ts",
         "tests/minting.test.ts",
+        "tests/optional-pack-files.test.ts",
         "tests/plugin-home.test.ts",
         "tests/product-structure.test.ts",
         "tests/projection.test.ts",
         "tests/publication.test.ts",
         "tests/registry-build.test.ts",
+        "tests/registry-collections.test.ts",
         "tests/registry-config.test.ts",
         "tests/registry-layout.test.ts",
         "tests/registry-resolve.test.ts",
@@ -1680,6 +1683,7 @@
         "tests/membership.test.ts",
         "tests/preview.test.ts",
         "tests/retention.test.ts",
+        "tests/runner-evidence.test.ts",
         "tests/scope.test.ts",
         "tests/seat.test.ts",
         "tests/view.test.ts",
@@ -2634,7 +2638,8 @@
         "tools/native/repository-architecture.test.ts",
         "tools/native/work-example.test.ts",
         "tools/native/check.test.ts",
-        "tools/native/language-base.test.ts"
+        "tools/native/language-base.test.ts",
+        "tools/native/public-systems.test.ts"
       ],
       "profile": "corpus",
       "platforms": [
@@ -3445,6 +3450,170 @@
       "dependsOn": [],
       "outputs": [
         "artifacts/tests/tools-test-npm-release"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "runner:build",
+      "kind": "command",
+      "project": "apps/runner",
+      "command": "pnpm build",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "agent-composition-system:build",
+        "agent-system:build",
+        "session-system:build",
+        "workspace-runtime:build",
+        "runtime:build",
+        "db:build"
+      ],
+      "outputs": [
+        "apps/runner/dist",
+        "artifacts/tests/runner-build"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm -r build"
+      ]
+    },
+    {
+      "id": "runner:typecheck",
+      "kind": "command",
+      "project": "apps/runner",
+      "command": "pnpm typecheck",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "runner:build"
+      ],
+      "outputs": [
+        "artifacts/tests/runner-typecheck"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm -r typecheck"
+      ]
+    },
+    {
+      "id": "runner:test",
+      "kind": "vitest",
+      "project": "apps/runner",
+      "files": [
+        "tests/response.test.ts",
+        "tests/runner.test.ts"
+      ],
+      "profile": "database",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "runner:build"
+      ],
+      "outputs": [
+        "artifacts/tests/runner-test"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "native:release-check",
+      "kind": "command",
+      "project": ".",
+      "command": "pnpm native:release:check",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "repository-inventory",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/native-release-check"
+      ],
+      "cache": false,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "node --conditions=development --import tsx tools/release/native-version.ts --check"
+      ],
+      "reason": "Published Git tag availability and native archive digests must be checked fresh for each qualification."
+    },
+    {
+      "id": "tools:test-public-release",
+      "kind": "vitest",
+      "project": ".",
+      "files": [
+        "tools/release/public-content.test.ts"
+      ],
+      "profile": "corpus",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "repository-inventory",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/tools-test-public-release"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "tools:test-native-release",
+      "kind": "vitest",
+      "project": ".",
+      "files": [
+        "tools/release/native-version.test.ts"
+      ],
+      "profile": "corpus",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "repository-inventory",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/tools-test-native-release"
       ],
       "cache": true,
       "workerLimit": 1,

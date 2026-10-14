@@ -27,11 +27,14 @@ export {
 export type { CapturePlan, CaptureWrite, Readiness, Staleness } from './retention.js';
 export type { SeatResolution } from './seat.js';
 export type { CacheStatus, CacheObservation } from './cache.js';
-export type { RefusedRecord } from './view.js';
+export type { RefusedRecord, UnadmittedFinding, UnadmittedRecord } from './view.js';
 export type { DraftChange, DraftPreview } from './preview.js';
 export { EVIDENCE_DIRECTORY, EVIDENCE_FILE } from './inputs.js';
 export { bindChecks, checkVerdicts, WHOLE_WORKSPACE_SCOPE } from './checks.js';
 export type { CheckBinding, CheckBindingStatus, CheckCatalog, CheckOutcome } from './checks.js';
 export { CHECK_EVIDENCE_WORD, evidenceText, readEvidence, reproducesEvidence, writeEvidence } from './evidence.js';
 export type { EvidenceObservation, EvidenceWrite } from './evidence.js';
+export { RUNNER_EVIDENCE_DIRECTORY } from './inputs.js';
+export { RUNNER_EVIDENCE_FORMAT, writeRunnerEvidence } from './runner-evidence.js';
+export type { RunnerEvidenceWrite } from './runner-evidence.js';
 export type { ViewOptions } from './view.js';

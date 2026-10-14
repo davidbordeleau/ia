@@ -17,7 +17,7 @@ import {
 } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
-import { PACKET_MARKER } from '@inventarch/runtime';
+import { PACKET_MARKER, admissionReport } from '@inventarch/runtime';
 import { hookGroupDigest } from '@inventarch/distribution/guard-registration';
 import { sha256 } from '@inventarch/distribution/services';
 import { runBounded } from '@tools/testing/subprocess.js';
@@ -617,13 +617,23 @@ it('restores editing with the removal the guard names when a broken record keeps
   // A syntax error in the hook's own record: it is no admitted @hook, and the workspace no longer admits.
   edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
   const refused = await guarded(root, group, '.ia/src/hooks.ia', {}, 'Edit');
-  expect(codeOf(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
-  // Re-registering would refuse here, so it is not named; ia validate, which shows why, is.
+  // hooks.ia holds docs-mandate and reviewer-docs too, which admission refuses with it, so the edit fails closed at the
+  // first of them (review D-N1), and `ia validate`, mandate-gated, refuses there (lane D). Re-registering would refuse
+  // too, so it is not named: the admission report, which shows why, is named instead, and runs.
+  expect(codeOf(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+  expect(refused).toContain('agent-system/policy/mandate/docs-mandate (.ia/src/hooks.ia:15) failed admission');
   expect(refused).not.toContain(`"ia host claude --root ${JSON.stringify(root)} --apply --yes"`);
-  expect(refused).toContain(`"ia validate --root ${JSON.stringify(root)}"`);
+  expect(refused).not.toContain('ia validate');
+  expect(refused).toContain(`"${admissionReport(root).command}"`);
   const validated = await run(['validate', '--root', root, '--json']);
-  expect(validated.exitCode).not.toBe(0);
-  expect(validated.stdout).toContain('hooks.ia');
+  expect(validated.exitCode).toBe(1);
+  expect(JSON.parse(validated.stdout)).toMatchObject({
+    code: 'IA-RUNTIME-REQUEST-INVALID',
+    where: { path: '.ia/src/hooks.ia' },
+  });
+  const report = await run(['report', '--root', root]);
+  expect(report.stderr).toBe('');
+  expect(report.stdout).toContain('hooks.ia');
   expect(await lifted(root, env, refused)).toBe(0);
 
   // The lift a main-session refusal names works whatever the records say: an ambiguous default actor and a source error.
@@ -638,10 +648,16 @@ it('restores editing with the removal the guard names when a broken record keeps
   // effect (review C2-R7), so the registration names its actor; the guarded edits below are judged as before.
   await apply(second.root, second.env, '--actor', 'agent-system/binding/agent/demo');
   const ambiguous = hookGroups(second.root).get(HOOK);
-  put(second.root, '.ia/src/broken.ia', '#! ia 1.0\n\n@playbook broken\n  meaning\n    says "x"\nzzz not ia\n');
+  // The source error is inside a record db identifies: a stray top-level line would be a record it cannot identify,
+  // possibly a @mandate, which fails the edit closed at it instead (review D2-R2), and the lift works then too.
+  put(second.root, '.ia/src/broken.ia', '#! ia 1.0\n\n@playbook broken\n  meaning\n    says "x"\n   not ia\n');
   const lift = await guarded(second.root, ambiguous, 'docs/guide.md');
   expect(codeOf(lift)).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
-  expect(await lifted(second.root, second.env, lift)).toBe(0);
+  put(second.root, '.ia/src/broken.ia', '#! ia 1.0\n\n@playbook broken\n  meaning\n    says "x"\nzzz not ia\n');
+  const closed = await guarded(second.root, ambiguous, 'docs/guide.md');
+  expect(codeOf(closed)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+  expect(closed).toContain('an unidentified record at .ia/src/broken.ia:6, possibly a @mandate, failed admission');
+  expect(await lifted(second.root, second.env, closed)).toBe(0);
 });
 
 it('refuses no more than the last registered selection when the records cannot open, and the removal it names works (H-R8)', async () => {
@@ -1055,7 +1071,9 @@ it('names the state repair when the hook ownership state cannot be read and the 
   writeFileSync(resolve(root, HOOK_STATE), '{ not json');
   edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
   const refused = await guarded(root, group, 'src/app.ts');
-  expect(codeOf(refused)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
+  // hooks.ia holds docs-mandate and reviewer-docs too, so the edit fails closed at the first of them (review D-N1).
+  expect(codeOf(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
+  expect(refused).toContain('agent-system/policy/mandate/docs-mandate (.ia/src/hooks.ia:15) failed admission');
   expect(refused).toContain(
     `from a shell, delete ${HOOK_STATE} and every IA hook group in ${SETTINGS} (each runs the guard for one authored @hook) to restore editing, then run "ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`,
   );

@@ -1,8 +1,10 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { Interrupted } from '../src/consumer.js';
+import { applyInit, collectInit, gitIn } from '../src/init.js';
 import { cleanup, scratch } from './scratch-fixture.js';
-import { repository, run } from './workspace-fixture.js';
+import { cli, repository, run } from './workspace-fixture.js';
 
 afterAll(cleanup);
 async function workspace(): Promise<string> {
@@ -584,6 +586,24 @@ describe('final review: ia project plugin flags', () => {
     ]);
     expect(result.exitCode, result.stdout).toBe(1);
     expect(json(result.stdout)['code']).toBe('IA-PLUGIN-INPUT');
+    // The next action is about the comparison directory, not a link, and its rerun keeps --compare.
+    const next = String(json(result.stdout)['next']);
+    expect(next).toMatch(/existing plugin directory/);
+    expect(next).not.toMatch(/link/);
+    expect(next).toContain(`--compare ${missing}`);
+  });
+  it('judges an --out reached through a link or junction into the workspace as inside it', async () => {
+    const kit = await lowered();
+    const link = join(scratch('host-plugin-outlink'), 'into-kit');
+    try {
+      symlinkSync(kit, link, 'junction');
+    } catch {
+      return; // a platform that can create neither a junction nor a directory link: only this case is skipped
+    }
+    const out = join(link, 'out');
+    const result = await run(['project', 'claude', '--product', 'plugin', '--out', out, '--root', kit, '--json']);
+    expect(json(result.stdout)['code']).toBe('IA-PLUGIN-OUT');
+    expect(existsSync(join(kit, 'out'))).toBe(false);
   });
   it('judges an --out named ..x below the workspace as inside it', async () => {
     const kit = await lowered();
@@ -649,6 +669,51 @@ describe('final review: ia init --from', () => {
     cpSync(SAMPLE, root, { recursive: true });
     return root;
   }
+  it('carries --from into the plan, resume and conflict next commands', async () => {
+    const source = await plugin('next');
+    const kit = join(scratch('host-plugin-next-kit'), 'sample-kit');
+    const applyLine = (text: string): string => text.replace(/\s+/g, ' ').match(/Apply with "([^"]*)"/)?.[1] ?? '';
+    // The plan's next, as the terminal prints it.
+    const planned = await run(['init', kit, '--from', source]);
+    expect(planned.exitCode, planned.stderr).toBe(0);
+    const command = applyLine(planned.stdout);
+    expect(command).toMatch(/^ia init \S+ --from \S+ --apply --yes$/);
+    expect(command).toContain(`--from ${source}`);
+    // The resume next: an apply interrupted after its first write names the same invocation, --from included.
+    const controller = new AbortController();
+    const interrupted = applyInit(
+      collectInit({
+        root: kit,
+        host: 'none',
+        from: source,
+        packageRoot: cli,
+        git: gitIn(dirname(kit), {}),
+        invocation: command.replace(/ --apply --yes$/, ''),
+      }),
+      {
+        packageRoot: cli,
+        signal: controller.signal,
+        checkpoint: (name) => {
+          if (name === 'init:author') controller.abort();
+        },
+      },
+    );
+    await expect(interrupted).rejects.toBeInstanceOf(Interrupted);
+    await expect(interrupted).rejects.toMatchObject({
+      next: expect.stringContaining(`--from ${source} --apply --yes`),
+    });
+    // The resumable plan's next comes from invocationOf again and still carries --from.
+    const resumable = await run(['init', kit, '--from', source]);
+    expect(resumable.stdout).toContain('Completed steps are skipped');
+    expect(applyLine(resumable.stdout)).toContain(`--from ${source} --apply --yes`);
+    // The conflict refusal's next.
+    const busy = join(scratch('host-plugin-next-busy'), 'sample-kit');
+    mkdirSync(join(busy, '.ia/src'), { recursive: true });
+    writeFileSync(join(busy, '.ia/src/foreign.ia'), '#! ia 1.0\n');
+    const conflict = await run(['init', busy, '--from', source, '--apply', '--yes', '--json']);
+    expect(json(conflict.stdout)['code']).toBe('IA-CLI-CONFLICT');
+    expect(String(json(conflict.stdout)['next'])).toContain(`--from ${source}`);
+  });
   it('refuses ia init --from . run inside the plugin, writing nothing into it', async () => {
     const source = await plugin('self');
     const before = listed(source);

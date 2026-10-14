@@ -70,7 +70,13 @@ function checkPluginProduct(context: Context, root: string): Result {
   const given = args.value('compare');
   const compare = given === undefined ? undefined : resolve(context.host.cwd, given);
   if (compare !== undefined && statSync(compare, { throwIfNoEntry: false })?.isDirectory() !== true)
-    throw new HostPluginError('IA-PLUGIN-INPUT', `${compare} is not a plugin directory to compare with`);
+    throw new Refusal(
+      'IA-PLUGIN-INPUT',
+      `${compare} is not a plugin directory to compare with`,
+      1,
+      { path: compare },
+      `Choose an existing plugin directory to compare with, then run "ia project ${args.positionals[0] ?? 'claude'} --product plugin --check --compare ${quote(compare)} --root ${quote(root)}".`,
+    );
   const diffs = compare === undefined ? [] : comparePlugin(readEntries(compare), files);
   const drift = diffs.filter((d) => REFUSED.has(d.status));
   const again = lowerPlugin(inventoryOf(files.map((f) => ({ path: f.path, bytes: f.bytes }))), system);
@@ -196,13 +202,16 @@ export async function runPluginProduct(context: Context): Promise<Result> {
     };
   } catch (error) {
     if (error instanceof HostPluginError) {
+      // A rerun keeps the comparison the invocation asked for.
+      const compared = args.value('compare');
+      const compareOption = compared === undefined ? '' : ` --compare ${quote(resolve(context.host.cwd, compared))}`;
       const fix =
         error.code === 'IA-PLUGIN-OUT'
           ? 'Run "ia project --help" for the options, and choose an absent or empty output directory outside the workspace.'
           : error.code === 'IA-RESOURCE-DIGEST' || error.code === 'IA-PLUGIN-PRODUCT'
             ? 'Run "ia init --help" to lower the plugin again from its source, then project it.'
             : error.code === 'IA-PLUGIN-INPUT'
-              ? `Name an existing plugin directory, or replace the link the message names with real files, then run "ia project ${args.positionals[0] ?? 'claude'} --product plugin --check --root ${quote(root)}".`
+              ? `Remove the entry the message names, or replace the link it names with real files, then run "ia project ${args.positionals[0] ?? 'claude'} --product plugin --check${compareOption} --root ${quote(root)}".`
               : next;
       throw new Refusal(error.code, error.message, 1, { path: root }, fix);
     }

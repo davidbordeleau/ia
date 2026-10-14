@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createFile } from '@inventarch/distribution/services';
 import type { PluginAsset, PluginFile, PluginResource } from '@inventarch/workspace-runtime/internal/generate';
 import { ASSET_ROOT, HostPluginError } from '@inventarch/workspace-runtime/internal/host-plugin';
@@ -18,6 +18,22 @@ interface Association {
 
 /** Whether `relative(base, path)` leaves `base`: `..` itself or a `..` segment first, never a name like `..x`. */
 const leaves = (here: string): boolean => here === '..' || here.startsWith(`..${sep}`) || isAbsolute(here);
+
+/** `path` with its longest existing prefix resolved through links, junctions and the volume's own spelling. */
+export function canonical(path: string): string {
+  let head = resolve(path);
+  const rest: string[] = [];
+  while (!existsSync(head) && dirname(head) !== head) {
+    rest.unshift(basename(head));
+    head = dirname(head);
+  }
+  try {
+    head = realpathSync.native(head);
+  } catch {
+    // An unreadable prefix is compared as spelled.
+  }
+  return join(head, ...rest);
+}
 
 const contained = (base: string, path: string): string => {
   const resolved = resolve(base, path);
@@ -107,8 +123,10 @@ export function readPluginSources(root: string): { resources: PluginResource[]; 
  */
 export function checkPluginOut(root: string, out: string): string {
   const resolved = resolve(out);
-  const inside = !leaves(relative(resolve(root), resolved));
-  const contains = !leaves(relative(resolved, resolve(root)));
+  // Judged on the volume's own paths, so an --out reached through a link or junction into the workspace is inside it.
+  const [here, base] = [canonical(resolved), canonical(root)];
+  const inside = !leaves(relative(base, here));
+  const contains = !leaves(relative(here, base));
   if (inside || contains)
     throw new HostPluginError(
       'IA-PLUGIN-OUT',

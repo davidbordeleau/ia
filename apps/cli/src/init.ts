@@ -4,6 +4,7 @@ import { adoptedBindings } from '@inventarch/db';
 import { adoptionId, planAdoption, applyAdoption } from '@inventarch/distribution/registry';
 import type { WorkspaceRelease } from '@inventarch/distribution/registry';
 import { readBase, PIN_PATH, PACKAGE_ID, DAMAGED } from './bundled-base.js';
+import { canonical } from './plugin-sources.js';
 import type { Base, BasePin } from './bundled-base.js';
 export { readBase, PIN_PATH, baseArchivePath, PACKAGE_ID } from './bundled-base.js';
 export type { Base, BasePin } from './bundled-base.js';
@@ -786,21 +787,6 @@ function filesBelow(root: string, path: string): readonly string[] {
   return found;
 }
 
-/** `path` with its longest existing prefix resolved through links, junctions and the volume's own spelling. */
-function canonical(path: string): string {
-  let head = resolve(path);
-  const rest: string[] = [];
-  while (!existsSync(head) && dirname(head) !== head) {
-    rest.unshift(basename(head));
-    head = dirname(head);
-  }
-  try {
-    head = realpathSync.native(head);
-  } catch {
-    // An unreadable prefix is compared as spelled.
-  }
-  return join(head, ...rest);
-}
 /** Whether `path` is `base` or lies below it; an in-base name that only begins with `..`, such as `..x`, is below it. */
 const within = (base: string, path: string): boolean => {
   const here = relative(base, path);
@@ -1611,7 +1597,8 @@ function invocationOf(context: Context): string {
   const parts = ['ia init', ...args.positionals.map(quote)];
   const id = args.value('id'),
     host = args.value('host');
-  for (const option of ['adopt', 'registry']) {
+  // `--from` too, as typed: without it the apply, resume and conflict commands would initialize a plain starter.
+  for (const option of ['adopt', 'registry', 'from']) {
     const value = args.value(option);
     if (value !== undefined) parts.push(`--${option}`, quote(value));
   }

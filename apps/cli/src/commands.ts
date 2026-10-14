@@ -134,6 +134,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     syntax: [
       'ia init [<directory>] [--id <provider/name>] [--system] [--host claude|codex|none]',
       '        [--apply] [--json] [--yes]',
+      'ia init [<directory>] --from <plugin-directory> [--id <provider/name>] [--apply] [--json] [--yes]',
       'ia init [<directory>] --migrate [--system] [--apply] [--json] [--yes]',
       'ia init [<directory>] --decline today|forever | --forget-decline [--host claude|codex|none] [--json]',
     ],
@@ -161,6 +162,13 @@ export const COMMANDS: readonly CommandSpec[] = [
           name: 'system',
           kind: 'boolean',
           summary: 'Also author a local @system, its steward and a @distribution, so ia pack can release it',
+        }),
+        option({
+          name: 'from',
+          kind: 'value',
+          placeholder: '<plugin-directory>',
+          summary: 'Lower a Claude, Codex or Grok plugin into the new workspace as a kit (implies --system)',
+          conflicts: ['migrate', 'adopt', 'system', 'decline', 'forget-decline'],
         }),
         // Milestone position-packet task init-migrate-flag: the workspace's own name, and the hosts it already
         // registered, are the ones the migration keeps, so neither --id nor --host applies.

@@ -1,8 +1,8 @@
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { cleanup, scratch } from './scratch-fixture.js';
-import { run } from './workspace-fixture.js';
+import { repository, run } from './workspace-fixture.js';
 
 afterAll(cleanup);
 async function workspace(): Promise<string> {
@@ -77,5 +77,43 @@ describe('product section (A2)', () => {
     const result = await validate(root);
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain('IA-COMP-FIELD-VALUE');
+  });
+});
+
+const json = (text: string): Record<string, unknown> => JSON.parse(text) as Record<string, unknown>;
+const SAMPLE = resolve(repository, 'tools/projections/fixtures/host-plugin/sample');
+async function lowered(): Promise<string> {
+  const kit = join(scratch('host-plugin-kit'), 'sample-kit');
+  const plan = await run(['init', kit, '--from', SAMPLE, '--json']);
+  expect(plan.exitCode, plan.stdout).toBe(0);
+  expect(existsSync(kit)).toBe(false);
+  const applied = await run(['init', kit, '--from', SAMPLE, '--apply', '--yes', '--json']);
+  expect(applied.exitCode, applied.stdout).toBe(0);
+  return kit;
+}
+describe('ia init --from (A7)', () => {
+  it('plans without writing, then lowers the sample into an admitted workspace', async () => {
+    const kit = await lowered();
+    expect(readFileSync(join(kit, '.ia/src/systems/sample-kit/plugin/skills/sample-run/SKILL.body.md'), 'utf8')).toBe(
+      '\nRun the sample method on $ARGUMENTS.\n',
+    );
+    const release = JSON.parse(readFileSync(join(kit, '.ia/release.json'), 'utf8')) as { assets: unknown[] };
+    expect(release.assets).toContainEqual({
+      path: 'assets/plugin/LICENSE',
+      role: 'license',
+    });
+    expect((await validate(kit)).exitCode).toBe(0);
+  });
+  it('refuses a plugin with an unresolved construct and writes nothing', async () => {
+    const plugin = join(scratch('host-plugin-hooks'), 'sample');
+    cpSync(SAMPLE, plugin, { recursive: true });
+    mkdirSync(join(plugin, 'hooks'));
+    writeFileSync(join(plugin, 'hooks/hooks.json'), '{}\n');
+    const kit = join(scratch('host-plugin-hooks-kit'), 'sample-kit');
+    const result = await run(['init', kit, '--from', plugin, '--json']);
+    expect(result.exitCode).toBe(1);
+    expect(json(result.stdout)['code']).toBe('IA-LOWER-UNRESOLVED');
+    expect(result.stdout).toContain('hooks/hooks.json');
+    expect(existsSync(kit)).toBe(false);
   });
 });

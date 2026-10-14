@@ -1,4 +1,5 @@
 import { registryWorkspace } from './adopt.js';
+import { HostPluginError, lowerPlugin, readPlugin } from '@inventarch/workspace-runtime/internal/host-plugin';
 import { adoptedBindings } from '@inventarch/db';
 import { adoptionId, planAdoption, applyAdoption } from '@inventarch/distribution/registry';
 import type { WorkspaceRelease } from '@inventarch/distribution/registry';
@@ -207,7 +208,7 @@ export interface Descriptor {
     readonly range: string;
     readonly systems: readonly string[];
   }[];
-  readonly assets: readonly never[];
+  readonly assets: Starter['assets'];
   readonly license: string;
   readonly description: string;
   readonly source: Source;
@@ -222,6 +223,8 @@ export interface Starter {
   readonly files: readonly { readonly path: string; readonly text: string }[];
   /** The records those files hold, in file order: three, or six with `--system`. */
   readonly records: readonly StarterRecord[];
+  /** The assets `--from` lowered; empty otherwise. */
+  readonly assets: readonly { readonly path: string; readonly role: 'asset' | 'documentation' | 'license' }[];
   readonly descriptor: Descriptor | null;
   readonly base: BasePin;
   readonly systems: readonly string[];
@@ -735,6 +738,7 @@ export function starterDescriptor(
   base: Base,
   provenance: Provenance,
   distribution?: string | null,
+  assets: Starter['assets'] = [],
 ): Descriptor {
   return {
     formatVersion: 1,
@@ -744,7 +748,7 @@ export function starterDescriptor(
     engine: `^${DISTRIBUTION_ENGINE_VERSION}`,
     language: ['1.0'],
     dependencies: baseDependencies(base),
-    assets: [],
+    assets,
     license: 'UNLICENSED',
     description: `The ${name} workspace.`,
     source: provenance.source,
@@ -782,6 +786,33 @@ function filesBelow(root: string, path: string): readonly string[] {
   return found;
 }
 
+/** `--from`: lower the plugin; any unresolved construct refuses before anything is planned or written. */
+function lowerFrom(from: string, name: string): ReturnType<typeof lowerPlugin> {
+  let plan: ReturnType<typeof lowerPlugin>;
+  try {
+    plan = lowerPlugin(readPlugin(resolve(from)), name);
+  } catch (error) {
+    if (error instanceof HostPluginError)
+      throw new Refusal(
+        error.code,
+        error.message,
+        1,
+        { path: resolve(from) },
+        'Run "ia init --help" for what a plugin directory may hold.',
+      );
+    throw error;
+  }
+  if (plan.unresolved.length > 0)
+    throw new Refusal(
+      'IA-LOWER-UNRESOLVED',
+      `${plan.unresolved.length} construct(s) cannot be lowered yet: ${plan.unresolved.slice(0, 20).join('; ')}`,
+      1,
+      { path: resolve(from) },
+      'Nothing was written; run "ia init --help" for what a plugin directory may hold.',
+    );
+  return plan;
+}
+
 export interface InitRequest {
   readonly adoption?: { readonly id: string; readonly release: WorkspaceRelease };
   readonly root: string;
@@ -789,6 +820,8 @@ export interface InitRequest {
   readonly id?: string | undefined;
   /** `--system`: also author the local `@system`, its steward and the `@distribution` rooted at it. */
   readonly system?: boolean | undefined;
+  /** `--from`: a plugin directory lowered into the new workspace as a kit. */
+  readonly from?: string | undefined;
   readonly packageRoot: string;
   readonly git: Git;
   readonly invocation?: string;
@@ -815,8 +848,25 @@ export function collectInit(request: InitRequest): InitView {
     const source = `.ia/open/${adoptionId(request.adoption.id)}/${request.adoption.release.revision}/.ia/src @open`;
     if (!sources.includes(source)) sources.push(source);
   }
+  const lowered = request.from === undefined || name === null ? null : lowerFrom(request.from, name);
   const { files, records } =
-    name === null ? { files: [], records: [] } : starterFiles(name, base.systems, system, sources);
+    name === null
+      ? { files: [], records: [] }
+      : lowered !== null
+        ? {
+            files: [
+              { path: WORKSPACE_PATH, text: starterRecords(name, [...base.systems, name], sources) },
+              ...lowered.files.map((file) => ({ path: file.path, text: file.bytes.toString('utf8') })),
+            ],
+            records: [
+              { word: 'workspace', name, path: WORKSPACE_PATH },
+              { word: 'agent', name, path: WORKSPACE_PATH },
+              { word: 'mandate', name: `${name}-mandate`, path: WORKSPACE_PATH },
+              ...lowered.records,
+            ],
+          }
+        : starterFiles(name, base.systems, system, sources);
+  const assets = lowered?.assets ?? [];
   // M5.2 §4.3: a temporary file `createFile` left beside one of this initialization's own targets.
   const targets = new Set([...files.map((file) => file.path), IGNORE_PATH, DESCRIPTOR_PATH]);
   // `.<uuid>.tmp` is 41 characters: the dot, a 36-character UUID and `.tmp`.
@@ -935,8 +985,11 @@ export function collectInit(request: InitRequest): InitView {
       system,
       files,
       records,
+      assets,
       descriptor:
-        id === null || name === null ? null : starterDescriptor(id, name, base, provenance, system ? null : undefined),
+        id === null || name === null
+          ? null
+          : starterDescriptor(id, name, base, provenance, system ? null : undefined, assets),
       base: base.pin,
       systems: base.systems,
       provenance,
@@ -1034,7 +1087,9 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
   createFile(
     root,
     DESCRIPTOR_PATH,
-    Buffer.from(descriptorText(starterDescriptor(id, name, base, starter.provenance, distribution ?? undefined))),
+    Buffer.from(
+      descriptorText(starterDescriptor(id, name, base, starter.provenance, distribution ?? undefined, starter.assets)),
+    ),
   );
   checkpoint('init:descriptor');
   const installed = readInstalledState({ root });
@@ -1563,7 +1618,8 @@ async function initialize(context: Context, root: string, id: string | undefined
     root,
     host: selected,
     id,
-    system: args.flag('system'),
+    system: args.value('from') === undefined && args.flag('system'),
+    from: args.value('from'),
     packageRoot: host.packageRoot,
     git: gitIn(existing, host.env),
     invocation: invocationOf(context),

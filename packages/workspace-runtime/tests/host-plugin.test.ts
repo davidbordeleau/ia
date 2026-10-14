@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,7 @@ import { emitFrontmatter, isPlain, parseFrontmatter, sameValue } from '../src/ho
 import { comparePlugin } from '../src/host-plugin/compare.js';
 import { MANIFESTS, readEntries, readPlugin } from '../src/host-plugin/inventory.js';
 import { lowerPlugin } from '../src/host-plugin/lower.js';
+import { sameJson } from '../src/host-plugin/json.js';
 import { pluginManifest } from '../src/host-plugin/manifest.js';
 
 const b = (text: string): Buffer => Buffer.from(text, 'utf8');
@@ -576,5 +577,26 @@ describe('final review: inventory', () => {
     const root = copy();
     mkdirSync(join(root, name));
     expect(() => readPlugin(root)).toThrow(/not plugin content/);
+  });
+});
+
+describe('JSON equality without node:util', () => {
+  it('compares parsed JSON structurally: key order ignored, array order kept', () => {
+    expect(sameJson({ a: 1, b: [1, { c: null }] }, { b: [1, { c: null }], a: 1 })).toBe(true);
+    expect(sameJson({ hooks: {} }, { hooks: {} })).toBe(true);
+    expect(sameJson([1, 2], [2, 1])).toBe(false);
+    expect(sameJson({ a: 1 }, { a: 1, b: undefined })).toBe(false);
+    expect(sameJson({ a: '1' }, { a: 1 })).toBe(false);
+    expect(sameJson(null, {})).toBe(false);
+    expect(sameJson([], {})).toBe(false);
+    expect(sameJson({ a: { b: [true] } }, { a: { b: [false] } })).toBe(false);
+  });
+  it('keeps node:util and node:assert out of the host-plugin modules, whose import prints a colour warning to stderr', () => {
+    // An ESM import of node:util (or node:assert) loads the colour probe, which warns on stderr whenever NO_COLOR and
+    // FORCE_COLOR are both set; the CLI imports these modules on every command, and installed-CLI qualification
+    // requires an empty stderr.
+    const dir = resolve(dirname(fileURLToPath(import.meta.url)), '../src/host-plugin');
+    for (const file of readdirSync(dir).filter((name) => name.endsWith('.ts')))
+      expect(readFileSync(join(dir, file), 'utf8'), file).not.toMatch(/from 'node:(util|assert)(\/strict)?'/);
   });
 });

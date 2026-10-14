@@ -704,7 +704,8 @@ describe('final review: ia init --from', () => {
     });
     // The resumable plan's next comes from invocationOf again and still carries --from.
     const resumable = await run(['init', kit, '--from', source]);
-    expect(resumable.stdout).toContain('Completed steps are skipped');
+    // The terminal wraps the line at its width, so the phrase is matched with whitespace collapsed.
+    expect(resumable.stdout.replace(/\s+/g, ' ')).toContain('Completed steps are skipped');
     expect(applyLine(resumable.stdout)).toContain(`--from ${source} --apply --yes`);
     // The conflict refusal's next.
     const busy = join(scratch('host-plugin-next-busy'), 'sample-kit');

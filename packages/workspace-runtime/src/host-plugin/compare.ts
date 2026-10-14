@@ -1,6 +1,6 @@
-import { isDeepStrictEqual } from 'node:util';
 import { emitFrontmatter, type FrontValue, parseFrontmatter, sameValue } from './frontmatter.js';
 import { MANIFESTS, type PluginEntry } from './inventory.js';
+import { sameJson } from './json.js';
 
 export const DIFF_RULES = [
   'frontmatter-scalar-style',
@@ -35,10 +35,10 @@ function manifestDiff(path: string, a: Buffer, b: Buffer): FileDiff {
   } catch {
     return drift(path, 'manifest is not JSON');
   }
-  if (isDeepStrictEqual(before, after)) return { path, status: 'ruled', rules: ['manifest-format'], reason: null };
+  if (sameJson(before, after)) return { path, status: 'ruled', rules: ['manifest-format'], reason: null };
   if (path === MANIFESTS.codex && before['hooks'] === undefined) {
     const { hooks, ...rest } = after;
-    if (isDeepStrictEqual(hooks, { hooks: {} }) && isDeepStrictEqual(before, rest))
+    if (sameJson(hooks, { hooks: {} }) && sameJson(before, rest))
       return { path, status: 'ruled', rules: ['codex-hooks-suppressed', 'manifest-format'], reason: null };
   }
   return drift(path, 'manifest content differs');

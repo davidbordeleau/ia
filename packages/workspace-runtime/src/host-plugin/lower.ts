@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 import { claudeProseCatalog, PROSE_EFFECT_TOOLS } from '../projection-host.js';
 import { HostPluginError } from './errors.js';
 import type { FrontField, FrontValue } from './frontmatter.js';
 import { MANIFESTS, NAME, type PluginEntry, type PluginHost, type PluginInventory } from './inventory.js';
+import { sameJson } from './json.js';
 import { type PluginProduct, pluginManifest } from './manifest.js';
 
 export type AssetRole = 'asset' | 'documentation' | 'license';
@@ -75,7 +75,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 /** Where an original manifest and the one the renderer writes differ, by key path, each with what is wrong there. */
 function differences(original: unknown, rendered: unknown, path = ''): [string, string][] {
-  if (isDeepStrictEqual(original, rendered)) return [];
+  if (sameJson(original, rendered)) return [];
   if (isRecord(original) && isRecord(rendered))
     return [...new Set([...Object.keys(original), ...Object.keys(rendered)])]
       .sort(cmp)
@@ -176,7 +176,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   const face = isRecord(rawFace) ? rawFace : {};
   if (rawFace !== undefined && !isRecord(rawFace))
     refuseKey(MANIFESTS.codex, 'interface', 'interface must be an object');
-  if (codex?.['hooks'] !== undefined && !isDeepStrictEqual(codex['hooks'], { hooks: {} }))
+  if (codex?.['hooks'] !== undefined && !sameJson(codex['hooks'], { hooks: {} }))
     refuseKey(MANIFESTS.codex, 'hooks', 'hooks other than {"hooks": {}} are not lowered by this version of ia');
   const hosts = HOST_ORDER.filter((host) => inventory.manifests[host] !== undefined);
   let keywords: string[] | undefined;

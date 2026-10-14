@@ -167,7 +167,8 @@ export const COMMANDS: readonly CommandSpec[] = [
           name: 'from',
           kind: 'value',
           placeholder: '<plugin-directory>',
-          summary: 'Lower a Claude, Codex or Grok plugin into the new workspace as a kit (implies --system)',
+          summary:
+            'Lower a Claude, Codex or Grok plugin into the new workspace as a kit; the kit supplies its own system',
           conflicts: ['migrate', 'adopt', 'system', 'decline', 'forget-decline'],
         }),
         // Milestone position-packet task init-migrate-flag: the workspace's own name, and the hosts it already

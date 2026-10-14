@@ -116,4 +116,22 @@ describe('ia init --from (A7)', () => {
     expect(result.stdout).toContain('hooks/hooks.json');
     expect(existsSync(kit)).toBe(false);
   });
+  it('refuses a plugin directory that does not exist, even before a name resolves', async () => {
+    const kit = join(scratch('host-plugin-missing-kit'), 'sample-kit');
+    const result = await run(['init', kit, '--from', join(kit, 'no-such-plugin'), '--json']);
+    expect(result.exitCode).toBe(1);
+    expect(json(result.stdout)['code']).toBe('IA-PLUGIN-INPUT');
+    expect(existsSync(kit)).toBe(false);
+  });
+  it('reports the already-initialized conflict, not a lowering refusal', async () => {
+    const kit = await lowered();
+    const again = await run(['init', kit, '--from', SAMPLE, '--json']);
+    expect(again.exitCode, again.stdout).toBe(0);
+    expect(again.stdout).toContain('already initialized');
+  });
+  it('writes the lowered license asset with the sample bytes', async () => {
+    const kit = await lowered();
+    const written = readFileSync(join(kit, 'assets/plugin/LICENSE'));
+    expect(written.equals(readFileSync(join(SAMPLE, 'LICENSE')))).toBe(true);
+  });
 });

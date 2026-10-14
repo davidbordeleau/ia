@@ -787,10 +787,14 @@ function filesBelow(root: string, path: string): readonly string[] {
 }
 
 /** `--from`: lower the plugin; any unresolved construct refuses before anything is planned or written. */
-function lowerFrom(from: string, name: string): ReturnType<typeof lowerPlugin> {
-  let plan: ReturnType<typeof lowerPlugin>;
+function lowerFrom(from: string, name: string | null, lower: boolean): ReturnType<typeof lowerPlugin> | null {
+  let plan: ReturnType<typeof lowerPlugin> | null = null;
   try {
-    plan = lowerPlugin(readPlugin(resolve(from)), name);
+    // The plugin is always read, so an input error refuses at once; lowering needs a name and a target free of conflicts.
+    if (statSync(resolve(from), { throwIfNoEntry: false })?.isDirectory() !== true)
+      throw new HostPluginError('IA-PLUGIN-INPUT', `${from} is not a plugin directory`);
+    const inventory = readPlugin(resolve(from));
+    if (lower && name !== null) plan = lowerPlugin(inventory, name);
   } catch (error) {
     if (error instanceof HostPluginError)
       throw new Refusal(
@@ -802,7 +806,7 @@ function lowerFrom(from: string, name: string): ReturnType<typeof lowerPlugin> {
       );
     throw error;
   }
-  if (plan.unresolved.length > 0)
+  if (plan !== null && plan.unresolved.length > 0)
     throw new Refusal(
       'IA-LOWER-UNRESOLVED',
       `${plan.unresolved.length} construct(s) cannot be lowered yet: ${plan.unresolved.slice(0, 20).join('; ')}`,
@@ -848,7 +852,11 @@ export function collectInit(request: InitRequest): InitView {
     const source = `.ia/open/${adoptionId(request.adoption.id)}/${request.adoption.release.revision}/.ia/src @open`;
     if (!sources.includes(source)) sources.push(source);
   }
-  const lowered = request.from === undefined || name === null ? null : lowerFrom(request.from, name);
+  // An initialized target keeps init's own conflict report; only a target free of conflicts is lowered.
+  const lowered =
+    request.from === undefined
+      ? null
+      : lowerFrom(request.from, name, identity.conflict === null && !existsSync(resolve(root, DESCRIPTOR_PATH)));
   const { files, records } =
     name === null
       ? { files: [], records: [] }

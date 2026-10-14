@@ -51,7 +51,7 @@ try {
 
 ### Host generation
 
-`ia host claude` and `ia host codex` take their generated files and hooks from this package, through the `./internal/generate` subpath, and apply them with the CLI's one projection writer. `ia project` writes the same files. Generation reads only records the workspace authors (band 100); installed and adopted records render nothing.
+`ia host claude` and `ia host codex` take their generated files and hooks from this package, through the `./internal/generate` subpath, and apply them with the CLI's one projection writer. `ia project` writes the same generated files but registers no hook group; only `ia host claude --apply` does. Generation reads only records the workspace authors (band 100); installed and adopted records render nothing.
 
 | Authored record | Claude Code | Codex |
 | --- | --- | --- |

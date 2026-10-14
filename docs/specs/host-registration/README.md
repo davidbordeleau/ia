@@ -30,7 +30,7 @@ When every element is applied, the registration records a join: the catalog of t
 | `ia host <claude\|codex> --apply` | Materializes the payload, then applies the MCP entry and the projection, in that order. |
 | `ia host <claude\|codex> --remove` | Plans removal of the owned host set; with `--apply` it removes it in reverse order. |
 | `ia init --host <claude\|codex>` | Runs the same `--apply` path once the workspace is initialized. |
-| `ia project <claude\|codex>` | Plans, or with `--apply` writes, the projection alone, with no MCP entry. |
+| `ia project <claude\|codex>` | Plans, or with `--apply` writes, the projection files alone, with no MCP entry and no hook group of its own: it keeps the groups an `ia host` registration made and lists any other `@hook` as not taken. |
 
 The plan lists three elements:
 
@@ -38,11 +38,11 @@ The plan lists three elements:
 | --- | --- | --- |
 | `mcp` | `.mcp.json` | `.codex/config.toml` |
 | `context` | not selected | unsupported by host |
-| `projection` | the packet `.claude/rules/ia-workspace.md` and the `ia-authoring` skill; an agent per authored `@agent-profile` under `.claude/agents/`; a skill per authored `@playbook` under `.claude/skills/`; a hook group per authored `@hook` in `.claude/settings.local.json` | the packet `AGENTS.md` and the `ia-authoring` skill under `.agents/skills/`; a skill per authored `@playbook`; each `@agent-profile` and `@hook` listed as not taken, with the reason |
+| `projection` | the packet `.claude/rules/ia-workspace.md` and the `ia-authoring` skill; an agent per authored `@agent-profile` under `.claude/agents/`; a skill per authored `@playbook` under `.claude/skills/`; a hook group per authored `@hook` in `.claude/settings.local.json`, registered by `ia host` only | the packet `AGENTS.md` and the `ia-authoring` skill under `.agents/skills/`; a skill per authored `@playbook`; each `@agent-profile` and `@hook` listed as not taken, with the reason |
 
 The `context` element is not available in this release: `--context <identity>` refuses with `IA-DIST-HOST-UNSUPPORTED` for Claude and is a usage error for Codex.
 
-Each hook group refuses an edit its paths and tools select unless the acting agent holds a governing `@mandate` that grants Synthesis there. `ia host` registers no per-system steward guard; applying the projection retires one that an earlier release registered.
+Each hook group refuses an edit its paths and tools select when a `@mandate` governs the path and none grants the acting agent Synthesis there; an edit no mandate governs is allowed. `ia host` registers no per-system steward guard; applying the projection retires one that an earlier release registered.
 
 A workspace `host --apply` writes the projection, so it is judged as Execution against the acting participant's mandates and takes `--actor <agent>`, as `ia project` does. The plan, `--remove` and `--user` are not judged.
 

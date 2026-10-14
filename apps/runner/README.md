@@ -12,6 +12,8 @@
 npm install --global @inventarch/runner
 ```
 
+Before you start, the workspace must select the installed `runner-local-v1` host contract, the `runner-read-v1` mandate contract and the `runner-entry-v1` entry mapping, and must admit `agent-composition-system`'s own `@operation read-captured-source`; a copy authored outside that system refuses with `IA-COMPOSITION-CONFLICT`. A workspace created by `ia init` alone provides none of these. The conformance composition's [`runner.ia`](../../examples/conformance/composition/.ia/src/systems/agent-composition-system/records/runner.ia) shows the `@agent`, `@mandate`, `@capability`, `@agent-profile`, entry `@execution-binding` and `@harness` declarations; the runner tests run it with this repository's public systems adopted.
+
 Run a profile, answer its pending model request, then step it to the end:
 
 ```sh
@@ -27,8 +29,6 @@ Each command prints one JSON line, `{id, sequence, run, pending}`. `run` capture
 ```
 
 Repeat `step`, which advances one scheduler action, until `run.status` is `completed`. A refusal prints `{code, message, next}` on stderr and exits 1. Node 22 also prints an `ExperimentalWarning` for SQLite on stderr. `ia-runner --help` gives the full syntax, including `--harness` and `--entry`, which pick one when the composition offers several.
-
-The workspace must select the installed `runner-local-v1` host contract, the `runner-read-v1` mandate contract and the `runner-entry-v1` entry mapping, and must admit `agent-composition-system`'s own `@operation read-captured-source`; a copy authored outside that system refuses with `IA-COMPOSITION-CONFLICT`. The conformance composition's [`runner.ia`](../../examples/conformance/composition/.ia/src/systems/agent-composition-system/records/runner.ia) shows the `@agent`, `@mandate`, `@capability`, `@agent-profile`, entry `@execution-binding` and `@harness` declarations; the runner tests run it with this repository's public systems adopted.
 
 ## 🧭 What it does
 

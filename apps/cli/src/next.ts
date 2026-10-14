@@ -22,6 +22,7 @@ import {
   entry,
   headerLine,
   quote,
+  safeRootAdvice,
   remedyWords,
   sectionLabel,
   terminalText,
@@ -47,7 +48,7 @@ const VERDICT_SYMBOL: Readonly<Record<DeliveryTask['verdict'], SymbolName>> = {
  * line, its self-declared status, a basis line per requirement and its five state lines; the review items; and, when a
  * task has no declared blocker, the command the view names for it, with the root this invocation gave.
  */
-export function renderNext(view: DeliveryView, caps: Capabilities, rooted = ''): string {
+export function renderNext(view: DeliveryView, caps: Capabilities, rooted = '', supplied?: string): string {
   const symbols: readonly SymbolName[] = [...Object.values(VERDICT_SYMBOL)];
   const symbolWidth = blockSymbolWidth(symbols, caps.ascii);
   const milestones = view.milestones.flatMap((milestone) =>
@@ -97,7 +98,10 @@ export function renderNext(view: DeliveryView, caps: Capabilities, rooted = ''):
       ? null
       : remedyWords(
           terminalText(
-            `Run "${view.next}${rooted}" for the position of ${first.identity}, the next task with no declared blocker.`,
+            safeRootAdvice(
+              `Run "${view.next}${rooted}" for the position of ${first.identity}, the next task with no declared blocker.`,
+              [supplied],
+            ),
           ),
         );
   return document(
@@ -294,5 +298,5 @@ export function runNext(context: Context): Result {
   }
   return json
     ? { exitCode: 0, stdout: JSON.stringify(nextEnvelope(got.view)) + '\n', stderr: '' }
-    : { exitCode: 0, stdout: renderNext(got.view, caps, rooted), stderr: '' };
+    : { exitCode: 0, stdout: renderNext(got.view, caps, rooted, supplied), stderr: '' };
 }

@@ -234,6 +234,13 @@ export function evaluateMandateGuard(
 }
 /** Characters a printed root may hold and stay inert unquoted in sh, PowerShell and cmd: letters, digits, `._-/:`. */
 const INERT_ROOT = /^[\p{L}\p{N}._\-/:]+$/u;
+/** Whether a known root can appear in a suggested shell command, double-quoted when it contains spaces. */
+export function inertCommandRoot(root: string): boolean {
+  // JSON-quoted UNC backslashes do not round-trip through native Windows shell argument handling.
+  if (root.startsWith('\\\\')) return false;
+  const spelled = process.platform === 'win32' ? root.replaceAll('\\', '/') : root;
+  return /^[\p{L}\p{N}._\-/: ]+$/u.test(spelled);
+}
 /**
  * Lane D, review findings D-R1 and D-N2: the admission report command (`ia report`, the version 1 machine route no
  * mandate gates) for a workspace root, spelled so no shell reads anything in it. `root` is printed, with forward slashes

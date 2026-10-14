@@ -23,8 +23,8 @@ import { sha256 } from '@inventarch/distribution/services';
 import { runBounded } from '@tools/testing/subprocess.js';
 import { ProjectionError } from '@inventarch/workspace-runtime/projections';
 import { applyHostProjection, HOOK_KEPT, renderProjectionFor } from '../src/host-projection.js';
-import { quote } from '../src/render.js';
-import { cleanup, cli, nextArgv, run } from './workspace-fixture.js';
+
+import { quoteCommandRoot as quote, cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
 import {
   doctor,
   GUARD_STATE,
@@ -175,6 +175,101 @@ async function guarded(
   return output.hookSpecificOutput?.permissionDecisionReason;
 }
 const codeOf = (reason: string | undefined): string | undefined => reason?.split(':')[0];
+
+it('follows shell-safe registered guard removal and unreadable ownership repairs', async () => {
+  const { root: initial, env } = await composed(),
+    root = resolve(scratch('active-hook-root'), 'ws-$(Write-Output SENTINEL)'),
+    source = read(initial, '.ia/src/hooks.ia');
+  cpSync(initial, root, { recursive: true });
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  const foreign = { matcher: 'Read', hooks: [{ command: 'foreign-handler', args: ['preserve'] }] };
+  const current = settings(root);
+  current.hooks!.PreToolUse!.push(foreign);
+  writeFileSync(resolve(root, SETTINGS), JSON.stringify(current));
+  put(root, '.ia/src/hooks.ia', 'this is not an IA source');
+  const denied = await guarded(root, hookGroups(root).get(HOOK), 'docs/guide.md');
+  expect(denied).toContain('"ia host claude --root . --remove --apply --yes"');
+  expect(denied).not.toContain('SENTINEL');
+  const removed = await run([...nextArgv(denied!), '--json'], { cwd: root, env });
+  expect(removed.exitCode, removed.stdout + removed.stderr).toBe(0);
+  expect(hookGroups(root).size).toBe(0);
+  expect(settings(root).hooks!.PreToolUse).toContainEqual(foreign);
+  expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
+  put(root, '.ia/src/hooks.ia', source);
+  expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
+  put(root, HOOK_STATE, '{}');
+  const before = snapshot(root, [SETTINGS, HOOK_STATE, AGENT, SKILL, PROJECTION]);
+  const refusal = await host(root, env, 'claude', '--apply', '--yes');
+  expect(refusal.exitCode).not.toBe(0);
+  const next = JSON.parse(refusal.stdout).next as string;
+  expect(next).toContain('--root .');
+  expect(next).not.toContain('SENTINEL');
+  expect(snapshot(root, Object.keys(before))).toEqual(before);
+  // The located manual repair removes only IA's damaged state and hook groups, preserving the foreign group.
+  rmSync(resolve(root, HOOK_STATE));
+  withoutHookGroups(root);
+  const followed = await run([...nextArgv(next), '--yes', '--json'], { cwd: root, env });
+  expect(followed.exitCode, followed.stdout + followed.stderr).toBe(0);
+  expect(settings(root).hooks!.PreToolUse).toContainEqual(foreign);
+});
+
+it('refuses removal when hook ownership is lost and preserves the active group until manual recovery', async () => {
+  const { root, env } = await composed();
+  const unrelated = { permissions: { allow: ['Bash(ls)'] } };
+  put(root, SETTINGS, JSON.stringify(unrelated) + '\n');
+  await apply(root, env);
+  rmSync(resolve(root, HOOK_STATE));
+  const group = hookGroups(root).get(HOOK);
+  expect(codeOf(await guarded(root, group, 'docs/guide.md', reviewer))).toBe('IA-HOOK-NOT-MANDATED');
+  expect((await doctor(root, env)).checks.find((row) => row.id === `projection-claude-hook:${HOOK}`)).toMatchObject({
+    status: 'warn',
+    detail: expect.stringContaining('delete only this unowned group manually'),
+    remedy: null,
+  });
+  const paths = [
+      SETTINGS,
+      HOOK_STATE,
+      PROJECTION,
+      RECEIPT_PATH,
+      '.ia/distributions/hosts/joins.json',
+      '.ia/distributions/hosts/guard-pending.json',
+      '.mcp.json',
+      AGENT,
+      SKILL,
+      ...PACKET,
+    ],
+    before = snapshot(root, paths);
+  for (const flags of [[], ['--apply', '--yes']]) {
+    const result = await host(root, env, 'claude', '--remove', ...flags);
+    if (flags.length === 0) {
+      expect(result.exitCode, result.stdout).toBe(0);
+      expect(projection(result.stdout)).toMatchObject({
+        action: 'refused',
+        conflict: { code: 'IA-DIST-LOCAL-MODIFICATION', path: SETTINGS },
+      });
+    } else {
+      expect(result.exitCode, result.stdout).toBe(3);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        code: 'IA-DIST-LOCAL-MODIFICATION',
+        where: { path: SETTINGS },
+        next: expect.stringContaining(`Delete only the unowned IA hook group for ${HOOK}`),
+      });
+    }
+    expect(snapshot(root, paths)).toEqual(before);
+  }
+  expect(codeOf(await guarded(root, hookGroups(root).get(HOOK), 'docs/guide.md', reviewer))).toBe(
+    'IA-HOOK-NOT-MANDATED',
+  );
+  // The refusal does not authorize adopting or deleting the whole settings file. Remove just the identified group.
+  const repaired = settings(root);
+  repaired.hooks!.PreToolUse = repaired.hooks!.PreToolUse!.filter(
+    (entry) => entry !== undefined && !entry.hooks.some((handler) => handler.args?.includes(HOOK)),
+  );
+  put(root, SETTINGS, JSON.stringify(repaired) + '\n');
+  expect((await host(root, env, 'claude', '--remove', '--apply', '--yes')).exitCode).toBe(0);
+  expect(settings(root)['permissions']).toEqual(unrelated.permissions);
+  expect(hookGroups(root).size).toBe(0);
+});
 
 it('applies the packet, one agent, one skill and one hook group through the one writer, and a second apply writes nothing', async () => {
   const { root, env } = await composed();
@@ -543,7 +638,7 @@ it("falls back to the mandates that bind the fixture profile's agent when the pr
   const agent = renderProjectionFor(root, 'claude').files.find((file) => file.path === AGENT)!.text;
   expect(agent.split('\n## Mandate\n\n')[1]!.split('\n\n## ')[0]).toBe(
     [
-      "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.",
+      'This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard judges the agent by these, and refuses it where a mandate that binds another participant governs and none of these grants the move.',
       '',
       '- `agent-system/policy/mandate/reviewer-docs`',
       '  - participant `agent-system/binding/agent/reviewer`',

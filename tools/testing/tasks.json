@@ -55,7 +55,7 @@
     "selected-tests": "Owning production sources, every non-test helper, shared configuration and dependency sources; exclude only declared sibling test files, retaining selected and unassigned files.",
     "selected-tests-workspace-records": "selected-tests plus authored workspace records, teaching resources and native fixture inventories read through the filesystem.",
     "language-conformance": "workspace-records plus the compliance language fixtures read by the language formatter and conformance suites.",
-    "host-adapters": "workspace-records plus this repository's committed ia-authoring skills under .claude/skills and .agents/skills, which the runtime's host adapter tests compare the repository target's skills with through the filesystem, since no import edge names them.",
+    "host-adapters": "workspace-records plus this repository's committed ia-authoring skills under .claude/skills and .agents/skills, the pending mandate-resolution note and consumed changeset history read by runtime tests through the filesystem, since no import edge names them.",
     "composition-fixture": "workspace-records plus apps/cli's composition workspace fixture, whose authored records the workspace-runtime generator tests render through the filesystem, since no import edge names them."
   },
   "tasks": [
@@ -852,6 +852,16 @@
       "resourceClass": "subprocess",
       "covers": [
         "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tests/render.test.ts > preserves the command directory when only root separators change",
+          "reason": "The fixture asserts Windows separator normalization and command-directory preservation and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        }
       ]
     },
     {
@@ -1117,6 +1127,38 @@
           "reason": "db pathKey folds case only on Windows and macOS, as the edit guard keys paths; on Linux each case is its own path, so there is no folding to observe.",
           "platforms": [
             "linux"
+          ]
+        },
+        {
+          "case": "tests/capture.test.ts > prints capture preview roots that replay at the same Windows target",
+          "reason": "The fixture replays capture roots with native Windows path semantics and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/refusal-next.test.ts > keeps relative recovery and apply commands in their original directory",
+          "reason": "The fixture resolves relative backslash-separated recovery targets on Windows and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/refusal-next.test.ts > normalizes inert Windows roots in suggestions (shell follow-up)",
+          "reason": "The fixture asserts the win32 branch that normalizes Windows command roots and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/refusal-next.test.ts > replays normalized leading-dash init targets (recovery syntax)",
+          "reason": "The fixture replays a backslash-separated leading-dash init target with Windows path semantics and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
           ]
         }
       ]

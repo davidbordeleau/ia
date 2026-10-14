@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { open, pathKey } from '@inventarch/db';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Result } from '../src/consumer.js';
-import { cleanup, cli, nextArgv, run, scratch } from './workspace-fixture.js';
+import { cleanup, cli, commandRoots, nextArgv, run, scratch } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 });
 afterAll(cleanup);
@@ -442,15 +442,9 @@ describe('path spelling (review C-R1, C-R7)', () => {
     ] as const) {
       const refusal = await refused(root, ['task', 't9', ...FIELDS, '--at', at], 'IA-RUNTIME-MANDATE-WORD');
       expect(refusal['message'], at).toBe(`${mandate(fence)} excludes task`);
-      expect(nextArgv(refusal['next'] as string), at).toEqual([
-        'position',
-        '--seat',
-        mandate(fence),
-        '--shape',
-        'governance',
-        '--root',
-        root,
-      ]);
+      expect(nextArgv(refusal['next'] as string), at).toEqual(
+        commandRoots(['position', '--seat', mandate(fence), '--shape', 'governance', '--root', root]),
+      );
       // `ia author` judges the same profile before it writes anything.
       const before = tree(root);
       const authored = await run(
@@ -487,7 +481,7 @@ describe('path spelling (review C-R1, C-R7)', () => {
     // A path no fixture mandate covers (docs/ is covered by the composition fixture's docs-mandate, which grants only
     // Synthesis, so the profile would refuse a preview there first).
     const refusal = await refused(root, ['task', 't9', 'meaning.says=x', '--at', 'notes/t9.ia'], 'IA-CLI-EDIT-UNOWNED');
-    expect(nextArgv(refusal['next'] as string)).toEqual(['position', '--root', root]);
+    expect(nextArgv(refusal['next'] as string)).toEqual(commandRoots(['position', '--root', root]));
   });
 });
 
@@ -506,15 +500,9 @@ describe('the mandate profile', () => {
     expect(refusal['message']).toBe(
       `${mandate('demo-mandate')} allows Observation, Synthesis; validate needs Verification`,
     );
-    expect(nextArgv(refusal['next'] as string)).toEqual([
-      'position',
-      '--seat',
-      mandate('demo-mandate'),
-      '--shape',
-      'governance',
-      '--root',
-      root,
-    ]);
+    expect(nextArgv(refusal['next'] as string)).toEqual(
+      commandRoots(['position', '--seat', mandate('demo-mandate'), '--shape', 'governance', '--root', root]),
+    );
     await refused(root, ['--set', '@milestone m1', 'work.owner=x'], 'IA-RUNTIME-MANDATE-MOVE');
     // An unadmitted record does not get past the move either, and `ia position` stays ungated.
     await refused(root, ['--set', '@milestone m9', 'work.owner=x'], 'IA-RUNTIME-MANDATE-MOVE');
@@ -533,6 +521,32 @@ describe('the mandate profile', () => {
     await refused(root, ['--relate', '@milestone m2', 'requires', '@milestone m1'], 'IA-RUNTIME-MANDATE-WORD');
     expect((await preview(root, ['task'])).exitCode).toBe(0);
   });
+  it.each(['covers', 'participant'])('refuses a sole participant without an actor when located by %s', async (kind) => {
+    const root = workspace((at) =>
+      rewrite(at, '.ia/src/workspace.ia', (text) =>
+        text
+          .replace('    steward @agent demo\n', '')
+          .replace('    scope [@workspace demo]\n', kind === 'covers' ? '    covers [".ia/src/**"]\n' : ''),
+      ),
+    );
+    const refusal = await refused(root, ['plan'], 'IA-RUNTIME-MANDATE-ACTOR');
+    expect(refusal['message']).toContain('no acting @agent was established');
+    expect(nextArgv(refusal['next'] as string)).toEqual(
+      commandRoots(['position', '--seat', demo, '--shape', 'governance', '--root', root]),
+    );
+    // A path-only mandate does not make its participant an eligible workspace CLI actor.
+    await refused(root, ['plan', '--actor', participant], 'IA-RUNTIME-MANDATE-ACTOR');
+    // An owner's authored steward establishes the same participant; the read then succeeds without writing.
+    rewrite(root, '.ia/src/workspace.ia', (text) =>
+      text.replace(
+        '    sources [".ia/src @authored"]\n',
+        '    sources [".ia/src @authored"]\n    steward @agent demo\n',
+      ),
+    );
+    const chosen = await preview(root, ['plan']);
+    expect(chosen.exitCode, chosen.stdout).toBe(0);
+    expect(body(chosen)).toMatchObject({ profile: { actor: participant, by: 'steward' } });
+  });
   it('refuses an open actor choice, and --actor resolves it without lifting moves or excluded words', async () => {
     // Two participants and no steward: OD1 names no default actor.
     const root = workspace((at) => {
@@ -545,16 +559,13 @@ describe('the mandate profile', () => {
     const ambiguous = await refused(root, ['task'], 'IA-RUNTIME-MANDATE-ACTOR');
     expect(ambiguous['message']).toContain('its authored mandates name 2 participants');
     // The next command is this one as the first participant whose mandates allow it: demo, since ops excludes task.
-    expect(nextArgv(ambiguous['next'] as string)).toEqual(['preview', 'task', '--actor', participant, '--root', root]);
+    expect(nextArgv(ambiguous['next'] as string)).toEqual(
+      commandRoots(['preview', 'task', '--actor', participant, '--root', root]),
+    );
     const milestone = await refused(root, ['milestone'], 'IA-RUNTIME-MANDATE-ACTOR');
-    expect(nextArgv(milestone['next'] as string)).toEqual([
-      'preview',
-      'milestone',
-      '--actor',
-      participant,
-      '--root',
-      root,
-    ]);
+    expect(nextArgv(milestone['next'] as string)).toEqual(
+      commandRoots(['preview', 'milestone', '--actor', participant, '--root', root]),
+    );
     const chosen = body(await preview(root, ['milestone', '--actor', ops]));
     expect(chosen).toMatchObject({
       mode: 'word',
@@ -586,8 +597,15 @@ describe('the mandate profile', () => {
         `is not an authored participant of ${demo}; its participants are ${participant}`,
       );
       // The workspace's default actor (its steward) may run it, so the next command drops --actor (review C-N1).
-      expect(nextArgv(refusal['next'] as string)).toEqual(['preview', 'task', '--root', root]);
+      expect(nextArgv(refusal['next'] as string)).toEqual(commandRoots(['preview', 'task', '--root', root]));
     }
+  });
+  it('keeps a generated profile agent separate from CLI actor selection', async () => {
+    const root = workspace();
+    await refused(root, ['plan', '--actor', '@agent reviewer'], 'IA-RUNTIME-MANDATE-ACTOR');
+    const selected = await preview(root, ['plan']);
+    expect(selected.exitCode, selected.stdout).toBe(0);
+    expect(body(selected)).toMatchObject({ profile: { actor: participant, by: 'steward' } });
   });
   it('refuses, rather than fails, under a mandate whose authority the resolver cannot read', async () => {
     // A child under `authority.moves`: admission admits the record, the runtime's mandate reader refuses the field.
@@ -609,15 +627,9 @@ describe('the mandate profile', () => {
       line: 3,
       identity: mandate('unreadable-mandate'),
     });
-    expect(nextArgv(refusal['next'] as string)).toEqual([
-      'position',
-      '--seat',
-      mandate('unreadable-mandate'),
-      '--shape',
-      'governance',
-      '--root',
-      root,
-    ]);
+    expect(nextArgv(refusal['next'] as string)).toEqual(
+      commandRoots(['position', '--seat', mandate('unreadable-mandate'), '--shape', 'governance', '--root', root]),
+    );
   });
   it('refuses at a mandate admission refused, a stated empty move list among them, naming the admission report (lane D)', async () => {
     const root = workspace((at) =>
@@ -642,7 +654,7 @@ describe('the mandate profile', () => {
       expect(refusal['message'], form.join(' ')).toContain(
         `${mandate('empty-mandate')} (.ia/src/empty.ia:3) failed admission: IA-COMP-FIELD-VALUE`,
       );
-      expect(nextArgv(refusal['next'] as string), form.join(' ')).toEqual(['report', '--root', root]);
+      expect(nextArgv(refusal['next'] as string), form.join(' ')).toEqual(commandRoots(['report', '--root', root]));
     }
     // From a clean workspace, a candidate that would leave a refused mandate is a verdict, not clean, as it was.
     const clean = workspace();
@@ -674,7 +686,7 @@ describe('the catalog row', () => {
     expect(refusal.exitCode).toBe(1);
     const next = body(refusal);
     expect(next).toMatchObject({ code: 'IA-RUNTIME-NEXT-NO-PLAN' });
-    expect(nextArgv(next.next!)).toEqual(['preview', 'plan', '--root', root]);
+    expect(nextArgv(next.next!)).toEqual(commandRoots(['preview', 'plan', '--root', root]));
     const before = tree(root);
     const followed = await run(nextArgv(next.next!));
     expect(followed.exitCode).toBe(0);
@@ -738,7 +750,7 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
   it('names the same command without --actor when a mistyped actor stands in for an allowed default', async () => {
     const root = workspace();
     const refusal = await refused(root, ['task', '--actor', '@agent reviewer'], 'IA-RUNTIME-MANDATE-ACTOR');
-    expect(nextArgv(refusal['next'] as string)).toEqual(['preview', 'task', '--root', root]);
+    expect(nextArgv(refusal['next'] as string)).toEqual(commandRoots(['preview', 'task', '--root', root]));
   });
   it('offers a participant the mandates bind when none binds the steward, and reads no installed steward as default', async () => {
     const unbound = workspace((at) => {
@@ -749,7 +761,9 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
       );
     });
     const refusal = await refused(unbound, ['task'], 'IA-RUNTIME-MANDATE-ACTOR');
-    expect(nextArgv(refusal['next'] as string)).toEqual(['preview', 'task', '--actor', ops, '--root', unbound]);
+    expect(nextArgv(refusal['next'] as string)).toEqual(
+      commandRoots(['preview', 'task', '--actor', ops, '--root', unbound]),
+    );
     const installed = workspace((at) =>
       rewrite(at, '.ia/src/workspace.ia', (text) =>
         text.replace('    steward @agent demo\n', '    steward @agent public-work-system-steward\n'),
@@ -771,29 +785,29 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
         .next!;
     const FALLBACK = ['preview', 'task', '--root', 'C:/ws'];
     // A `--root` after `--` is a positional, and a --root value other than the invocation's is no exemption.
-    expect(nextArgv(nextOf('ia preview task -- --root $(id) --root C:/ws'))).toEqual(FALLBACK);
-    expect(nextArgv(nextOf('ia preview task --root $(id)'))).toEqual(FALLBACK);
+    expect(nextArgv(nextOf('ia preview task -- --root $(id) --root C:/ws'))).toEqual(commandRoots(FALLBACK));
+    expect(nextArgv(nextOf('ia preview task --root $(id)'))).toEqual(commandRoots(FALLBACK));
     // A value with a space is quoted, but `$()` stays live in double quotes, so it is never repeated.
-    expect(nextArgv(nextOf('ia preview task "a $(id)" --root C:/ws'))).toEqual(FALLBACK);
+    expect(nextArgv(nextOf('ia preview task "a $(id)" --root C:/ws'))).toEqual(commandRoots(FALLBACK));
     // A bare token opening a comment, a PowerShell splat or a tilde expansion is repeated quoted, and so is one holding a
     // comma (a PowerShell array) or a tilde anywhere (review C3-N1).
     for (const token of ['#x', '@milestone', 'a,b', 'work.peers=x,y', 'x~y', 'k=~/x']) {
       const next = nextOf(`ia preview task ${token} --root C:/ws`);
       expect(next, token).toBe(`Run "ia preview task ${JSON.stringify(token)} --root C:/ws" again.`);
-      expect(nextArgv(next)).toEqual(['preview', 'task', token, '--root', 'C:/ws']);
+      expect(nextArgv(next)).toEqual(commandRoots(['preview', 'task', token, '--root', 'C:/ws']));
     }
     // A token that opens with `~` is never repeated: pwsh expands it even double-quoted through an npm-style .ps1 shim
     // (review F4), so the next falls back to the word's preview.
-    expect(nextArgv(nextOf('ia preview task ~/x --root C:/ws'))).toEqual(FALLBACK);
-    expect(nextArgv(nextOf('ia preview task m-1 --actor ~x --root C:/ws'))).toEqual(FALLBACK);
+    expect(nextArgv(nextOf('ia preview task ~/x --root C:/ws'))).toEqual(commandRoots(FALLBACK));
+    expect(nextArgv(nextOf('ia preview task m-1 --actor ~x --root C:/ws'))).toEqual(commandRoots(FALLBACK));
     // The invocation's own --root value is repeated as every command repeats it.
     expect(nextOf('ia preview task m-1 --root C:/ws')).toBe('Run "ia preview task m-1 --root C:/ws" again.');
     // A quoted value full of `\"` is split in one pass (CodeQL js/polynomial-redos): a quote is shell syntax, so it falls
     // back, and a long one costs no more than a short one.
     const quotes = (count: number): string => `ia preview task ${JSON.stringify('"'.repeat(count))} --root C:/ws`;
-    expect(nextArgv(nextOf(quotes(3)))).toEqual(FALLBACK);
+    expect(nextArgv(nextOf(quotes(3)))).toEqual(commandRoots(FALLBACK));
     const started = performance.now();
-    expect(nextArgv(nextOf(quotes(200_000)))).toEqual(FALLBACK);
+    expect(nextArgv(nextOf(quotes(200_000)))).toEqual(commandRoots(FALLBACK));
     expect(performance.now() - started).toBeLessThan(2_000);
   });
   it('escapes terminal controls from caller input in human refusals', async () => {

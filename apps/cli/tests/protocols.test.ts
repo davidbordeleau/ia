@@ -20,9 +20,8 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { withScope } from '@tools/testing/resources.js';
 import { runBounded, spawnOwned } from '@tools/testing/subprocess.js';
 import { LEGACY_OPERATIONS } from '../src/commands.js';
-import { DEPRECATION } from '../src/compile.js';
-import { quote } from '../src/render.js';
-import { cleanup, delivery, scratch, workspace } from './workspace-fixture.js';
+
+import { quoteCommandRoot as quote, cleanup, delivery, scratch, workspace } from './workspace-fixture.js';
 
 const repository = resolve(import.meta.dirname, '../../..');
 let MAIN: string, DISTRIBUTION: string, installedRoot: string;
@@ -285,14 +284,13 @@ it('keeps consumer --json one parseable value with no colour, no prompt and no n
     expect(got.status, label).not.toBeNull();
     oneJsonLine(got.stdout, label);
     // “JSON” and “Terminal rendering”: in `--json` mode stderr may carry progress and notes, and no verb in this release emits
-    // either but the deprecated `ia compile` (below), so the observable is that nothing narrates onto either stream —
+    // either, so the observable is that nothing narrates onto either stream —
     // including a prompt, which cannot be answered here because stdin is an empty closed pipe and neither stream is a
     // terminal.
     expect(got.stderr, label).toBe('');
     expect([0, 1, 2, 3, 4, 130], label).toContain(got.status);
   }
-  // Decision compile-verb-fate: `ia compile`, the deprecated alias of `ia capture` since 2.0, writes the capture's one
-  // value on stdout and its one note on stderr.
+  // The removed command follows the normal one-value JSON refusal protocol.
   const installed = (argv: readonly string[]) =>
     runBounded(process.execPath, [MAIN, ...argv, '--root', root, '--json'], {
       cwd: empty,
@@ -301,13 +299,19 @@ it('keeps consumer --json one parseable value with no colour, no prompt and no n
       timeoutMs: 60_000,
     });
   const compiled = await installed(['compile']);
-  expect(compiled.status).toBe(0);
-  const aliased = oneJsonLine(compiled.stdout, 'compile') as object;
+  expect(compiled.status).toBe(2);
+  expect(oneJsonLine(compiled.stdout, 'compile')).toMatchObject({
+    ok: false,
+    code: 'IA-CLI-USAGE',
+    exit: 2,
+    next: 'Run "ia capture --help" for the supported capture command.',
+  });
+  expect(compiled.stderr).toBe('');
   const captured = await installed(['capture']);
-  expect(Object.keys(aliased)).toEqual(Object.keys(oneJsonLine(captured.stdout, 'capture') as object));
+  expect(captured.status).toBe(0);
+  oneJsonLine(captured.stdout, 'capture');
   expect(existsSync(resolve(root, '.ia/work/snapshot/current.json'))).toBe(true);
   expect(existsSync(resolve(root, '.ia/work/compiled.json'))).toBe(false);
-  expect(compiled.stderr).toBe(DEPRECATION);
   // Workspace initialization §3 “Bundled language”: the bundled base ships in the packed @inventarch/cli's `assets`, so the installed binary initializes offline.
   const initialized = await runBounded(process.execPath, [MAIN, 'init', 'fresh', '--apply', '--yes', '--json'], {
     cwd: empty,
@@ -491,8 +495,8 @@ globalThis.fetch = async () => new Response(new ReadableStream({
         expect(result.stdout).toBe('');
       } else {
         expect(result.messages).toContain('cleaned');
-        // Design row 27: the interruption names the invocation to run again, as it was typed.
-        const next = `Run "ia install fixture/foundation --root ${quote(root)} --catalog .ia/work/catalog.json --apply --yes --json" again.`;
+        // The interruption rebuilds the same parsed invocation in canonical option order.
+        const next = `Run "ia install fixture/foundation --root ${quote(root)} --json --yes --catalog .ia/work/catalog.json --apply" again.`;
         expect(oneJsonLine(result.stdout, signal)).toMatchObject({ code: 'IA-CLI-INTERRUPTED', exit: 130, next });
         expect(result.stderr).toBe(`Interrupted. ${next}\n`);
       }

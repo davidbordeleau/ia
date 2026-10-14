@@ -2,8 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { repositoryKey } from '@inventarch/distribution/decisions';
 import { afterAll, expect, it, vi } from 'vitest';
-import { quote } from '../src/render.js';
-import { cleanup, run, scratch } from './workspace-fixture.js';
+import { quoteCommandRoot as quote, cleanup, run, scratch } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 120_000 });
 afterAll(cleanup);

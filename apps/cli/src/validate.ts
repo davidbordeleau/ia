@@ -46,6 +46,7 @@ import {
   errorBlock,
   headerLine,
   quote,
+  safeRootAdvice,
   sectionLabel,
   statusSymbol,
   truncateDigest,
@@ -182,7 +183,7 @@ function evidenceRefusal(error: unknown, root: string): Refusal {
     3,
     { path: located },
     code === 'IA-DB-PATH-UNSAFE'
-      ? `Replace ${located}, a link, junction or entry of the wrong kind, with a directory of this workspace, then run "${rerun}".`
+      ? `Replace only the unsafe entry ${located}, without following it or deleting its target, with a plain entry of the required kind inside this workspace, then run "${rerun}".`
       : `Make ${EVIDENCE_DIRECTORY} writable, then run "${rerun}".`,
   );
 }
@@ -549,7 +550,13 @@ export function renderValidation(view: ValidationView, options: ValidationOption
   if (view.bindings.results.length > 0) blocks.push(bindingsSection(view.bindings, caps));
   blocks.push(
     entry(
-      [words(closing(view, total.errors, bound.revoked + checked.revoked, checked.notEvaluated))],
+      [
+        words(
+          safeRootAdvice(closing(view, total.errors, bound.revoked + checked.revoked, checked.notEvaluated), [
+            view.root,
+          ]),
+        ),
+      ],
       {
         depth: 0,
         symbol: 'step',

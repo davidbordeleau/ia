@@ -10,6 +10,7 @@ import {
   isAdmissionRefusal,
   defaultActor,
   governingMandates,
+  mandateAuthorityOf,
   position,
   profileRefusal,
   refusedDependencies,
@@ -57,6 +58,25 @@ function profileAt(db: Handle, mode: Mode, words?: readonly string[]) {
 }
 const identities = (db: Handle, options: GoverningOptions = {}): readonly string[] =>
   governingMandates(db, token(db), options).map((entry) => entry.identity);
+
+it.each(['covers', 'participant'])('refuses actor-less use of a single participant mandate located by %s', (kind) => {
+  const source = records.replace(STEWARD, '').replace(SCOPE, kind === 'covers' ? '    covers ["docs/**"]\n' : '');
+  const db = database(freshInit(source)),
+    within = token(db);
+  expect(errors(db)).toEqual([]);
+  expect(defaultActor(db, within, demo).actor).toBeUndefined();
+  const unbound = governingMandates(db, within, { workspace: demo, path: 'docs/new.md' });
+  expect(unbound).toHaveLength(1);
+  for (const mode of MODES)
+    expect(profileRefusal(unbound, mode).refusal, mode).toMatchObject({
+      code: 'IA-RUNTIME-MANDATE-ACTOR',
+      next: governance(mandate('demo-mandate')),
+    });
+  const bound = governingMandates(db, within, { actor: participant, workspace: demo, path: 'docs/new.md' });
+  expect(profileRefusal(bound, 'author')).toEqual({});
+  expect(profileRefusal([{ identity: mandate('anyone'), moves: ['Synthesis'] }], 'author')).toEqual({});
+  expect(profileRefusal([], 'author')).toMatchObject({ notice: UNGOVERNED });
+});
 /** Each governing mandate with whether it binds `options.actor`. */
 const bound = (db: Handle, options: GoverningOptions): readonly (readonly [string, boolean | undefined])[] =>
   governingMandates(db, token(db), options).map((entry) => [entry.identity, entry.binds] as const);
@@ -238,10 +258,12 @@ it('refuses an actor that no mandate governing the workspace binds, rather than 
         next: governance(mandate('demo-mandate')),
       },
     });
-  // Without an actor the workspace's mandate is judged; where no mandate claims the path, nothing is restricted.
-  expect(profileRefusal(governingMandates(db, within, { workspace: demo }), 'read')).toEqual({});
+  // Without an actor a named participant cannot be satisfied; where no mandate claims the path, nothing is restricted.
+  expect(profileRefusal(governingMandates(db, within, { workspace: demo }), 'read').refusal!.code).toBe(
+    'IA-RUNTIME-MANDATE-ACTOR',
+  );
   expect(profileRefusal(governingMandates(db, within, { workspace: demo }), 'author').refusal!.code).toBe(
-    'IA-RUNTIME-MANDATE-MOVE',
+    'IA-RUNTIME-MANDATE-ACTOR',
   );
   expect(profileRefusal(governingMandates(db, within, { actor: ops, path: 'docs/guide.md' }), 'author')).toEqual({
     notice: UNGOVERNED,
@@ -376,10 +398,10 @@ it('governs wherever its participant acts a mandate that states neither scope no
   expect(identities(db, { actor: zed, workspace: demo })).toEqual([]);
   expect(identities(db, { workspace: demo })).toEqual([mandate('demo-mandate')]);
   expect(identities(db)).toEqual([mandate('demo-mandate'), mandate('loose-mandate')]);
-  // Without a steward it names no participant of the workspace, yet governs the actorless profile alike.
+  // Without a steward it names no participant of the workspace; the located mandate still needs an established actor.
   const unstewarded = database(freshInit(located.replace(STEWARD, '')));
   expect(defaultActor(unstewarded, token(unstewarded), demo).actor).toBeUndefined();
-  expect(profileAt(unstewarded, 'author').refusal!.code).toBe('IA-RUNTIME-MANDATE-MOVE');
+  expect(profileAt(unstewarded, 'author').refusal!.code).toBe('IA-RUNTIME-MANDATE-ACTOR');
 });
 
 it('locates nothing by a declared empty scope or covers, so an empty list never lifts a restriction', () => {
@@ -461,7 +483,7 @@ it('binds whoever acts a mandate that names no participant, and judges it withou
   ]);
   expect(profileAt(stewarded, 'author').refusal).toEqual(refused);
   expect(profileAt(stewarded, 'read', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
-  // With no participant and no steward there is no actor and no refusal, but the mandate still governs.
+  // A participant-less mandate needs no actor; a dangling participant reference cannot grant an actor-less mode.
   for (const participantLine of [[], ['participant @agent ghost']]) {
     const unstewarded = database(
       freshInit(
@@ -474,8 +496,16 @@ it('binds whoever acts a mandate that names no participant, and judges it withou
       actors: [],
       reason: `${demo} states no composition.steward, and no authored @mandate scoped to it names an authored @agent as its participant`,
     });
-    expect(profileAt(unstewarded, 'read')).toEqual({});
-    expect(profileAt(unstewarded, 'author').refusal).toEqual(refused);
+    if (participantLine.length === 0) {
+      expect(profileAt(unstewarded, 'read')).toEqual({});
+      expect(profileAt(unstewarded, 'author').refusal).toEqual(refused);
+    } else {
+      for (const mode of ['read', 'author'] as const)
+        expect(profileAt(unstewarded, mode).refusal).toMatchObject({
+          code: 'IA-RUNTIME-MANDATE-ACTOR',
+          next: governance(mandate('house-rules')),
+        });
+    }
   }
 });
 
@@ -711,7 +741,12 @@ it('judges excluded words only when words are given, after the move', () => {
     },
   ]);
   expect(asPacket(governing)).toEqual(renderPacket(stated, token(stated), []).packet.mandates);
-  expect(profileRefusal(governing, 'author', ['hook'])).toEqual({});
+  expect(profileRefusal(governing, 'author', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-ACTOR');
+  expect(
+    profileRefusal(governingMandates(stated, token(stated), { actor: participant, workspace: demo }), 'author', [
+      'hook',
+    ]),
+  ).toEqual({});
 });
 
 it('judges any number of mandates: any one grants a move, any one excludes a word, the first named is next', () => {
@@ -792,7 +827,7 @@ it('judges any number of mandates: any one grants a move, any one excludes a wor
       next: governance(a),
     },
   });
-  // Two participants' mandates are never pooled; one participant's several, and those naming none, are.
+  // Two participants' mandates are never pooled. One participant's several need that actor to be established.
   expect(
     profileRefusal(
       [
@@ -813,8 +848,8 @@ it('judges any number of mandates: any one grants a move, any one excludes a wor
     profileRefusal(
       [
         { identity: a, moves: ['Observation'] },
-        { identity: b, participant: 'agent/x', moves: ['Synthesis'] },
-        { identity: 'agent-system/policy/mandate/c', participant: 'agent/x', moves: ['Execution'] },
+        { identity: b, participant: 'agent/x', binds: true, moves: ['Synthesis'] },
+        { identity: 'agent-system/policy/mandate/c', participant: 'agent/x', binds: true, moves: ['Execution'] },
       ],
       'author',
     ),
@@ -833,12 +868,14 @@ it('judges any number of mandates: any one grants a move, any one excludes a wor
   const sample = database(workspace())
     .records()
     .find((record) => record.discriminator === 'mandate' && record.name === 'sample-mandate')!;
-  expect(profileRefusal([sample], 'author').refusal).toEqual({
+  expect(profileRefusal([sample], 'read').refusal!.code).toBe('IA-RUNTIME-MANDATE-ACTOR');
+  const actingSample = { ...mandateAuthorityOf(sample), binds: true };
+  expect(profileRefusal([actingSample], 'author').refusal).toEqual({
     code: 'IA-RUNTIME-MANDATE-MOVE',
     message: `${sample.identity} allows Observation, Verification; author needs Synthesis`,
     next: governance(sample.identity),
   });
-  expect(profileRefusal([sample], 'read', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
+  expect(profileRefusal([actingSample], 'read', ['hook']).refusal!.code).toBe('IA-RUNTIME-MANDATE-WORD');
 });
 
 it('reads only through its scope token, never at runtime placement, and refuses what it cannot read', () => {
@@ -966,6 +1003,106 @@ it("resolves this repository's participant as its default actor, granted all fiv
   expect(identities(db, { actor: own, path: 'README.md' })).toEqual([]);
 });
 
+/** The note is consumed by release preparation; its identity must remain unique across both locations. */
+function mandateReleaseNote(root: string): { summary: string; path: string } {
+  const candidates: { note: { summary: string; packages: string[] }; path: string }[] = [],
+    pending = 'releases/pending/mandate-resolution.json';
+  try {
+    const note = JSON.parse(readFileSync(resolve(root, pending), 'utf8'));
+    expect(note, pending).toMatchObject({ format: 'ia.npm-change-note.v1' });
+    candidates.push({ note, path: pending });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  for (const file of readdirSync(resolve(root, 'releases/changesets'))
+    .filter((name) => name.endsWith('.json'))
+    .sort()) {
+    const path = `releases/changesets/${file}`,
+      history = JSON.parse(readFileSync(resolve(root, path), 'utf8'));
+    expect(history, path).toMatchObject({
+      format: 'ia.npm-changeset.v1',
+      state: 'consumed',
+      changes: expect.any(Array),
+    });
+    for (const note of history.changes) if (note.id === 'mandate-resolution') candidates.push({ note, path });
+  }
+  expect(
+    candidates.map(({ path }) => path),
+    'Exactly one mandate-resolution note across pending and history',
+  ).toHaveLength(1);
+  const { note, path } = candidates[0]!;
+  expect(note, path).toMatchObject({
+    summary: expect.any(String),
+    packages: expect.arrayContaining(['@inventarch/runtime']),
+  });
+  return { summary: note.summary, path };
+}
+
+function assertMandateConsumers(text: string, where: string): void {
+  expect(text, where).not.toContain('or hook does yet');
+  expect(text, where).toContain('the edit guard');
+  expect(text, where).toContain('evaluateMandateGuard');
+  expect(text, where).toContain('no Door operation does');
+}
+
+describe('mandate release note evidence', () => {
+  const summary = 'The CLI and the edit guard (evaluateMandateGuard) consult the resolver; no Door operation does.',
+    note = { format: 'ia.npm-change-note.v1', summary, packages: ['@inventarch/runtime'] },
+    change = { id: 'mandate-resolution', summary, packages: ['@inventarch/runtime'] },
+    history = (changes: unknown[]) => ({ format: 'ia.npm-changeset.v1', state: 'consumed', changes });
+  const fixture = (pending: unknown | undefined, changes: unknown[] = []): string => {
+    const root = workspace(null);
+    put(root, 'releases/changesets/2.0.0.json', JSON.stringify(history(changes)));
+    if (pending !== undefined) put(root, 'releases/pending/mandate-resolution.json', JSON.stringify(pending));
+    return root;
+  };
+
+  it.each(['pending', 'consumed', 'later release'])('finds the original note in %s state', (state) => {
+    const root = fixture(state === 'pending' ? note : undefined, state === 'pending' ? [] : [change]);
+    if (state === 'later release') {
+      put(root, 'releases/current.json', JSON.stringify({ version: '4.0.0' }));
+      put(root, 'releases/changesets/4.0.0.json', JSON.stringify(history([{ ...change, id: 'unrelated' }])));
+    }
+    const found = mandateReleaseNote(root);
+    expect(found.summary).toBe(summary);
+    assertMandateConsumers(found.summary, found.path);
+  });
+
+  it.each([
+    ['missing', undefined, []],
+    ['unrelated identity', undefined, [{ ...change, id: 'unrelated' }]],
+    ['wrong package', undefined, [{ ...change, packages: ['@inventarch/cli'] }]],
+    ['invalid summary', undefined, [{ ...change, summary: null }]],
+    ['malformed pending with valid history', {}, [change]],
+    ['duplicate in one changeset', undefined, [change, change]],
+    ['pending and consumed ambiguity', note, [change]],
+  ])('refuses %s evidence', (_name, pending, changes) => {
+    expect(() => mandateReleaseNote(fixture(pending, changes as unknown[]))).toThrow();
+  });
+
+  it('refuses duplicate identities across historical changesets', () => {
+    const root = fixture(undefined, [change]);
+    put(root, 'releases/changesets/4.0.0.json', JSON.stringify(history([change])));
+    expect(() => mandateReleaseNote(root)).toThrow('Exactly one mandate-resolution');
+  });
+
+  it('does not fall back from invalid pending JSON to valid history', () => {
+    const root = fixture(undefined, [change]);
+    put(root, 'releases/pending/mandate-resolution.json', '{');
+    expect(() => mandateReleaseNote(root)).toThrow(SyntaxError);
+  });
+
+  it.each(['pending', 'consumed'])('rejects a semantic regression in %s prose', (state) => {
+    const broken = summary.replace('no Door operation does', 'every Door operation does'),
+      root = fixture(
+        state === 'pending' ? { ...note, summary: broken } : undefined,
+        state === 'pending' ? [] : [{ ...change, summary: broken }],
+      ),
+      found = mandateReleaseNote(root);
+    expect(() => assertMandateConsumers(found.summary, found.path)).toThrow('no Door operation does');
+  });
+});
+
 it('names the consumers the code has: the CLI mandate profile and the edit guard, and no Door operation (R21)', () => {
   const read = (path: string) => readFileSync(resolve(repository, path), 'utf8');
   const RESOLVER = /\b(?:governingMandates|defaultActor|profileRefusal|evaluateMandateGuard)\(/;
@@ -980,19 +1117,16 @@ it('names the consumers the code has: the CLI mandate profile and the edit guard
     'mandate-guard.ts',
     'mandate-modes.ts',
   ]);
-  // SPEC R21 and the pending note say so.
+  // SPEC R21 and the note, pending or consumed into release history, say so.
   const spec = read('packages/runtime/SPEC.md')
       .split('\n')
       .find((line) => line.startsWith('R21. '))!,
-    note = (JSON.parse(read('releases/pending/mandate-resolution.json')) as { summary: string }).summary;
+    note = mandateReleaseNote(repository);
   for (const [text, where] of [
     [spec, 'SPEC R21'],
-    [note, 'releases/pending/mandate-resolution.json'],
+    [note.summary, note.path],
   ] as const) {
-    expect(text, where).not.toContain('or hook does yet');
-    expect(text, where).toContain('the edit guard');
-    expect(text, where).toContain('evaluateMandateGuard');
-    expect(text, where).toContain('no Door operation does');
+    assertMandateConsumers(text, where);
   }
 });
 
@@ -1394,6 +1528,19 @@ it('spells the admission report root only when every character is inert unquoted
 
 describe('a file refused whole whose records db cannot all identify (review D2-R2)', () => {
   const body = '  meaning\n    says "x"\n';
+  it('keeps the restrictive profile when an unrelated rejected file contains an attribution comment', () => {
+    const root = freshInit(readFileSync(packetFixture, 'utf8').replace(ALL_MOVES, 'moves [Observation]')),
+      comment = `# authored-by @agent demo under @mandate demo-mandate at ${'a'.repeat(64)}`;
+    put(root, '.ia/src/extra.ia', `#! ia 1.0\n${comment}\n@agent unrelated\n  meaning\n    says "unfinished\n`);
+    const db = database(root),
+      within = token(db);
+    expect(refusedMandates(db)).toEqual([]);
+    expect(defaultActor(db, within, demo).actor).toBe(participant);
+    const mandates = governingMandates(db, within, { actor: participant, workspace: demo });
+    expect(mandates.map((entry) => entry.identity)).toEqual([mandate('demo-mandate')]);
+    expect(profileRefusal(mandates, 'read').refusal).toBeUndefined();
+    expect(profileRefusal(mandates, 'effect').refusal?.code).toBe('IA-RUNTIME-MANDATE-MOVE');
+  });
   const thrownBy = (run: () => unknown): RuntimeError => {
     try {
       run();
@@ -1403,6 +1550,32 @@ describe('a file refused whole whose records db cannot all identify (review D2-R
     }
     throw new Error('expected a RuntimeError');
   };
+  it('retains unidentified authority and resolution dependency refusals after an attribution comment', () => {
+    const comment = `# authored-by @agent demo under @mandate demo-mandate at ${'a'.repeat(64)}`;
+    for (const text of [
+      '@ mandate hidden\n',
+      '\uFF20mandate hidden\n',
+      '<<<<<<< HEAD\ngarbage\n=======\nother\n>>>>>>> incoming\n',
+      '@mandate hidden\n  meaning\n    says "unfinished\n',
+      '@agent demo\n  meaning\n    says "unfinished\n',
+      '@workspace demo\n  meaning\n    says "unfinished\n',
+    ]) {
+      const root = freshInit();
+      put(root, '.ia/src/extra.ia', `#! ia 1.0\n${comment}\n${text}`);
+      const db = database(root),
+        within = token(db);
+      for (const resolve of [
+        () => defaultActor(db, within, demo),
+        () => seatedWorkspace(db, within, '.ia/src/workspace.ia'),
+        () => governingMandates(db, within, { actor: participant, workspace: demo }),
+      ]) {
+        const error = thrownBy(resolve);
+        expect(error.admission, text).toBe('refused');
+        // It names the record after the comment: read as a declaration, the comment's own references (line 2) would be.
+        expect(error.where, text).toMatchObject({ path: '.ia/src/extra.ia', line: 3 });
+      }
+    }
+  });
   for (const [name, text, line] of [
     ['a space after the at sign', `#! ia 1.0\n\n@ mandate spaced\n${body}`, 3],
     ['a full-width at sign', `#! ia 1.0\n\n${String.fromCharCode(0xff20)}mandate wide\n${body}`, 3],

@@ -14,8 +14,18 @@ import { afterAll, expect, it } from 'vitest';
 import { Door } from '@inventarch/runtime';
 import type { DeliveryView, DoorResponse } from '@inventarch/runtime';
 import { renderNext } from '../src/next.js';
-import { quote, resolveCapabilities } from '../src/render.js';
-import { cleanup, commandsIn, delivery, nextArgv, repository, run, workspace } from './workspace-fixture.js';
+import { resolveCapabilities } from '../src/render.js';
+
+import {
+  quoteCommandRoot as quote,
+  cleanup,
+  commandsIn,
+  delivery,
+  nextArgv,
+  repository,
+  run,
+  workspace,
+} from './workspace-fixture.js';
 
 afterAll(cleanup);
 

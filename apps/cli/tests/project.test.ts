@@ -22,7 +22,7 @@ import { PACKET_MARKER } from '@inventarch/runtime';
 import { afterAll, expect, it, vi } from 'vitest';
 import { dispatch } from '../src/consumer.js';
 import { GUARD_RETIRED } from '../src/host.js';
-import { quote } from '../src/render.js';
+
 import {
   deadPid,
   doctor,
@@ -41,7 +41,7 @@ import {
   row,
   STEWARD,
 } from './host-fixture.js';
-import { cleanup, makeHost, run, scratch } from './workspace-fixture.js';
+import { quoteCommandRoot as quote, cleanup, makeHost, run, scratch } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
 afterAll(cleanup);

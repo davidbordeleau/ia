@@ -21,10 +21,11 @@ import { HOST_TREE_LIMITS, packTree } from '@inventarch/distribution/ustar';
 import { json, sha256 } from '@inventarch/distribution/services';
 import { collectDoctor } from '../src/doctor.js';
 import { applyHostProjection, renderProjectionFor } from '../src/host-projection.js';
-import { rootedNext, SETTINGS } from '../src/host.js';
-import { quote } from '../src/render.js';
-import { cli, run, scratch } from './workspace-fixture.js';
+import { SETTINGS } from '../src/host.js';
+import { quoteCommandRoot as quote, cli, run, scratch, cleanup } from './workspace-fixture.js';
+
 import {
+  rootedCommandNext as rootedNext,
   put,
   read,
   initialized,
@@ -40,7 +41,7 @@ import {
   STEWARD,
 } from './host-fixture.js';
 import { afterAll, expect, it, vi } from 'vitest';
-import { cleanup } from './workspace-fixture.js';
+
 import type { Row } from './host-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });

@@ -1,7 +1,11 @@
 import { expect, it } from 'vitest';
+import { join, resolve } from 'node:path';
 import {
   atom,
   blockSymbolWidth,
+  commandFacts,
+  commandArguments,
+  ADVICE_COMMAND,
   contentColumn,
   createProgress,
   document,
@@ -13,6 +17,8 @@ import {
   indentOf,
   MAX_WIDTH,
   resolveCapabilities,
+  safeRootAdvice,
+  quote,
   sectionLabel,
   statusSymbol,
   stripMessage,
@@ -33,6 +39,152 @@ const terminal = (env: Record<string, string | undefined>, isTTY = true, columns
 const REFERENCE_WIDTH = MAX_WIDTH;
 const plain = (ascii: boolean): Capabilities => ({ color: false, ascii, width: REFERENCE_WIDTH });
 const ansi = /\u001b\[[0-9;]*m/g;
+
+it('omits shell-active known roots from suggestions without parsing their command-like contents', () => {
+  for (const root of [
+    '/work/$(Write-Output SENTINEL)',
+    '/work/`whoami`',
+    '/work/%PATH%',
+    '/work/!PATH!',
+    '/work/a&b',
+    '/work/a;b',
+    '/work/a^b',
+    '/work/a,b',
+    '/work/a" --root /other',
+    '\\\\server\\share with spaces',
+    '/work/a\nb',
+    '/work/a\tb',
+    '/work/a|b',
+    '/work/a>b',
+    '/work/a<b',
+    '/work/(a)',
+    '/work/~a',
+    "/work/a'b",
+  ]) {
+    const source = `Run "ia recover host --root ${quote(root)}" then "ia validate --root ${quote(root)}".`;
+    const next = safeRootAdvice(source, [root]);
+    expect(next, root).toContain('"ia recover host --root ." then "ia validate --root ."');
+    expect(next, root).toContain('from the workspace root');
+    expect(next, root).not.toContain(root);
+    expect(safeRootAdvice(next, [root])).toBe(next);
+  }
+  const root = '/work/café with spaces';
+  const source = `Run "ia validate --root ${quote(root)}".`;
+  expect(safeRootAdvice(source, [root])).toBe(source);
+});
+
+it.runIf(process.platform === 'win32')('preserves the command directory when only root separators change', () => {
+  for (const root of ['nested\\workspace', 'nested\\workspace with spaces', 'C:\\ordinary\\workspace']) {
+    const command = `ia position --root ${quote(root)}`,
+      expected = `ia position --root ${quote(root.replaceAll('\\', '/'))}`,
+      roots = [root, `C:\\parent(with-parens)\\${root}`];
+    expect.soft(safeRootAdvice(command, roots)).toBe(expected);
+    expect
+      .soft(entry(commandFacts('', command, '', 0, plain(true), roots), {}, plain(true)).join('\n'))
+      .not.toContain('from the workspace root');
+  }
+  const root = 'nested\\workspace(with-parens)',
+    command = `ia position --root ${quote(root)}`,
+    roots = [root, `C:\\parent\\${root}`];
+  expect(safeRootAdvice(command, roots)).toContain('ia position --root .');
+  expect(safeRootAdvice(command, roots)).toContain('from the workspace root');
+  const facts = entry(commandFacts('', command, '', 0, plain(true), roots), {}, plain(true)).join('\n');
+  expect(facts).toContain('ia position --root .');
+  expect(facts).toContain('from the workspace root');
+});
+
+it('preserves caller-relative registry selection for each relocated registry operation', () => {
+  const cwd = resolve('registry-advice'),
+    root = 'workspace(active)',
+    selected = resolve(cwd, 'registry').replaceAll('\\', '/'),
+    advice = { cwd, env: { IA_REGISTRY: './registry' } };
+  for (const operation of [
+    'install pkg/name',
+    'update pkg/name',
+    'restore --apply --yes',
+    'adopt pkg/name',
+    'init workspace(active) --adopt pkg/name',
+  ]) {
+    for (const flag of ['', ' --registry ./registry', ' --registry=./registry']) {
+      const command = `ia ${operation}${flag}${operation.startsWith('init ') ? '' : ` --root ${root}`}`,
+        next = safeRootAdvice(`Run "${command}" again.`, [root], advice),
+        argv = commandArguments(ADVICE_COMMAND.exec(next)![1]!);
+      expect(argv.slice(argv.indexOf('--registry'), argv.indexOf('--registry') + 2)).toEqual(['--registry', selected]);
+      expect(next).toContain('from the workspace root');
+      expect(safeRootAdvice(next, [root], advice)).toBe(next);
+      const facts = entry(commandFacts('', command, '', 0, plain(true), [root], advice), {}, plain(true))
+        .join('\n')
+        .replaceAll('\\\n', '');
+      expect(facts).toContain(selected);
+    }
+  }
+});
+
+it('uses the omitted root destination and requires manual recovery only when no safe registry spelling exists', () => {
+  const cwd = resolve('parent(active)'),
+    root = 'workspace(active)',
+    env = { IA_REGISTRY: './registry' };
+  const relative = safeRootAdvice(`Run "ia install pkg/name --root ${root}".`, [resolve(cwd, root), root], {
+    cwd,
+    env,
+  });
+  expect(relative).toContain('--registry ../registry');
+  const optionLike = safeRootAdvice(`Run "ia install pkg/name --root ${root}".`, [root], {
+    cwd,
+    env: { IA_REGISTRY: `./${root}/--json` },
+  });
+  expect(optionLike).toContain('--registry ./--json');
+  const unsafe = safeRootAdvice(`Run "ia restore --root ${root} --apply --yes".`, [root], {
+    cwd,
+    env: { IA_REGISTRY: './registry(active)' },
+  });
+  expect(ADVICE_COMMAND.exec(unsafe)![1]).toBe('ia restore --help');
+  expect(unsafe).not.toContain('--apply');
+  expect(unsafe).toContain(JSON.stringify(resolve(cwd, 'registry(active)')));
+  const doctor = safeRootAdvice(`Run "ia doctor --root ${root}".`, ['/unrelated(root)', root], { cwd, env });
+  expect(ADVICE_COMMAND.exec(doctor)![1]).toBe('ia doctor --help');
+  expect(doctor).toContain('IA_REGISTRY');
+  expect(doctor).toContain(JSON.stringify(resolve(cwd, 'registry')));
+  expect(doctor).not.toContain('--registry');
+});
+
+it('keeps registry intent and inputs when the suggested operation needs no rebasing', () => {
+  const cwd = resolve('registry-advice'),
+    root = 'workspace(active)',
+    advice = { cwd, env: { IA_REGISTRY: './registry' } };
+  for (const command of [
+    `ia install pkg/name --root ${root} --offline`,
+    `ia install pkg/name --root ${root} --catalog ./catalog.json`,
+    `ia install pkg/name --root ${root} --registry ""`,
+    `ia install pkg/name --root ${root} --registry https://example.test/registry`,
+    `ia install pkg/name --root ${root} --registry ${quote(resolve(cwd, 'registry'))}`,
+    `ia install pkg/name --root ${root} --registry <url|dir>`,
+    `ia init ${root}`,
+    `ia init ${root} --adopt pkg/name --migrate`,
+    `ia init ${root} --adopt pkg/name --decline=today`,
+    `ia init ${root} --adopt pkg/name --forget-decline`,
+    `ia remove pkg/name --root ${root}`,
+    `ia doctor --root ${root} --help`,
+  ]) {
+    const expected = safeRootAdvice(`Run "${command}".`, [root]);
+    expect(safeRootAdvice(`Run "${command}".`, [root], advice)).toBe(expected);
+  }
+  const command = `Run "ia install pkg/name --root ${root}".`;
+  expect(safeRootAdvice(command, [root], { ...advice, registryIntent: 'reselect' })).toBe(
+    safeRootAdvice(command, [root]),
+  );
+  expect(safeRootAdvice(command, [root], { cwd, env: {} })).toBe(safeRootAdvice(command, [root]));
+  const same = `Run "ia install pkg/name --root ${quote(cwd + '(active)')}".`;
+  expect(safeRootAdvice(same, [cwd + '(active)'], { cwd: cwd + '(active)', env: advice.env })).not.toContain(
+    '--registry',
+  );
+  for (const ordinary of ['workspace', join('nested', 'workspace')]) {
+    const text = `Run "ia install pkg/name --root ${quote(ordinary)} --registry ./registry".`;
+    expect(safeRootAdvice(text, [ordinary, resolve(cwd, 'unused(active)')], advice)).toBe(
+      safeRootAdvice(text, [ordinary]),
+    );
+  }
+});
 
 it('resolves every colour precedence branch of section 6.7 from an explicit environment', () => {
   const on = { color: true, ascii: false, width: 80 };

@@ -61,7 +61,7 @@ export function qualifyInit(envelope, workspace) {
 
 /** Authored expectations against the installed CLI only; no repository runtime or fixture supplies the oracle. */
 export function qualifyInstalledViews(cli, cwd, env, workspace) {
-  const invoke = (args, exit = 0, deprecation = false) => {
+  const invoke = (args, exit = 0) => {
     const result = spawnSync(process.execPath, ['--import', './offline.mjs', cli, ...args, '--root', workspace], {
       cwd,
       env,
@@ -72,12 +72,12 @@ export function qualifyInstalledViews(cli, cwd, env, workspace) {
     });
     assert.ifError(result.error);
     assert.equal(result.status, exit, `${args.join(' ')}: ${result.stdout}\n${result.stderr}`);
-    if (deprecation) assert.match(result.stderr, /^Deprecated: ia compile[^\n]*ia capture[^\n]*\n$/);
-    else assert.equal(result.stderr, '');
+    assert.equal(result.stderr, '');
     return result.stdout;
   };
-  const machine = (args, exit = 0, deprecation = false) => JSON.parse(invoke([...args, '--json'], exit, deprecation));
-  const rooted = `--root ${JSON.stringify(workspace)}`;
+  const machine = (args, exit = 0) => JSON.parse(invoke([...args, '--json'], exit));
+  const commandRoot = process.platform === 'win32' ? workspace.replaceAll('\\', '/') : workspace;
+  const rooted = `--root ${JSON.stringify(commandRoot)}`;
   const refusal = (args, exit, code, command, repair, directoryTimes = true) => {
     const before = tree(workspace, directoryTimes),
       result = machine(args, exit);
@@ -269,29 +269,20 @@ export function qualifyInstalledViews(cli, cwd, env, workspace) {
   machine(['validate']);
   assert.deepEqual(readFileSync(current), snapshotBytes, 'Refused capture replaced the retained snapshot');
 
-  // From 2.0 compile is the deprecated alias of capture (decision compile-verb-fate): the capture's result and snapshot
-  // with one stderr note, --force mapped onto it, and --out and --stdout refused naming the capture to run instead.
-  const compiled = machine(['compile'], 0, true);
-  assert.equal(compiled.revision, captured.revision);
-  assert.equal(compiled.digest, captured.digest);
-  assert.equal(compiled.changed, 0);
-  assert.equal(compiled.rotated, false);
-  assert.deepEqual(readFileSync(current), snapshotBytes, 'The compile alias changed an unchanged capture');
-  assert.equal(
-    existsSync(resolve(workspace, '.ia/work/compiled.json')),
-    false,
-    'The compile alias wrote ia.compiled.v1',
-  );
-  assert.equal(machine(['compile', '--force'], 0, true).digest, captured.digest);
-  refusal(['compile', '--stdout'], 2, 'IA-CLI-USAGE', `ia capture ${rooted}`, 'write the admitted snapshot');
-  refusal(
-    ['compile', '--out', '.ia/work/compiled.json'],
-    2,
-    'IA-CLI-USAGE',
-    `ia capture ${rooted}`,
-    'admitted snapshot',
-  );
-  assert.deepEqual(readFileSync(current), snapshotBytes, 'A refused compile changed capture output');
+  // Removal must be observable from installed bytes, with no workspace file or timestamp changes.
+  for (const options of [
+    [],
+    ['--force'],
+    ['--preview'],
+    ['--help'],
+    ['--out', '.ia/work/compiled.json'],
+    ['--stdout'],
+    ['--out', 'x', '--stdout'],
+  ]) {
+    refusal(['compile', ...options], 2, 'IA-CLI-USAGE', 'ia capture --help', 'capture command');
+  }
+  assert.deepEqual(readFileSync(current), snapshotBytes, 'A removed compile invocation changed capture output');
+  assert.equal(existsSync(resolve(workspace, '.ia/work/compiled.json')), false);
   return [
     'three-record position, packet and format',
     'pack refusal without a distribution',
@@ -301,6 +292,6 @@ export function qualifyInstalledViews(cli, cwd, env, workspace) {
     'read/next observe uncaptured edits',
     'read/next no writes',
     'read/capture/next refusals',
-    'compile alias of capture',
+    'removed compile command',
   ];
 }

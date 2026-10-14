@@ -238,7 +238,10 @@ export interface RefusedMandate {
  * then line, each with its own admission finding as db records it (db `unadmitted`): (a) one admission refused,
  * `refused` naming it; (b) both occurrences of a mandate identity that ties at band 100; (c) one a file refused whole
  * declares, by a language error or a duplicate requirement id, as db's own parse of the file reads its headers, or as
- * its captured text shows a header the parse could not read, or a `@mandate` token on a line no parsed record spans; and
+ * its captured text shows a header the parse could not read, or a `@mandate` token on a line no parsed record spans and
+ * the language scanner does not read as a whole-line comment (db D15), so the attribution `ia author` writes is none
+ * outside the damaged files D15 names (a bare CR anywhere, the comment inside `"""` prose, a byte-order mark before it
+ * on line 1 with no pragma); and
  * (d) review D2-R2: every record db cannot identify (db D15 lists it with no word, by the rules and limits D15 states),
  * which may be a mandate, so it counts as one, marked `unidentified`, except at a line db also lists a mandate at, which
  * is counted once, as that mandate (review D2 recheck F3). A record is a mandate when its word is `mandate` or its
@@ -508,7 +511,8 @@ export interface DefaultActor {
 /**
  * What profileRefusal judges of one governing mandate; a GoverningMandate and a MandateAuthority are both one. A
  * mandate whose `binds` is false governs for another participant: it is left out of the judgement, and `participant`
- * names whom it binds.
+ * names whom it binds. A named participant with no `binds` has no established actor and refuses every mode, even
+ * when it is the only participant. `binds: true` records the resolver's established actor binding.
  */
 export type ProfileMandate = Pick<MandateAuthority, 'identity' | 'participant' | 'moves' | 'excludedWords'> & {
   readonly binds?: boolean;
@@ -739,7 +743,8 @@ export function defaultActor(reader: ReadHandle, within: string, workspace: stri
  * C1: the refusal profile the governing `mandates` give `mode` and its target `words`. A mandate whose `binds` is false
  * governs for another participant and is left out; when every one is, no mandate here binds the actor, and the mode is
  * IA-RUNTIME-MANDATE-ACTOR, naming whom each binds. The rest are never pooled across participants: when they name more
- * than one, as they may without an actor, the mode is IA-RUNTIME-MANDATE-ACTOR too, naming each. Then the move is
+ * than one, as they may without an actor, the mode is IA-RUNTIME-MANDATE-ACTOR too, naming each. A named participant
+ * without an established binding (`binds` absent) also refuses every mode, even when it is the only one. Then the move is
  * judged: the mode is allowed when any mandate grants its move, by listing it or by declaring no moves, else
  * IA-RUNTIME-MANDATE-MOVE. Then, only when words are given, a word any mandate excludes is IA-RUNTIME-MANDATE-WORD.
  * Each refusal's `next` is the governance position of the first mandate it names (design §11), a read, which a command
@@ -781,6 +786,13 @@ export function profileRefusal(
       'IA-RUNTIME-MANDATE-ACTOR',
       `the mandates that govern here bind ${participants.size} participants and name no acting @agent: ${named.map(whom).join('; ')}`,
       named[0]!.identity,
+    );
+  const unbound = named.filter((authority) => authority.binds === undefined);
+  if (unbound.length > 0)
+    return refuse(
+      'IA-RUNTIME-MANDATE-ACTOR',
+      `a governing mandate names a participant but no acting @agent was established: ${unbound.map(whom).join('; ')}`,
+      unbound[0]!.identity,
     );
   if (binding.every(({ refusal }) => refusal !== undefined))
     return refuse(

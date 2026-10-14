@@ -8,10 +8,11 @@ import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSyn
 import { basename, resolve } from 'node:path';
 import { json } from '@inventarch/distribution/services';
 import { runBounded } from '@tools/testing/subprocess.js';
-import { projectionFailure, rootedNext } from '../src/host.js';
-import { quote } from '../src/render.js';
-import { cli, DESCRIPTOR, packable, run, scratch } from './workspace-fixture.js';
+import { projectionFailure } from '../src/host.js';
+
+import { quoteCommandRoot as quote, cli, DESCRIPTOR, packable, run, scratch, cleanup } from './workspace-fixture.js';
 import {
+  rootedCommandNext as rootedNext,
   put,
   read,
   initialized,
@@ -28,7 +29,6 @@ import {
   STEWARD,
 } from './host-fixture.js';
 import { afterAll, expect, it, vi } from 'vitest';
-import { cleanup } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
 afterAll(cleanup, 120_000);
@@ -649,7 +649,7 @@ it('prioritizes a real interrupted guard journal over raw filesystem errors and 
   expect(refusal.where.path).toBe('.ia/distributions/hosts/guard-pending.json');
   expect(refusal.next).not.toContain('delete');
   const command = refusal.next.match(/Run "([^"]+)"/)[1];
-  expect(command).toBe(`ia recover guard --root ${root}`);
+  expect(command).toBe(`ia recover guard --root ${quote(root)}`);
   const recovered = await runBounded(process.execPath, [resolve(cli, 'dist/main.js'), ...command.split(' ').slice(1)], {
     cwd: root,
     env: { ...process.env, ...env, NODE_OPTIONS: '' },

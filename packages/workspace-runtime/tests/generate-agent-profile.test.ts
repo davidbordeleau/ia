@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { afterAll, afterEach, expect, it, vi } from 'vitest';
 import { open } from '@inventarch/db';
 import type { Handle } from '@inventarch/db';
-import { PACKET_MARKER } from '@inventarch/runtime';
+import { defaultActor, PACKET_MARKER } from '@inventarch/runtime';
 import { adoptWorkspace } from '../src/corpus.js';
 import { generateAgentProfiles } from '../src/generate/index.js';
 import type { GeneratedFile, GeneratedSet } from '../src/generate/index.js';
@@ -68,6 +68,19 @@ const claude = (db: Handle, within: string): readonly GeneratedFile[] =>
   generateAgentProfiles(db, within, 'claude').files;
 const rendered = (db: Handle, within: string): GeneratedSet => generateAgentProfiles(db, within, 'claude');
 
+it('distinguishes a profile agent from the workspace CLI actor', () => {
+  const { db, within } = fixture(),
+    text = rendered(db, within).files[0]!.text,
+    actor = defaultActor(db, within, 'workspace-system/definition/workspace/demo');
+  expect(actor.actor).toBe('agent-system/binding/agent/demo');
+  expect(actor.actors).not.toContain('agent-system/binding/agent/reviewer');
+  expect(text).toContain('CLI commands choose an authored workspace participant or steward.');
+  expect(text).toContain(
+    "Omitting --actor uses the workspace's default actor; it does not select this profile's agent.",
+  );
+  expect(text).not.toContain("the edit guard and the CLI's mandate profile");
+});
+
 const AGENT_FILE = `---
 name: "reviewer"
 description: "Reviews the demo workspace's notes and reports what it finds."
@@ -83,13 +96,15 @@ Binds the reviewer to a bounded host contract under the demo mandate.
 - profile \`${PROFILE}\`
 - agent \`agent-system/binding/agent/reviewer\`
 
+CLI commands choose an authored workspace participant or steward. Omitting --actor uses the workspace's default actor; it does not select this profile's agent.
+
 ## Mandate
 
 - \`agent-system/policy/mandate/demo-mandate\`
   - participant \`agent-system/binding/agent/demo\`
   - moves Observation, Verification, Synthesis, Delegation, Execution
   - scope \`workspace-system/definition/workspace/demo\`
-  - binds \`agent-system/binding/agent/demo\`, not this profile's agent \`agent-system/binding/agent/reviewer\`: the edit guard and the CLI's mandate profile judge the agent by the mandates that bind it
+  - binds \`agent-system/binding/agent/demo\`, not this profile's agent \`agent-system/binding/agent/reviewer\`: the edit guard judges the agent by the mandates that bind it
 
 ## Voice
 
@@ -133,7 +148,7 @@ const unmandated = (extra = ''): string =>
 /** The Mandate section of an agent file, up to the next section. */
 const mandateSection = (text: string): string => text.split('\n## Mandate\n\n')[1]!.split('\n\n## ')[0]!;
 const FALLBACK =
-  "This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.";
+  'This profile names no mandate. Fallback: the authored mandates that bind its agent `agent-system/binding/agent/reviewer`, each with where it governs; the edit guard judges the agent by these, and refuses it where a mandate that binds another participant governs and none of these grants the move.';
 
 it("falls back to the authored mandates that bind the profile's agent, as the guard judges a subagent (A-R8)", () => {
   // The reviewer subagent acts as the reviewer @agent (OD4): reviewer-docs binds it; demo-mandate and docs-mandate bind
@@ -182,7 +197,7 @@ it('includes a participant-less mandate in the fallback, one group per mandate, 
     ),
   });
   expect(mandateSection(claude(none.db, none.within)[0]!.text)).toBe(
-    "This profile names no mandate. Fallback: no authored mandate binds its agent `agent-system/binding/agent/reviewer`; wherever a mandate governs, the edit guard and the CLI's mandate profile refuse it.",
+    'This profile names no mandate. Fallback: no authored mandate binds its agent `agent-system/binding/agent/reviewer`; wherever a mandate governs, the edit guard refuses it.',
   );
 });
 
@@ -443,6 +458,8 @@ Binds the reviewer to a bounded host contract under the demo mandate.
 
 - profile \`${PROFILE}\`
 - agent \`@agent reviewer\`: not admitted in this scope
+
+CLI commands choose an authored workspace participant or steward. Omitting --actor uses the workspace's default actor; it does not select this profile's agent.
 
 ## Mandate
 

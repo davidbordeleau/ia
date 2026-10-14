@@ -36,8 +36,9 @@ import {
 import type { FixtureReleaseSpec, SourcedRelease } from './registry-fixture.js';
 import { collectPlan, UNMAPPED } from '../src/distribute.js';
 import type { PlanRequest } from '../src/distribute.js';
-import { quote } from '../src/render.js';
-import { cleanup, nextArgv, run, scratch } from './workspace-fixture.js';
+
+import { quote as serviceQuote } from '../src/render.js';
+import { quoteCommandRoot as quote, cleanup, nextArgv, run, scratch } from './workspace-fixture.js';
 
 const BASE = 'https://registry.test/base/';
 /**
@@ -203,6 +204,37 @@ it('installs from a directory registry named by --registry, pins sha256 location
   );
   expect(again.plan.changes.added).toEqual([]);
   expect(again.plan.changes.updated).toEqual([]);
+});
+
+it('replays preview and declined apply advice against the original relative registry', async () => {
+  const cwd = scratch('registry-advice'),
+    directory = join(cwd, 'registry'),
+    trapped = trapFetch();
+  cpSync(registry(APP_ON_LIB), directory, { recursive: true });
+  for (const flag of [true, false])
+    for (const declined of [true, false]) {
+      const root = `workspace(${flag}-${declined})`;
+      mkdirSync(join(cwd, root));
+      const env = { IA_REGISTRY: flag ? './ignored' : './registry' },
+        args = ['install', 'acme/app', '--root', root, ...(flag ? ['--registry', './registry'] : [])],
+        result = await run([...args, ...(declined ? ['--apply'] : [])], {
+          cwd,
+          env,
+          interactive: declined,
+          answers: ['no'],
+        });
+      expect(result.exitCode, result.stderr).toBe(0);
+      expect(existsSync(join(cwd, root, '.ia/distributions.lock.json'))).toBe(false);
+      const printed = nextArgv(result.stdout.replace(/[ \t]*\\\r?\n[ \t]*/g, ' ')),
+        rerun = printed.filter((arg) => !['--apply', '--yes'].includes(arg));
+      expect(printed, result.stdout).toContain('--registry');
+      expect(printed[printed.indexOf('--root') + 1]).toBe('.');
+      const replay = await run([...rerun, '--json'], { cwd: join(cwd, root), env });
+      expect(replay.exitCode, replay.stdout + replay.stderr).toBe(0);
+      expect(json<Envelope>(replay.stdout).registries).toEqual([{ provider: 'acme', base: directory, level: 'flag' }]);
+      expect(json<Envelope>(replay.stdout).plan.lock.packages.map((pkg) => pkg.version)).toEqual(['1.0.0', '1.0.0']);
+    }
+  expect(trapped).not.toHaveBeenCalled();
 });
 
 it('installs with no flag when .ia/registries.json maps the provider to a directory inside the workspace', async () => {
@@ -476,7 +508,7 @@ it('names an incomplete directory registry when it lacks an artifact it lists', 
   // The release is re-added to the directory the message names; only the archive is the user's to supply.
   const named = /^Registry (.+) has no artifacts\//.exec(failure.message)![1]!;
   expect(realpathSync(named)).toBe(realpathSync(dir));
-  expect(failure.next).toContain(`"ia-distribution registry add --registry ${quote(named)} --archive <file>"`);
+  expect(failure.next).toContain(`"ia-distribution registry add --registry ${serviceQuote(named)} --archive <file>"`);
   expect(failure.next).not.toContain('Retry');
 });
 
@@ -611,7 +643,7 @@ it('spells each remedy family a 1.x collectPlan request can reach, though it car
   ).rejects.toMatchObject({
     code: 'IA-DIST-INPUT-INVALID',
     exit: 3,
-    next: `Run "ia install --requests <file> --offline --root ${quote(root)}" naming an existing requests file.`,
+    next: `Run "ia install --requests <file> --offline --root ${serviceQuote(root)}" naming an existing requests file.`,
   });
   const cached = `.ia/distributions/cache/${'c'.repeat(64)}.ia.tgz`;
   mkdirSync(join(root, '.ia/distributions/cache'), { recursive: true });
@@ -619,7 +651,7 @@ it('spells each remedy family a 1.x collectPlan request can reach, though it car
   await expect(collectPlan(request(root, { offline: true, rooted: true }))).rejects.toMatchObject({
     code: 'IA-DIST-ARCHIVE-INVALID',
     where: { path: cached },
-    next: `Delete ${cached}, then rerun "ia install acme/app --root ${quote(root)}"; a published archive is fetched again from its registry or catalog.`,
+    next: `Delete ${cached}, then rerun "ia install acme/app --root ${serviceQuote(root)}"; a published archive is fetched again from its registry or catalog.`,
   });
   const { root: installed, base } = await initialized();
   await expect(
@@ -638,7 +670,7 @@ it('spells each remedy family a 1.x collectPlan request can reach, though it car
     collectPlan(request(installed, { operation: 'update', ids: ['acme/other'], offline: true, rooted: true })),
   ).rejects.toMatchObject({
     code: 'IA-DIST-INPUT-INVALID',
-    next: `Run "ia inspect --root ${quote(installed)}" for the installed generation and name one of its direct requests.`,
+    next: `Run "ia inspect --root ${serviceQuote(installed)}" for the installed generation and name one of its direct requests.`,
   });
 });
 
@@ -941,7 +973,7 @@ const expectUnreadGeneration = (stdout: string, root: string): void =>
     title: 'Generation',
     status: 'unknown',
     detail: 'Not checked; IA-DB-SOURCE-UNAVAILABLE',
-    remedy: `ia recover installation --root ${realpathSync(root)}`,
+    remedy: `ia recover installation --root ${quote(realpathSync(root))}`,
   });
 
 it('doctor reports each provider of a fresh clone that carries only the portable lock', async () => {

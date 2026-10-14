@@ -6,6 +6,7 @@ import {
   identityOf,
   parse,
   requirementCollisions,
+  scan,
 } from '@inventarch/language';
 import type { Band, CompiledRecord, Diagnostic, FrozenRegistry, Phase, RecordNode, Source } from '@inventarch/language';
 import { authoredRevisionOf, canonicalRoot, load, reaches, stableSerialize } from '@inventarch/graph';
@@ -60,9 +61,11 @@ export interface UnadmittedFinding {
  *   parse cannot give (review findings D-R3, D2-R2 and D2-N2): a line that opens with `@<word>` after any whitespace or
  *   Unicode format characters (a no-break space, a form feed, a zero-width space, a byte-order mark) and is no header
  *   the parse read is one, wherever it stands, inside a parsed record too, with the name token after it and no
- *   identity; on a line no parsed record spans, each `@<word>` token anywhere on it is one, with no name, so a file
- *   whose parse reads no record (no or another pragma) lists every word it mentions; and a line the first reading
- *   names no header on is one with no word, a record db cannot identify, when it holds one of the file's errors and no
+ *   identity; on a line no parsed record spans, each `@<word>` token anywhere on it is one, with no name, unless the
+ *   language scanner reads the whole line as a comment (`#` after ASCII spaces or tabs, in a file with no bare CR), as
+ *   it reads the attribution `ia author` writes, so a file whose parse reads no record (no or another pragma) lists
+ *   every word it mentions outside such comments; and a line the first reading names no header on is one with no word,
+ *   a record db cannot identify, when it holds one of the file's errors and no
  *   parsed record spans it, when an at sign opens it wherever it stands, or, in a file refused at its pragma, when it
  *   stands at column 0 and is neither blank nor a comment (`refusedWhole`; review D2-R2 and its recheck F1, F2). The
  *   readings err towards listing: a non-header line so spelled in a file already refused is listed under its word, an
@@ -159,7 +162,8 @@ const PRAGMA = new Set(['IA-LANG-PRAGMA-MISSING', 'IA-LANG-VERSION-UNSUPPORTED']
  * The occurrences of a file a view refuses whole (`UnadmittedRecord`): every header its parse reads, nested ones
  * included, with the identity its compile gives that header's record or, for one its compile refused, the identity spec
  * 3.1 gives it (`identityOf` over its word's registration), then every other line of `text` that opens with a header,
- * under its word and name, every `@<word>` token on a line no parsed record spans, under its word, and, under no word,
+ * under its word and name, every `@<word>` token on a line no parsed record spans that is not a proven full-line
+ * comment, under its word, and, under no word,
  * every line no header reading names that may declare a record db cannot identify (review D2-R2 and its recheck F1, F2):
  * an error's (for one at a blank or comment line, the first line from there that is neither) that no parsed record
  * spans, one an at sign opens, and in a file refused at its pragma one at column 0 that is neither blank nor a comment.
@@ -220,6 +224,21 @@ function refusedWhole(
     ];
   const spanned = (line: number): boolean => spans.some((span) => line >= span.line && line <= span.endLine);
   const lines = text.split(/\r\n|\r|\n/),
+    // An attribution's references are not declarations. Require actual language trivia and the complete physical
+    // line: a trailing comment, comment-like prose or malformed prefix must keep the conservative token scan.
+    // Scan the same captured text, never a filesystem reread: the parse of a file refused at its pragma holds no
+    // trivia, and any other parse adds only trailing comments to the scanner's, which the two checks below refuse.
+    // The language scanner does not split bare CR; do not use its line numbers against our broader line splitting.
+    comments = new Set(
+      (/\r(?!\n)/.test(text) ? [] : scan(text, path).trivia)
+        .filter(
+          (trivia) =>
+            trivia.kind === 'comment' &&
+            /^[ \t]*#/.test(lines[trivia.line - 1] ?? '') &&
+            lines[trivia.line - 1]!.trim() === trivia.text,
+        )
+        .map((trivia) => trivia.line),
+    ),
     named = new Set<number>();
   const unread = lines.flatMap((spelled, index): UnadmittedRecord[] => {
     const line = index + 1,
@@ -228,7 +247,7 @@ function refusedWhole(
       named.add(line);
       return headers.has(line) ? [] : [occurrence(header[1]!, header[2], line, line)];
     }
-    return spanned(line)
+    return spanned(line) || comments.has(line)
       ? []
       : [...spelled.matchAll(TOKEN)].map((token) => occurrence(token[1]!, undefined, line, line));
   });

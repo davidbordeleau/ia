@@ -38,6 +38,7 @@ import {
   entry,
   headerLine,
   quote,
+  safeRootAdvice,
   remedyWords,
   sectionLabel,
   terminalSafe,
@@ -177,7 +178,7 @@ function keyText(key: ScopeKey): string {
  * output, what a source authored (cell text, a finding's message, identities and paths) included, is escaped by
  * `terminalSafe` before it is laid out, so no terminal control reaches the terminal; `--json` prints the output as is.
  */
-export function renderPosition(output: PositionOutput, caps: Capabilities, rooted = ''): string {
+export function renderPosition(output: PositionOutput, caps: Capabilities, rooted = '', supplied?: string): string {
   const { body, digest, hostNote } = terminalSafe(output),
     seated = body.seat.identity ?? spelled(body.seat.path ?? '');
   const freshness =
@@ -190,9 +191,16 @@ export function renderPosition(output: PositionOutput, caps: Capabilities, roote
   const widening: (readonly Token[])[] = [
     ...(body.widening.deeper === undefined
       ? []
-      : [remedyWords(`Run "${positionCommand(body.widening.deeper, rooted)}" for one hop deeper.`)]),
+      : [
+          remedyWords(
+            safeRootAdvice(`Run "${positionCommand(body.widening.deeper, rooted)}" for one hop deeper.`, [supplied]),
+          ),
+        ]),
     remedyWords(
-      `Run "${positionCommand(body.widening.reseat, rooted, '<identity>')}" with a pointer's or an applies-by-word entry's identity to re-seat there.`,
+      safeRootAdvice(
+        `Run "${positionCommand(body.widening.reseat, rooted, '<identity>')}" with a pointer's or an applies-by-word entry's identity to re-seat there.`,
+        [supplied],
+      ),
     ),
   ];
   return document(
@@ -206,7 +214,7 @@ export function renderPosition(output: PositionOutput, caps: Capabilities, roote
       entry(
         [
           [atom('key', 'dim', 0), ...words(keyText(hostNote.key), null, 2)],
-          [atom('freshness', 'dim', 0), ...words(freshness, null, 2)],
+          [atom('freshness', 'dim', 0), ...words(safeRootAdvice(freshness, [supplied]), null, 2)],
           [atom('digest', 'dim', 0), atom(`sha256 ${truncateDigest(digest, caps.ascii)}`, null, 2)],
           words(
             `${counts.loaded} loaded of ${counts.seeds} seeds and ${counts.composition} composition, ${counts.truncatedLoaded} past the budget; ${counts.rules} rules, ${counts.pointers} pointers, ${counts.appliesByWord} applying by word, ${counts.frontier} frontier`,
@@ -335,5 +343,5 @@ export function runPosition(context: Context): Result {
   }
   return json
     ? { exitCode: 0, stdout: JSON.stringify(positionEnvelope(got)) + '\n', stderr: '' }
-    : { exitCode: 0, stdout: renderPosition(got, caps, rooted), stderr: '' };
+    : { exitCode: 0, stdout: renderPosition(got, caps, rooted, supplied), stderr: '' };
 }

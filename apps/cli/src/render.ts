@@ -1,7 +1,12 @@
 /**
  * Terminal presentation primitives for the consumer CLI: docs/specs/consumer-cli-contract/README.md §6.
- * Everything here is pure. The environment is a parameter, so no function reads process.env, process.stdout or a clock.
+ * The environment is a parameter; platform-specific path spelling follows the running platform. No function reads
+ * process.env, process.stdout or a clock.
  */
+
+import { inertCommandRoot } from '@inventarch/runtime';
+import { parseRegistryBase } from '@inventarch/distribution/registry';
+import { isAbsolute, relative, resolve } from 'node:path';
 
 export type Role = 'bold' | 'dim' | 'red' | 'yellow' | 'green' | 'cyan';
 export type SymbolName =
@@ -339,6 +344,178 @@ export function document(blocks: readonly (readonly string[])[], options: Docume
  * rebuilt from parsed arguments is the one a reader can paste back.
  */
 export const quote = (value: string): string => (/[ "]/.test(value) ? JSON.stringify(value) : value);
+/** A generated, quoted next command, whose argument strings use JSON quoting rather than shell escapes. */
+export const ADVICE_COMMAND = /"(ia(?: (?:"(?:[^"\\]|\\.)*"|[^\s"]+))*)"/;
+/** Decode generated command arguments in one pass, avoiding repeated regex scans over escaped quotes. */
+export function commandArguments(body: string): string[] {
+  const argv: string[] = [];
+  let at = 0;
+  while (at < body.length) {
+    if (/\s/.test(body[at]!)) at += 1;
+    else if (body[at] === '"') {
+      let end = at + 1;
+      while (end < body.length && body[end] !== '"') end += body[end] === '\\' ? 2 : 1;
+      argv.push(JSON.parse(body.slice(at, end + 1)) as string);
+      at = end + 1;
+    } else {
+      let end = at;
+      while (end < body.length && body[end] !== '"' && !/\s/.test(body[end]!)) end += 1;
+      argv.push(body.slice(at, end));
+      at = end;
+    }
+  }
+  return argv;
+}
+/** Only printed guidance uses this context; invocation inputs and machine argument vectors remain unchanged. */
+export interface AdviceContext {
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
+  /** The remedy deliberately asks the caller to choose a different registry. */
+  readonly registryIntent?: 'reselect' | undefined;
+}
+function registryAdvice(
+  command: string,
+  destinations: readonly string[],
+  context: AdviceContext,
+): { readonly command: string; readonly manual?: string } {
+  const argv = commandArguments(command),
+    verb = argv[1],
+    end = argv.indexOf('--'),
+    options = argv.slice(2, end === -1 ? undefined : end),
+    option = (name: string): string | undefined => {
+      const at = options.findIndex((arg) => arg === `--${name}` || arg.startsWith(`--${name}=`));
+      return at === -1
+        ? undefined
+        : options[at] === `--${name}`
+          ? options[at + 1]
+          : options[at]!.slice(name.length + 3);
+    };
+  if (
+    context.registryIntent === 'reselect' ||
+    options.includes('--help') ||
+    options.includes('-h') ||
+    !(
+      verb === 'doctor' ||
+      verb === 'adopt' ||
+      (verb === 'init' &&
+        option('adopt') !== undefined &&
+        !options.includes('--migrate') &&
+        !options.includes('--forget-decline') &&
+        option('decline') === undefined) ||
+      (['install', 'update', 'restore'].includes(verb ?? '') &&
+        option('catalog') === undefined &&
+        !options.includes('--offline'))
+    )
+  )
+    return { command };
+  const flag = option('registry'),
+    value = flag ?? context.env['IA_REGISTRY'];
+  if (!value || value === '<url|dir>') return { command };
+  let selected: ReturnType<typeof parseRegistryBase>;
+  try {
+    selected = parseRegistryBase(value, context.cwd);
+  } catch {
+    return { command };
+  } // Advice must not replace the original refusal or repair an invalid input by choosing another source.
+  if (selected.kind !== 'dir' || isAbsolute(value)) return { command };
+  if (destinations.every((destination) => resolve(destination) === resolve(context.cwd))) return { command };
+  const spellings = [
+      selected.path,
+      ...(destinations.length === 1 ? [relative(destinations[0]!, selected.path) || '.'] : []),
+    ],
+    safe = spellings
+      .map((path) => (path.startsWith('-') ? `./${path}` : path))
+      .map((path) => (process.platform === 'win32' ? path.replaceAll('\\', '/') : path))
+      .find(inertCommandRoot);
+  if (verb === 'doctor' || safe === undefined)
+    return {
+      command: `ia ${verb} --help`,
+      manual: `Before retrying from the workspace root, preserve the selected registry directory ${JSON.stringify(selected.path)} using ${verb === 'doctor' || flag === undefined ? 'IA_REGISTRY' : 'the registry option'} with an absolute location or a safe alias to that same directory. The operation is omitted until that setting is restored.`,
+    };
+  const at = argv.findIndex(
+    (arg, index) => index > 1 && (end === -1 || index < end) && (arg === '--registry' || arg.startsWith('--registry=')),
+  );
+  if (at === -1) argv.splice(end === -1 ? argv.length : end, 0, '--registry', safe);
+  else argv.splice(at, argv[at] === '--registry' ? 2 : 1, '--registry', safe);
+  return { command: argv.map(quote).join(' ') };
+}
+const replaceArgument = (text: string, from: string, to: string): string => {
+  let result = '',
+    start = 0;
+  for (;;) {
+    const at = text.indexOf(from, start);
+    if (at === -1) return result + text.slice(start);
+    const end = at + from.length;
+    const complete =
+      end === text.length ||
+      /[\s"]/.test(text[end]!) ||
+      (text[end] === '.' && (end + 1 === text.length || /[\s"]/.test(text[end + 1]!)));
+    result += text.slice(start, at) + (complete ? to : from);
+    start = end;
+  }
+};
+/**
+ * Repair root arguments from known input, not by parsing shell text. JSON quoting does not neutralize shell syntax.
+ * The root stays available as diagnostic data; only command suggestions use `.` and name its required cwd.
+ */
+function rewriteRootCommand(
+  text: string,
+  roots: readonly (string | undefined)[],
+  context?: AdviceContext,
+  plain = false,
+): { readonly text: string; readonly rootOmitted: boolean; readonly manual: readonly string[] } {
+  let next = text,
+    rootOmitted = false;
+  const omitted: string[] = [];
+  for (const root of [...new Set(roots)]
+    .filter((root): root is string => root !== undefined)
+    .sort((a, b) => b.length - a.length)) {
+    const inert = inertCommandRoot(root),
+      target = inert ? (process.platform === 'win32' ? root.replaceAll('\\', '/') : root) : '.',
+      before = next;
+    if (target === root) continue;
+    for (const value of new Set([quote(root), JSON.stringify(root)])) {
+      next = replaceArgument(
+        replaceArgument(next, `--root ${value}`, `--root ${quote(target)}`),
+        `ia init ${value}`,
+        `ia init ${quote(target)}`,
+      );
+      next = replaceArgument(next, `ia init -- ${value}`, `ia init -- ${quote(target)}`);
+    }
+    if (root.startsWith('-'))
+      next = replaceArgument(
+        next,
+        `ia init ${quote(`./${root}`)}`,
+        `ia init ${quote(target.startsWith('-') ? `./${target}` : target)}`,
+      );
+    if (!inert && next !== before) {
+      rootOmitted = true;
+      omitted.push(root);
+    }
+  }
+  const manual: string[] = [];
+  if (rootOmitted && context !== undefined) {
+    const destinations = [...new Set(omitted.map((root) => resolve(context.cwd, root)))],
+      repair = (command: string): string => {
+        const repaired = registryAdvice(command, destinations, context);
+        if (repaired.manual !== undefined) manual.push(repaired.manual);
+        return repaired.command;
+      };
+    next = plain
+      ? repair(next)
+      : next.replace(new RegExp(ADVICE_COMMAND.source, 'g'), (_match, command: string) => `"${repair(command)}"`);
+  }
+  return { text: next, rootOmitted, manual };
+}
+export function safeRootCommand(text: string, roots: readonly (string | undefined)[], context?: AdviceContext): string {
+  return rewriteRootCommand(text, roots, context, true).text;
+}
+export function safeRootAdvice(text: string, roots: readonly (string | undefined)[], context?: AdviceContext): string {
+  const next = rewriteRootCommand(text, roots, context);
+  return [next.text, ...(next.rootOmitted ? [ROOT_CWD] : []), ...next.manual].join(' ');
+}
+const ROOT_CWD =
+  'Run the suggested commands from the workspace root; its path is omitted because it contains shell syntax.';
 /**
  * Scalar terminal controls (C0, DEL and C1) in source-derived text, escaped as `\uXXXX` before layout and colour, so an
  * authored string cannot move the cursor, clear the screen or forge colour; generated newlines and SGR remain
@@ -365,10 +542,13 @@ export function commandFacts(
   tail: string,
   column: number,
   caps: Capabilities,
+  roots: readonly (string | undefined)[] = [],
+  context?: AdviceContext,
 ): readonly (readonly Token[])[] {
+  const safe = rewriteRootCommand(command, roots, context, true);
   const lines: string[] = [];
   let current = '';
-  for (const piece of command.split(' ')) {
+  for (const piece of safe.text.split(' ')) {
     // The lead is glued to the first word, so the quoted command starts where the quote ends.
     const candidate = current === '' ? lead + piece : `${current} ${piece}`;
     if (current !== '' && column + candidate.length + 2 > caps.width) {
@@ -377,7 +557,11 @@ export function commandFacts(
     } else current = candidate;
   }
   lines.push(current + tail);
-  return lines.map((line) => [atom(line, null, 0)]);
+  return [
+    ...lines.map((line) => [atom(line, null, 0)]),
+    ...(safe.rootOmitted ? [words(ROOT_CWD)] : []),
+    ...safe.manual.map((line) => words(line)),
+  ];
 }
 
 const BARE_DIGEST = /^[0-9a-f]+$/i;

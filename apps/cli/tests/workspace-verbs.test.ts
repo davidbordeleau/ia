@@ -1,6 +1,6 @@
 /**
- * `ia init`, `ia format`, `ia compile` and `ia doctor`, against the committed loop fixture. From 2.0 `ia compile` is
- * the deprecated alias of `ia capture`, with one stderr line naming it (decision compile-verb-fate).
+ * Workspace commands and legacy internal compile helpers against the committed loop fixture.
+ * The ia compile command is removed in 3.0; it refuses without changing an existing capture.
  *
  * Every verb is exercised in its human and `--json` form and in each exit class its §2 section declares, because
  * the exit class is the part a script depends on and the part a renderer change cannot be trusted to preserve.
@@ -12,6 +12,8 @@ import { CAPTURE_CURRENT } from '@inventarch/db';
 import { applyHost, planHost } from '@inventarch/distribution/host';
 import { materializeHostPayload, readHostPin } from '@inventarch/distribution/host-home';
 import { json, sha256 } from '@inventarch/distribution/services';
+import { parseArguments } from '../src/args.js';
+import { findCommand } from '../src/commands.js';
 import {
   ARTIFACT,
   collectCompile,
@@ -20,10 +22,22 @@ import {
   DEFAULT_OUT,
   DEPRECATION,
   renderCompile,
+  runCompile,
 } from '../src/compile.js';
+import { Refusal } from '../src/consumer.js';
 import { collectDoctor } from '../src/doctor.js';
 import { resolveCapabilities } from '../src/render.js';
-import { cleanup, cli, delivery, FORMATTABLE, repository, run, scratch, workspace } from './workspace-fixture.js';
+import {
+  cleanup,
+  cli,
+  delivery,
+  FORMATTABLE,
+  makeHost,
+  repository,
+  run,
+  scratch,
+  workspace,
+} from './workspace-fixture.js';
 
 const ANSI = /\u001b\[/;
 afterAll(cleanup);
@@ -247,56 +261,94 @@ it("formats this repository's participant records, authored under its root outsi
   expect(readFileSync(resolve(repository, participant))).toEqual(before);
 }, 120_000);
 
-it('runs ia capture as the deprecated ia compile, maps --force and refuses --out and --stdout naming ia capture', async () => {
-  // Decision compile-verb-fate: from 2.0 `ia compile` is a deprecated alias of `ia capture`, removed in 3.0.
-  const aliased = workspace(),
+it('refuses every removed compile form while preserving the current capture', async () => {
+  const root = workspace();
+  expect((await run(['capture', '--root', root])).exitCode).toBe(0);
+  const before = readFileSync(resolve(root, CAPTURE_CURRENT));
+  for (const option of [
+    [],
+    ['--force'],
+    ['--preview'],
+    ['--help'],
+    ['--out', '.ia/work/x.json'],
+    ['--stdout'],
+    ['--out', 'x', '--stdout'],
+  ]) {
+    const refused = await run(['compile', '--root', root, ...option, '--json']);
+    expect(refused.exitCode, option.join(' ')).toBe(2);
+    expect(refused.stderr).toBe('');
+    const body = JSON.parse(refused.stdout) as { code: string; next: string; message: string };
+    expect(body.code).toBe('IA-CLI-USAGE');
+    expect(body.message).toContain('removed in 3.0');
+    expect(body.next).toContain('"ia capture --help"');
+    expect(readFileSync(resolve(root, CAPTURE_CURRENT))).toEqual(before);
+  }
+  expect(existsSync(resolve(root, '.ia/work/x.json'))).toBe(false);
+  expect(existsSync(resolve(root, DEFAULT_OUT))).toBe(false);
+});
+
+it('preserves the exported runCompile adapter after removing its CLI route', async () => {
+  expect(typeof (await import('@inventarch/cli/internal/compile')).runCompile).toBe('function');
+  const capture = findCommand('capture')!;
+  const invoke = (root: string, options: readonly string[] = []) => {
+    const args = parseArguments([...options, '--root', root], {
+      ...capture.grammar,
+      options: [
+        ...capture.grammar.options,
+        { name: 'force', kind: 'boolean', summary: 'Legacy compatibility input' },
+        { name: 'out', kind: 'value', summary: 'Legacy output path' },
+        { name: 'stdout', kind: 'boolean', summary: 'Legacy output stream' },
+      ],
+    });
+    const host = makeHost({ cwd: root });
+    return runCompile({
+      host,
+      command: { ...capture, name: 'compile' },
+      args,
+      caps: resolveCapabilities(host.stdout, {}),
+      json: args.flag('json'),
+    });
+  };
+  const adapted = workspace(),
     captured = workspace();
-  const first = await run(['compile', '--root', aliased]);
-  const expected = await run(['capture', '--root', captured]);
+  const first = invoke(adapted),
+    expected = await run(['capture', '--root', captured]);
+  expect(first).toEqual({ ...expected, stderr: DEPRECATION });
   expect(first.exitCode).toBe(0);
-  expect(first.stdout).toBe(expected.stdout);
   expect(first.stdout).not.toMatch(ANSI);
-  expect(first.stderr).toBe(DEPRECATION);
-  expect(expected.stderr).toBe('');
-  expect(DEPRECATION.split('\n')).toEqual([expect.stringContaining('"ia capture"'), '']);
-  expect(readFileSync(resolve(aliased, CAPTURE_CURRENT))).toEqual(readFileSync(resolve(captured, CAPTURE_CURRENT)));
-  // The alias writes the capture's snapshot only, never the 1.x ia.compiled.v1 artifact.
-  expect(existsSync(resolve(aliased, DEFAULT_OUT))).toBe(false);
+  expect(first.stderr).toContain('the ia compile command was removed in 3.0');
+  expect(readFileSync(resolve(adapted, CAPTURE_CURRENT))).toEqual(readFileSync(resolve(captured, CAPTURE_CURRENT)));
+  expect(existsSync(resolve(adapted, DEFAULT_OUT))).toBe(false);
 
-  // --force maps onto the capture, which always writes; --json is the capture's own result.
-  const forcedRun = await run(['compile', '--root', aliased, '--force', '--json']);
-  const recaptured = await run(['capture', '--root', captured, '--json']);
-  expect(forcedRun.exitCode).toBe(0);
-  expect(forcedRun.stderr).toBe(DEPRECATION);
-  const forced = JSON.parse(forcedRun.stdout) as Record<string, unknown>,
-    plain = JSON.parse(recaptured.stdout) as Record<string, unknown>;
-  expect(forced['snapshot']).toBe(resolve(realpathSync(aliased), CAPTURE_CURRENT));
-  expect({ ...forced, snapshot: null }).toEqual({ ...plain, snapshot: null });
+  const forced = invoke(adapted, ['--force', '--json']),
+    recaptured = await run(['capture', '--root', captured, '--json']);
+  expect(forced.exitCode).toBe(0);
+  expect(forced.stderr).toBe(DEPRECATION);
+  const body = JSON.parse(forced.stdout) as Record<string, unknown>;
+  expect(body['snapshot']).toBe(resolve(realpathSync(adapted), CAPTURE_CURRENT));
+  expect({ ...body, snapshot: null }).toEqual({ ...JSON.parse(recaptured.stdout), snapshot: null });
 
-  // --preview is the capture's preview, which writes nothing.
-  const before = readFileSync(resolve(aliased, CAPTURE_CURRENT));
-  const previewed = await run(['compile', '--root', aliased, '--preview', '--json']);
+  const before = readFileSync(resolve(adapted, CAPTURE_CURRENT));
+  const previewed = invoke(adapted, ['--preview', '--json']);
   expect(previewed.exitCode).toBe(0);
   expect(previewed.stderr).toBe(DEPRECATION);
-  expect((JSON.parse(previewed.stdout) as Record<string, unknown>)['preview']).toBe(true);
-  expect(readFileSync(resolve(aliased, CAPTURE_CURRENT))).toEqual(before);
-
-  // --out and --stdout have no place in the capture: each refuses as usage, writes nothing and names ia capture.
-  for (const option of [['--out', '.ia/work/x.json'], ['--stdout']]) {
-    const refused = await run(['compile', '--root', aliased, ...option, '--json']);
-    expect(refused.exitCode, option[0]).toBe(2);
-    expect(refused.stderr).toBe('');
-    const body = JSON.parse(refused.stdout) as { code: string; next: string };
-    expect(body.code).toBe('IA-CLI-USAGE');
-    expect(body.next).toContain('"ia capture --root ');
+  expect(JSON.parse(previewed.stdout).preview).toBe(true);
+  expect(readFileSync(resolve(adapted, CAPTURE_CURRENT))).toEqual(before);
+  for (const options of [['--out', '.ia/work/x.json'], ['--stdout']]) {
+    expect(() => invoke(adapted, options)).toThrowError(Refusal);
+    expect(() => invoke(adapted, options)).toThrowError(
+      expect.objectContaining({
+        code: 'IA-CLI-USAGE',
+        exit: 2,
+        message: expect.stringContaining(`${options[0]} has no equivalent`),
+        next: expect.stringContaining('"ia capture --root '),
+      }),
+    );
   }
-  expect(existsSync(resolve(aliased, '.ia/work/x.json'))).toBe(false);
-  expect(readFileSync(resolve(aliased, CAPTURE_CURRENT))).toEqual(before);
-  expect((await run(['compile', '--root', aliased, '--out', 'x', '--stdout'])).exitCode).toBe(2);
-
-  // A workspace with an error is captured as ia capture captures it: the snapshot is written and the exit is 1.
-  const broken = workspace({ foreign: true });
-  const failing = await run(['compile', '--root', broken, '--json']);
+  expect(existsSync(resolve(adapted, '.ia/work/x.json'))).toBe(false);
+  expect(readFileSync(resolve(adapted, CAPTURE_CURRENT))).toEqual(before);
+  const broken = workspace({ foreign: true }),
+    failing = invoke(broken, ['--json']);
   expect(failing.exitCode).toBe(1);
   expect(failing.stderr).toBe(DEPRECATION);
   expect(existsSync(resolve(broken, CAPTURE_CURRENT))).toBe(true);
@@ -520,8 +572,8 @@ it("keeps every new verb's --json stdout one parseable value with no ANSI, in su
     { argv: ['format', '--root', root, '../outside', '--json'], refusal: true },
     { argv: ['capture', '--root', root, '--json'], refusal: false },
     { argv: ['capture', '--root', root, '--json'], refusal: false },
-    { argv: ['compile', '--root', root, '--json'], refusal: false },
-    { argv: ['compile', '--root', root, '--force', '--json'], refusal: false },
+    { argv: ['compile', '--root', root, '--json'], refusal: true },
+    { argv: ['compile', '--root', root, '--force', '--json'], refusal: true },
     { argv: ['compile', '--root', root, '--stdout', '--json'], refusal: true },
     { argv: ['read', 'agent-system/binding/agent/agent-steward', '--root', root, '--json'], refusal: false },
     { argv: ['read', 'agent-system/binding/agent/absent', '--root', root, '--json'], refusal: true },
@@ -551,8 +603,7 @@ it("keeps every new verb's --json stdout one parseable value with no ANSI, in su
     expect(stream.endsWith('\n'), argv.join(' ')).toBe(true);
     expect(stream.slice(0, -1), argv.join(' ')).not.toContain('\n');
     expect(() => JSON.parse(stream), argv.join(' ')).not.toThrow();
-    // The deprecated `ia compile` notes its deprecation on stderr whenever it runs; a refusal prints only the refusal.
-    expect(result.stderr, argv.join(' ')).toBe(argv[0] === 'compile' && !refusal ? DEPRECATION : '');
+    expect(result.stderr, argv.join(' ')).toBe('');
     if (refusal) expect(JSON.parse(stream), argv.join(' ')).toMatchObject({ version: 1, ok: false });
   }
 });

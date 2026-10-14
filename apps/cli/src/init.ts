@@ -76,6 +76,7 @@ import {
   unlinkSync,
 } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { inertCommandRoot } from '@inventarch/runtime';
 import {
   decodeReleaseDescriptor,
   deriveGenerationInputs,
@@ -137,7 +138,7 @@ import { located } from './home-remedy.js';
 import { findProgram, programEnv, programHome } from './program.js';
 import type { Session } from './session.js';
 import { codeOf, openSession } from './session.js';
-import type { Capabilities, Field, SymbolName } from './render.js';
+import type { AdviceContext, Capabilities, Field, SymbolName } from './render.js';
 import {
   atom,
   blockSymbolWidth,
@@ -146,6 +147,7 @@ import {
   fieldRows,
   headerLine,
   quote,
+  safeRootAdvice,
   sectionLabel,
   truncateDigest,
   words,
@@ -1129,7 +1131,10 @@ const conflictMessage = (conflicts: readonly Conflict[], blocked: string): strin
 function initializedNext(view: InitView): string | null {
   if (!view.conflicts.some((row) => row.path === DESCRIPTOR_PATH && row.reason === 'The target is already initialized'))
     return null;
-  return `${existsSync(resolve(view.root, WORKSPACE_PATH)) || existsSync(resolve(view.root, SYSTEMS)) ? '' : 'Restore the authored .ia/src/workspace.ia from source control first. '}Run "ia position --root ${quote(view.root)}" to inspect this initialized workspace.`;
+  return safeRootAdvice(
+    `${existsSync(resolve(view.root, WORKSPACE_PATH)) || existsSync(resolve(view.root, SYSTEMS)) ? '' : 'Restore the authored .ia/src/workspace.ia from source control first. '}Run "ia position --root ${quote(view.root)}" to inspect this initialized workspace.`,
+    [view.root],
+  );
 }
 function conflictRefusal(view: InitView): Refusal {
   return new Refusal(
@@ -1345,11 +1350,14 @@ const planBlocks = (view: InitView, caps: Capabilities): readonly (readonly stri
   ];
 };
 
-export function renderInit(view: InitView, caps: Capabilities): string {
-  const next =
+export function renderInit(view: InitView, caps: Capabilities, supplied?: string, advice?: AdviceContext): string {
+  const next = safeRootAdvice(
     view.state === 'conflict'
       ? (initializedNext(view) ?? `Resolve the conflicts above, then run "${view.invocation} --apply --yes".`)
-      : `Apply with "${view.invocation} --apply --yes".${view.state === 'resumable' ? ' Completed steps are skipped.' : ''}`;
+      : `Apply with "${view.invocation} --apply --yes".${view.state === 'resumable' ? ' Completed steps are skipped.' : ''}`,
+    [view.root, supplied],
+    advice,
+  );
   return document(
     [
       headerLine('Plan', 'init', [{ text: view.root, column: 50 }], caps),
@@ -1368,6 +1376,20 @@ export function renderInit(view: InitView, caps: Capabilities): string {
           ]
         : []),
       ...planBlocks(view, caps),
+      ...(view.directory === 'absent' &&
+      (!inertCommandRoot(view.root) || (supplied !== undefined && !inertCommandRoot(supplied)))
+        ? [
+            entry(
+              [
+                words(
+                  'Create the target directory without pasting its path into a shell, then enter it before running the suggested command.',
+                ),
+              ],
+              { depth: 0 },
+              caps,
+            ),
+          ]
+        : []),
       entry([words(next)], { depth: 0, symbol: 'step' }, caps),
     ],
     { leadingBlank: true },
@@ -1461,11 +1483,20 @@ export function renderApplied(view: InitView, applied: Applied, caps: Capabiliti
     { leadingBlank: true },
   );
 }
-const renderDeclined = (view: Pick<InitView, 'invocation'>, caps: Capabilities): string =>
+const renderDeclined = (
+  view: Pick<InitView, 'invocation' | 'root'>,
+  caps: Capabilities,
+  supplied?: string,
+  advice?: AdviceContext,
+): string =>
   document(
     [
       entry([words('Nothing was applied.')], { depth: 0, symbol: 'info' }, caps),
-      entry([words(`Apply with "${view.invocation} --apply --yes".`)], { depth: 0, symbol: 'step' }, caps),
+      entry(
+        [words(safeRootAdvice(`Apply with "${view.invocation} --apply --yes".`, [view.root, supplied], advice))],
+        { depth: 0, symbol: 'step' },
+        caps,
+      ),
     ],
     { leadingBlank: true },
   );
@@ -1542,7 +1573,8 @@ async function initialize(context: Context, root: string, id: string | undefined
       ? { exitCode: 0, stdout: JSON.stringify(initEnvelope(view, apply, applied)) + '\n', stderr: '' }
       : {
           exitCode: 0,
-          stdout: applied === null ? renderInit(view, caps) : renderApplied(view, applied, caps),
+          stdout:
+            applied === null ? renderInit(view, caps, args.positionals[0], host) : renderApplied(view, applied, caps),
           stderr: '',
         };
   // §2.1: conflicts are reported inside the plan and are not an error class, so a plan is always exit 0.
@@ -1550,7 +1582,7 @@ async function initialize(context: Context, root: string, id: string | undefined
   if (view.state !== 'fresh' && view.state !== 'resumable') throw conflictRefusal(view);
   // §2.8 rule 3, as `ia install` asks it: parsing already refused every `--apply` whose question cannot be answered.
   if (!args.flag('yes') && !(await confirm(host.interaction, renderInitSummary(view, caps), CONFIRMATION)))
-    return { exitCode: 0, stdout: renderDeclined(view, caps), stderr: '' };
+    return { exitCode: 0, stdout: renderDeclined(view, caps, args.positionals[0], host), stderr: '' };
   // The project effect, last (position-and-projection §3): the `ia host` path, whose apply writes the receipt.
   const project = selected === 'none' ? undefined : (done: string) => registerHost(context, selected, root, done);
   try {
@@ -2608,11 +2640,13 @@ const migrationBlocks = (view: MigrationView, caps: Capabilities): readonly (rea
 };
 const migrationHeader = (view: MigrationView, caps: Capabilities): readonly string[] =>
   headerLine('Plan', `init --migrate from ${MIGRATES_FROM}`, [{ text: view.root, column: 50 }], caps);
-export function renderMigration(view: MigrationView, caps: Capabilities): string {
-  const next =
+export function renderMigration(view: MigrationView, caps: Capabilities, supplied?: string): string {
+  const next = safeRootAdvice(
     view.conflicts.length > 0
       ? `Resolve the conflicts above, then run "${view.invocation} --apply --yes".`
-      : `Apply with "${view.invocation} --apply --yes".`;
+      : `Apply with "${view.invocation} --apply --yes".`,
+    [view.root, supplied],
+  );
   return document(
     [
       migrationHeader(view, caps),
@@ -2708,13 +2742,14 @@ async function migrate(context: Context, root: string): Promise<Result> {
       ? { exitCode: 0, stdout: JSON.stringify(migrationEnvelope(view, apply, applied)) + '\n', stderr: '' }
       : {
           exitCode: 0,
-          stdout: applied === null ? renderMigration(view, caps) : renderMigrated(view, applied, caps),
+          stdout:
+            applied === null ? renderMigration(view, caps, args.positionals[0]) : renderMigrated(view, applied, caps),
           stderr: '',
         };
   if (!apply) return rendered(null);
   if (view.conflicts.length > 0) throw migrationRefusal(view);
   if (!args.flag('yes') && !(await confirm(host.interaction, renderMigrationSummary(view, caps), CONFIRMATION)))
-    return { exitCode: 0, stdout: renderDeclined(view, caps), stderr: '' };
+    return { exitCode: 0, stdout: renderDeclined(view, caps, args.positionals[0]), stderr: '' };
   return rendered(await applyMigration(view, { packageRoot: host.packageRoot, signal: host.signal }));
 }
 

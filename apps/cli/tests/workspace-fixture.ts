@@ -3,11 +3,17 @@ import { resolve } from 'node:path';
 import { dispatch } from '../src/consumer.js';
 import type { Extension, Host, Result } from '../src/consumer.js';
 import { runCli } from '../src/main.js';
+import { quote } from '../src/render.js';
 import { scratch } from './scratch-fixture.js';
 export { cleanup, scratch } from './scratch-fixture.js';
 
 export const repository = resolve(import.meta.dirname, '../../..');
 export const cli = resolve(repository, 'apps/cli');
+/** Expected shell arguments address a Windows root with portable separators; diagnostic paths retain native bytes. */
+export const commandRoot = (root: string): string => (process.platform === 'win32' ? root.replaceAll('\\', '/') : root);
+export const quoteCommandRoot = (root: string): string => quote(commandRoot(root));
+export const commandRoots = (argv: readonly string[]): readonly string[] =>
+  argv.map((value, index) => (argv[index - 1] === '--root' ? commandRoot(value) : value));
 export const FIXTURE = resolve(repository, 'packages/compliance/fixtures/loop');
 /** The fixture's one deliberately foreign record; removing it leaves a workspace that admits. */
 export const FOREIGN = '.ia/src/systems/agent-system/records/foreign.ia';

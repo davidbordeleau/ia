@@ -85,7 +85,9 @@
     "host-adapters": [
       "workspace-records",
       "{workspaceRoot}/.claude/skills/ia-authoring/SKILL.md",
-      "{workspaceRoot}/.agents/skills/ia-authoring/SKILL.md"
+      "{workspaceRoot}/.agents/skills/ia-authoring/SKILL.md",
+      "{workspaceRoot}/releases/pending/mandate-resolution.json",
+      "{workspaceRoot}/releases/changesets/*.json"
     ],
     "composition-fixture": [
       "workspace-records",

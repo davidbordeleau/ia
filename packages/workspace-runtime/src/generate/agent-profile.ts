@@ -45,8 +45,9 @@ import type { GeneratedSet } from './format.js';
  * of the scope's records alone: no absolute path, time or scope token is written.
  *
  * The mandate bounds are the profile's own `composition.mandate`. A profile that names none falls back to the authored
- * mandates C1 says bind its `composition.agent` (review finding A-R8): the agent a subagent acts as for the edit guard and
- * the CLI's mandate profile (OD4), so the file states what they enforce; a participant-less mandate that states neither
+ * mandates C1 says bind its `composition.agent` (review finding A-R8): the agent a subagent acts as for edits the guard
+ * selects (OD4), so the file states what the guard enforces; CLI commands independently choose a
+ * workspace participant or steward. A participant-less mandate that states neither
  * scope nor covers locates nowhere and is left out (A-RC4). The fallback is resolved only for a rendered profile that
  * needs it, and a mandate C1 cannot read makes it unavailable, which the file says, never failing the render. A profile's
  * own mandate that names another participant is rendered with a line saying the guard does not judge this agent by it.
@@ -115,10 +116,10 @@ export function generateAgentProfiles(reader: ReadHandle, within: string, host: 
       );
       if (binding.length === 0)
         return [
-          `${intro} Fallback: no authored mandate binds its agent ${code(agent.identity)}; wherever a mandate governs, the edit guard and the CLI's mandate profile refuse it.`,
+          `${intro} Fallback: no authored mandate binds its agent ${code(agent.identity)}; wherever a mandate governs, the edit guard refuses it.`,
         ];
       return [
-        `${intro} Fallback: the authored mandates that bind its agent ${code(agent.identity)}, each with where it governs; the edit guard and the CLI's mandate profile judge the agent by these, and refuse it where a mandate that binds another participant governs and none of these grants the move.`,
+        `${intro} Fallback: the authored mandates that bind its agent ${code(agent.identity)}, each with where it governs; the edit guard judges the agent by these, and refuses it where a mandate that binds another participant governs and none of these grants the move.`,
         '',
         ...binding.flatMap((mandate) => mandateLines(nodes.get(mandate.identity)!, named)),
       ];
@@ -191,6 +192,8 @@ function agentFile(
     ...(agent === undefined
       ? []
       : [`- agent ${named(agent)}${agentNode === undefined ? ': not admitted in this scope' : ''}`]),
+    '',
+    "CLI commands choose an authored workspace participant or steward. Omitting --actor uses the workspace's default actor; it does not select this profile's agent.",
   ];
 
   // The mandate bounds: the authority and limits of the mandate the profile itself names, else C1's fallback.
@@ -268,7 +271,7 @@ function mandateLines(mandate: Node, named: (value: CompiledValue) => string): r
 
 /**
  * The profile's own mandate names another participant than the profile's agent: its bounds are rendered as the plan says,
- * and a nested line says the edit guard and the CLI's mandate profile do not judge this agent by it (review finding
+ * and a nested line says the edit guard does not judge this agent by it (review finding
  * A-RC4).
  */
 function otherParticipant(
@@ -280,6 +283,6 @@ function otherParticipant(
     bound = participant === undefined ? undefined : target(participant);
   if (bound === undefined || agent === undefined || bound.identity === agent.identity) return [];
   return [
-    `  - binds ${code(bound.identity)}, not this profile's agent ${code(agent.identity)}: the edit guard and the CLI's mandate profile judge the agent by the mandates that bind it`,
+    `  - binds ${code(bound.identity)}, not this profile's agent ${code(agent.identity)}: the edit guard judges the agent by the mandates that bind it`,
   ];
 }

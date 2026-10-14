@@ -238,10 +238,24 @@ it('renders the Claude manifest with the product fields only', () => {
 });
 it('refuses a delegated capability with IA-PROJECT-FEATURE', () => {
   const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS.replace('mode user', 'mode delegated') });
-  expect(() => renderPlugin(db, within, [PROBE_BODY], [])).toThrow(/delegated skills are rendered from slice 2/);
+  expect(() => renderPlugin(db, within, [PROBE_BODY], [])).toThrow(
+    /delegated skills are not rendered by this version of ia/,
+  );
   try {
     renderPlugin(db, within, [PROBE_BODY], []);
   } catch (error) {
     expect((error as { code?: string }).code).toBe('IA-PROJECT-FEATURE');
+  }
+});
+it('refuses a product that lists no host, rendering no plugin without a manifest (IA-PLUGIN-PRODUCT)', () => {
+  for (const hosts of ['    hosts []\n', '']) {
+    const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS.replace('    hosts [claude, codex]\n', hosts) });
+    let code: string | undefined;
+    try {
+      renderPlugin(db, within, [PROBE_BODY], []);
+    } catch (error) {
+      code = (error as { code?: string }).code;
+    }
+    expect(code, JSON.stringify(hosts)).toBe('IA-PLUGIN-PRODUCT');
   }
 });

@@ -1,12 +1,14 @@
-import { cpSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { emitFrontmatter, isPlain, parseFrontmatter, sameValue } from '../src/host-plugin/frontmatter.js';
 import { comparePlugin } from '../src/host-plugin/compare.js';
-import { readEntries, readPlugin } from '../src/host-plugin/inventory.js';
+import { MANIFESTS, readEntries, readPlugin } from '../src/host-plugin/inventory.js';
 import { lowerPlugin } from '../src/host-plugin/lower.js';
+import { pluginManifest } from '../src/host-plugin/manifest.js';
 
 const b = (text: string): Buffer => Buffer.from(text, 'utf8');
 
@@ -403,5 +405,177 @@ describe('compare, fix round 1', () => {
     const diffs = comparePlugin(entries, rendered);
     expect(diffs.find((d) => d.path === 'LICENSE')!.status).toBe('missing');
     expect(diffs.find((d) => d.path === 'stray.txt')!.status).toBe('extra');
+  });
+});
+
+describe('final review: lowering admits only what the renderer reproduces', () => {
+  const AGENT = 'agents/sample-reader.md';
+  const CODEX = '.codex-plugin/plugin.json';
+  const agentWith = (tools: string): string =>
+    `---\nname: sample-reader\ndescription: Read the supplied target and report what it says, without editing anything.\ntools: ${tools}\n---\n\nRead only the target you are given and report what it says.\n`;
+  const lowered = (change: (root: string) => void) => {
+    const root = copy();
+    change(root);
+    return lowerPlugin(readPlugin(root), 'sample-kit');
+  };
+  const json = (root: string, path: string, change: (manifest: Record<string, unknown>) => void): void => {
+    const manifest = JSON.parse(readFileSync(join(root, path), 'utf8')) as Record<string, unknown>;
+    change(manifest);
+    writeFileSync(join(root, path), `${JSON.stringify(manifest, null, 2)}\n`);
+  };
+
+  it.each([
+    ['the list form', '[Read, Grep, Glob]'],
+    ['no spaces', 'Read,Grep,Glob'],
+    ['a doubled space', 'Read,  Grep, Glob'],
+    ['a trailing comma', '"Read, Grep, Glob,"'],
+  ])('refuses agent tools written as %s, naming the file and the key', (_label, tools) => {
+    const plan = lowered((root) => writeFileSync(join(root, AGENT), agentWith(tools)));
+    expect(plan.unresolved).toEqual([expect.stringMatching(/^agents\/sample-reader\.md: tools /)]);
+  });
+  it.each([['Glob, Grep, Read'], ['"Read, Grep, Glob"'], ["'Read, Grep, Glob'"]])(
+    'accepts agent tools %s, a plain string that splits on ", " and rejoins exactly',
+    (tools) => {
+      expect(lowered((root) => writeFileSync(join(root, AGENT), agentWith(tools))).unresolved).toEqual([]);
+    },
+  );
+  it('refuses an explicit disable-model-invocation: false, which the renderer omits', () => {
+    const SKILL = 'skills/sample-guide/SKILL.md';
+    const plan = lowered((root) =>
+      writeFileSync(
+        join(root, SKILL),
+        readFileSync(join(root, SKILL), 'utf8').replace('\n---\n', '\ndisable-model-invocation: false\n---\n'),
+      ),
+    );
+    expect(plan.unresolved).toEqual([
+      expect.stringMatching(/^skills\/sample-guide\/SKILL\.md: disable-model-invocation: false /),
+    ]);
+  });
+  it('refuses a Codex interface without the displayName the renderer emits, naming the manifest and the key', () => {
+    const plan = lowered((root) =>
+      json(root, CODEX, (manifest) => {
+        delete (manifest['interface'] as Record<string, unknown>)['displayName'];
+      }),
+    );
+    expect(plan.unresolved).toEqual([expect.stringMatching(/^\.codex-plugin\/plugin\.json: interface\.displayName /)]);
+  });
+  it('refuses a Codex manifest without the interface the renderer emits', () => {
+    const plan = lowered((root) =>
+      json(root, CODEX, (manifest) => {
+        delete manifest['interface'];
+      }),
+    );
+    expect(plan.unresolved).toEqual([expect.stringMatching(/^\.codex-plugin\/plugin\.json: interface /)]);
+  });
+  it('keeps the Codex hooks allowance: absent, or exactly {"hooks": {}}', () => {
+    expect(
+      lowered((root) =>
+        json(root, CODEX, (manifest) => {
+          delete manifest['hooks'];
+        }),
+      ).unresolved,
+    ).toEqual([]);
+    const other = lowered((root) =>
+      json(root, CODEX, (manifest) => {
+        manifest['hooks'] = { hooks: { PreToolUse: [] } };
+      }),
+    );
+    expect(other.unresolved).toEqual([expect.stringMatching(/^\.codex-plugin\/plugin\.json: hooks /)]);
+  });
+  it('compares manifests by content, so a reordered Claude manifest lowers and a differing Grok key is named', () => {
+    const reordered = lowered((root) => {
+      const claude = JSON.parse(readFileSync(join(root, MANIFESTS.claude), 'utf8')) as Record<string, unknown>;
+      writeFileSync(join(root, MANIFESTS.claude), JSON.stringify({ license: claude['license'], ...claude }));
+    });
+    expect(reordered.unresolved).toEqual([]);
+    const grok = lowered((root) =>
+      json(root, MANIFESTS.grok, (manifest) => {
+        manifest['version'] = '9.9.9';
+      }),
+    );
+    expect(grok.unresolved).toEqual([expect.stringMatching(/^\.grok-plugin\/plugin\.json: version /)]);
+  });
+  it('builds every host manifest of the sample exactly from its lowered product', () => {
+    const product = {
+      name: 'sample-plugin',
+      displayName: 'Sample Plugin',
+      version: '0.1.0',
+      description: 'A public fixture plugin that exercises every lowering row.',
+      author: 'InventArch fixtures',
+      license: 'Apache-2.0',
+      shortDescription: 'Exercises every lowering row',
+      category: 'Developer Tools',
+    };
+    for (const host of ['claude', 'codex', 'grok'] as const) {
+      const original = JSON.parse(readFileSync(join(SAMPLE, MANIFESTS[host]), 'utf8')) as unknown;
+      expect(isDeepStrictEqual(pluginManifest(product, host), original), host).toBe(true);
+    }
+    expect(Object.keys(pluginManifest(product, 'codex'))).toEqual([
+      'name',
+      'version',
+      'description',
+      'author',
+      'license',
+      'skills',
+      'hooks',
+      'interface',
+    ]);
+    expect(pluginManifest({ name: 'bare' }, 'codex')).toEqual({
+      name: 'bare',
+      skills: './skills/',
+      hooks: { hooks: {} },
+    });
+    expect(pluginManifest({ name: 'bare' }, 'claude')).toEqual({ name: 'bare' });
+  });
+  it('gives every agent frontmatter key one disposition in the map and in MIGRATION.md', () => {
+    const plan = lowered((root) =>
+      writeFileSync(
+        join(root, AGENT),
+        '---\nname: sample-reader\ndescription: Read.\ntools: Read, Grep, Glob\nmodel: haiku\ncolor: blue\neffort: high\n---\nx\n',
+      ),
+    );
+    expect(plan.unresolved).toEqual([]);
+    expect(plan.map.entries.filter((e) => e.source === AGENT).map((e) => [e.key, e.kind, e.target])).toEqual([
+      [null, 'resource', '.ia/src/systems/sample-kit/plugin/agents/sample-reader.body.md'],
+      ['color', 'field', '@agent-profile sample-reader presentation.color'],
+      ['description', 'field', '@agent-profile sample-reader meaning.says'],
+      ['effort', 'field', '@agent-profile sample-reader execution.effort'],
+      ['model', 'field', '@agent-profile sample-reader execution.model-profile'],
+      ['name', 'derived', '@agent-profile sample-reader'],
+      ['tools', 'field', '@capability sample-reader-tools execution.effects'],
+    ]);
+    const migration = plan.files.find((file) => file.path === 'assets/MIGRATION.md')!.bytes.toString('utf8');
+    for (const key of ['name', 'model', 'effort', 'color']) expect(migration).toContain(`| \`${AGENT}\` | ${key} |`);
+  });
+  it('says what this version of ia does not lower, never which plan slice will', () => {
+    const plan = lowered((root) => {
+      mkdirSync(join(root, 'hooks'));
+      writeFileSync(join(root, 'hooks/hooks.json'), '{}\n');
+      writeFileSync(join(root, 'icon.bin'), Buffer.from([0xff, 0xfe, 0x00]));
+      writeFileSync(join(root, AGENT), agentWith('Read, Grep, Glob').replace('\n---\n', '\nmemory: none\n---\n'));
+    });
+    const text = plan.unresolved.join('\n');
+    expect(text).not.toMatch(/slice/);
+    expect(text).toMatch(/hooks\/hooks\.json: .*not lowered by this version of ia/);
+    expect(text).toMatch(/icon\.bin: .*not lowered by this version of ia/);
+    expect(text).toMatch(/memory is not lowered by this version of ia/);
+  });
+  it('requires compliance-system, so authored trigger contracts can live beside the lowered records', () => {
+    const plan = lowerPlugin(readPlugin(SAMPLE), 'sample-kit');
+    const system = plan.files.find((file) => file.path === '.ia/src/systems/sample-kit/system.ia')!.bytes.toString();
+    expect(system).toContain(
+      '  requires\n    - agent-composition-system\n    - agent-system\n    - compliance-system\n    - workspace-system\n',
+    );
+  });
+  it('carries the Claude manifest licence on the plan', () => {
+    expect(lowerPlugin(readPlugin(SAMPLE), 'sample-kit').license).toBe('Apache-2.0');
+  });
+});
+
+describe('final review: inventory', () => {
+  it.each(['.GIT', 'Node_Modules'])('refuses %s in any letter case', (name) => {
+    const root = copy();
+    mkdirSync(join(root, name));
+    expect(() => readPlugin(root)).toThrow(/not plugin content/);
   });
 });

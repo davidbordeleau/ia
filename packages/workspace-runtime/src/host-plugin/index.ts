@@ -30,4 +30,5 @@ export {
   type LoweringMap,
   type LoweringPlan,
 } from './lower.js';
+export { pluginManifest, type PluginProduct } from './manifest.js';
 export { comparePlugin, DIFF_RULES, type DiffRule, type FileDiff } from './compare.js';

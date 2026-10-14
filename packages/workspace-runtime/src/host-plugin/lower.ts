@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { claudeProseCatalog, PROSE_EFFECT_TOOLS } from '../projection-host.js';
 import { HostPluginError } from './errors.js';
 import type { FrontField, FrontValue } from './frontmatter.js';
 import { MANIFESTS, NAME, type PluginEntry, type PluginHost, type PluginInventory } from './inventory.js';
+import { type PluginProduct, pluginManifest } from './manifest.js';
 
 export type AssetRole = 'asset' | 'documentation' | 'license';
 export type DispositionKind = 'field' | 'resource' | 'asset' | 'derived' | 'retired' | 'unresolved';
@@ -35,6 +37,8 @@ export interface LoweringPlan {
   readonly assets: readonly { readonly path: string; readonly role: AssetRole }[];
   readonly map: LoweringMap;
   readonly unresolved: readonly string[];
+  /** The Claude manifest's `license` when it is a string, else null; the caller decides whether it is SPDX. */
+  readonly license: string | null;
 }
 
 export const RESOURCE_ROOT = (system: string): string => `.ia/src/systems/${system}/plugin`;
@@ -55,7 +59,7 @@ export function toolsOf(effects: readonly string[]): string[] {
     ),
   ];
 }
-/** The one effect set whose tools are exactly `tools` (as a set), or null. Slice 1 knows `read` only. */
+/** The one effect set whose tools are exactly `tools` (as a set), or null. This version knows `read` only. */
 function effectsFor(tools: readonly string[]): string[] | null {
   const want = [...tools].sort().join(',');
   for (const effect of PROSE_EFFECT_TOOLS.keys()) if ([...toolsOf([effect])].sort().join(',') === want) return [effect];
@@ -68,6 +72,28 @@ const utf8 = (bytes: Buffer): boolean => Buffer.from(bytes.toString('utf8'), 'ut
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const ID = /^[A-Za-z][A-Za-z0-9-]*$/;
 
+const NOT_LOWERED = 'is not lowered by this version of ia';
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+/** Where an original manifest and the one the renderer writes differ, by key path, each with what is wrong there. */
+function differences(original: unknown, rendered: unknown, path = ''): [string, string][] {
+  if (isDeepStrictEqual(original, rendered)) return [];
+  if (isRecord(original) && isRecord(rendered))
+    return [...new Set([...Object.keys(original), ...Object.keys(rendered)])]
+      .sort(cmp)
+      .flatMap((key) => differences(original[key], rendered[key], path === '' ? key : `${path}.${key}`));
+  return [
+    [
+      path,
+      rendered === undefined
+        ? NOT_LOWERED
+        : original === undefined
+          ? 'is missing, and this version of ia renders one'
+          : 'differs from what this version of ia renders',
+    ],
+  ];
+}
+
 export function lowerPlugin(inventory: PluginInventory, system: string): LoweringPlan {
   if (!NAME.test(system)) throw new HostPluginError('IA-PLUGIN-INPUT', `${system} is not a portable system name`);
   const unresolved = [...inventory.unresolved];
@@ -78,30 +104,39 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   const lines: string[] = ['#! ia 1.0', ''];
   const records: LoweredRecord[] = [];
   const recordsPath = RECORDS_PATH(system);
+  let licence: string | null = null;
   const put = (d: Omit<Disposition, 'reason'> & { reason?: string }): void => {
     entries.push(Object.freeze({ ...d, reason: d.reason ?? null }));
   };
   const text = (value: string, where: string): string => {
     if (value.includes('"') || value.includes('\\') || control(value))
-      unresolved.push(`${where}: text with a double quote, backslash or control character is lowered from slice 2`);
+      unresolved.push(`${where}: text with a double quote, backslash or control character ${NOT_LOWERED}`);
     return `"${value}"`;
   };
   const string = (field: FrontField | undefined): string | undefined =>
     field?.value.kind === 'string' ? field.value.text : undefined;
   const field = (fields: readonly FrontField[], key: string): FrontField | undefined =>
     fields.find((candidate) => candidate.key === key);
-  /** A value that, when present, must be a string; a present value of another kind is unresolved. */
-  const expectString = (value: unknown, where: string, key: string): string | undefined => {
+  /** Manifest keys an unresolved entry already names, as `<manifest> <key path>`, so the comparison names each once. */
+  const flagged = new Set<string>();
+  const refuseKey = (manifest: string, key: string, message: string): void => {
+    flagged.add(`${manifest} ${key}`);
+    unresolved.push(`${manifest}: ${message}`);
+  };
+  const isFlagged = (manifest: string, path: string): boolean =>
+    path.split('.').some((_part, index, parts) => flagged.has(`${manifest} ${parts.slice(0, index + 1).join('.')}`));
+  /** A manifest value that, when present, must be a string; a present value of another kind is unresolved. */
+  const expectString = (value: unknown, manifest: string, key: string): string | undefined => {
     if (value === undefined) return undefined;
     if (typeof value === 'string') return value;
-    unresolved.push(`${where}: ${key} must be a string in slice 1`);
+    refuseKey(manifest, key, `${key} must be a string; another value ${NOT_LOWERED}`);
     return undefined;
   };
   const frontString = (fields: readonly FrontField[], key: string, where: string): string | undefined => {
     const found = field(fields, key);
     if (found === undefined) return undefined;
     if (found.value.kind === 'string') return found.value.text;
-    unresolved.push(`${where}: ${key} must be a string in slice 1`);
+    unresolved.push(`${where}: ${key} must be a string; another value ${NOT_LOWERED}`);
     return undefined;
   };
   const frontId = (fields: readonly FrontField[], key: string, where: string): string | undefined => {
@@ -122,7 +157,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
           ? 'has CR line endings'
           : null;
 
-  // The product, from the manifests. Claude's is required; Codex's and Grok's must agree with it.
+  // The product, from the manifests: Claude's is required and gives the product; Codex adds its interface texts.
   const claude = inventory.manifests.claude;
   const name = typeof claude?.['name'] === 'string' ? claude['name'] : null;
   if (claude === undefined || name === null || !NAME.test(name)) {
@@ -131,75 +166,57 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   }
   const CLAUDE_KEYS = ['name', 'displayName', 'version', 'description', 'author', 'license', 'keywords'];
   for (const key of Object.keys(claude))
-    if (!CLAUDE_KEYS.includes(key)) unresolved.push(`${MANIFESTS.claude}: key ${key} is lowered from slice 2`);
+    if (!CLAUDE_KEYS.includes(key)) refuseKey(MANIFESTS.claude, key, `key ${key} ${NOT_LOWERED}`);
   const rawAuthor = claude['author'];
   let authorName: string | undefined;
   if (rawAuthor !== undefined) {
-    const shape = rawAuthor as { name?: unknown } | null;
-    if (
-      typeof shape !== 'object' ||
-      shape === null ||
-      Array.isArray(shape) ||
-      Object.keys(shape).join() !== 'name' ||
-      typeof shape.name !== 'string'
-    )
-      unresolved.push(`${MANIFESTS.claude}: author must be {"name": string}`);
-    else authorName = shape.name;
+    if (!isRecord(rawAuthor) || Object.keys(rawAuthor).join() !== 'name' || typeof rawAuthor['name'] !== 'string')
+      refuseKey(MANIFESTS.claude, 'author', 'author must be {"name": string}');
+    else authorName = rawAuthor['name'];
   }
   const codex = inventory.manifests.codex;
-  if (codex !== undefined) {
-    const CODEX_KEYS = [
-      'name',
-      'version',
-      'description',
-      'author',
-      'license',
-      'keywords',
-      'skills',
-      'hooks',
-      'interface',
-    ];
-    for (const key of Object.keys(codex))
-      if (!CODEX_KEYS.includes(key)) unresolved.push(`${MANIFESTS.codex}: key ${key} is lowered from slice 2`);
-    for (const key of ['name', 'version', 'description', 'author', 'license', 'keywords'])
-      if (JSON.stringify(codex[key]) !== JSON.stringify(claude[key]))
-        unresolved.push(`${MANIFESTS.codex}: ${key} differs from the Claude manifest`);
-    if (codex['skills'] !== './skills/') unresolved.push(`${MANIFESTS.codex}: skills must be "./skills/"`);
-    if (codex['hooks'] !== undefined && JSON.stringify(codex['hooks']) !== '{"hooks":{}}')
-      unresolved.push(`${MANIFESTS.codex}: hooks other than {"hooks":{}} are lowered from slice 3`);
-    if (
-      codex['interface'] !== undefined &&
-      (typeof codex['interface'] !== 'object' || codex['interface'] === null || Array.isArray(codex['interface']))
-    )
-      unresolved.push(`${MANIFESTS.codex}: interface must be an object`);
-    const codexFace = (
-      typeof codex['interface'] === 'object' && codex['interface'] !== null ? codex['interface'] : {}
-    ) as Record<string, unknown>;
-    for (const key of Object.keys(codexFace))
-      if (!['displayName', 'shortDescription', 'category'].includes(key))
-        unresolved.push(`${MANIFESTS.codex}: interface.${key} is lowered from slice 2`);
-    if (codexFace['displayName'] !== undefined && codexFace['displayName'] !== claude['displayName'])
-      unresolved.push(`${MANIFESTS.codex}: interface.displayName differs from the Claude displayName`);
-  }
-  const grok = inventory.manifests.grok;
-  if (grok !== undefined && JSON.stringify(grok) !== JSON.stringify(claude))
-    unresolved.push(`${MANIFESTS.grok}: differs from the Claude manifest`);
-  const face = (
-    typeof codex?.['interface'] === 'object' && codex['interface'] !== null ? codex['interface'] : {}
-  ) as Record<string, unknown>;
+  const rawFace = codex?.['interface'];
+  const face = isRecord(rawFace) ? rawFace : {};
+  if (rawFace !== undefined && !isRecord(rawFace))
+    refuseKey(MANIFESTS.codex, 'interface', 'interface must be an object');
+  if (codex?.['hooks'] !== undefined && !isDeepStrictEqual(codex['hooks'], { hooks: {} }))
+    refuseKey(MANIFESTS.codex, 'hooks', 'hooks other than {"hooks": {}} are not lowered by this version of ia');
   const hosts = HOST_ORDER.filter((host) => inventory.manifests[host] !== undefined);
-  let keywords: string[] | null = null;
+  let keywords: string[] | undefined;
   if (claude['keywords'] !== undefined) {
     const raw = claude['keywords'];
     if (Array.isArray(raw) && raw.every((k): k is string => typeof k === 'string')) keywords = raw;
-    else unresolved.push(`${MANIFESTS.claude}: keywords must be a list of strings`);
+    else refuseKey(MANIFESTS.claude, 'keywords', 'keywords must be a list of strings');
   }
   const displayName = expectString(claude['displayName'], MANIFESTS.claude, 'displayName');
   const version = expectString(claude['version'], MANIFESTS.claude, 'version');
   const description = expectString(claude['description'], MANIFESTS.claude, 'description');
   const license = expectString(claude['license'], MANIFESTS.claude, 'license');
+  licence = license ?? null;
   const shortDescription = expectString(face['shortDescription'], MANIFESTS.codex, 'interface.shortDescription');
   const category = expectString(face['category'], MANIFESTS.codex, 'interface.category');
+  // Each manifest must be the one the renderer writes for this product, compared by content: a key the renderer would
+  // not write back, or would write differently, is unresolved. Codex may leave out the empty hook map the renderer adds
+  // (rule codex-hooks-suppressed); a hook map that is present was judged above.
+  const product: PluginProduct = {
+    name,
+    displayName,
+    version,
+    description,
+    author: authorName,
+    license,
+    keywords,
+    shortDescription,
+    category,
+  };
+  for (const host of hosts) {
+    const original = inventory.manifests[host]!;
+    const rendered = pluginManifest(product, host);
+    const judged = (manifest: Readonly<Record<string, unknown>>): Record<string, unknown> =>
+      Object.fromEntries(Object.entries(manifest).filter(([key]) => host !== 'codex' || key !== 'hooks'));
+    for (const [path, problem] of differences(judged(original), judged(rendered)))
+      if (!isFlagged(MANIFESTS[host], path)) unresolved.push(`${MANIFESTS[host]}: ${path} ${problem}`);
+  }
 
   lines.push(
     `@distribution ${system}-distribution`,
@@ -220,7 +237,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   productText('description', description, MANIFESTS.claude);
   productText('author', authorName, MANIFESTS.claude);
   productText('license', license, MANIFESTS.claude);
-  if (keywords !== null)
+  if (keywords !== undefined)
     lines.push(`    keywords [${keywords.map((k) => text(k, `${MANIFESTS.claude} keywords`)).join(', ')}]`);
   lines.push(`    hosts [${hosts.join(', ')}]`);
   productText('short-description', shortDescription, MANIFESTS.codex);
@@ -247,13 +264,18 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     const fields = skill.frontmatter.fields;
     for (const f of fields)
       if (!['name', 'description', 'disable-model-invocation', 'argument-hint'].includes(f.key))
-        unresolved.push(`${where}: frontmatter key ${f.key} is lowered from slice 2`);
+        unresolved.push(`${where}: frontmatter key ${f.key} ${NOT_LOWERED}`);
     if (string(field(fields, 'name')) !== skill.name) unresolved.push(`${where}: name must equal the folder name`);
     const skillDescription = frontString(fields, 'description', where);
     if (field(fields, 'description') === undefined) unresolved.push(`${where}: no description`);
     const disabled = field(fields, 'disable-model-invocation')?.value;
     if (disabled !== undefined && disabled.kind !== 'boolean')
-      unresolved.push(`${where}: disable-model-invocation must be a boolean in slice 1`);
+      unresolved.push(`${where}: disable-model-invocation must be a boolean; another value ${NOT_LOWERED}`);
+    // The renderer omits the default, so lowering its output again would lose this key and the fixed point with it.
+    else if (disabled?.kind === 'boolean' && !disabled.value)
+      unresolved.push(
+        `${where}: disable-model-invocation: false is the default, which this version of ia does not render back; remove the line`,
+      );
     const hint = frontString(fields, 'argument-hint', where);
     lines.push(
       `@capability ${skill.name}`,
@@ -270,7 +292,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     records.push({ word: 'capability', name: skill.name, path: recordsPath });
     put({ source: where, key: 'name', kind: 'derived', target: `@capability ${skill.name}` });
     put({ source: where, key: 'description', kind: 'field', target: `@capability ${skill.name} meaning.says` });
-    if (disabled?.kind === 'boolean')
+    if (disabled?.kind === 'boolean' && disabled.value)
       put({
         source: where,
         key: 'disable-model-invocation',
@@ -308,24 +330,27 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     const fields = agent.frontmatter.fields;
     for (const f of fields)
       if (!['name', 'description', 'tools', 'model', 'color', 'effort'].includes(f.key))
-        unresolved.push(`${where}: frontmatter key ${f.key} is lowered from slice 2`);
+        unresolved.push(`${where}: frontmatter key ${f.key} ${NOT_LOWERED}`);
     if (string(field(fields, 'name')) !== agent.name) unresolved.push(`${where}: name must equal the file name`);
     const agentDescription = frontString(fields, 'description', where) ?? '';
     if (field(fields, 'description') === undefined) unresolved.push(`${where}: no description`);
+    // Only the form the renderer writes back: one string whose `split(', ')` rejoins to exactly the original, each
+    // member a bare tool name. A list, a comma without its space or a padded member is unresolved, never normalized.
     const toolsValue: FrontValue | undefined = field(fields, 'tools')?.value;
-    if (toolsValue?.kind === 'boolean') unresolved.push(`${where}: tools must be a string or a list in slice 1`);
-    const tools =
-      toolsValue?.kind === 'string'
-        ? toolsValue.text.split(',').map((t) => t.trim())
-        : toolsValue?.kind === 'list'
-          ? [...toolsValue.items]
-          : [];
-    const effects = effectsFor(tools);
-    if (effects === null) unresolved.push(`${where}: tools ${tools.join(', ') || '(none)'} match no effect yet`);
-    const optional = (key: string, line: (value: string) => string): string[] => {
-      const value = frontId(fields, key, where);
-      return value === undefined ? [] : [line(value)];
-    };
+    const tools = toolsValue === undefined ? [] : toolsValue.kind === 'string' ? toolsValue.text.split(', ') : null;
+    const writable =
+      tools !== null && tools.every((tool) => tool !== '' && tool === tool.trim() && !tool.includes(','));
+    let effects: string[] | null = null;
+    if (!writable)
+      unresolved.push(
+        `${where}: tools must be one string of tool names separated by ", " (as Read, Grep, Glob); another form ${NOT_LOWERED}`,
+      );
+    else {
+      effects = effectsFor(tools);
+      if (effects === null) unresolved.push(`${where}: tools ${tools.join(', ') || '(none)'} match no effect yet`);
+    }
+    const model = frontId(fields, 'model', where);
+    const effort = frontId(fields, 'effort', where);
     const color = frontId(fields, 'color', where);
     lines.push(
       `@agent ${agent.name}`,
@@ -353,8 +378,8 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       `    role ${agent.name}`,
       '    outcomes report-v1',
       '    mandate-contract plugin-v1',
-      ...optional('model', (v) => `    model-profile ${v}`),
-      ...optional('effort', (v) => `    effort ${v}`),
+      ...(model === undefined ? [] : [`    model-profile ${model}`]),
+      ...(effort === undefined ? [] : [`    effort ${effort}`]),
       '  invocation',
       '    mode model',
       ...(color === undefined ? [] : ['  presentation', `    color ${color}`]),
@@ -365,8 +390,17 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       { word: 'capability', name: `${agent.name}-tools`, path: recordsPath },
       { word: 'agent-profile', name: agent.name, path: recordsPath },
     );
+    // Every agent frontmatter key the lowering accepts gets exactly one disposition.
+    put({ source: where, key: 'name', kind: 'derived', target: `@agent-profile ${agent.name}` });
     put({ source: where, key: 'description', kind: 'field', target: `@agent-profile ${agent.name} meaning.says` });
     put({ source: where, key: 'tools', kind: 'field', target: `@capability ${agent.name}-tools execution.effects` });
+    const profileField = (key: string, value: string | undefined, target: string): void => {
+      if (value !== undefined)
+        put({ source: where, key, kind: 'field', target: `@agent-profile ${agent.name} ${target}` });
+    };
+    profileField('model', model, 'execution.model-profile');
+    profileField('effort', effort, 'execution.effort');
+    profileField('color', color, 'presentation.color');
     const bodyPath = `${RESOURCE_ROOT(system)}/agents/${agent.name}.body.md`;
     resources.push({
       path: bodyPath,
@@ -399,7 +433,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   }
   function asset(entry: PluginEntry): void {
     const problem = textProblem(entry.bytes);
-    if (problem === 'not UTF-8') unresolved.push(`${entry.path}: binary assets are lowered from slice 2`);
+    if (problem === 'not UTF-8') unresolved.push(`${entry.path}: binary assets are not lowered by this version of ia`);
     else if (problem !== null) unresolved.push(`${entry.path}: ${problem}`);
     const path = `${ASSET_ROOT}/${entry.path}`;
     const base = entry.path.split('/').pop()!;
@@ -498,8 +532,11 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       `  describes "The ${name ?? system} plugin, lowered into records by ia init --from."`,
       `  steward @agent ${system}-steward`,
       '  requires',
-      '    - agent-system',
+      // Sorted; compliance-system lets authored trigger `@contract` and `@case` records live beside the lowered ones
+      // without a hand edit of this lowered file, which would break the round trip's fixed point.
       '    - agent-composition-system',
+      '    - agent-system',
+      '    - compliance-system',
       '    - workspace-system',
       '',
       `@agent ${system}-steward`,
@@ -535,6 +572,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       assets: Object.freeze(allAssets),
       map,
       unresolved: Object.freeze([...unresolved]),
+      license: licence,
     });
   }
 }

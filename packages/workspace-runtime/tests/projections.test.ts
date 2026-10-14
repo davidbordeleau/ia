@@ -1902,7 +1902,7 @@ describe('HOST-01 emitted projection baseline', () => {
     },
     { name: 'a boolean argument', id: 'check', change: withArgument('boolean'), outcomes: everywhere(TYPED) },
     { name: 'an integer argument', id: 'check', change: withArgument('integer'), outcomes: everywhere(TYPED) },
-    // #444: the agent profile's capabilities declare `effects [read]`, and v1 maps read to the read, glob and grep tool ids.
+    // #444: the agent profile's capabilities declare `effects [read]`, and v1 maps read to the read, grep and glob tool ids.
     {
       name: 'an agent export without an agent profile',
       id: 'reviewer',

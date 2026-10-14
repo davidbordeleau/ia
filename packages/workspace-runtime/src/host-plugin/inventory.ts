@@ -46,7 +46,8 @@ export function readEntries(root: string): PluginEntry[] {
       const stat = lstatSync(join(root, path));
       if (stat.isSymbolicLink())
         throw new HostPluginError('IA-PLUGIN-INPUT', `${path} is a symbolic link; lowering reads real files only`);
-      if (name === '.git' || name === 'node_modules')
+      // In any letter case: a case-insensitive volume reads `.GIT` as `.git`.
+      if (name.toLowerCase() === '.git' || name.toLowerCase() === 'node_modules')
         throw new HostPluginError('IA-PLUGIN-INPUT', `${path} is not plugin content`);
       if (stat.isDirectory()) {
         walk(path);
@@ -89,7 +90,7 @@ export function inventoryOf(entries: readonly PluginEntry[]): PluginInventory {
     }
     const parts = entry.path.split('/');
     if (parts[0] === 'hooks' || entry.path === '.mcp.json' || entry.path === '.lsp.json') {
-      unresolved.push(`${entry.path}: hooks and servers are lowered from slice 3`);
+      unresolved.push(`${entry.path}: hooks and servers are not lowered by this version of ia`);
       continue;
     }
     if (parts[0] === 'commands') {

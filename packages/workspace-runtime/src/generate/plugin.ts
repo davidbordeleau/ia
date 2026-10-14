@@ -2,7 +2,9 @@ import type { ReadHandle } from '@inventarch/db';
 import type { Node } from '@inventarch/graph';
 import { emitFrontmatter, type FrontField } from '../host-plugin/frontmatter.js';
 import { HostPluginError } from '../host-plugin/errors.js';
+import { MANIFESTS, type PluginHost } from '../host-plugin/inventory.js';
 import { toolsOf } from '../host-plugin/lower.js';
+import { type PluginProduct, pluginManifest } from '../host-plugin/manifest.js';
 import { stated, textsAt, valuesAt } from './format.js';
 
 export interface PluginResource {
@@ -64,45 +66,27 @@ export function renderPlugin(
       throw new HostPluginError('IA-PLUGIN-PRODUCT', `Two sources render ${path}`);
     out.push(Object.freeze({ path, bytes }));
   };
-  const author = one(d, 'product.author');
-  const common = {
-    name: one(d, 'product.name'),
+  const name = one(d, 'product.name');
+  if (name === undefined) throw new HostPluginError('IA-PLUGIN-PRODUCT', `${d.identity}: product.name is not a name`);
+  const product: PluginProduct = {
+    name,
+    displayName: one(d, 'product.display-name'),
     version: one(d, 'product.version'),
     description: one(d, 'product.description'),
-    ...(author === undefined ? {} : { author: { name: author } }),
-    ...(one(d, 'product.license') === undefined ? {} : { license: one(d, 'product.license') }),
-    ...(stated(d, 'product.keywords') ? { keywords: textsAt(d, 'product.keywords') } : {}),
+    author: one(d, 'product.author'),
+    license: one(d, 'product.license'),
+    keywords: stated(d, 'product.keywords') ? textsAt(d, 'product.keywords') : undefined,
+    shortDescription: one(d, 'product.short-description'),
+    category: one(d, 'product.category'),
   };
-  const claude = {
-    name: common.name,
-    ...(one(d, 'product.display-name') === undefined ? {} : { displayName: one(d, 'product.display-name') }),
-    version: common.version,
-    description: common.description,
-    ...('author' in common ? { author: common.author } : {}),
-    ...('license' in common ? { license: common.license } : {}),
-    ...('keywords' in common ? { keywords: common.keywords } : {}),
-  };
-  const face = {
-    ...(one(d, 'product.display-name') === undefined ? {} : { displayName: one(d, 'product.display-name') }),
-    ...(one(d, 'product.short-description') === undefined
-      ? {}
-      : { shortDescription: one(d, 'product.short-description') }),
-    ...(one(d, 'product.category') === undefined ? {} : { category: one(d, 'product.category') }),
-  };
-  for (const host of textsAt(d, 'product.hosts')) {
-    if (host === 'claude') add('.claude-plugin/plugin.json', json(claude));
-    if (host === 'grok') add('.grok-plugin/plugin.json', json(claude));
-    if (host === 'codex')
-      add(
-        '.codex-plugin/plugin.json',
-        json({
-          ...common,
-          skills: './skills/',
-          hooks: { hooks: {} },
-          ...(Object.keys(face).length === 0 ? {} : { interface: face }),
-        }),
-      );
-  }
+  // One plugin carries every host its product lists; a product that lists none would render a plugin with no manifest.
+  const hosts = textsAt(d, 'product.hosts').filter((host): host is PluginHost => Object.hasOwn(MANIFESTS, host));
+  if (hosts.length === 0)
+    throw new HostPluginError(
+      'IA-PLUGIN-PRODUCT',
+      `${d.identity}: product.hosts names no host; a plugin needs at least one manifest`,
+    );
+  for (const host of hosts) add(MANIFESTS[host], json(pluginManifest(product, host)));
   const bodyOf = (owner: string): Buffer => {
     const bodies = resources.filter((r) => r.owner === owner && r.role === 'body' && r.delivery === 'inline');
     if (bodies.length !== 1)
@@ -118,7 +102,7 @@ export function renderPlugin(
     if (mode === 'delegated')
       throw new HostPluginError(
         'IA-PROJECT-FEATURE',
-        `${capability.identity}: delegated skills are rendered from slice 2`,
+        `${capability.identity}: delegated skills are not rendered by this version of ia`,
       );
     const fields: FrontField[] = [
       { key: 'name', value: plain(capability.name) },
@@ -147,7 +131,7 @@ export function renderPlugin(
     if (mode === 'delegated')
       throw new HostPluginError(
         'IA-PROJECT-FEATURE',
-        `${profile.identity}: delegated agents are rendered from slice 2`,
+        `${profile.identity}: delegated agents are not rendered by this version of ia`,
       );
     const effects = valuesAt(profile, 'composition.capabilities').flatMap((value) => {
       const resolved = value.kind === 'ref' ? reader.resolve(value, { within }) : undefined;

@@ -36,6 +36,93 @@ export interface HostFile {
   readonly text: string;
 }
 /**
+ * The words authored host generation (milestone generation-binding) renders files of, the word it registers hook groups
+ * for, and the words it defines, each union stated once here for the generators, the receipt and their consumers.
+ */
+export type GeneratedFileWord = 'agent-profile' | 'playbook';
+export type GeneratedRecordWord = GeneratedFileWord | 'hook';
+export type DefinitionWord = 'operation' | 'harness';
+/** The edit tools a hook can declare, in canonical order. */
+export type HookToolName = 'Write' | 'Edit' | 'MultiEdit';
+/** Authored hook metadata; registration derives a fixed command, never authored shell text. */
+export interface HostHookDeclaration {
+  readonly identity: string;
+  readonly event: 'PreToolUse';
+  readonly tools: readonly HookToolName[];
+  readonly paths: readonly string[];
+  readonly message: string;
+}
+/** One generated file a receipt lists: the record it renders, its word, its path and the SHA-256 of its text. */
+export interface GeneratedRow {
+  readonly identity: string;
+  readonly word: GeneratedFileWord;
+  readonly path: string;
+  readonly sha256: string;
+}
+/**
+ * One registered hook group a receipt lists, keyed by its `@hook`: the tools the hook declares (the group itself matches
+ * every edit tool) and the SHA-256 of the group as it was written (its canonical JSON, keys sorted), so a hand edit of the
+ * group is evidence against the row.
+ */
+export interface HookGroupRow {
+  readonly identity: string;
+  readonly tools: readonly HookToolName[];
+  readonly sha256: string;
+}
+/**
+ * One hook group a receipt lists as removed (review finding H-R5): its `@hook` and the SHA-256 of the group as it was last
+ * registered, which the applying caller read from the hook ownership state before removing it.
+ */
+export interface RemovedHookRow {
+  readonly identity: string;
+  readonly sha256: string;
+}
+/** An authored record the host does not render or register, and why. */
+export interface UnsupportedRow {
+  readonly identity: string;
+  readonly word: GeneratedRecordWord;
+  readonly reason: string;
+}
+/**
+ * An authored `@operation` as a definition (plan amendment C11): its handler and its input and output validators are
+ * catalog keys an installed implementation answers, never module specifiers; nothing imports, serves or executes them
+ * here (milestone 7 owns execution). A field the record does not state is absent.
+ */
+export interface OperationDefinition {
+  readonly name: string;
+  readonly description: string;
+  readonly handler?: string;
+  readonly input?: string;
+  readonly output?: string;
+  readonly effects: readonly string[];
+}
+/** A registration a harness selects: the record and the host path generation renders it at. */
+export interface RegistrationRow {
+  readonly identity: string;
+  readonly path: string;
+}
+/**
+ * An authored `@harness` as a definition: its workspace, host profile, profiles and bindings, and the registration set
+ * they select (the generated agents of its profiles, the skills of the playbooks their capabilities and included
+ * capabilities name, and the hooks its bindings target), as identities and paths only.
+ */
+export interface HarnessDefinition {
+  readonly name: string;
+  readonly description: string;
+  readonly workspace?: string;
+  readonly hostProfile?: string;
+  readonly profiles: readonly string[];
+  readonly bindings: readonly string[];
+  readonly registrations: {
+    readonly agents: readonly RegistrationRow[];
+    readonly skills: readonly RegistrationRow[];
+    readonly hooks: readonly HostHookDeclaration[];
+  };
+}
+export type PacketDefinition =
+  | { readonly identity: string; readonly word: 'operation'; readonly definition: OperationDefinition }
+  | { readonly identity: string; readonly word: 'harness'; readonly definition: HarnessDefinition };
+/**
  * B12: the receipt of one render, which the caller that applies the files writes beside the projection state.
  * `renderHost` fills what the render decides and leaves `removed` and `foreign` empty, `guard` `none`, and `cli` and
  * `writtenAt` null; the caller that writes and deletes the files sets those five (milestone position-packet task
@@ -48,7 +135,7 @@ export interface PacketReceipt {
   readonly cli: string | null;
   /** `<adapter id>@<@inventarch/runtime version>`, `ia-claude@…` or `ia-codex@…`, in either target. */
   readonly adapter: string;
-  /** The packet's revision. */
+  /** The packet's revision, the authored revision body(K0) names. */
   readonly revision: string;
   /** The packet's provenance slug, null when it has none (decision identity-namespace: the slug lives here). */
   readonly slug: string | null;
@@ -59,7 +146,17 @@ export interface PacketReceipt {
   readonly entries: number;
   /** The files this render writes and expects to remain, in render order, each with the SHA-256 of its UTF-8 text. */
   readonly files: readonly { readonly path: string; readonly sha256: string }[];
-  /** The owned legacy files the applying caller deleted (B9). */
+  /** Optional on receipts predating authored generation. Ownership remains projection state. */
+  /** The generated files among `files`, each with the record it renders. */
+  readonly generated?: readonly GeneratedRow[];
+  readonly definitions?: readonly PacketDefinition[];
+  /** The hook groups the applying caller registered, one per `@hook`. */
+  readonly hooks?: readonly HookGroupRow[];
+  /** The hook groups the applying caller removed, an interrupted earlier apply's included. */
+  readonly removedHooks?: readonly RemovedHookRow[];
+  /** The authored records the host does not render or register, each with the reason. */
+  readonly unsupported?: readonly UnsupportedRow[];
+  /** The owned files the applying caller deleted: 1.x files (B9), and generated files no render writes any more. */
   readonly removed: readonly { readonly path: string; readonly sha256: string }[];
   /** The unmarked files the applying caller left in place (design §4, adapter rule 2). */
   readonly foreign: readonly string[];
@@ -77,6 +174,7 @@ export interface PacketReceipt {
 export interface HostOutput {
   readonly files: readonly HostFile[];
   readonly receipt: PacketReceipt;
+  readonly hooks?: readonly HostHookDeclaration[];
 }
 
 /** This package's version, read from its own manifest as the MCP door reads its own. */
@@ -115,8 +213,12 @@ const skill = (target: PacketTarget, revision: string): string =>
     : `---\nname: ia-authoring\ndescription: Author or review IA records in this workspace.\n---\n\n${PACKET_MARKER}\n\nSource revision: ${revision}\n\nFind a word and its schema with \`ia vocabulary <word> --schema\`. Check records with \`ia validate\`. Inspect an admitted record with \`ia inspect <identity>\`. Validation establishes conformance to the declared schemas, not design quality.\n`;
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 
-/** `text` on one line: a line break and the blanks around it become one space, so each entry is one line. */
-function inline(text: string): string {
+/**
+ * `text` on one line: a line break and the blanks around it become one space, so each entry is one line. Exported on
+ * the `./internal/packet-host` subpath with `code` and `prose`, so workspace-runtime's host generators write free text
+ * exactly as the packet does.
+ */
+export function inline(text: string): string {
   const parts: string[] = [];
   let start = 0;
   for (let index = 0; index < text.length; ) {
@@ -136,7 +238,7 @@ function inline(text: string): string {
   return parts.length === 0 ? text : parts.join('') + text.slice(start);
 }
 /** `text` as one code span: its fence one backtick longer than the longest run inside, padded where one touches it. */
-function code(text: string): string {
+export function code(text: string): string {
   const one = inline(text),
     fence = '`'.repeat(Math.max(0, ...(one.match(/`+/g) ?? []).map((run) => run.length)) + 1),
     pad = one.startsWith('`') || one.endsWith('`') ? ' ' : '';
@@ -159,7 +261,7 @@ const SPAN_OR_TOKEN = new RegExp(`${SPAN.source}|${TOKEN.source}`, 'g');
  * backtick run no span closes: that run is literal text, and a fence of its length would close it. Markup only (design
  * §4): an authored span stays as written, a token in it included, and the packet's values and entries are unchanged.
  */
-function prose(text: string): string {
+export function prose(text: string): string {
   const one = inline(text),
     loose = new Set((one.replace(SPAN, '').match(/`+/g) ?? []).map((run) => run.length));
   let fence = '`';
@@ -298,8 +400,9 @@ function sections(packet: PositionPacket): readonly string[] {
  * `.claude/rules/ia-workspace.md` and `.claude/skills/ia-authoring/SKILL.md`, its repository files `CLAUDE.md` and
  * both skills; codex's are `AGENTS.md` and `.agents/skills/ia-authoring/SKILL.md` in either target. The entry file is
  * the marker, the packet's sections, the provenance line `ia-generated <revision> <packet digest> <adapter>` (the
- * adapter's version only in the consumer target) and, in the consumer target alone, the host note. An unknown host or
- * target, or a digest that is not the packet's, is IA-RUNTIME-REQUEST-INVALID.
+ * packet's authored revision; the adapter's version only in the consumer target) and, in the consumer target alone,
+ * the host note. A skill's `Source revision` is the packet's revision too. An unknown host or target, or a digest that
+ * is not the packet's, is IA-RUNTIME-REQUEST-INVALID.
  */
 export function renderHost(
   host: PacketHost,

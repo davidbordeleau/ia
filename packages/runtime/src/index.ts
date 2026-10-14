@@ -43,7 +43,26 @@ export type {
   PositionPacket,
 } from './packet.js';
 export { PACKET_MARKER, renderHost } from './packet-host.js';
-export type { HostFile, HostOutput, PacketHost, PacketReceipt, PacketTarget } from './packet-host.js';
+export type {
+  DefinitionWord,
+  GeneratedFileWord,
+  GeneratedRecordWord,
+  GeneratedRow,
+  HarnessDefinition,
+  HookGroupRow,
+  RemovedHookRow,
+  HookToolName,
+  UnsupportedRow,
+  HostFile,
+  HostOutput,
+  HostHookDeclaration,
+  OperationDefinition,
+  PacketDefinition,
+  PacketHost,
+  PacketReceipt,
+  PacketTarget,
+  RegistrationRow,
+} from './packet-host.js';
 export { context, DEFAULT_TOKENIZER } from './context.js';
 export type {
   ContextRequest,
@@ -75,6 +94,8 @@ export type {
 } from './machine-protocol.js';
 export { HOOK_CODES, evaluateSteward } from './steward.js';
 export type { HookCode, StewardActor, StewardDecision } from './steward.js';
+export { evaluateMandateGuard, mandateGuardSelects } from './mandate-guard.js';
+export type { MandateGuardDecision, MandateGuardRequest } from './mandate-guard.js';
 export { validateCandidate } from './candidate.js';
 export type { CandidateEnvelope, CandidateScope, CandidateValidation } from './candidate.js';
 export {
@@ -92,11 +113,26 @@ export {
   MODES,
   MODE_MOVES,
   MOVES,
+  defaultActor,
+  governingMandates,
   isMode,
   mandateAuthorityOf,
   mandateRefusal,
+  profileRefusal,
+  seatedWorkspace,
 } from './mandate-modes.js';
-export type { MandateAuthority, MandateCode, MandateRefusal, Mode, Move } from './mandate-modes.js';
+export type {
+  DefaultActor,
+  GoverningMandate,
+  GoverningOptions,
+  MandateAuthority,
+  MandateCode,
+  MandateRefusal,
+  Mode,
+  Move,
+  ProfileMandate,
+  ProfileVerdict,
+} from './mandate-modes.js';
 // The markdown and fragment helpers stay on the ./internal/locator subpath; the root names the reader and its terms.
 export { READ_CODES, SOURCE_LOCATORS, parseLocator, readBody } from './locator.js';
 export type { Locator, ReadBody, ReadBodyOptions, ReadCode, ReadRefusal, ReadResult } from './locator.js';

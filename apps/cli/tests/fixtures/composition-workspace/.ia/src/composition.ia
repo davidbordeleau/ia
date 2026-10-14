@@ -1,0 +1,52 @@
+#! ia 1.0
+
+@agent reviewer
+  meaning
+    says "Reviews the demo workspace's notes and reports what it finds."
+    answers "Which agent reviews the demo workspace's notes?"
+  governance
+    applies []
+
+@voice reviewer-voice
+  meaning
+    says "How the reviewer reports what it finds."
+    answers "How does the reviewer communicate?"
+  communication
+    tone "Plain and direct."
+    terminology "The workspace's own words, as its records spell them."
+    explanation "Name the record and the field behind each finding."
+    uncertainty "Say what was not checked."
+
+@operation read-note
+  meaning
+    says "Read one captured note."
+    answers "Which captured note is selected?"
+  execution
+    handler read-note-v1
+    effects read-only
+    input read-note-input-v1
+    output read-note-output-v1
+
+@capability note-reading
+  meaning
+    says "Reads the demo workspace's captured notes."
+    answers "Which operation reads a note?"
+  composition
+    operations [@operation read-note]
+    playbooks [@playbook note-review]
+  execution
+    effects [read]
+
+@agent-profile reviewer
+  meaning
+    says "Binds the reviewer to a bounded host contract under the demo mandate."
+    answers "Which profile receives a review request?"
+  composition
+    agent @agent reviewer
+    voice @voice reviewer-voice
+    mandate @mandate demo-mandate
+    capabilities [@capability note-reading]
+  execution
+    role reviewer
+    outcomes review-findings-v1
+    mandate-contract review-v1

@@ -272,7 +272,7 @@ it('writes nothing, needs no capture, and moves only the note when a capture is 
   expect(JSON.stringify(captured.body)).toBe(JSON.stringify(first.body));
   expect(captured.digest).toBe(first.digest);
   const freshness = async () => flat((await run(['position', ...flags, '--root', root])).stdout);
-  expect(await freshness()).toContain('freshness current: the capture is at this revision digest');
+  expect(await freshness()).toContain('freshness current: the capture is at this authored revision digest');
   // An edit after the capture moves the body's revision, and the note names the captured one, truncated as digests are,
   // and the capture that brings it to this revision (design §5: a stale capture is a notice until `ia capture`).
   writeFileSync(resolve(root, RECORDS, 'late-law.ia'), rule('law', 'late-law', 'advisory'));
@@ -282,7 +282,7 @@ it('writes nothing, needs no capture, and moves only the note when a capture is 
   const ascii = resolveCapabilities({ env: {}, isTTY: false }).ascii;
   expect(await freshness()).toContain(
     flat(
-      `freshness stale: the capture is at revision ${truncateDigest(first.body.revision, ascii)}; run "ia capture ${rooted(root)}" to capture this one digest`,
+      `freshness stale: the capture is at authored revision ${truncateDigest(first.body.revision, ascii)}; run "ia capture ${rooted(root)}" to capture this one digest`,
     ),
   );
 });

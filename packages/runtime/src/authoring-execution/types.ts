@@ -42,7 +42,9 @@ export interface Success {
   readonly operation: string;
   readonly owner: string;
   readonly steward: string;
+  /** The authored revision (db `authoredRevision`) the run read and rechecked after its handler. */
   readonly baseRevision: string;
+  /** The revision of the handler's draft preview (db `DraftPreview.revision`), or the one the handler names. */
   readonly candidateRevision?: string;
   readonly effects: 'read-only' | 'draft-only';
   readonly artifacts: readonly Artifact[];

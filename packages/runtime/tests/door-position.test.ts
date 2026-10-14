@@ -10,7 +10,7 @@ import type { Location } from '@inventarch/language';
 import { afterEach, expect, it } from 'vitest';
 import { Door, MACHINE_PROTOCOL, SCOPE_KEY_CAPS, position } from '../src/index.js';
 import type { DoorOptions, DoorResponse, PositionOutput, Scope, ScopeKey } from '../src/index.js';
-import { database, lawId, lawPath, methodId, tree, workspace } from './workspace.js';
+import { database, law, lawId, lawPath, methodId, put, tree, workspace } from './workspace.js';
 
 const governanceSystem = 'floor/definition/system/governance-system',
   foundation = 'workspace-system/definition/workspace/foundation-workspace';
@@ -76,6 +76,31 @@ it("answers with runtime position through the door's token, byte for byte, and w
     served(position(db, narrow, KEYS['governance-system'])),
   );
   expect(tree(root)).toBe(before);
+});
+
+it('keeps the full revision on the version 1 routes while position names the authored one', () => {
+  // Plan amendment C13: a runtime-band source moves the revision the version 1 scope and records bind and answer
+  // (frozen: their four snapshot fields, no authored revision), and leaves the position body's authored one.
+  const root = workspace(),
+    lawFile = '.ia/src/systems/governance-system/records/runtime-rule.ia',
+    placement = { locations: { [lawFile]: RUNTIME } };
+  put(root, lawFile, law('runtime-rule', 'advisory'));
+  const plain = door(workspace()),
+    placed = door(root, placement),
+    db = database(root, placement);
+  expect(db.revision).not.toBe(db.authoredRevision);
+  const answer = (gate: Door, operation: string): Record<string, unknown> => {
+    const response = gate.request({ operation });
+    if (!response.ok) throw new Error(response.message);
+    return response.result as Record<string, unknown>;
+  };
+  expect(answer(placed, 'scope')['revision']).toBe(db.revision);
+  expect(Object.keys(answer(placed, 'records'))).toEqual(['revision', 'root', 'records', 'systems']);
+  expect(answer(placed, 'records')['revision']).toBe(db.revision);
+  expect(answer(placed, 'scope')['revision']).not.toBe(answer(plain, 'scope')['revision']);
+  const k0 = resultOf(positioned(placed)());
+  expect(k0.body.revision).toBe(db.authoredRevision);
+  expect(JSON.stringify(k0.body)).toBe(JSON.stringify(resultOf(positioned(plain)()).body));
 });
 
 it('gives one key one body and digest at two absolute roots through the Door', () => {

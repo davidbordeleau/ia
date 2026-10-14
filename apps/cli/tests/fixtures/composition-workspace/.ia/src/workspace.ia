@@ -1,0 +1,28 @@
+#! ia 1.0
+
+@workspace demo
+  meaning
+    says "The demo workspace and the public systems it composes."
+    answers "Which systems does this workspace compose?"
+  composition
+    systems [@system agent-composition-system, @system agent-system, @system authoring-system, @system compliance-system, @system governance-system, @system hook-authoring-system, @system learning-system, @system session-system, @system template-system, @system work-system, @system workspace-system]
+    sources [".ia/src @authored"]
+    steward @agent demo
+
+@agent demo
+  meaning
+    says "The IDE agent operating in the demo workspace, any vendor."
+    answers "Which participant acts in the demo workspace?"
+  governance
+    applies []
+
+@mandate demo-mandate
+  meaning
+    says "The bounded authority of the demo participant in the demo workspace."
+    answers "Which moves may the demo participant make, and in which workspace?"
+  governance
+    requires "Claim no host permission or execution from this mandate."
+  authority
+    participant @agent demo
+    moves [Observation, Verification, Synthesis, Delegation, Execution]
+    scope [@workspace demo]

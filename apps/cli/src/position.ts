@@ -182,9 +182,9 @@ export function renderPosition(output: PositionOutput, caps: Capabilities, roote
     seated = body.seat.identity ?? spelled(body.seat.path ?? '');
   const freshness =
     hostNote.freshness === 'stale'
-      ? `stale: the capture is at revision ${truncateDigest(hostNote.capturedRevision ?? '', caps.ascii)}; run "ia capture${rooted}" to capture this one`
+      ? `stale: the capture is at authored revision ${truncateDigest(hostNote.capturedRevision ?? '', caps.ascii)}; run "ia capture${rooted}" to capture this one`
       : hostNote.freshness === 'current'
-        ? 'current: the capture is at this revision'
+        ? 'current: the capture is at this authored revision'
         : 'no-capture: no capture is written; the body reads the live admitted revision';
   const counts = body.counts;
   const widening: (readonly Token[])[] = [

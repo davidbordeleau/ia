@@ -15,14 +15,17 @@ import { isBand } from '@inventarch/language';
 import { stableSerialize } from '@inventarch/graph';
 import { DbError } from './errors.js';
 import { safePath } from './inputs.js';
+import { authoredRows } from './membership.js';
 import type { MembershipRow } from './membership.js';
 
-/** D08: an admitted root snapshot (location '', no phase) as retained: its revision and D02a membership rows. */
+/** D08: an admitted root snapshot (location '', no phase) as retained: its revisions and D02a membership rows. */
 export interface RetainedSnapshot {
   readonly revision: string;
+  /** Its authored revision (graph `authoredRevisionOf`), which retention rotates by and trusts a capture by. */
+  readonly authoredRevision: string;
   readonly membership: readonly MembershipRow[];
 }
-/** D08: the current root snapshot and the most recent one whose revision differs from it, when there is one. */
+/** D08: the current root snapshot and the most recent one whose authored revision differs from it, when there is one. */
 export interface Retained {
   readonly current: RetainedSnapshot;
   readonly previous?: RetainedSnapshot;
@@ -51,10 +54,17 @@ export function stalenessOf(now: string | undefined, before: string | undefined)
 export function readinessOf(now: string | undefined, before: string | undefined, digest: string): Readiness {
   return digest === now ? 'current' : digest === before ? 'previous' : 'unknown';
 }
-/** D08 rotation: the prior current becomes previous only when the revision changed; otherwise the prior previous stays. */
+/**
+ * D08 rotation: the prior current becomes previous only when the authored revision changed, so a change to runtime-band
+ * sources alone keeps the prior previous, as an unchanged revision does.
+ */
 export function rotate(prior: Retained | undefined, current: RetainedSnapshot): Retained {
   const previous =
-    prior === undefined ? undefined : prior.current.revision === current.revision ? prior.previous : prior.current;
+    prior === undefined
+      ? undefined
+      : prior.current.authoredRevision === current.authoredRevision
+        ? prior.previous
+        : prior.current;
   return Object.freeze({ current, ...(previous === undefined ? {} : { previous }) });
 }
 
@@ -67,7 +77,7 @@ export const CAPTURE_DIRECTORY = '.ia/work/snapshot';
 export const CAPTURE_CURRENT = `${CAPTURE_DIRECTORY}/current.json`;
 export const CAPTURE_PREVIOUS = `${CAPTURE_DIRECTORY}/previous.json`;
 
-/** A capture as read back: its exact bytes and the retained part, its revision and membership rows. */
+/** A capture as read back: its exact bytes and the retained part, its revisions and membership rows. */
 interface Captured extends RetainedSnapshot {
   readonly bytes: Buffer;
 }
@@ -75,7 +85,11 @@ const plain = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const exactly = (value: Record<string, unknown>, keys: readonly string[]): boolean =>
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify(keys);
-/** The retained part of an `ia-snapshot-1` document, or why the bytes are none. */
+/**
+ * The retained part of an `ia-snapshot-1` document, or why the bytes are none. A document without `authoredRevision`
+ * (one written before the authored revision) names its `revision` as its authored revision, which it was while no
+ * source sat at runtime placement.
+ */
 function capturedOf(bytes: Buffer): Captured | string {
   let value: unknown;
   try {
@@ -85,9 +99,11 @@ function capturedOf(bytes: Buffer): Captured | string {
   }
   if (!plain(value) || value['format'] !== CAPTURE_FORMAT) return `is not an ${CAPTURE_FORMAT} document`;
   const revision = value['revision'],
+    authoredRevision = Object.hasOwn(value, 'authoredRevision') ? value['authoredRevision'] : revision,
     rows = value['membership'];
   if (typeof revision !== 'string' || !HEX.test(revision) || !Array.isArray(rows))
     return 'has no revision or membership rows';
+  if (typeof authoredRevision !== 'string' || !HEX.test(authoredRevision)) return 'has a malformed authored revision';
   const identities = new Set<string>(),
     membership: MembershipRow[] = [];
   for (const row of rows as unknown[]) {
@@ -108,13 +124,13 @@ function capturedOf(bytes: Buffer): Captured | string {
       Object.freeze({ identity: row['identity'], root: row['root'], band: row['band'], digest: row['digest'] }),
     );
   }
-  return Object.freeze({ bytes, revision, membership: Object.freeze(membership) });
+  return Object.freeze({ bytes, revision, authoredRevision, membership: Object.freeze(membership) });
 }
 /**
  * The entry at `path`, contained the D01 way: undefined when nothing is there, refused as IA-DB-PATH-UNSAFE when the
  * path runs through a link or junction or the entry is not a regular file, so nothing is read or written through one.
  */
-function entryAt(root: string, path: string): string | undefined {
+export function entryAt(root: string, path: string): string | undefined {
   const target = safePath(root, path),
     stat = lstatSync(target, { throwIfNoEntry: false });
   if (stat === undefined) return undefined;
@@ -141,17 +157,23 @@ function readCaptured(root: string, path: string): Captured | string | null {
 
 /** D08a: what the capture pair seeds a handle with. */
 export interface CaptureSeed {
-  /** The pair as `rotate` takes it: the capture at current.json and, at another revision, the one at previous.json. */
+  /**
+   * The pair as `rotate` takes it: the capture at current.json and, at another authored revision, the one at
+   * previous.json.
+   */
   readonly prior?: Retained;
-  /** The revision of the capture at current.json, when that file holds one. */
-  readonly captured?: string;
+  /** The revision and authored revision of the capture at current.json, when that file holds one. */
+  readonly captured?: Pick<RetainedSnapshot, 'revision' | 'authoredRevision'>;
 }
 /**
  * D08a: the capture pair as a handle reads it, never written. A link or junction on the way, an entry that is not a
  * regular file, or a file that is no capture is ignored, never followed, so a read stays usable. With no readable
- * current.json a capture at previous.json still seeds, as the most recent capture there is. A current.json that names
- * the fresh revision with other membership rows is not this workspace's capture at that revision, so the pair seeds
- * nothing; a capture at another revision cannot be rebuilt from the fresh inputs, so it is trusted as written.
+ * current.json a capture at previous.json still seeds, as the most recent capture there is. A capture is trusted by its
+ * authored revision and the membership rows of its records not at runtime placement, by identity, band and digest
+ * (`authoredRows`): a current.json that names the fresh authored revision with other such rows is not this workspace's
+ * capture at that revision, so the pair seeds nothing, while one that differs from the fresh snapshot only in its
+ * runtime-band rows (and so in its revision) or in the roots a runtime-band @workspace declares is this workspace's; a
+ * capture at another authored revision cannot be rebuilt from the fresh inputs, so it is trusted as written.
  */
 export function readCapture(root: string, fresh: RetainedSnapshot): CaptureSeed {
   const read = (path: string): Captured | undefined => {
@@ -165,20 +187,30 @@ export function readCapture(root: string, fresh: RetainedSnapshot): CaptureSeed 
   const current = read(CAPTURE_CURRENT),
     previous = read(CAPTURE_PREVIOUS);
   const snapshot = (captured: Captured): RetainedSnapshot =>
-    Object.freeze({ revision: captured.revision, membership: captured.membership });
+    Object.freeze({
+      revision: captured.revision,
+      authoredRevision: captured.authoredRevision,
+      membership: captured.membership,
+    });
   if (current === undefined)
     return previous === undefined ? {} : { prior: Object.freeze({ current: snapshot(previous) }) };
-  const sameRows = (a: readonly MembershipRow[], b: readonly MembershipRow[]): boolean => {
-    const order = (rows: readonly MembershipRow[]) =>
+  const sameRows = (a: readonly Omit<MembershipRow, 'root'>[], b: readonly Omit<MembershipRow, 'root'>[]): boolean => {
+    const order = (rows: readonly Omit<MembershipRow, 'root'>[]) =>
       [...rows].sort((x, y) => (x.identity < y.identity ? -1 : x.identity > y.identity ? 1 : 0));
     return stableSerialize(order(a)) === stableSerialize(order(b));
   };
-  if (current.revision === fresh.revision && !sameRows(current.membership, fresh.membership)) return {};
+  if (
+    current.authoredRevision === fresh.authoredRevision &&
+    !sameRows(authoredRows(current.membership), authoredRows(fresh.membership))
+  )
+    return {};
   return {
-    captured: current.revision,
+    captured: Object.freeze({ revision: current.revision, authoredRevision: current.authoredRevision }),
     prior: Object.freeze({
       current: snapshot(current),
-      ...(previous === undefined || previous.revision === current.revision ? {} : { previous: snapshot(previous) }),
+      ...(previous === undefined || previous.authoredRevision === current.authoredRevision
+        ? {}
+        : { previous: snapshot(previous) }),
     }),
   };
 }
@@ -216,7 +248,7 @@ interface Planned {
   /** previous.json as read: null when nothing is there. */
   readonly kept: Captured | string | null;
   readonly prior: Captured | undefined;
-  /** The prior capture a new revision rotates into previous.json. */
+  /** The prior capture a new authored revision rotates into previous.json. */
   readonly moving: Captured | undefined;
   /** The previous.json kept when nothing rotates. */
   readonly keeping: Captured | undefined;
@@ -244,8 +276,9 @@ function planned(root: string, text: string): Planned {
   const now = new Set(built.membership.map((row) => row.identity));
   const removed =
     prior === undefined ? [] : prior.membership.filter((row) => !now.has(row.identity)).map((row) => row.identity);
-  const moving = prior !== undefined && prior.revision !== built.revision ? prior : undefined,
-    keeping = moving === undefined && held !== undefined && held.revision !== built.revision ? held : undefined;
+  const moving = prior !== undefined && prior.authoredRevision !== built.authoredRevision ? prior : undefined,
+    keeping =
+      moving === undefined && held !== undefined && held.authoredRevision !== built.authoredRevision ? held : undefined;
   const result: CaptureWrite = Object.freeze({
     prior: prior?.revision ?? null,
     ignored: typeof read === 'string' ? read : null,
@@ -276,7 +309,7 @@ export function planCapture(root: string, text: string): CapturePlan {
     }),
   });
 }
-const syncDirectory = (path: string): void => {
+export const syncDirectory = (path: string): void => {
   // Windows exposes no fsync on a directory handle; a flushed file and a same-volume rename are what it offers.
   if (process.platform === 'win32') return;
   const fd = openSync(path, 'r');
@@ -287,7 +320,7 @@ const syncDirectory = (path: string): void => {
   }
 };
 /** A new same-directory temporary file holding `bytes`, flushed, owner-only; its workspace-relative path. */
-function staged(root: string, path: string, bytes: Buffer): string {
+export function staged(root: string, path: string, bytes: Buffer): string {
   const temporary = `${path}.${randomUUID()}.tmp`,
     fd = openSync(safePath(root, temporary), 'wx', 0o600);
   try {
@@ -298,7 +331,7 @@ function staged(root: string, path: string, bytes: Buffer): string {
   }
   return temporary;
 }
-const discard = (root: string, path: string | undefined): void => {
+export const discard = (root: string, path: string | undefined): void => {
   if (path === undefined) return;
   try {
     unlinkSync(safePath(root, path));
@@ -309,11 +342,12 @@ const discard = (root: string, path: string | undefined): void => {
 /**
  * D08a: write `text`, an `ia-snapshot-1` document, as the current capture and keep the pair D08 retains. Its counts
  * follow `stalenessOf` against the prior capture at current.json: an equal digest is unchanged, another changed, a row
- * the prior lacks new, a prior row with none now removed. Its rotation is `rotate`'s: a capture at a new revision makes
- * the prior current.json previous.json, renamed, so byte for byte; one at an unchanged revision keeps previous.json while
- * it holds a capture at another revision; and with no readable prior capture a previous.json at another revision is
- * kept as the most recent capture there is. A previous.json at the new revision, or one that is no capture, is removed
- * once the current one is written.
+ * the prior lacks new, a prior row with none now removed. Its rotation is `rotate`'s, by authored revision: a capture at
+ * a new authored revision makes the prior current.json previous.json, renamed, so byte for byte; one at an unchanged
+ * authored revision (one that changes runtime-band sources alone among them) keeps previous.json while it holds a
+ * capture at another authored revision; and with no readable prior capture a previous.json at another authored revision
+ * is kept as the most recent capture there is. A previous.json at the new authored revision, or one that is no capture,
+ * is removed once the current one is written.
  *
  * Nothing is written before every check passes: a link or junction on the way, an entry at `.ia`, `.ia/work` or the
  * snapshot directory that is not a directory, or an entry at either path that is not a regular file, refuses as
@@ -358,8 +392,8 @@ export function writeCapture(root: string, text: string): CaptureWrite {
     }
   } else {
     // No rotation: current.json is replaced when its bytes differ, and a previous.json that is no capture, or one at the
-    // revision being written, is dropped. It is moved aside before current.json is published and removed only after,
-    // so a failure at either step restores it and leaves the pair this capture found.
+    // authored revision being written, is dropped. It is moved aside before current.json is published and removed only
+    // after, so a failure at either step restores it and leaves the pair this capture found.
     let temporary: string | undefined =
         prior === undefined || !prior.bytes.equals(bytes) ? staged(root, CAPTURE_CURRENT, bytes) : undefined,
       aside: string | undefined;

@@ -146,6 +146,10 @@ it('tags the agent commands for the packet catalog in table order, each naming o
   expect(rows.map((row) => [row.command, row.mode, row.move])).toEqual([
     ['ia init', 'effect', 'Execution'],
     ['ia validate', 'validate', 'Verification'],
+    // Milestone generation-binding plan amendment C3: the eighth row.
+    ['ia preview', 'validate', 'Verification'],
+    // Plan amendment C3: the ninth row, with C19's author form.
+    ['ia author', 'author', 'Synthesis'],
     ['ia capture', 'effect', 'Execution'],
     ['ia read', 'read', 'Observation'],
     ['ia position', 'read', 'Observation'],
@@ -171,9 +175,9 @@ it('tags the agent commands for the packet catalog in table order, each naming o
     refuses: 'an uninitialized root with no authored @workspace and no source errors; nothing is written',
     next: 'ia init <directory>',
   });
-  // A row whose next names a command the table does not hold fails here, as `ia preview` would until it exists.
-  expect(catalogDefects([...rows, { ...rows[0]!, next: 'ia preview plan' }])).toEqual([
-    'ia init: ia preview plan names no command of COMMANDS',
+  // A row whose next names a command the table does not hold fails here: the reserved token is no command.
+  expect(catalogDefects([...rows, { ...rows[0]!, next: 'ia agent plan' }])).toEqual([
+    'ia init: ia agent plan names no command of COMMANDS',
   ]);
   // The builder reads the rows it is given; a row without `catalog` is no catalog row.
   expect(packetCatalog(COMMANDS.filter((command) => command.name !== 'next')).map((row) => row.command)).not.toContain(

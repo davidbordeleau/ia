@@ -5,8 +5,10 @@ import { load } from '@inventarch/graph';
 import type { Node } from '@inventarch/graph';
 import {
   checkRunner,
+  evaluate,
   graphLookup,
   validateCheck,
+  validateCheckStructure,
   validateSchema,
   validateConsent,
   validateCoverage,
@@ -107,6 +109,49 @@ describe('full native graph checks', () => {
     const missing = validateCheck(withCheck({ runs: null }));
     expect(missing.findings.map((f) => f.code)).toEqual(['IA-COMP-CHECK-UNKNOWN']);
     expect(missing.findings[0]!.message).toContain("Unknown or missing check.implementation or check.runs ''");
+  });
+  it('admits any named evaluator structurally, refusing only a conflict or no evaluator, while strict stays (C21)', () => {
+    const check = [...native.nodes.values()].find((n) => n.discriminator === 'check')!;
+    const withCheck = (fields: Record<string, string | null>): Node => ({
+      ...check,
+      sections: check.sections.map((s) =>
+        s.name !== 'check'
+          ? s
+          : {
+              ...s,
+              fields: [
+                ...s.fields.filter((f) => !('key' in f) || !(f.key in fields)),
+                ...Object.entries(fields).flatMap(([key, text]) =>
+                  text === null ? [] : [{ key, value: { kind: 'scalar' as const, text }, span: s.span }],
+                ),
+              ],
+            },
+      ),
+    });
+    const unknown = withCheck({ runs: null, implementation: 'acme-strict-typing' });
+    // Structural admission: the declaration names one evaluator, so it is admitted; binding decides what serves it.
+    expect(validateCheckStructure(unknown)).toMatchObject({ outcome: 'pass', findings: [] });
+    expect(validateCheckStructure(withCheck({ runs: 'COMP-MAGIC' })).outcome).toBe('pass');
+    expect(validateCheckStructure(check).outcome).toBe('pass');
+    // Strict admission, every existing reader's default, still refuses the same record.
+    expect(validateCheck(unknown).findings.map((f) => f.code)).toEqual(['IA-COMP-CHECK-UNKNOWN']);
+    // What structural admission still refuses: two different evaluators, and none at all.
+    expect(validateCheckStructure(withCheck({ implementation: 'COMP-PARSE' })).findings.map((f) => f.code)).toEqual([
+      'IA-COMP-CHECK-CONFLICT',
+    ]);
+    const missing = validateCheckStructure(withCheck({ runs: null }));
+    expect(missing.findings.map((f) => f.code)).toEqual(['IA-COMP-CHECK-UNKNOWN']);
+    expect(missing.findings[0]!.message).toContain(
+      'Missing check.implementation or check.runs: the check names no evaluator',
+    );
+    // The report follows the option, and its default is the strict one.
+    const graph = view([...records.filter((r) => r.identity !== check.identity)]),
+      admitted = { ...graph, nodes: new Map([...graph.nodes, [unknown.identity, unknown]]) };
+    const codes = (report: ReturnType<typeof evaluate>) =>
+      report.findings.filter((f) => f.identity === unknown.identity).map((f) => f.code);
+    expect(codes(evaluate(admitted))).toEqual(['IA-COMP-CHECK-UNKNOWN']);
+    expect(codes(evaluate(admitted, { checks: 'strict' }))).toEqual(['IA-COMP-CHECK-UNKNOWN']);
+    expect(codes(evaluate(admitted, { checks: 'structural' }))).toEqual([]);
   });
   it('admits an implementation-only check against the schema now that check.runs is optional', () => {
     const source = {

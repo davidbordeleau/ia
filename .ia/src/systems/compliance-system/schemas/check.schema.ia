@@ -13,4 +13,5 @@
     must have meaning.answers as text
     may have check.implementation as text "The evaluator that runs the check: a built-in or catalog evaluator id, the same value check.runs takes, and equal to it when both are stated. The <id>@<version> form of evidence.implementation is not accepted here."
     may have check.runs as id
-    must have check.scope as text
+    must have check.scope as text "What the check selects: the whole-workspace token *, a scope its evaluator reports, or prose. It is text and claims no path; check.covers does."
+    may have check.covers as list of text "Path selections the check claims, matched by the location resolver. Claiming a path does not change which verdicts the check selects; check.scope does that."

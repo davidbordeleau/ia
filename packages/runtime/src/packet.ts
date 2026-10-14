@@ -137,13 +137,17 @@ export interface PacketPhase {
   readonly changes: string;
 }
 export interface PacketProvenance {
+  /** The packet's revision, body(K0)'s authored one. */
   readonly revision: string;
   /** The seat @workspace's name (decision identity-namespace: the repository slug lives here, not in identities). */
   readonly slug?: string;
 }
 export interface PositionPacket {
   readonly format: 'ia.position-packet.v1';
-  /** The revision of the view the scope reads, position(K0)'s. */
+  /**
+   * The authored revision of the view the scope reads, body(K0)'s (db `Snapshot.authoredRevision`), which no
+   * runtime-band source moves.
+   */
   readonly revision: string;
   /** The digest of body(K0), position(K0)'s `digest`. */
   readonly body: string;
@@ -190,8 +194,12 @@ interface Lowering {
   readonly kind: Kind;
   readonly facets: readonly string[];
 }
-/** The fields `node` states unconditionally at `field`, a `section.key` path. */
-function fieldsAt(node: CompiledRecord, field: string): readonly CompiledField[] {
+/**
+ * The fields `node` states unconditionally at `field`, a `section.key` path. Exported on `./internal/packet` with
+ * `valuesAt`, `textsAt` and `stated`, the one copy of these readers workspace-runtime's host generators read records
+ * with (guard review finding G-N9).
+ */
+export function fieldsAt(node: CompiledRecord, field: string): readonly CompiledField[] {
   const [section, key] = field.split('.');
   return node.sections
     .filter((s) => s.name === section)
@@ -199,12 +207,12 @@ function fieldsAt(node: CompiledRecord, field: string): readonly CompiledField[]
     .filter((f): f is CompiledField => 'key' in f && f.key === key && f.when === undefined);
 }
 /** The values `node` states unconditionally at `field`, a list's items one by one. */
-const valuesAt = (node: CompiledRecord, field: string): readonly CompiledValue[] =>
+export const valuesAt = (node: CompiledRecord, field: string): readonly CompiledValue[] =>
   fieldsAt(node, field).flatMap((f) => (f.value.kind === 'list' ? f.value.items : [f.value]));
-const textsAt = (node: CompiledRecord, field: string): readonly string[] =>
+export const textsAt = (node: CompiledRecord, field: string): readonly string[] =>
   valuesAt(node, field).flatMap((value) => ('text' in value ? [value.text] : []));
 /** Whether `node` states `field` at all: a declared empty list is stated, an absent key is not. */
-const stated = (node: CompiledRecord, field: string): boolean => fieldsAt(node, field).length > 0;
+export const stated = (node: CompiledRecord, field: string): boolean => fieldsAt(node, field).length > 0;
 const isMove = (text: string): text is Move => (MOVES as readonly string[]).includes(text);
 /** The `discriminators` rows a @system record states: each word, the kind it lowers to and its facets. */
 function loweringsOf(node: CompiledRecord): readonly Lowering[] {

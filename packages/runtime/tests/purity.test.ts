@@ -11,7 +11,8 @@ import { database, law, lawId, lawPath, put, workspace } from './workspace.js';
 // R16 (position-and-projection §1 and item 11; plan amendment A9): position(handle, within, partial) returns body(K),
 // its digest and the host note. The body is a function of the key and the admitted revision alone: no root, token,
 // request text or capture enters it, and no record at runtime placement (band 0) does (decision evidence-placement),
-// though the revision and admission's findings still read every placement (R15, R16: the limits pinned below).
+// nor does a runtime-band source move its revision, the authored one (plan amendment C13), though admission's findings
+// still read every placement (R15, R16: the limits pinned below).
 const governanceSystem = 'floor/definition/system/governance-system',
   foundation = 'workspace-system/definition/workspace/foundation-workspace',
   check = 'compliance-system/check/gate/instance-schema-check',
@@ -32,7 +33,12 @@ const at = (db: Handle, partial: Partial<ScopeKey>, within = db.resolveScope().t
   position(db, within, partial);
 const text = (body: PositionBody): string => JSON.stringify(body);
 const captureOf = (db: Handle): string =>
-  `${JSON.stringify({ format: CAPTURE_FORMAT, revision: db.revision, membership: db.snapshot().membership })}\n`;
+  `${JSON.stringify({
+    format: CAPTURE_FORMAT,
+    revision: db.revision,
+    authoredRevision: db.authoredRevision,
+    membership: db.snapshot().membership,
+  })}\n`;
 const refusal = (message: string) =>
   expect.objectContaining({ code: 'IA-RUNTIME-REQUEST-INVALID', message: expect.stringContaining(message) });
 /** An observation of `subject`, shaped as the delivery fixtures write one. */
@@ -146,6 +152,75 @@ it('moves only the host note when a capture is written, and names no capture rev
   );
 });
 
+it('keeps a capture current across a runtime-band source, and stale after an authored edit', () => {
+  // Plan amendment C13: the note compares the capture's authored revision with the handle's, so evidence appearing at
+  // runtime placement neither stales the capture nor moves a revision the note names, while the handle's revision moves.
+  const root = workspace(),
+    evidenceFile = '.ia/src/systems/learning-system/records/runtime-evidence.ia',
+    db = database(root, { locations: { [evidenceFile]: RUNTIME } }),
+    within = db.resolveScope().token,
+    revision = db.revision,
+    authored = db.authoredRevision;
+  expect(authored).toBe(revision);
+  writeCapture(root, captureOf(db));
+  db.refresh();
+  const captured = Object.fromEntries(Object.entries(KEYS).map(([name, partial]) => [name, at(db, partial, within)]));
+  expect(captured['k0']!.hostNote).toEqual({ revision, capturedRevision: revision, freshness: 'current', key: K0 });
+  put(root, evidenceFile, `#! ia 1.0\n${observation('workspace-checked', '@workspace foundation-workspace')}`);
+  db.refresh();
+  expect(db.get('learning-system/definition/observation/workspace-checked')?.band).toBe(0);
+  expect(db.revision).not.toBe(revision);
+  expect(db.authoredRevision).toBe(authored);
+  // The token belongs to the earlier inputs; a new one reads the same bodies, digests and notes.
+  const fresh = db.resolveScope().token;
+  for (const [name, partial] of Object.entries(KEYS)) {
+    const now = at(db, partial, fresh);
+    expect(text(now.body), name).toBe(text(captured[name]!.body));
+    expect(now.digest, name).toBe(captured[name]!.digest);
+    expect(now.hostNote, name).toEqual(captured[name]!.hostNote);
+  }
+  // A handle opened after the evidence reads the capture as current too.
+  expect(at(database(root, { locations: { [evidenceFile]: RUNTIME } }), {}).hostNote).toEqual(captured['k0']!.hostNote);
+  // A capture taken while the evidence is there names the handle's revision beside its authored one, and the note reads
+  // the authored one: the evidence rewritten since (as the next `ia validate` rewrites it) leaves every note current.
+  writeCapture(root, captureOf(db));
+  db.refresh();
+  expect([db.capturedRevision, db.capturedAuthoredRevision]).toEqual([db.revision, authored]);
+  expect(db.capturedRevision).not.toBe(db.capturedAuthoredRevision);
+  put(
+    root,
+    evidenceFile,
+    `#! ia 1.0\n${observation('workspace-checked', '@workspace foundation-workspace')}\n${observation('rule-checked', '@law sample-rule')}`,
+  );
+  db.refresh();
+  expect(db.capturedRevision).not.toBe(db.revision);
+  expect(db.authoredRevision).toBe(authored);
+  const rewritten = db.resolveScope().token;
+  for (const [name, partial] of Object.entries(KEYS)) {
+    const now = at(db, partial, rewritten);
+    expect(text(now.body), name).toBe(text(captured[name]!.body));
+    expect(now.digest, name).toBe(captured[name]!.digest);
+    expect(now.hostNote, name).toEqual(captured[name]!.hostNote);
+  }
+  expect(at(db, {}, rewritten).hostNote).toEqual({
+    revision: authored,
+    capturedRevision: authored,
+    freshness: 'current',
+    key: K0,
+  });
+  // An authored edit still moves both revisions, and the capture is stale against it.
+  put(root, `${records}/later-rule.ia`, law('later-rule', 'advisory'));
+  db.refresh();
+  expect(db.authoredRevision).not.toBe(authored);
+  expect(at(db, {}).hostNote).toEqual({
+    revision: db.authoredRevision,
+    capturedRevision: authored,
+    previousRevision: authored,
+    freshness: 'stale',
+    key: K0,
+  });
+});
+
 it('runs nothing text-driven: text or a token is refused, and a context call with any text moves nothing', () => {
   const db = database(workspace()),
     within = db.resolveScope().token;
@@ -189,7 +264,7 @@ it('runs nothing text-driven: text or a token is refused, and a context call wit
   }
 });
 
-it('leaves records at runtime placement out of every body; only the revision they enter moves', () => {
+it("leaves records at runtime placement out of every body, its revision and digest; only the handle's revision moves", () => {
   // Runtime-band evidence and a blocking law that, authored, would be composition, a word member, a claimant, a
   // reserved rule, a pointer and frontier: observations of the workspace and of the law, and a law that the check
   // enforces and that claims src/billing/** and .ia/work/notes/**. Each names authored records, and no authored record
@@ -227,14 +302,17 @@ it('leaves records at runtime placement out of every body; only the revision the
       // Authored, the same records change every one of these bodies.
       control = at(authored, partial);
     expect(text({ ...control.body, revision: before.body.revision }), name).not.toBe(text(before.body));
-    // Placed at runtime, the body is byte-equal but for its revision, and so is its digest.
-    expect(text({ ...after.body, revision: before.body.revision }), name).toBe(text(before.body));
-    expect(digest({ ...after.body, revision: before.body.revision }), name).toBe(before.digest);
-    // The revision hashes every source at its placement, a runtime-band one included (graph revisionOf), so it and
-    // the digest still move: decision evidence-placement's "excluded from the authored revision" is not built yet.
-    expect(after.body.revision, name).not.toBe(before.body.revision);
-    expect(after.digest, name).not.toBe(before.digest);
+    // Placed at runtime, the body is byte-equal, and so is its digest: its revision is the authored revision, which
+    // leaves runtime-placed sources out (graph authoredRevisionOf; decision evidence-placement).
+    expect(text(after.body), name).toBe(text(before.body));
+    expect(after.digest, name).toBe(before.digest);
+    expect(after.body.revision, name).toBe(placed.authoredRevision);
   }
+  // The handle's revision hashes every source at its placement, a runtime-band one included (graph revisionOf), so it
+  // moves; the authored revision, which the body names, does not.
+  expect(placed.revision).not.toBe(plain.revision);
+  expect(placed.authoredRevision).toBe(plain.authoredRevision);
+  expect(authored.authoredRevision).not.toBe(plain.authoredRevision);
   // A seat at runtime placement is refused: no body enters it. K0's seat is the repository's own @workspace, which the
   // database decides over every placement, so K0 is refused when that @workspace is placed at runtime.
   expect(() => at(placed, { seat: runtimeLaw })).toThrow(
@@ -315,8 +393,8 @@ it('reads admission over every placement: a runtime-band record an authored refe
   // an authored law's `enforced-by` names, and a runtime-band observation that a task's `work.exit-evidence` names (the
   // evidence flow an `ia validate` will write), resolve them. Each record's missing-target or missing-field-reference
   // finding leaves its body, and the row to the runtime-band record is dropped, so the body names the relation nowhere.
-  // An admission view without runtime-band sources, for the findings as for the revision, is milestone
-  // generation-binding's.
+  // The revision the body names leaves runtime-band sources out (the authored revision, plan amendment C13); an
+  // admission view without them for the findings is not built.
   const needsFile = `${records}/needs-check.ia`,
     workFile = '.ia/src/systems/work-system/records/fixture-work.ia',
     checkFile = '.ia/src/systems/compliance-system/checks/later-check.ia',
@@ -389,6 +467,6 @@ it('reads admission over every placement: a runtime-band record an authored refe
       text({ ...before, unknowns: before.unknowns.filter((unknown) => unknown.kind !== 'finding') }),
     );
   }
-  // K0 loads neither record, so it does not move but for its revision.
-  expect(text({ ...at(placed, {}).body, revision: '' })).toBe(text({ ...at(plain, {}).body, revision: '' }));
+  // K0 loads neither record, so it does not move, its authored revision included.
+  expect(text(at(placed, {}).body)).toBe(text(at(plain, {}).body));
 });

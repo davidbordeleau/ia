@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { types } from 'node:util';
+import { isProxy } from 'node:util/types';
 import semver from 'semver';
 import { parseStrictJson } from '../json.js';
 import type { StrictJsonFault } from '../json.js';
@@ -313,7 +313,7 @@ export function snapshot(
       item === undefined
     )
       return item;
-    if (typeof item !== 'object' || types.isProxy(item) || ancestors.has(item)) fault();
+    if (typeof item !== 'object' || isProxy(item) || ancestors.has(item)) fault();
     const object = item as object,
       array = Array.isArray(object),
       prototype = Object.getPrototypeOf(object) as unknown;

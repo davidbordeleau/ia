@@ -1,0 +1,22 @@
+#! ia 1.0
+
+@playbook note-review
+  meaning
+    says "Review one of the demo workspace's notes and report what the review finds."
+    answers "How is a note in the demo workspace reviewed?"
+  cognition
+    orient
+      primary Memory
+      Attention means "Notice which records the note cites."
+      Memory means "Recall the findings already reported on the note."
+    plan
+      primary Inference
+      Inference means "Infer which of the note's claims its cited records can confirm."
+      Decision means "Decide which claims to check first."
+    act
+      primary Decision
+      Decision means "Report each finding with the record and field behind it."
+      Escalation means "Name the demo participant before reporting a blocking finding." when severity is blocking
+    learn
+      primary Learning
+      Learning means "Record what the review did not check."

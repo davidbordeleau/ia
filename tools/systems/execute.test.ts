@@ -332,6 +332,35 @@ it('rechecks source revision after a handler and refuses a stale input snapshot'
     db.close();
   }
 });
+it('takes the authored revision as its base, so a source appearing at runtime placement during a run refuses nothing', () => {
+  // Plan amendment C13: runtime-band evidence moves the handle's revision, not the authored one the run rechecks.
+  const base = temp(),
+    path = '.ia/src/systems/template-system/records/runtime-evidence.ia',
+    locations = {
+      [path]: { placement: { kind: 'runtime', band: 0, reach: '' } as const, provenance: 'runtime' as const },
+    },
+    db = open(base, { cache: false, locations });
+  try {
+    const context = { db, records: db.records() },
+      { revision, authoredRevision } = db;
+    put(base, path, '#! ia 1.0\n');
+    expect(executeWithContext(context, 'render-template', template).baseRevision).toBe(authoredRevision);
+    expect(db.revision).not.toBe(revision);
+    expect(db.authoredRevision).toBe(authoredRevision);
+  } finally {
+    db.close();
+  }
+  // With the source there before the run, the two revisions differ from the start, and the base is the authored one.
+  const evidenced = open(base, { cache: false, locations });
+  try {
+    expect(evidenced.revision).not.toBe(evidenced.authoredRevision);
+    const result = executeWithContext({ db: evidenced, records: evidenced.records() }, 'render-template', template);
+    expect(result.baseRevision).toBe(evidenced.authoredRevision);
+    expect(result.baseRevision).not.toBe(evidenced.revision);
+  } finally {
+    evidenced.close();
+  }
+});
 it('runs the actual command with stdin, fixed host code and bounded optional publication', () => {
   const base = temp();
   put(base, '.ia/src/systems/authoring-system/execute.ts', 'throw new Error("Never load code from --root")');

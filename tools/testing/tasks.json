@@ -55,7 +55,8 @@
     "selected-tests": "Owning production sources, every non-test helper, shared configuration and dependency sources; exclude only declared sibling test files, retaining selected and unassigned files.",
     "selected-tests-workspace-records": "selected-tests plus authored workspace records, teaching resources and native fixture inventories read through the filesystem.",
     "language-conformance": "workspace-records plus the compliance language fixtures read by the language formatter and conformance suites.",
-    "host-adapters": "workspace-records plus this repository's committed ia-authoring skills under .claude/skills and .agents/skills, which the runtime's host adapter tests compare the repository target's skills with through the filesystem, since no import edge names them."
+    "host-adapters": "workspace-records plus this repository's committed ia-authoring skills under .claude/skills and .agents/skills, which the runtime's host adapter tests compare the repository target's skills with through the filesystem, since no import edge names them.",
+    "composition-fixture": "workspace-records plus apps/cli's composition workspace fixture, whose authored records the workspace-runtime generator tests render through the filesystem, since no import edge names them."
   },
   "tasks": [
     {
@@ -884,6 +885,36 @@
       ]
     },
     {
+      "id": "cli:test-host-generated",
+      "kind": "vitest",
+      "project": "apps/cli",
+      "files": [
+        "tests/host-generated.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "selected-tests-workspace-records",
+      "dependsOn": [
+        "cli:build",
+        "host-payload:generate",
+        "language-base:generate"
+      ],
+      "outputs": [
+        "artifacts/tests/cli-test-host-generated"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
       "id": "cli:test-host-recovery",
       "kind": "vitest",
       "project": "apps/cli",
@@ -1039,7 +1070,10 @@
       "kind": "vitest",
       "project": "apps/cli",
       "files": [
+        "tests/author.test.ts",
+        "tests/bindings.test.ts",
         "tests/capture.test.ts",
+        "tests/check-admission.test.ts",
         "tests/consumer.test.ts",
         "tests/decline.test.ts",
         "tests/distribution-verbs.test.ts",
@@ -1047,9 +1081,11 @@
         "tests/host-projection.test.ts",
         "tests/next.test.ts",
         "tests/position.test.ts",
+        "tests/preview.test.ts",
         "tests/project.test.ts",
         "tests/read.test.ts",
         "tests/refusal-next.test.ts",
+        "tests/validate-checks.test.ts",
         "tests/workspace-verbs.test.ts"
       ],
       "profile": "installed",
@@ -1073,6 +1109,15 @@
       "resourceClass": "subprocess",
       "covers": [
         "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tests/preview.test.ts > path spelling (review C-R1, C-R7) matches covers as the edit guard does where pathKey folds case: a missing covered directory, a covers in another case, never a longer name (review C-RC1)",
+          "reason": "db pathKey folds case only on Windows and macOS, as the edit guard keys paths; on Linux each case is its own path, so there is no folding to observe.",
+          "platforms": [
+            "linux"
+          ]
+        }
       ]
     },
     {
@@ -1154,6 +1199,7 @@
         "tests/host.test.ts",
         "tests/hosts.test.ts",
         "tests/ia-home.test.ts",
+        "tests/implementations.test.ts",
         "tests/installation-core.test.ts",
         "tests/installed.test.ts",
         "tests/inventory.test.ts",
@@ -1247,6 +1293,14 @@
             "windows"
           ],
           "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tests/implementations.test.ts > compares a network path a registration names to the pinned payload and never opens it (B2-RC2)",
+          "reason": "Only Windows spells a local directory as a network path (the \\\\localhost administrative share); POSIX has no such second spelling to compare.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
         }
       ]
     },
@@ -1341,7 +1395,8 @@
         "tests/context-guard.test.ts",
         "tests/context-inventory.test.ts",
         "tests/context.test.ts",
-        "tests/hook.test.ts"
+        "tests/hook.test.ts",
+        "tests/mandate-guard.test.ts"
       ],
       "profile": "installed",
       "platforms": [
@@ -1615,6 +1670,7 @@
       "project": "packages/db",
       "files": [
         "tests/acceptance.test.ts",
+        "tests/check-evidence.test.ts",
         "tests/complete-scope.test.ts",
         "tests/descriptors.test.ts",
         "tests/distribution-contracts.test.ts",
@@ -1749,6 +1805,7 @@
         "tests/compile/syntax-ownership.test.ts",
         "tests/compile/values.test.ts",
         "tests/diagnostics.test.ts",
+        "tests/edit-source.test.ts",
         "tests/editor.test.ts",
         "tests/fixtures.test.ts",
         "tests/fold.test.ts",
@@ -1851,6 +1908,7 @@
         "tests/locator.test.ts",
         "tests/loop.test.ts",
         "tests/mandate-modes.test.ts",
+        "tests/mandate-resolution.test.ts",
         "tests/next.test.ts",
         "tests/packet-host.test.ts",
         "tests/packet.test.ts",
@@ -2052,7 +2110,10 @@
         "tests/authoring-lifecycle.test.ts",
         "tests/authoring-shipped.test.ts",
         "tests/authoring.test.ts",
+        "tests/bind.test.ts",
         "tests/boundary.test.ts",
+        "tests/generate-agent-profile.test.ts",
+        "tests/generate-playbook.test.ts",
         "tests/installed-catalog.test.ts",
         "tests/installed-sources.test.ts",
         "tests/lifecycle-profile.test.ts",
@@ -2074,7 +2135,7 @@
         "macos"
       ],
       "mode": "source",
-      "inputProfile": "workspace-records",
+      "inputProfile": "composition-fixture",
       "dependsOn": [
         "workspace-runtime:build"
       ],
@@ -2432,6 +2493,7 @@
       "mode": "source",
       "inputProfile": "workspace-records",
       "dependsOn": [
+        "agent-composition-system:build",
         "language-base:generate",
         "distribution:build",
         "cli:build",
@@ -2567,6 +2629,10 @@
       "project": ".",
       "files": [
         "tools/native/public-language.test.ts",
+        "tools/native/public-fixture.test.ts",
+        "tools/native/release-work.test.ts",
+        "tools/native/repository-architecture.test.ts",
+        "tools/native/work-example.test.ts",
         "tools/native/check.test.ts",
         "tools/native/language-base.test.ts"
       ],
@@ -3220,6 +3286,7 @@
       "mode": "source",
       "inputProfile": "repository-inventory",
       "dependsOn": [
+        "agent-composition-system:build",
         "language-base:generate",
         "cli:build",
         "distribution:build",

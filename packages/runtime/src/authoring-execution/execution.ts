@@ -30,7 +30,9 @@ export function executeOwned(context: Context, name: string, input: unknown, cat
     );
   const owner = evaluateSteward(context.records, binding.owner, { kind: 'operator' });
   if (!owner.allowed || !owner.steward) throw new ExecutionError('IA-EXEC-BINDING-MISMATCH', owner.message);
-  const baseRevision = context.db.revision,
+  // The base is the authored revision (db `authoredRevision`), so runtime-band evidence written during the run does
+  // not refuse it; an authored change does.
+  const baseRevision = context.db.authoredRevision,
     product = binding.run(context, input),
     seen = new Set<string>();
   for (const artifact of product.artifacts) {
@@ -41,7 +43,7 @@ export function executeOwned(context: Context, name: string, input: unknown, cat
   }
   if (binding.effects === 'read-only' && product.artifacts.length)
     throw new ExecutionError('IA-EXEC-BINDING-MISMATCH', 'Read-only handler returned draft effects');
-  if (context.db.refresh().revision !== baseRevision)
+  if (context.db.refresh().authoredRevision !== baseRevision)
     throw new ExecutionError('IA-EXEC-SOURCE-CHANGED', 'Native inputs changed during execution');
   const candidateRevision = product.preview?.revision ?? product.candidateRevision;
   return {

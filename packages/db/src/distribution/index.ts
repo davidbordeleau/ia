@@ -10,6 +10,9 @@ export {
   text,
   portablePath,
   satisfies,
+  supportsDistributionLockEngine,
+  ROOT_RELEASE_CONTROL_ENGINE_VERSION,
+  supportsRootReleaseControls,
   compareVersions,
   version,
 } from './codec.js';
@@ -25,6 +28,7 @@ export {
   readInstalledGeneration,
 } from './reader.js';
 export type { ExpandedBundle, InstalledGeneration } from './reader.js';
+export { verifyReleaseControl } from './release-control.js';
 export {
   decodeReleaseDescriptor,
   decodeBundleManifest,
@@ -47,3 +51,12 @@ export type {
   GenerationInputs,
   ActivationPointer,
 } from './contracts.js';
+export { checkInstalledImplementations, INSTALLED_IMPLEMENTATIONS_FORMAT } from './implementations.js';
+export type {
+  AvailableOperation,
+  InstalledImplementationsCheck,
+  InstalledImplementationsValue,
+  InstalledOperation,
+  RevokedOperation,
+  UnavailableOperation,
+} from './implementations.js';

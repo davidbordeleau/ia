@@ -2,7 +2,7 @@
   "version": 1,
   "language": "ia 1.0",
   "status": "public IA 1.0 language contract",
-  "sourceDigest": "b57cce54697f36634d379efd7d7edaf0657daa42d5ef92ac33fdcdb021b813c3",
+  "sourceDigest": "8cbcfd65e08d4240b1f99efeb0ab0fa7495bda04051966c9349ae86257c7b91f",
   "words": [
     {
       "word": "agent",
@@ -823,7 +823,14 @@
           {
             "path": "check.scope",
             "type": "text",
-            "required": true
+            "required": true,
+            "description": "What the check selects: the whole-workspace token *, a scope its evaluator reports, or prose. It is text and claims no path; check.covers does."
+          },
+          {
+            "path": "check.covers",
+            "type": "list of text",
+            "required": false,
+            "description": "Path selections the check claims, matched by the location resolver. Claiming a path does not change which verdicts the check selects; check.scope does that."
           }
         ],
         "edges": []
@@ -3772,7 +3779,8 @@
           {
             "path": "composition.systems",
             "type": "list of ref",
-            "required": true
+            "required": true,
+            "target": "system"
           },
           {
             "path": "composition.sources",

@@ -32,12 +32,20 @@ import type { Readiness, RetainedSnapshot, Staleness } from './retention.js';
 import { seatOf } from './seat.js';
 import type { SeatResolution } from './seat.js';
 import { occurrenceKey, viewBuilder } from './view.js';
+import type { ViewOptions } from './view.js';
 import type { RefusedRecord, View } from './view.js';
 import { previewInputs } from './preview.js';
 import type { DraftChange, DraftPreview } from './preview.js';
 
 export interface OpenOptions extends InputOptions {
   readonly cache?: boolean;
+  /**
+   * D13: how `@check` records are admitted (`ViewOptions.checks`). `strict`, the default, keeps every existing reader's
+   * admission; `structural` is for the validate path that binds checks, and `preview` drafts under it too. A handle
+   * opened `structural` or with `evidence` never reads or writes the cache, whatever `cache` says (review finding
+   * B3-N5), so `.ia/.iadb/graph.json` only ever holds a strict, evidence-free graph.
+   */
+  readonly checks?: 'strict' | 'structural';
 }
 export interface ReadOptions {
   readonly root?: string;
@@ -56,6 +64,11 @@ export interface Scope {
 }
 export interface Snapshot {
   readonly revision: string;
+  /**
+   * The view's authored revision (graph `authoredRevisionOf`): `revision` without the sources at runtime placement, so
+   * runtime-band evidence leaves it unchanged; it equals `revision` while no source is placed so.
+   */
+  readonly authoredRevision: string;
   readonly root: string;
   readonly phase?: Phase;
   readonly records: readonly Node[];
@@ -78,10 +91,10 @@ interface State {
  * files, and a refresh hands the previous side on unread.
  */
 interface Retention {
-  /** The most recent admitted root snapshot whose revision differs from rootView's. */
+  /** The most recent admitted root snapshot whose authored revision differs from rootView's. */
   readonly previous: () => RetainedSnapshot | undefined;
-  /** D08a: the revision of the capture at `.ia/work/snapshot/current.json`, when that file holds one. */
-  readonly captured: () => string | undefined;
+  /** D08a: the revisions of the capture at `.ia/work/snapshot/current.json`, when that file holds one. */
+  readonly captured: () => Pick<RetainedSnapshot, 'revision' | 'authoredRevision'> | undefined;
 }
 /** D08: what a refresh rotates: the root snapshot a reader holds and its previous side, read on first use. */
 interface Held {
@@ -123,11 +136,11 @@ function scopeRoot(value: string): string {
 
 /** Internal observation seam: production supplies readInputs, tests can prove
  * the bounded retry and no-publication invariant with real captured inputs. */
-export function stableState(read: () => InputSnapshot, cache: boolean): State {
+export function stableState(read: () => InputSnapshot, cache: boolean, view: ViewOptions = {}): State {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const inputs = read(),
-        build = viewBuilder(inputs),
+        build = viewBuilder(inputs, view),
         rootView = build();
       if (read().fingerprint !== inputs.fingerprint) continue;
       return {
@@ -144,17 +157,28 @@ export function stableState(read: () => InputSnapshot, cache: boolean): State {
   throw new DbError('IA-DB-SOURCE-CHANGED', 'Source inputs changed during three consecutive snapshot attempts');
 }
 const rootSnapshot = (state: State): RetainedSnapshot =>
-  Object.freeze({ revision: state.rootView.graph.revision, membership: state.rootView.membership });
+  Object.freeze({
+    revision: state.rootView.graph.revision,
+    authoredRevision: state.rootView.authoredRevision,
+    membership: state.rootView.membership,
+  });
 /** Shared read engine for disk handles and cache-free editor snapshots. */
 export class Reader {
   readonly root: string;
   #locations: Readonly<Record<string, import('@inventarch/language').Location>>;
+  /** How `preview` admits a draft: as this reader's view does (`OpenOptions.checks`). */
+  #view: ViewOptions;
   #state: State;
   #closed = false;
   #generation = 0;
   #scopes = new Map<string, BoundScope>();
-  constructor(state: State, locations: Readonly<Record<string, import('@inventarch/language').Location>> = {}) {
+  constructor(
+    state: State,
+    locations: Readonly<Record<string, import('@inventarch/language').Location>> = {},
+    view: ViewOptions = {},
+  ) {
     this.#locations = locations;
+    this.#view = view;
     this.#state = state;
     this.root = state.inputs.root;
   }
@@ -284,6 +308,16 @@ export class Reader {
     this.#assertOpen();
     return this.#state.rootView.graph.revision;
   }
+  /**
+   * The root view's authored revision (graph `authoredRevisionOf`): `revision` without the sources at runtime
+   * placement, the derived revision-only input (D03) kept, so a runtime-band source moves `revision` and leaves this
+   * unchanged, while an authored edit moves both. It equals `revision` while no source is placed so. `revision` stays
+   * what read bindings assert (IA-DB-STALE) and scopes bind; retention and the capture pair key on this one (D08, D08a).
+   */
+  get authoredRevision(): string {
+    this.#assertOpen();
+    return this.#state.rootView.authoredRevision;
+  }
   get report(): Report {
     this.#assertOpen();
     return this.#state.rootView.report;
@@ -300,6 +334,7 @@ export class Reader {
     const { view, allowed } = this.#select(options);
     return Object.freeze({
       revision: view.graph.revision,
+      authoredRevision: view.authoredRevision,
       root: view.graph.location,
       ...(view.graph.phase === undefined ? {} : { phase: view.graph.phase }),
       records: Object.freeze(
@@ -319,7 +354,7 @@ export class Reader {
   }
   preview(changes: readonly DraftChange[]): DraftPreview {
     this.#assertOpen();
-    return previewInputs(this.#state.inputs, this.revision, changes, this.#locations);
+    return previewInputs(this.#state.inputs, this.revision, changes, this.#locations, this.#view);
   }
   get(identity: string, options: ReadOptions = {}): Node | undefined {
     return this.#admit(identity, options).view.graph.nodes.get(identity);
@@ -329,13 +364,26 @@ export class Reader {
     this.#assertOpen();
     return this.#previous()?.revision;
   }
+  /** D08: the authored revision of the retained previous root snapshot, when one is retained. */
+  get previousAuthoredRevision(): string | undefined {
+    this.#assertOpen();
+    return this.#previous()?.authoredRevision;
+  }
   /**
    * D08a: the revision of the capture `ia capture` last wrote, at `.ia/work/snapshot/current.json`; undefined when there
-   * is none or the file holds no capture this handle trusts. A capture at another revision than `revision` is stale.
+   * is none or the file holds no capture this handle trusts.
    */
   get capturedRevision(): string | undefined {
     this.#assertOpen();
-    return this.#state.retention?.captured();
+    return this.#state.retention?.captured()?.revision;
+  }
+  /**
+   * D08a: the authored revision of that capture, under the same conditions. A capture at another authored revision than
+   * `authoredRevision` is stale; one that differs only in runtime-band sources is not.
+   */
+  get capturedAuthoredRevision(): string | undefined {
+    this.#assertOpen();
+    return this.#state.retention?.captured()?.authoredRevision;
   }
   /**
    * D08: the identity's digest in the view `get` reads under `options` and, when that is also its current root digest
@@ -474,8 +522,12 @@ export class Reader {
 export class Handle extends Reader {
   #options: OpenOptions;
   constructor(root: string, options: OpenOptions = {}) {
-    const selected = Object.freeze({ ...inputOptions(options), cache: options.cache ?? true });
-    const state = stableState(() => readInputs(root, selected), selected.cache),
+    const selected = Object.freeze({
+      ...inputOptions(options),
+      cache: options.checks === 'structural' || options.evidence === true ? false : (options.cache ?? true),
+      ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
+    });
+    const state = stableState(() => readInputs(root, selected), selected.cache, selected),
       canonical = state.inputs.root,
       current = rootSnapshot(state),
       seed = once(() => readCapture(canonical, current));
@@ -490,20 +542,22 @@ export class Handle extends Reader {
         },
       },
       selected.locations,
+      selected.checks === 'structural' ? { checks: 'structural' } : {},
     );
     this.#options = selected;
     Object.freeze(this);
   }
   refresh(): Snapshot {
     const held = this.retention,
-      next = stableState(() => readInputs(this.root, this.#options), this.#options.cache!),
+      next = stableState(() => readInputs(this.root, this.#options), this.#options.cache!, this.#options),
       root = next.inputs.root,
       current = rootSnapshot(next);
-    // D08 rotation (`rotate`) without reading the pair: a changed revision makes the held root snapshot previous, an
-    // unchanged one keeps the held previous side, still unread until asked, so no refresh lengthens what a handle holds.
-    // The capture pair's current revision is read again when asked, as `ia capture` may have run.
+    // D08 rotation (`rotate`) without reading the pair: a changed authored revision makes the held root snapshot
+    // previous, an unchanged one (a runtime-band change alone among them) keeps the held previous side, still unread
+    // until asked, so no refresh lengthens what a handle holds. The capture pair's current revisions are read again
+    // when asked, as `ia capture` may have run.
     const before = held.current,
-      previous = before.revision === current.revision ? held.previous : (): RetainedSnapshot => before;
+      previous = before.authoredRevision === current.authoredRevision ? held.previous : (): RetainedSnapshot => before;
     this.replaceState({
       ...next,
       retention: { previous, captured: once(() => readCapture(root, current).captured) },

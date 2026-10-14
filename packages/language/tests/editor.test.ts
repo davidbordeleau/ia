@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parse, references, scan } from '../src/index.js';
-import { cursorContext, draftSource, projectSource } from '../src/editor/index.js';
+import { cursorContext, draftSource, projectSource, SourceEditError } from '../src/editor/index.js';
 
 describe('editor source projection', () => {
   it('serializes schema-backed text without changing quotes, backslashes, tabs or Unicode', () => {
@@ -72,5 +72,105 @@ describe('editor source projection', () => {
       );
     }
     expect(cursorContext('#! ia 9.0\n@ag', 'x.ia', { line: 1, character: 3 }).slot).toBe('none');
+  });
+});
+
+/**
+ * 2.0.0's `draftSource` (6239cbc), reproduced to pin what it wrote: text quoted, every other type written as given
+ * (milestone generation-binding review C-R9). The 2.0.0 function admitted no line break and nothing else.
+ */
+function draftSource200(
+  discriminator: string,
+  name: string,
+  schema: {
+    readonly sections: readonly { readonly name: string; readonly must: boolean }[];
+    readonly fields: readonly { readonly section: string; readonly key: string; readonly type: string }[];
+  },
+  values: Readonly<Record<string, string>>,
+): string {
+  const sections = new Map<string, string[]>();
+  for (const section of schema.sections) if (section.must) sections.set(section.name, []);
+  for (const field of schema.fields) {
+    const value = values[`${field.section}/${field.key}`];
+    if (value === undefined) continue;
+    const encoded = field.type === 'text' ? `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : value;
+    const rows = sections.get(field.section) ?? [];
+    rows.push(`${field.key} ${encoded}`);
+    sections.set(field.section, rows);
+  }
+  return (
+    `#! ia 1.0\n\n@${discriminator} ${name}\n` +
+    [...sections]
+      .sort(([a], [b]) => (a === 'head' ? -1 : b === 'head' ? 1 : 0))
+      .map(([section, rows]) =>
+        section === '' || section === 'head'
+          ? rows.map((r) => `  ${r}\n`).join('')
+          : `  ${section}\n${rows.map((r) => `    ${r}\n`).join('')}`,
+      )
+      .join('')
+  );
+}
+
+describe('draftSource keeps 2.0.0 spelling', () => {
+  const schema = {
+    sections: [
+      { name: 'meaning', must: true },
+      { name: 'work', must: true },
+    ],
+    fields: [
+      { section: 'meaning', key: 'says', type: 'text' as const, must: true },
+      { section: 'work', key: 'due', type: 'text' as const, must: false, form: 'iso-date' as const },
+      { section: 'work', key: 'status', type: 'id' as const, must: false, values: ['open', 'closed'] },
+      { section: 'work', key: 'milestone', type: 'ref' as const, must: false, target: 'milestone' },
+      { section: 'work', key: 'peers', type: 'list of ref' as const, must: false, target: 'task' },
+      { section: 'work', key: 'done', type: 'flag' as const, must: false },
+      { section: 'work', key: 'weight', type: 'number' as const, must: false },
+    ],
+  };
+  const char = (code: number) => String.fromCharCode(code);
+  it('writes every value 2.0.0 wrote, as 2.0.0 wrote it', () => {
+    for (const values of [
+      { 'meaning/says': `separator${char(0x2028)}here` },
+      { 'meaning/says': `vertical${char(0x0b)}tab` },
+      { 'meaning/says': `nul${char(0)}byte` },
+      { 'meaning/says': `escape${char(0x1b)}[2J` },
+      { 'meaning/says': 'A "quoted" C:\\file\t' },
+      { 'meaning/says': 'x', 'work/due': 'tomorrow' },
+      { 'meaning/says': 'x', 'work/status': 'alien' },
+      { 'meaning/says': 'x', 'work/status': 'is open' },
+      { 'meaning/says': 'x', 'work/milestone': '@task elsewhere' },
+      { 'meaning/says': 'x', 'work/peers': '@task bare' },
+      { 'meaning/says': 'x', 'work/done': 'yes' },
+      { 'meaning/says': 'x', 'work/weight': '1e400' },
+    ])
+      expect(draftSource('task', 'kept', schema, values), JSON.stringify(values)).toBe(
+        draftSource200('task', 'kept', schema, values),
+      );
+  });
+  it('refuses only a value that would add a condition, a comment or a line', () => {
+    for (const value of ['open when phase act', 'open # hidden', '[@task a] # c'])
+      expect(() =>
+        draftSource('task', 'bad', schema, { 'meaning/says': 'x', 'work/status': value, 'work/peers': '[@task a]' }),
+      ).toThrow(SourceEditError);
+    expect(() => draftSource('task', 'bad', schema, { 'meaning/says': 'first\nsecond' })).toThrow('single-line');
+    expect(() => draftSource('task', 'bad', schema, { 'meaning/says': 'x', 'work/status': 'open\rclosed' })).toThrow(
+      'single-line',
+    );
+    // A line break throws a plain Error, as 2.0.0 did; only structure from a condition or comment is SourceEditError.
+    expect(() => draftSource('task', 'bad', schema, { 'meaning/says': 'first\nsecond' })).not.toThrow(SourceEditError);
+  });
+  it('refuses a value that opens a string, prose or list it does not close (review C-RC2)', () => {
+    // Across two values, an opener and a closer would swallow the rows between them and add a comment.
+    expect(() =>
+      draftSource('task', 'bad', schema, {
+        'meaning/says': 'x',
+        'work/status': '"""',
+        'work/peers': '""" # injected',
+      }),
+    ).toThrow(SourceEditError);
+    for (const value of ['"""', '"open', '[@task a', '[@task a, "b'])
+      expect(() => draftSource('task', 'bad', schema, { 'meaning/says': 'x', 'work/peers': value }), value).toThrow(
+        SourceEditError,
+      );
   });
 });

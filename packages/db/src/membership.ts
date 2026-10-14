@@ -1,4 +1,4 @@
-import { isPlacementKind } from '@inventarch/language';
+import { BAND_OF, isPlacementKind } from '@inventarch/language';
 import type { Band, PlacementKind } from '@inventarch/language';
 import { canonicalRoot, reaches } from '@inventarch/graph';
 import type { Graph, Node } from '@inventarch/graph';
@@ -136,3 +136,10 @@ export function membershipOf(nodes: readonly Node[], declared: readonly Declared
     }),
   );
 }
+/**
+ * D08a: the rows of the records not at runtime placement (band 0), in their order, each without its root: what the
+ * authored revision decides of a membership, by which a capture is trusted. Runtime-band rows never decide it, nor does
+ * a root, which a runtime-band @workspace can declare over authored records and no retained read takes.
+ */
+export const authoredRows = (rows: readonly MembershipRow[]): readonly Omit<MembershipRow, 'root'>[] =>
+  rows.filter((row) => row.band !== BAND_OF.runtime).map(({ identity, band, digest }) => ({ identity, band, digest }));

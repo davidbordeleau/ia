@@ -31,7 +31,7 @@ it('publishes the five kernel moves in kernel order and one move per mode', () =
   expect(MODES).toEqual(['read', 'validate', 'author', 'effect', 're-seat']);
   expect(MODES.every(isMode)).toBe(true);
   expect(isMode('invented')).toBe(false);
-  expect(MANDATE_CODES).toEqual(['IA-RUNTIME-MANDATE-MOVE', 'IA-RUNTIME-MANDATE-WORD']);
+  expect(MANDATE_CODES).toEqual(['IA-RUNTIME-MANDATE-MOVE', 'IA-RUNTIME-MANDATE-WORD', 'IA-RUNTIME-MANDATE-ACTOR']);
   for (const code of MANDATE_CODES) expect(RUNTIME_CODES).toContain(code);
 });
 

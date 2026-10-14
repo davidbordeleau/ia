@@ -3,9 +3,10 @@
  *
  * The one verb that records what the workspace admits. It admits the workspace as every workspace verb does and writes
  * the admitted root snapshot to `.ia/work/snapshot/current.json`, an `ia-snapshot-1` document: the language identity,
- * the revision, the admitted records sorted by identity with their graph G13 per-record digests, their db D02a
- * membership rows, the admission findings and their counts. The distribution's `json()` serializer writes it, as it
- * writes `ia.compiled.v1`, so identical sources on one language version capture to identical bytes.
+ * the revision and the authored revision, the admitted records sorted by identity with their graph G13 per-record
+ * digests, their db D02a membership rows, the admission findings and their counts. The distribution's `json()`
+ * serializer writes it, as it writes `ia.compiled.v1`, so identical sources on one language version capture to identical
+ * bytes.
  *
  * The pair is db D08a's, the one retained pair (`writeCapture`): the db writes and rotates it and compares the records
  * with the prior capture by digest, and every db handle seeds its previous snapshot from it, whatever its cache
@@ -50,6 +51,8 @@ import {
   truncateDigest,
   words,
 } from './render.js';
+import { sessionGate } from './profile.js';
+import type { SessionGate } from './profile.js';
 import { codeOf, openSession } from './session.js';
 import type { Session } from './session.js';
 import { NOT_EVALUATED } from './validate.js';
@@ -74,6 +77,11 @@ export interface SnapshotDocument {
   readonly language: string;
   readonly kernelDigest: string;
   readonly revision: string;
+  /**
+   * The revision without the sources at runtime placement (db `authoredRevision`), which the db trusts and rotates the
+   * pair by (D08a), so runtime-band evidence alone neither stales nor rotates it.
+   */
+  readonly authoredRevision: string;
   readonly records: Snapshot['records'];
   readonly membership: readonly MembershipRow[];
   readonly diagnostics: readonly Finding[];
@@ -124,6 +132,7 @@ export function buildSnapshot(session: Session): Pick<CaptureView, 'snapshot' | 
     language: LANGUAGE_IDENTITY.language,
     kernelDigest: LANGUAGE_IDENTITY.kernelDigest,
     revision: admitted.revision,
+    authoredRevision: admitted.authoredRevision,
     records,
     membership,
     diagnostics,
@@ -173,9 +182,10 @@ export const unparsedSeed = (diagnostics: readonly Finding[]): Finding | undefin
       SEEDED.some((prefix) => finding.path.startsWith(prefix)),
   );
 /** Admits the workspace at `root` and builds its snapshot; the session is closed before anything is written. */
-function admit(root: string): Admitted {
+function admit(root: string, gate?: SessionGate): Admitted {
   const session = openSession(root);
   try {
+    gate?.(session);
     const own = (path: string): boolean => path.startsWith('.ia/src/') && !path.startsWith('.ia/src/floor/');
     const declared =
       session.reader.records().some((record) => record.discriminator === 'workspace' && own(record.source.path)) ||
@@ -220,8 +230,8 @@ function captureRefusal(root: string, given: string | undefined, admitted: Admit
   );
 }
 /** Admits the workspace at `root` and builds the snapshot to write, unless one of §5's two refusals answers first. */
-function capturable(root: string, given: string | undefined): Omit<Admitted, 'declared'> {
-  const admitted = admit(root);
+function capturable(root: string, given: string | undefined, gate?: SessionGate): Omit<Admitted, 'declared'> {
+  const admitted = admit(root, gate);
   const refused = captureRefusal(root, given, admitted);
   if (refused !== null) throw refused;
   const { declared: _declared, ...built } = admitted;
@@ -229,18 +239,19 @@ function capturable(root: string, given: string | undefined): Omit<Admitted, 'de
 }
 /**
  * Admits the workspace at `root` and writes its snapshot pair through db D08a, unless one of §5's two refusals answers
- * first. `given` is the `--root` the invocation typed, which the `ia validate` a refusal names carries.
+ * first. `given` is the `--root` the invocation typed, which the `ia validate` a refusal names carries. `gate`,
+ * when given, judges the admitting session before anything is read from it (review C2-N3).
  */
-export function collectCapture(root: string, given?: string): CaptureView {
-  const built = capturable(root, given);
+export function collectCapture(root: string, given?: string, gate?: SessionGate): CaptureView {
+  const built = capturable(root, given, gate);
   return { root, ...built, ...writeCapture(root, built.text) };
 }
 /**
  * `ia capture --preview`: admits and refuses exactly as `collectCapture` does, then plans the write through db D08b's
  * `planCapture` instead of making it, so nothing is created or written and the pair stays as it was.
  */
-export function previewCapture(root: string, given?: string): CapturePreview {
-  const built = capturable(root, given);
+export function previewCapture(root: string, given?: string, gate?: SessionGate): CapturePreview {
+  const built = capturable(root, given, gate);
   return {
     root,
     ...built,
@@ -308,13 +319,18 @@ export function renderCapture(view: CaptureView | CapturePreview, caps: Capabili
   ];
   const previous: (readonly Token[])[] =
     view.previous === null
-      ? [words(`No earlier capture at another revision ${preview === null ? 'is' : 'would be'} retained.`, 'dim')]
+      ? [
+          words(
+            `No earlier capture at another authored revision ${preview === null ? 'is' : 'would be'} retained.`,
+            'dim',
+          ),
+        ]
       : [
           [atom(PREVIOUS, 'cyan', 0)],
           words(
             preview === null
-              ? `revision ${digest(view.previous)}, ${view.rotated ? 'moved from current.json because the revision changed' : 'kept because the revision did not change'}`
-              : `revision ${digest(view.previous)}, ${view.rotated ? 'would move from current.json because the revision changed' : 'would be kept because the revision did not change'}`,
+              ? `revision ${digest(view.previous)}, ${view.rotated ? 'moved from current.json because the authored revision changed' : 'kept because the authored revision did not change'}`
+              : `revision ${digest(view.previous)}, ${view.rotated ? 'would move from current.json because the authored revision changed' : 'would be kept because the authored revision did not change'}`,
             'dim',
           ),
         ];
@@ -482,9 +498,15 @@ export function runCapture(context: Context): Result {
   const { caps, json: machine } = context;
   const root = requireRoot(context),
     preview = context.args.flag('preview');
+  // The effect mode (Execution) under the participant's mandate profile, a preview included, judged on the admitting
+  // session before anything is read from it.
   let view: CaptureView | CapturePreview;
   try {
-    view = (preview ? previewCapture : collectCapture)(root, context.args.value('root'));
+    view = (preview ? previewCapture : collectCapture)(
+      root,
+      context.args.value('root'),
+      sessionGate(context, 'effect'),
+    );
   } catch (error) {
     throw captureFailure(error, root, respell(context), !preview);
   }

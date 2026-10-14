@@ -35,6 +35,10 @@ import { runInspect } from './inspect.js';
 import { runNext } from './next.js';
 import { runPack } from './pack.js';
 import { runPosition } from './position.js';
+import { runPreview } from './preview.js';
+import { runAuthor } from './author.js';
+import { gatedNext, inertNext } from './profile.js';
+import type { Gate } from './profile.js';
 import { runProject } from './project.js';
 import { runRead } from './read.js';
 import { runValidate } from './validate.js';
@@ -50,6 +54,7 @@ import {
   remedyWords,
   resolveCapabilities,
   sectionLabel,
+  terminalText,
   words,
 } from './render.js';
 
@@ -108,6 +113,11 @@ export interface Context {
   readonly args: Arguments;
   readonly caps: Capabilities;
   readonly json: boolean;
+  /**
+   * The invocation's mandate gate (profile.ts): a gated command's profile, once it allows the command, so a refusal the
+   * command raises later names a next command the same actor may run. Absent where no dispatcher made one.
+   */
+  readonly gate?: Gate;
 }
 
 /**
@@ -235,14 +245,15 @@ export function renderRefusal(
     };
     return { exitCode: refusal.exit, stdout: JSON.stringify(body) + '\n', stderr: '' };
   }
+  // Review C-N2: a refusal repeats caller and authored text (a path, an identity, a value), so its controls are escaped.
   const block = errorBlock(
     {
-      location,
-      ...(refusal.where?.identity === undefined ? {} : { identity: refusal.where.identity }),
+      location: location === null ? null : terminalText(location),
+      ...(refusal.where?.identity === undefined ? {} : { identity: terminalText(refusal.where.identity) }),
       code: refusal.code,
-      message: refusal.message,
+      message: terminalText(refusal.message),
       // Design row 27: the command it names stays on one line, so it is copied and run as printed.
-      next: remedyWords(next),
+      next: remedyWords(terminalText(next)),
     },
     { depth: 0 },
     caps,
@@ -474,6 +485,8 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   capture: runCapture,
   compile: runCompile,
   validate: runValidate,
+  preview: runPreview,
+  author: runAuthor,
   inspect: runInspect,
   read: runRead,
   position: runPosition,
@@ -493,6 +506,8 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
 export async function runCommand(command: CommandSpec, argv: readonly string[], host: Host): Promise<Result> {
   const preliminary = resolveCapabilities(host.stdout, {});
   if (wantsHelp(argv)) return { exitCode: 0, stdout: renderCommandHelp(command, preliminary), stderr: '' };
+  // Filled by a gated command once its profile allows it; read when the command refuses.
+  const gate: Gate = {};
   let caps = preliminary,
     // Kept for the refusal below, whose fallback next action names the root the parser understood. A failed parse
     // leaves none, and its usage refusal names the verb's help, which takes no root.
@@ -513,7 +528,7 @@ export async function runCommand(command: CommandSpec, argv: readonly string[], 
       // §5: `--json` stdout is one parseable value with no prompt in it, so a terminal does not make it askable.
       if (json) throw new UsageError('--apply --json requires --yes; a --json run is never asked to confirm');
     }
-    const context: Context = { host, command, args, caps, json };
+    const context: Context = { host, command, args, caps, json, gate };
     const handler = HANDLERS[command.name];
     if (handler === undefined)
       throw new Refusal(
@@ -551,7 +566,8 @@ export async function runCommand(command: CommandSpec, argv: readonly string[], 
       };
     }
     const refused: Refused = { command: command.name, root: args?.value('root') };
-    const raw = refusalOf(error, refused);
+    const gated = gatedNext(refusalOf(error, refused), gate),
+      raw = args === undefined ? gated : inertNext(gated, { command, args });
     const refusal =
       raw.where === null && raw.at === null
         ? new Refusal(raw.code, raw.message, raw.exit, null, raw.next, `ia ${command.name}`)

@@ -7,6 +7,7 @@ import type { Location } from '@inventarch/language';
 import { open, readInputs } from '../src/index.js';
 import type { SeatResolution } from '../src/index.js';
 import { EditorDatabase } from '../src/editor/index.js';
+import { copyPublicLanguageFixture } from '../../../tools/native/public-fixture.js';
 import { put, workspace } from './workspace.js';
 
 // D02b (position-and-projection row 17): a path resolves to the seat it is declared at and to the records whose
@@ -143,7 +144,24 @@ it('resolves the exit-evidence path in this repository to the work-system seat',
     // Every claimant states a selection that selects the path, whatever records the repository holds.
     for (const claimant of resolution.claimants)
       expect(claimant.matches.every((m) => selects(m.selection, evidence))).toBe(true);
-    // The work-system spec that covers the reference pages claims them through its `work.covers`.
+    // Neutral examples are absent from the live corpus and cannot claim this repository's reference pages.
+    expect(
+      db
+        .resolveSeat('docs/reference/language/README.md')
+        .claimants.some((c) => c.identity.endsWith('/spec/example-reference-spec')),
+    ).toBe(false);
+  } finally {
+    db.close();
+  }
+});
+
+it('resolves the public example specification claimant from its explicit fixture corpus', () => {
+  const root = workspace(false);
+  copyPublicLanguageFixture(repository, root);
+  const db = open(root, { cache: false });
+  try {
+    expect(errors(db)).toEqual([]);
+    // The fixture spec still claims the reference pages through its exact work.covers selection.
     expect(
       db
         .resolveSeat('docs/reference/language/README.md')
@@ -328,17 +346,28 @@ it('orders claimants band descending then identity ascending across claimant fie
   put(
     root,
     '.ia/src/systems/compliance-system/checks/billing-check.ia',
-    '#! ia 1.0\n\n@check billing-check\n  meaning\n    says "A billing check."\n    answers "Which check scopes billing?"\n  check\n    runs COMP-SCHEMA\n    scope "src/billing/*.ts"\n',
+    '#! ia 1.0\n\n@check billing-check\n  meaning\n    says "A billing check."\n    answers "Which check scopes billing?"\n  check\n    runs COMP-SCHEMA\n    scope "src/billing/*.ts"\n    covers ["src/**"]\n',
   );
   const db = open(root, { cache: false, locations: { [lawPath]: adopted } });
   try {
     expect(errors(db)).toEqual([]);
-    // The check's scope reads as a path but is the schema's prose scope, so the check claims nothing (G06c).
+    // The check claims through its covers (plan amendment C17); its scope reads as a path but is text that selects
+    // verdicts, so it claims nothing (G06c, C22).
     expect(brief(db.resolveSeat('src/billing/invoice.ts')).claimants).toEqual([
       [mandateId, 100, 'authority.covers src/**'],
+      ['compliance-system/check/gate/billing-check', 100, 'check.covers src/**'],
       ['hook-authoring-system/binding/hook/source-hook', 100, 'hook.paths src/billing/**'],
       ['governance-system/governance/law/adopted-law', 90, 'subject.covers **'],
     ]);
+    // Exit evidence: `covers ["src/**"]` makes the check a claimant of src/x.ts, and its scope claims nothing anywhere.
+    expect(brief(db.resolveSeat('src/x.ts')).claimants).toContainEqual([
+      'compliance-system/check/gate/billing-check',
+      100,
+      'check.covers src/**',
+    ]);
+    expect(
+      db.resolveSeat('src/billing/invoice.ts').claimants.flatMap((claimant) => claimant.matches.map((m) => m.field)),
+    ).not.toContain('check.scope');
     // Every selection here is one the dialect reads, so none is named as declaring nothing.
     expect(db.inertDeclarations().filter((declaration) => declaration.field !== 'composition.sources')).toEqual([]);
   } finally {
@@ -354,27 +383,36 @@ it('names each claimant selection the dialect reads as none, where it is authore
     lawPath,
     '#! ia 1.0\n\n@law rooted-law\n  meaning\n    says "A rooted law."\n    answers "Which law covers billing?"\n  governance\n    severity blocking\n  subject\n    covers ["/src/billing/", "./src/billing/**", "src/billing/"]\n',
   );
-  // A check's scope is prose, not a claimant selection (graph G06c), so even one the dialect would read as none is
-  // never named here.
+  // A check's scope is text, not a claimant selection (graph G06c, C22), so even one the dialect would read as none is
+  // never named here; its covers is a claimant field (C17), whose selections are.
   put(
     root,
     '.ia/src/systems/compliance-system/checks/prose-check.ia',
-    '#! ia 1.0\n\n@check prose-check\n  meaning\n    says "A prose-scoped check."\n    answers "Which check reads shared sources?"\n  check\n    runs COMP-SCHEMA\n    scope "../shared or /srv"\n',
+    '#! ia 1.0\n\n@check prose-check\n  meaning\n    says "A prose-scoped check."\n    answers "Which check reads shared sources?"\n  check\n    runs COMP-SCHEMA\n    scope "../shared or /srv"\n    covers ["../shared", "shared/"]\n',
   );
   const db = open(root, { cache: false });
   try {
     expect(errors(db)).toEqual([]);
     const law = 'governance-system/governance/law/rooted-law';
-    expect(db.inertDeclarations()).toEqual(
-      ['/src/billing/', './src/billing/**'].map((value) => ({
+    const reason = 'selects nothing: a selection is a workspace-relative path with no empty, . or .. segment';
+    expect(db.inertDeclarations()).toEqual([
+      {
+        identity: 'compliance-system/check/gate/prose-check',
+        field: 'check.covers',
+        value: '../shared',
+        path: '.ia/src/systems/compliance-system/checks/prose-check.ia',
+        line: 10,
+        reason,
+      },
+      ...['/src/billing/', './src/billing/**'].map((value) => ({
         identity: law,
         field: 'subject.covers',
         value,
         path: lawPath,
         line: 10,
-        reason: 'selects nothing: a selection is a workspace-relative path with no empty, . or .. segment',
+        reason,
       })),
-    );
+    ]);
     // Only the workspace-relative selection claims the path.
     expect(brief(db.resolveSeat('src/billing/invoice.ts')).claimants).toContainEqual([
       law,

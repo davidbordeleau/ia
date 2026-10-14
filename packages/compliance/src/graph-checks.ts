@@ -272,6 +272,32 @@ export function validateCheck(node: Node, catalog?: EvaluatorCatalog): Assessmen
     ),
   ]);
 }
+/**
+ * COMP-CHECK as structural admission reads it (milestone generation-binding, plan amendments C15 and C21): the
+ * declaration's own shape only. A check naming both fields with different values is IA-COMP-CHECK-CONFLICT and one naming
+ * no evaluator IA-COMP-CHECK-UNKNOWN, as validateCheck has them; any named evaluator passes, because whether a built-in or
+ * an installed implementation serves it is decided when the check is bound against a host's catalog, not by admission.
+ * validateCheck stays the strict admission every existing reader of the admitted graph uses.
+ */
+export function validateCheckStructure(node: Node): Assessment {
+  const implementation = textField(node, 'check', 'implementation'),
+    runs = textField(node, 'check', 'runs');
+  if (implementation !== undefined && runs !== undefined && implementation !== runs)
+    return assess('COMP-CHECK', node.identity, [
+      finding(
+        'IA-COMP-CHECK-CONFLICT',
+        node,
+        `check.implementation '${implementation}' and check.runs '${runs}' name different evaluators; declare one or make them agree`,
+      ),
+    ]);
+  return assess(
+    'COMP-CHECK',
+    node.identity,
+    checkRunner(node) === undefined
+      ? [finding('IA-COMP-CHECK-UNKNOWN', node, `Missing ${runnerField(node)}: the check names no evaluator`)]
+      : [],
+  );
+}
 export function validateParse(diagnostics: readonly Diagnostic[] | undefined): Assessment {
   return assess(
     'COMP-PARSE',

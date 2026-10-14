@@ -4,10 +4,11 @@ import { ExecutionError } from './types.js';
 import type { Success } from './types.js';
 import { id } from './shared.js';
 
+/** The execution's base is the authored revision (runtime authoring-execution), so it is what a publication rechecks. */
 function fresh(root: string, revision: string): void {
   const db = open(root, { cache: false });
   try {
-    if (db.revision !== revision)
+    if (db.authoredRevision !== revision)
       throw new ExecutionError('IA-EXEC-SOURCE-CHANGED', 'Native inputs changed before draft publication');
   } finally {
     db.close();

@@ -17,7 +17,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { open } from '../../packages/db/src/index.js';
 import { entryCount, renderPacket } from '../../packages/runtime/src/packet.js';
-import { PACKET_MARKER } from '../../packages/runtime/src/packet-host.js';
+import { PACKET_MARKER, renderHost } from '../../packages/runtime/src/packet-host.js';
 import { packetCatalog } from '../../apps/cli/src/commands.js';
 import { guardGroup } from '../../apps/distribution/src/guard-registration.js';
 import { json } from '../../apps/distribution/src/files.js';
@@ -137,8 +137,8 @@ it('renders this repository as its position packet: CLAUDE.md and both skills, n
     '- `agent-system/binding/agent/language-participant`: The IDE agent operating in the language workspace, any vendor.',
   ]);
   expect(claude).not.toContain('Host note');
-  // Plan amendment B1 with the milestone's final catalog (C = 7, task ia-project-verb): 1 participant, 1 mandate, the
-  // seat, 11 system lines, 22 tallies, 5 intent rows, 4 phase rows, 7 commands, provenance and 3 SPEC lines. The file
+  // Plan amendment B1 with plan amendment C3's catalog (C = 9, `ia preview` and `ia author` added): 1 participant, 1
+  // mandate, the seat, 11 system lines, 22 tallies, 5 intent rows, 4 phase rows, 9 commands, provenance and 3 SPEC lines. The file
   // renders one entry per list item and table row, and the provenance line.
   const db = open(root, { cache: false });
   try {
@@ -147,8 +147,8 @@ it('renders this repository as its position packet: CLAUDE.md and both skills, n
       [packet.participants, packet.mandates, packet.systems, packet.tallies, packet.commands].map(
         (rows) => rows.length,
       ),
-    ).toEqual([1, 1, 11, 22, 7]);
-    expect(entryCount(packet)).toBe(56);
+    ).toEqual([1, 1, 11, 17, 9]);
+    expect(entryCount(packet)).toBe(53);
   } finally {
     db.close();
   }
@@ -157,7 +157,7 @@ it('renders this repository as its position packet: CLAUDE.md and both skills, n
       (line, index) => line.startsWith('| ') && !line.startsWith('| ---') && !lines[index + 1]?.startsWith('| ---'),
     );
   expect(lines.filter((line) => line.startsWith('- ') || line.startsWith('ia-generated ')).length + rows.length).toBe(
-    56,
+    53,
   );
   expect(rows).toContain(
     '| `ia project` | effect | Execution | a file without the generated marker at a path it writes, which its plan names; --apply writes nothing | `ia project <host>` |',
@@ -175,6 +175,34 @@ it('renders this repository as its position packet: CLAUDE.md and both skills, n
   publishArtifacts(base, files, true);
   expect(publishArtifacts(base, files, false)).toEqual([]);
 });
+it('renders the committed files from a copy given a source at runtime placement, whose revision it moves', () => {
+  // Plan amendment C13: the packet's revision, which the provenance line carries, is the authored revision, so a
+  // runtime-band source (as the evidence an `ia validate` writes will be) moves the revision and no committed byte.
+  const base = copy(),
+    path = '.ia/src/systems/governance-system/records/runtime-rule.ia',
+    runtime = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' } as const;
+  put(
+    base,
+    path,
+    '#! ia 1.0\n@law runtime-rule\n  meaning\n    says "A law placed at runtime."\n    answers "What does it require?"\n  governance\n    severity blocking\n',
+  );
+  const placed = open(base, { cache: false, locations: { [path]: runtime } }),
+    committed = open(root, { cache: false });
+  try {
+    expect(placed.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    expect(placed.get('governance-system/governance/law/runtime-rule')?.band).toBe(0);
+    expect(placed.revision).not.toBe(committed.revision);
+    expect(placed.authoredRevision).toBe(committed.authoredRevision);
+    const { packet, digest, hostNote } = renderPacket(placed, placed.resolveScope().token, packetCatalog());
+    const files = renderHost('claude', packet, digest, hostNote, 'repository').files;
+    expect(files.map((file) => file.path)).toEqual(FILES);
+    for (const file of files) expect(file.text, file.path).toBe(read(root, file.path));
+  } finally {
+    placed.close();
+    committed.close();
+  }
+  // Copying the native corpus (hundreds of files) dominates this test: allow for a loaded machine.
+}, 180_000);
 it('commits CLAUDE.md and both skills, and ignores .claude/agents, where no file is tracked (packet-tracking-policy)', () => {
   // Milestone position-packet task untrack-steward-agents: no steward agent is tracked, and none can be added unforced.
   const base = temp(),

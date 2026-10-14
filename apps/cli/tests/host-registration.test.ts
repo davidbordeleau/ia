@@ -44,7 +44,9 @@ import { afterAll, expect, it, vi } from 'vitest';
 import { cleanup } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 180_000 });
-afterAll(cleanup);
+// Every case materializes a host payload of some 1,400 files in its own IA home (it carries the installed read handler
+// since milestone generation-binding), so removing them all can outlast the default 10 s hook timeout on Windows.
+afterAll(cleanup, 120_000);
 
 /**
  * A seam on apps/distribution's applyProjection, which writes and deletes every projection file, so a test can fail
@@ -202,9 +204,10 @@ it('prints the machine-local sentence and never claims an observation', async ()
   expect(applied.exitCode, applied.stderr).toBe(0);
   expect(applied.stdout).toContain('written; not observed answering');
   expect(applied.stdout.replace(/\s+/g, ' ')).toContain(MACHINE_LOCAL.claude);
-  // Operator decision 2026-10-08 (B11): the guard's retirement is disclosed wherever Claude is registered, and only there.
+  // The guard's scope (milestone generation-binding, C9 and C10; B11's retirement kept) is disclosed wherever Claude is
+  // registered, and only there.
   expect(GUARD_SCOPE).toBe(
-    'ia host registers no steward guard, and applying the projection retires one an earlier release registered: with no per-system steward subagents left, it would deny every edit under .ia/src/systems/<name>/. Until a later release re-keys the guard to @mandate scope, nothing blocks those edits.',
+    'ia host registers one guard group per authored @hook, which refuses an edit its paths and tools select unless the acting agent holds a governing @mandate granting Synthesis there; it registers no per-system steward guard, and applying the projection retires one an earlier release registered.',
   );
   expect(preview.stdout.replace(/\s+/g, ' ')).toContain(GUARD_SCOPE);
   expect(applied.stdout.replace(/\s+/g, ' ')).toContain(GUARD_SCOPE);

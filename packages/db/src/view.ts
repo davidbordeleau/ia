@@ -7,11 +7,12 @@ import {
   requirementCollisions,
 } from '@inventarch/language';
 import type { CompiledRecord, Diagnostic, FrozenRegistry, Phase, Source } from '@inventarch/language';
-import { canonicalRoot, load, reaches, stableSerialize } from '@inventarch/graph';
+import { authoredRevisionOf, canonicalRoot, load, reaches, stableSerialize } from '@inventarch/graph';
 import type { Graph, RevisionSource } from '@inventarch/graph';
 import {
   evaluate,
   validateCheck,
+  validateCheckStructure,
   validateConsent,
   validateGraphSchema,
   validateSelectors,
@@ -20,7 +21,9 @@ import {
 } from '@inventarch/compliance';
 import type { Assessment, Report, SystemFolder } from '@inventarch/compliance';
 import type { InputSnapshot } from './inputs.js';
-import { systemMember } from './inputs.js';
+import { EVIDENCE_DIRECTORY, evidenceSource, systemMember } from './inputs.js';
+import { bindChecks } from './checks.js';
+import { reproducesEvidence } from './evidence.js';
 import { declaredRoots, membershipOf } from './membership.js';
 import type { DeclaredRoot, MembershipRow } from './membership.js';
 import { repositoryWorkspace } from './seat.js';
@@ -35,6 +38,11 @@ export interface RefusedRecord {
 /** Internal view; public reads project allowed nodes, never this candidate registry. */
 export interface View {
   readonly graph: Graph;
+  /**
+   * The authored revision of this view (graph `authoredRevisionOf`): `graph.revision` without the sources at runtime
+   * placement, the derived revision-only input (D03) kept, so it equals `graph.revision` while no source is placed so.
+   */
+  readonly authoredRevision: string;
   readonly report: Report;
   readonly refused: readonly RefusedRecord[];
   readonly admittedSystems: readonly string[];
@@ -62,8 +70,111 @@ function diagnosticsOf(values: readonly Diagnostic[]): readonly Diagnostic[] {
     (a, b) => compare(a.path, b.path) || a.line - b.line || compare(a.code, b.code),
   );
 }
-export function viewBuilder(input: InputSnapshot): (location?: string, phase?: Phase) => View {
-  const parsed = input.sources.map((s) => ({ ...parse(s.text, s.path), location: s.location }));
+/** How a view admits: every existing reader takes the defaults. */
+export interface ViewOptions {
+  /**
+   * D13 (plan amendments C15 and C21): `strict`, the default, admits a `@check` only when its runner is a built-in id
+   * (compliance validateCheck), so an unknown runner is IA-COMP-CHECK-UNKNOWN and the record is not admitted, as every
+   * released reader has it; `structural` admits any check that names one evaluator (validateCheckStructure), for the
+   * validate path that binds checks against a host's catalog.
+   */
+  readonly checks?: 'strict' | 'structural';
+}
+/**
+ * D14, review findings B3-R4 and B4-RC1: the evidence file at `source` when it is exactly what the writer makes for the
+ * checks `root` admits (`reproducesEvidence`): their bindings derived again from `root`'s own records and report, the
+ * times taken from the file itself. A forged verdict, reason or record, an observation for a check not evaluated, a
+ * relationship, another locator or revision, any byte the writer would not write, and anything written for another view,
+ * is not evidence. Only built-in evaluators produce evidence, so no catalog takes part.
+ */
+function writerEvidence(source: RevisionSource, root: View): RevisionSource | undefined {
+  // Review finding F1: the validate request records nothing for a refused admission, so no file is evidence for one.
+  if (root.report.findings.some((finding) => finding.severity === 'error')) return undefined;
+  const records = [...root.graph.nodes.values()];
+  return reproducesEvidence({
+    authoredRevision: root.authoredRevision,
+    bindings: bindChecks(records, root.report, { status: 'unavailable', reason: 'no catalog takes part' }),
+    records,
+    text: source.text,
+  })
+    ? source
+    : undefined;
+}
+/** What `view` admits of everything but the evidence at `path`: its findings, verdicts and refusals, revisions aside. */
+function authoredAdmission(view: View, path: string): string {
+  const evidence = new Set(
+    [...view.graph.nodes.values()].filter((node) => node.source.path === path).map((node) => node.identity),
+  );
+  return stableSerialize({
+    findings: view.report.findings.filter((finding) => finding.path !== path),
+    verdicts: view.report.verdicts
+      .filter((verdict) => !evidence.has(verdict.scope))
+      .map((verdict) => ({
+        check: verdict.check,
+        scope: verdict.scope,
+        outcome: verdict.outcome,
+        findings: verdict.findings.filter((finding) => finding.path !== path),
+      })),
+    refused: view.refused.filter((record) => record.path !== path),
+    records: [...view.graph.nodes.values()]
+      .filter((node) => !evidence.has(node.identity))
+      .map((node) => node.identity)
+      .sort(compare),
+  });
+}
+/** The runtime metadata source every view's revision hashes: the inputs' layout, which no authored file states. */
+function metadataOf(input: InputSnapshot): RevisionSource {
+  return {
+    path: '.ia/.db-inputs.json',
+    text: stableSerialize({
+      folders: input.folders,
+      floorOrigin: input.floorOrigin,
+      admissionVersion: 1,
+      ...(input.authoredRoots ? { authoredRoots: input.authoredRoots } : {}),
+      ...(input.activation ? { activation: input.activation } : {}),
+    }),
+    location: { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' },
+  };
+}
+/**
+ * The views of `input`, admitted as `options` says. With evidence listed (D14), the authored view is built first; the
+ * one file named after its authored revision, and no other, is then read (review finding B3-N10) and admitted only when
+ * it is exactly the file the writer makes for that view's checks (`writerEvidence`, B3-R4, B4-RC1) and adding it changes
+ * nothing the authored records admit: their findings, verdicts, refusals and records stay as they were.
+ * Otherwise the authored view stands, as for a file that is not evidence. Evidence moves `revision`, never
+ * `authoredRevision`, and is never what a validation binds or reports admission from.
+ */
+export function viewBuilder(
+  input: InputSnapshot,
+  options: ViewOptions = {},
+): (location?: string, phase?: Phase) => View {
+  const metadata = metadataOf(input),
+    authored = views(input, options, metadata, undefined);
+  if (input.evidence === undefined || input.evidence.length === 0) return authored;
+  const root = authored(),
+    rooted =
+      (build: typeof authored, view: View): typeof authored =>
+      (location, phase) =>
+        location === undefined && phase === undefined ? view : build(location, phase);
+  const wanted = `${EVIDENCE_DIRECTORY}/${root.authoredRevision}.ia`;
+  const listed = input.evidence.find((candidate) => candidate.path === wanted),
+    read = listed === undefined ? undefined : evidenceSource(input.root, listed.path),
+    source = read === undefined ? undefined : writerEvidence(read, root);
+  if (source === undefined) return rooted(authored, root);
+  const build = views(input, options, metadata, source),
+    evidenced = build();
+  return authoredAdmission(evidenced, source.path) === authoredAdmission(root, source.path)
+    ? rooted(build, evidenced)
+    : rooted(authored, root);
+}
+function views(
+  input: InputSnapshot,
+  options: ViewOptions,
+  metadata: RevisionSource,
+  evidence: RevisionSource | undefined,
+): (location?: string, phase?: Phase) => View {
+  const inputSources = evidence === undefined ? input.sources : [...input.sources, evidence];
+  const parsed = inputSources.map((s) => ({ ...parse(s.text, s.path), location: s.location }));
   const contexts = new Map<string, Context>();
   const analyze = (location: string): Context => {
     const known = contexts.get(location);
@@ -85,7 +196,7 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
   };
   // Registry visibility can change only at a declared reach. Inspect those
   // finite contexts before authority so bands cannot conceal duplicate REQ ids.
-  for (const reach of [...new Set(['', ...input.sources.map((s) => s.location.placement.reach)])].sort(compare))
+  for (const reach of [...new Set(['', ...inputSources.map((s) => s.location.placement.reach)])].sort(compare))
     analyze(reach);
   const requirements = new Map<string, { id: string; identity: string; path: string; line: number }>();
   for (const context of contexts.values())
@@ -101,18 +212,8 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
       }
   const duplicates = requirementCollisions([...requirements.values()]);
   const duplicatePaths = new Set(duplicates.diagnostics.map((d) => d.path));
-  const metadata: RevisionSource = {
-    path: '.ia/.db-inputs.json',
-    text: stableSerialize({
-      folders: input.folders,
-      floorOrigin: input.floorOrigin,
-      admissionVersion: 1,
-      ...(input.authoredRoots ? { authoredRoots: input.authoredRoots } : {}),
-      ...(input.activation ? { activation: input.activation } : {}),
-    }),
-    location: { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' },
-  };
-  const revisionSources = [...input.sources, metadata];
+  const revisionSources = [...inputSources, metadata],
+    revisionInputs = { sources: revisionSources, languageVersion: LANGUAGE_VERSION, kernelDigest: KERNEL_DIGEST };
   // D02a: the capture declares roots once, by the @workspace records the root view admits, and every view seats its
   // records by them, so a narrower root or phase never re-roots an occurrence. D02b decides the repository's own
   // @workspace at the same moment, for every view's path seats.
@@ -158,7 +259,7 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
       }
       const path = systemMember(registry.systems.get(name)?.path ?? '')?.root ?? `.ia/src/systems/${name}`;
       const roots = [...new Set(sources.map((s) => systemMember(s.ast.path)!.root))];
-      return sources.length === 0 && input.sources.some((s) => systemMember(s.path)?.name === name)
+      return sources.length === 0 && inputSources.some((s) => systemMember(s.path)?.name === name)
         ? []
         : [{ name, path, roots, sources, records: [] }];
     });
@@ -214,9 +315,7 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
     };
     const graphOf = (records: readonly CompiledRecord[]) =>
       load(records, registry, {
-        sources: revisionSources,
-        languageVersion: LANGUAGE_VERSION,
-        kernelDigest: KERNEL_DIGEST,
+        ...revisionInputs,
         location,
         ...(phase === undefined ? {} : { phase }),
       });
@@ -256,7 +355,9 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
           validateGraphSchema(node, graph),
           validateSelectors(node),
           validateVariants(node),
-          ...(node.discriminator === 'check' ? [validateCheck(node)] : []),
+          ...(node.discriminator === 'check'
+            ? [options.checks === 'structural' ? validateCheckStructure(node) : validateCheck(node)]
+            : []),
         ];
         for (const assessment of assessments)
           if (assessment.outcome !== 'pass') {
@@ -287,9 +388,12 @@ export function viewBuilder(input: InputSnapshot): (location?: string, phase?: P
       sourceDiagnostics,
       folders: folders.filter((f) => !blockedFolders.has(f.path)),
       admission: observations,
+      ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
     });
     return Object.freeze({
       graph,
+      // Over the inputs and registry the graph's revision hashes, so the two differ only by runtime-placed sources.
+      authoredRevision: authoredRevisionOf(registry, revisionInputs, [metadata.path]),
       report,
       boundary,
       refused: Object.freeze(

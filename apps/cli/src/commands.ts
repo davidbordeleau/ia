@@ -81,6 +81,39 @@ const REGISTRY: OptionSpec = option({
   summary: 'Registry for every id in this command (default: per-provider configuration)',
 });
 
+/**
+ * Plan amendment C19 and the continuation's lane C: the acting participant of a mandate-gated command (profile.ts), a
+ * local declaration rather than authentication. Every gated command takes it; `ia position` is never gated.
+ */
+const ACTOR: OptionSpec = option({
+  name: 'actor',
+  kind: 'value',
+  placeholder: '<agent>',
+  summary:
+    "The acting participant, an authored @agent of the workspace's mandates (default: its steward, or its one participant)",
+});
+/** `ia preview`'s and `ia author`'s forms: the parser takes one value per option, so these are mode flags. */
+const EDIT_OPTIONS: readonly OptionSpec[] = [
+  option({
+    name: 'relate',
+    kind: 'boolean',
+    conflicts: ['set', 'at'],
+    summary: 'Add one relationship row <spelling> <target> to the owned record',
+  }),
+  option({
+    name: 'set',
+    kind: 'boolean',
+    conflicts: ['at'],
+    summary: 'Set one field of the owned record; += adds one item to a list field',
+  }),
+  option({
+    name: 'at',
+    kind: 'value',
+    placeholder: '<path>',
+    summary: 'File for a new record, under an authored root in .ia/src (default <first authored root>/<word>.ia)',
+  }),
+];
+
 const grammar = (options: readonly OptionSpec[], rest: PositionalSpec = none): Grammar => ({
   options: [...COMMON_OPTIONS, ...options],
   positionals: rest,
@@ -166,7 +199,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       refuses: 'no .ia/src directory at the root or in any parent',
       next: 'ia init',
     },
-    syntax: ['ia validate [<path>...] [--severity error|warning] [--max-findings <n>] [--json]'],
+    syntax: ['ia validate [<path>...] [--severity error|warning] [--max-findings <n>] [--actor <agent>] [--json]'],
     grammar: grammar(
       [
         option({ name: 'severity', kind: 'value', values: ['error', 'warning'], summary: 'Lowest severity to report' }),
@@ -177,8 +210,66 @@ export const COMMANDS: readonly CommandSpec[] = [
           placeholder: '<n>',
           summary: 'Findings to render (default 50)',
         }),
+        ACTOR,
       ],
       positionals('path', 0, Number.POSITIVE_INFINITY),
+    ),
+  },
+  {
+    // Milestone generation-binding plan amendments C18, C19 and C3: the read-only half of record authoring. The parser
+    // takes one value per option, so --relate and --set are mode flags followed by positionals.
+    name: 'preview',
+    group: 'workspace',
+    summary: 'Show what one new record, field or relationship would compile to',
+    // requireProfile (profile.ts): a mode the governing mandates do not allow names their governance position.
+    catalog: {
+      mode: 'validate',
+      move: 'Verification',
+      // Review C-N7: the refusal its next command answers; the others are in apps/cli/SPEC.md.
+      refuses: 'a move or a word the governing mandates do not allow; writes nothing',
+      next: 'ia position --seat <mandate> --shape governance',
+    },
+    syntax: [
+      'ia preview <word> [<name> [<field>=<value>...] [--at <path>]] [--actor <agent>] [--json]',
+      'ia preview --relate <owned> <spelling> <target> [--actor <agent>] [--json]',
+      'ia preview --set <owned> <section.key>=<value> [--actor <agent>] [--json]',
+      'ia preview --set <owned> <section.key>+=<item> [--actor <agent>] [--json]',
+    ],
+    grammar: grammar([...EDIT_OPTIONS, ACTOR], positionals('argument', 1, Number.POSITIVE_INFINITY)),
+  },
+  {
+    // Milestone generation-binding plan amendments C19, C20 and C3: the writing half of record authoring. Each form is the
+    // preview form of the same target, bound to the digest that preview printed.
+    name: 'author',
+    group: 'workspace',
+    summary: 'Write one new record, field or relationship that ia preview showed',
+    // runAuthor (author.ts): a file changed since its preview names the preview again.
+    catalog: {
+      mode: 'author',
+      move: 'Synthesis',
+      // Review C-N7: the refusal its next command answers; the others are in apps/cli/SPEC.md.
+      refuses: 'a --digest that no longer names the target file; writes nothing',
+      next: 'ia preview <the same form>',
+    },
+    syntax: [
+      'ia author <word> <name> [<field>=<value>...] [--at <path>] --digest <sha256> [--actor <agent>] [--json]',
+      'ia author --relate <owned> <spelling> <target> --digest <sha256> [--actor <agent>] [--json]',
+      'ia author --set <owned> <section.key>=<value> --digest <sha256> [--actor <agent>] [--json]',
+      'ia author --set <owned> <section.key>+=<item> --digest <sha256> [--actor <agent>] [--json]',
+      'ia author system <name> [--actor <agent>] [--json]',
+    ],
+    grammar: grammar(
+      [
+        ...EDIT_OPTIONS,
+        option({
+          name: 'digest',
+          kind: 'value',
+          placeholder: '<sha256>',
+          summary: "The target file's sha256 that ia preview printed for the same form (required but for system)",
+        }),
+        ACTOR,
+      ],
+      positionals('argument', 1, Number.POSITIVE_INFINITY),
     ),
   },
   {
@@ -194,10 +285,11 @@ export const COMMANDS: readonly CommandSpec[] = [
       refuses: 'an uninitialized root with no authored @workspace and no source errors; nothing is written',
       next: 'ia init <directory>',
     },
-    syntax: ['ia capture [--preview] [--json]'],
+    syntax: ['ia capture [--preview] [--actor <agent>] [--json]'],
     // Decision capture-preview-placement: capture writes by default, so its preview is a flag (plan amendment B8).
     grammar: grammar([
       option({ name: 'preview', kind: 'boolean', summary: 'Report what the capture would write; write nothing' }),
+      ACTOR,
     ]),
   },
   {
@@ -219,6 +311,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       }),
       option({ name: 'stdout', kind: 'boolean', summary: 'Refused: ia capture writes only its snapshot file' }),
       option({ name: 'force', kind: 'boolean', summary: 'Accepted and ignored: ia capture always writes' }),
+      ACTOR,
     ]),
   },
   {
@@ -279,8 +372,8 @@ export const COMMANDS: readonly CommandSpec[] = [
     // readNext (read.ts): IA-RUNTIME-READ-UNADMITTED names the overview of what the workspace admits.
     catalog: { mode: 'read', move: 'Observation', refuses: 'a locator no admitted record answers', next: 'ia inspect' },
     syntax: [
-      'ia read <identity>[#<phase>/<Primitive> | #<REQ-ID>] [--include-runtime] [--json]',
-      'ia read <path>:<line> [--include-runtime] [--json]',
+      'ia read <identity>[#<phase>/<Primitive> | #<REQ-ID>] [--include-runtime] [--actor <agent>] [--json]',
+      'ia read <path>:<line> [--include-runtime] [--actor <agent>] [--json]',
     ],
     grammar: grammar(
       [
@@ -289,6 +382,7 @@ export const COMMANDS: readonly CommandSpec[] = [
           kind: 'boolean',
           summary: 'Also read a record at runtime placement (band 0)',
         }),
+        ACTOR,
       ],
       positionals('locator', 1, 1),
     ),
@@ -368,7 +462,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       refuses: 'no --seat while the workspace authors several @plan records, which the message lists',
       next: 'ia next --seat <plan>',
     },
-    syntax: ['ia next [--seat <plan|milestone|task>] [--json]'],
+    syntax: ['ia next [--seat <plan|milestone|task>] [--actor <agent>] [--json]'],
     grammar: grammar([
       option({
         name: 'seat',
@@ -378,6 +472,7 @@ export const COMMANDS: readonly CommandSpec[] = [
         summary:
           'A @plan, @milestone or @task identity (default: the only @plan authored, with @milestone records that name it in work.plan and @task records that name those in work.milestone)',
       }),
+      ACTOR,
     ]),
   },
   {
@@ -394,9 +489,9 @@ export const COMMANDS: readonly CommandSpec[] = [
       refuses: 'a file without the generated marker at a path it writes, which its plan names; --apply writes nothing',
       next: 'ia project <host>',
     },
-    syntax: ['ia project <claude|codex> [--apply] [--json] [--yes]'],
+    syntax: ['ia project <claude|codex> [--apply] [--actor <agent>] [--json] [--yes]'],
     grammar: grammar(
-      [option({ name: 'apply', kind: 'boolean', summary: 'Apply the plan rather than previewing it' })],
+      [option({ name: 'apply', kind: 'boolean', summary: 'Apply the plan rather than previewing it' }), ACTOR],
       positionals('host', 1, 1),
     ),
   },
@@ -625,7 +720,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     group: 'distribution',
     summary: "Plan or apply this workspace's host registration",
     syntax: [
-      'ia host <claude|codex|cursor> [--remove] [--context <identity>] [--apply] [--json] [--yes]',
+      'ia host <claude|codex|cursor> [--remove] [--context <identity>] [--apply] [--actor <agent>] [--json] [--yes]',
       'ia host claude --user [--remove] [--apply] [--json] [--yes]',
     ],
     grammar: grammar(
@@ -649,6 +744,8 @@ export const COMMANDS: readonly CommandSpec[] = [
           summary: 'Claude only: select the lifecycle context element',
         }),
         option({ name: 'apply', kind: 'boolean', summary: 'Apply the plan rather than previewing it' }),
+        // Review C2-R7: a workspace apply is gated as an effect; a removal and the user-level plugin are not.
+        { ...ACTOR, conflicts: ['user', 'remove'] },
       ],
       positionals('host', 1, 1),
     ),

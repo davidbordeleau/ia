@@ -7,9 +7,9 @@ import { digest } from '@inventarch/graph';
 import type { Node } from '@inventarch/graph';
 import { SHAPE_ROWS } from '@inventarch/language';
 import type { Location } from '@inventarch/language';
-import { entryCount, position, renderPacket } from '../src/index.js';
+import { entryCount, position, renderHost, renderPacket } from '../src/index.js';
 import type { PacketCatalogRow, PacketOutput } from '../src/index.js';
-import { database, declare, freshInit, packetFixture, put, workspace } from './workspace.js';
+import { database, declare, freshInit, law, packetFixture, put, workspace } from './workspace.js';
 
 // R19 (position-and-projection §4 and items 11 and 12; plan amendments B1 to B5 and B8): the position packet. The golden
 // packet is regenerated only by `node packages/runtime/tests/golden/write.mjs`, which sets IA_POSITION_GOLDEN=write for
@@ -23,12 +23,20 @@ const fixture = packetFixture,
   NONE = 'none (no authored @mandate names an @agent)';
 const RUNTIME: Location = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' };
 /**
- * A catalog fixture with the shape of the CLI's seven rows (apps/cli packetCatalog): the runtime takes the catalog as
+ * A catalog fixture with the shape of the CLI's nine rows (apps/cli packetCatalog): the runtime takes the catalog as
  * data and imports no app (B2), so the rows the CLI builds are pinned in apps/cli.
  */
 const CATALOG: readonly PacketCatalogRow[] = [
   { command: 'ia init', mode: 'effect', move: 'Execution', refuses: 'a target already initialized', next: 'ia init' },
   { command: 'ia validate', mode: 'validate', move: 'Verification', refuses: 'no .ia/src', next: 'ia init' },
+  {
+    command: 'ia preview',
+    mode: 'validate',
+    move: 'Verification',
+    refuses: 'a move the mandates do not allow',
+    next: 'ia position --seat <mandate> --shape governance',
+  },
+  { command: 'ia author', mode: 'author', move: 'Synthesis', refuses: 'a stale digest', next: 'ia preview <form>' },
   { command: 'ia capture', mode: 'effect', move: 'Execution', refuses: 'no @workspace', next: 'ia init' },
   { command: 'ia read', mode: 'read', move: 'Observation', refuses: 'an unadmitted locator', next: 'ia inspect' },
   { command: 'ia position', mode: 'read', move: 'Observation', refuses: 'an unadmitted seat', next: 'ia position' },
@@ -115,11 +123,11 @@ it('matches the golden packet of a fresh init and pins its entry count, the revi
     )}\n`;
   if (process.env['IA_POSITION_GOLDEN'] === 'write') writeFileSync(file, text);
   else expect(text).toBe(readFileSync(file, 'utf8'));
-  // P = M = 1, N = 11, T = 3 (workspace, agent, mandate) and C = 7, the milestone's final catalog (B1: 26 + N).
+  // P = M = 1, N = 11, T = 3 (workspace, agent, mandate) and C = 9, with plan amendment C3's two rows (B1: 28 + N).
   expect([packet.participants.length, packet.mandates.length, packet.systems.length, packet.tallies.length]).toEqual([
     1, 1, 11, 3,
   ]);
-  expect(entryCount(packet)).toBe(37);
+  expect(entryCount(packet)).toBe(39);
   expect(entryCount(packet)).toBe(formula(db, CATALOG.length));
   // The output is frozen whole, and its intent rows are copies: the kernel's rows are not the packet's to freeze.
   expect([Object.isFrozen(output), Object.isFrozen(packet), Object.isFrozen(packet.intents[0]!.kinds)]).toEqual([
@@ -140,9 +148,9 @@ it('holds the entry formula on the conformance corpus and on this repository, co
       { packet } = render(db);
     expect(packet.systems.length, name).toBe(packet.seat.systems);
     expect(entryCount(packet), name).toBe(formula(db, CATALOG.length));
-    // B1's pinned counts under the seven-row catalog: the conformance corpus (P = M = T = 0, N = 5) and this repository
-    // (P = M = 1, N = 11, T = 22), whose committed CLAUDE.md renders the same 56 (tools/projections/generate.test.ts).
-    expect(entryCount(packet), name).toBe(name === 'conformance' ? 26 : 56);
+    // B1's pinned counts under the nine-row catalog: the conformance corpus (P = M = T = 0, N = 5) and this repository
+    // (P = M = 1, N = 11, T = 17) after separating the neutral examples from the live corpus.
+    expect(entryCount(packet), name).toBe(name === 'conformance' ? 28 : 53);
     // The host note is no entry, and the formula does not read the catalog's contents.
     expect(entryCount(render(db, []).packet), name).toBe(entryCount(packet) - CATALOG.length);
   }
@@ -188,7 +196,7 @@ it('renders a workspace with no participant with no participant entry and no ref
   const { packet } = render(database(adopted));
   expect([packet.participants, packet.mandates]).toEqual([[], []]);
   expect(packet.seat.participants).toBe(NONE);
-  expect(entryCount(packet)).toBe(35);
+  expect(entryCount(packet)).toBe(37);
   // With one, the seat line names no `none` and the participant is read through the scope.
   const one = render(database(freshInit())).packet;
   expect(one.seat).toEqual({
@@ -236,7 +244,7 @@ it('renders two participants named by three mandates by identity, each agent onc
     },
   ]);
   expect(packet.seat.participants).toBeUndefined();
-  expect(entryCount(packet)).toBe(40);
+  expect(entryCount(packet)).toBe(42);
   expect(entryCount(packet)).toBe(formula(db, CATALOG.length));
 });
 
@@ -384,6 +392,39 @@ it('moves only the host note when a capture is written: the packet and its diges
   expect(after.hostNote).not.toEqual(before.hostNote);
   expect(JSON.stringify(after.packet)).toBe(JSON.stringify(before.packet));
   expect(after.digest).toBe(before.digest);
+});
+
+it('keeps the packet, its digest, every rendered file and a current capture across a runtime-band source', () => {
+  // Plan amendment C13: the packet's revision is body(K0)'s authored revision, so a source at runtime placement (as
+  // evidence an `ia validate` writes will be) moves the handle's revision and nothing the packet or a host file says.
+  const root = freshInit(),
+    lawFile = '.ia/src/runtime-rule.ia',
+    db = database(root, { locations: { [lawFile]: RUNTIME } }),
+    rendered = (output: PacketOutput) =>
+      (['claude', 'codex'] as const).flatMap((host) =>
+        (['repository', 'consumer'] as const).map((target) =>
+          renderHost(host, output.packet, output.digest, output.hostNote, target),
+        ),
+      );
+  writeCapture(
+    root,
+    `${JSON.stringify({ format: CAPTURE_FORMAT, revision: db.revision, authoredRevision: db.authoredRevision, membership: db.snapshot().membership })}\n`,
+  );
+  db.refresh();
+  const revision = db.revision,
+    before = render(db);
+  expect(before.hostNote).toMatchObject({ revision, capturedRevision: revision, freshness: 'current' });
+  put(root, lawFile, law('runtime-rule', 'blocking'));
+  db.refresh();
+  expect(db.records().find((node) => node.identity === 'governance-system/governance/law/runtime-rule')?.band).toBe(0);
+  expect(errors(db)).toEqual([]);
+  expect(db.revision).not.toBe(revision);
+  const after = render(db);
+  expect(after.packet.revision).toBe(db.authoredRevision);
+  expect(JSON.stringify(after.packet)).toBe(JSON.stringify(before.packet));
+  expect(after.digest).toBe(before.digest);
+  expect(after.hostNote).toEqual(before.hostNote);
+  expect(rendered(after)).toEqual(rendered(before));
 });
 
 it('prints a composition.systems reference no admitted record answers as unresolved, and orders the lines by identity', () => {

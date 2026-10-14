@@ -2,7 +2,7 @@
 
 Generated from the public contract corpus by `pnpm vocabulary:generate`. Required sections and fields are structural obligations; `id` is not an implicit enumeration. See [the language guide](README.md) for shared syntax, allowed values, relationship resolution, domain constraints and evaluator limits. The [JSON catalogue](vocabulary.json) carries the same machine-readable contract.
 
-This catalogue contains 44 words. Source digest: `b57cce54697f36634d379efd7d7edaf0657daa42d5ef92ac33fdcdb021b813c3`.
+This catalogue contains 44 words. Source digest: `8cbcfd65e08d4240b1f99efeb0ab0fa7495bda04051966c9349ae86257c7b91f`.
 
 ## @agent
 
@@ -261,7 +261,8 @@ Required sections: meaning, check. Optional sections: relationships, governance.
 | meaning.answers | text | yes |  |
 | check.implementation | text | no | The evaluator that runs the check: a built-in or catalog evaluator id, the same value check.runs takes, and equal to it when both are stated. The \<id>@\<version> form of evidence.implementation is not accepted here. |
 | check.runs | id | no |  |
-| check.scope | text | yes |  |
+| check.scope | text | yes | What the check selects: the whole-workspace token *, a scope its evaluator reports, or prose. It is text and claims no path; check.covers does. |
+| check.covers | list of text | no | Path selections the check claims, matched by the location resolver. Claiming a path does not change which verdicts the check selects; check.scope does that. |
 
 ## @contract
 
@@ -1138,6 +1139,6 @@ Required sections: meaning, composition. Optional sections: relationships.
 |---|---|---|---|
 | meaning.says | text | yes |  |
 | meaning.answers | text | yes |  |
-| composition.systems | list of ref | yes |  |
+| composition.systems | list of ref to system | yes |  |
 | composition.sources | list of text | no | A root and the placement it is captured at, spelled \<root> @\<placement> with the placement one of authored, adopted, open, floor or runtime; for example .ia/src @authored. Admission does not check this form; an entry spelled any other way declares no root. |
 | composition.steward | ref to agent | no |  |

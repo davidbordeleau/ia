@@ -5,13 +5,18 @@
  * a root that cannot be read produced no finding set, so it is a refusal and never a diagnostic. The service's
  * own code is carried through unchanged (§4.1); only the next action is the CLI's.
  */
+import { EditorDatabase } from '@inventarch/db/editor';
+import type { EditorSnapshot } from '@inventarch/db/editor';
 import { openWorkspaceSession } from '@inventarch/distribution/services';
+import type { SessionOptions } from '@inventarch/distribution/services';
 import { Refusal, serviceNext } from './consumer.js';
 import { nearestTokens } from './commands.js';
 import { recoverCommand } from './host.js';
 import { quote } from './render.js';
 
 export type Session = ReturnType<typeof openWorkspaceSession>;
+/** What the identity remedies below read of an open workspace: an editor snapshot answers them as a session's reader does. */
+export type Records = Pick<Session['reader'], 'refused' | 'records'>;
 
 export const codeOf = (error: unknown, fallback: string): string =>
   error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
@@ -52,18 +57,49 @@ function openNext(error: unknown, root: string): string {
   return serviceNext(code, { command: null, root });
 }
 
-export function openSession(root: string): Session {
+/** How `ia validate` opens its session: checks admitted structurally (C21); no evidence is read (review finding B3-R4). */
+export const VALIDATING = { checks: 'structural' } as const;
+export function openSession(root: string, options: Omit<SessionOptions, 'root'> = {}): Session {
   try {
-    return openWorkspaceSession({ root });
+    return openWorkspaceSession({ root, ...options });
   } catch (error) {
-    throw new Refusal(
-      codeOf(error, 'IA-DB-ROOT-INVALID'),
-      error instanceof Error ? error.message : String(error),
-      3,
-      { path: root },
-      openNext(error, root),
-    );
+    throw openRefusal(error, root);
   }
+}
+const openRefusal = (error: unknown, root: string): Refusal =>
+  new Refusal(
+    codeOf(error, 'IA-DB-ROOT-INVALID'),
+    error instanceof Error ? error.message : String(error),
+    3,
+    { path: root },
+    openNext(error, root),
+  );
+
+/** An open editor snapshot: one consistent read of the workspace's sources, their admission and its registry. */
+export interface Editor {
+  readonly snapshot: EditorSnapshot;
+  close(): void;
+}
+/**
+ * How `ia preview` and `ia author` open their editor snapshot: checks admitted structurally, as `ia validate` admits
+ * them (C21), so a `@check` naming an evaluator that is not built in is a record they can draft beside and edit rather
+ * than an admission error; no evidence is listed (review finding B3-N5), so a candidate never reads it.
+ */
+export const AUTHORING = { checks: 'structural' } as const;
+/**
+ * The authoring verbs' open (plan amendment C18): db's editor database, which reads the inputs twice and keeps them only
+ * when both reads agree, so the source text a draft edits, the registry its schema comes from and the admission it is
+ * compiled against are one state, admitted as `AUTHORING` says. It publishes no cache and writes nothing. A workspace
+ * that does not open refuses as `openSession` refuses.
+ */
+export function openEditor(root: string): Editor {
+  let database: EditorDatabase;
+  try {
+    database = new EditorDatabase(root, AUTHORING);
+  } catch (error) {
+    throw openRefusal(error, root);
+  }
+  return { snapshot: database.current, close: () => database.close() };
 }
 
 /** The words `ia next` reads a plan from, as its `--seat`. */
@@ -76,7 +112,7 @@ const SEAT_WORDS: readonly string[] = ['plan', 'milestone', 'task'];
  * verb, answers a misspelling (for `ia next`, the nearest @plan, @milestone or @task as its seat). Null when neither does.
  */
 export function nearestNext(
-  reader: Session['reader'],
+  reader: Records,
   identity: string,
   verb: 'inspect' | 'read' | 'next',
   rooted: string,
@@ -101,12 +137,7 @@ export function nearestNext(
  * Design row 27 for an identity `ia inspect` or `ia read` finds no admitted record of: what `nearestNext` names, else
  * the workspace overview.
  */
-export function identityNext(
-  reader: Session['reader'],
-  identity: string,
-  verb: 'inspect' | 'read',
-  rooted: string,
-): string {
+export function identityNext(reader: Records, identity: string, verb: 'inspect' | 'read', rooted: string): string {
   return (
     nearestNext(reader, identity, verb, rooted) ??
     `Run "ia inspect${rooted}" for the overview of what the workspace admits.`

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { CAPTURE_FORMAT, writeCapture } from '@inventarch/db';
 import type { Handle } from '@inventarch/db';
+import type { Location } from '@inventarch/language';
 import { Door, MACHINE_PROTOCOL, NEXT_CODES, RUNTIME_CODES, deliveryView } from '../src/index.js';
 import type {
   DeliveryResult,
@@ -148,6 +149,30 @@ it('orders the plan in one sort, prerequisites first and ties by milestone then 
   expect(delivered.revision).toBe(db.revision);
   for (const seat of [id('plan', 'release'), milestone('build'), task('examples')])
     expect(JSON.stringify(view(root, seat)), seat).toBe(JSON.stringify(delivered));
+});
+
+it('names the authored revision: exit evidence placed at runtime moves the verdicts, never the revision', () => {
+  // Plan amendment C13 and decision evidence-placement: evidence an `ia validate` writes sits at runtime placement, the
+  // view reads it as exit evidence, and the authored revision the view names leaves it out.
+  const root = delivery('base'),
+    file = '.ia/src/runtime-evidence.ia',
+    runtime: Location = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' },
+    db = database(root, { locations: { [file]: runtime } });
+  const delivered = (): DeliveryView => {
+    const result = deliveryView(db, db.resolveScope().token);
+    if (!result.ok) throw new Error(`${result.code}: ${result.message}`);
+    return result.view;
+  };
+  const before = delivered();
+  expect(before.revision).toBe(db.authoredRevision);
+  expect(byIdentity(before, 'guide').verdict).toBe('unblocked');
+  put(root, file, `#! ia 1.0\n\n${observation('guide-done', '@task guide', db.get(task('guide'))!.digest)}`);
+  db.refresh();
+  expect(db.get(id('observation', 'guide-done'))?.band).toBe(0);
+  const after = delivered();
+  expect(byIdentity(after, 'guide').verdict).toBe('evidenced');
+  expect(after.revision).toBe(before.revision);
+  expect(db.revision).not.toBe(before.revision);
 });
 
 it('orders a task requirement across milestones that no milestone states, which per-milestone sorts cannot', () => {

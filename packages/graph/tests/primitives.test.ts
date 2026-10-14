@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { KERNEL_DIGEST, LANGUAGE_VERSION } from '@inventarch/language';
-import { canonicalRoot, dimensionsOf, reaches, revisionOf, stableSerialize, validateCoordinate } from '../src/index.js';
+import {
+  authoredRevisionOf,
+  canonicalRoot,
+  dimensionsOf,
+  reaches,
+  revisionOf,
+  stableSerialize,
+  validateCoordinate,
+} from '../src/index.js';
 import { snapshot } from '../src/immutable.js';
 import { inputs, instance, records, registry } from './native.js';
 
@@ -117,6 +125,74 @@ describe('corpus revision', () => {
       location: { ...inputs[0]!.location, placement: { kind: 'floor' as const, band: 100 as const, reach: '' } },
     };
     expect(() => revisionOf(registry, { ...metadata, sources: [source] })).toThrow('placement');
+  });
+});
+describe('authored revision', () => {
+  // Decision evidence-placement and plan amendment C13: the revision without runtime-placed sources, a derived
+  // revision-only input such as db's .ia/.db-inputs.json kept.
+  const metadata = { languageVersion: LANGUAGE_VERSION, kernelDigest: KERNEL_DIGEST };
+  const runtime = {
+    placement: { kind: 'runtime' as const, band: 0 as const, reach: '' },
+    provenance: 'runtime' as const,
+  };
+  const derived = { path: '.ia/.db-inputs.json', text: '{"folders":[]}', location: runtime },
+    evidence = { path: '.ia/work/evidence/probe.ia', text: '#! ia 1.0\n', location: runtime };
+  const full = [...inputs, derived],
+    baseline = authoredRevisionOf(registry, { ...metadata, sources: full }, [derived.path]);
+  it('is the revision while no source but a derived input sits at runtime placement, in any order', () => {
+    expect(baseline).toBe(revisionOf(registry, { ...metadata, sources: full }));
+    expect(authoredRevisionOf(registry, { ...metadata, sources: [...full].reverse() }, [`./${derived.path}`])).toBe(
+      baseline,
+    );
+  });
+  it('leaves runtime-placed sources out: adding or editing one moves only the revision', () => {
+    for (const sources of [
+      [...full, evidence],
+      [...full, { ...evidence, text: evidence.text + '\n' }],
+    ]) {
+      expect(revisionOf(registry, { ...metadata, sources })).not.toBe(
+        revisionOf(registry, { ...metadata, sources: full }),
+      );
+      expect(authoredRevisionOf(registry, { ...metadata, sources }, [derived.path])).toBe(baseline);
+    }
+    // A source moved to runtime placement drops out of the authored revision, as its records leave what agents are
+    // given: it is hashed as if the source were absent.
+    const placed = [{ ...inputs[0]!, location: runtime }, ...inputs.slice(1), derived];
+    expect(authoredRevisionOf(registry, { ...metadata, sources: placed }, [derived.path])).toBe(
+      authoredRevisionOf(registry, { ...metadata, sources: [...inputs.slice(1), derived] }, [derived.path]),
+    );
+    expect(authoredRevisionOf(registry, { ...metadata, sources: placed }, [derived.path])).not.toBe(baseline);
+  });
+  it.each(['bytes', 'derived', 'unnamed derived', 'registry', 'kernel', 'version'])('changes for %s', (change) => {
+    const sources = [
+      change === 'bytes' ? { ...inputs[0]!, text: inputs[0]!.text + '\n' } : inputs[0]!,
+      ...inputs.slice(1),
+      change === 'derived' ? { ...derived, text: '{"folders":["new"]}' } : derived,
+    ];
+    const result = authoredRevisionOf(
+      change === 'registry' ? { ...registry, blocked: new Set(['new']) } : registry,
+      {
+        sources,
+        languageVersion: change === 'version' ? 'different' : LANGUAGE_VERSION,
+        kernelDigest: change === 'kernel' ? 'different' : KERNEL_DIGEST,
+      },
+      // Not named as derived, the metadata input is a runtime-placed source like any other.
+      change === 'unnamed derived' ? [] : [derived.path],
+    );
+    expect(result).not.toBe(baseline);
+  });
+  it('checks every source as revisionOf does, a runtime-placed one included', () => {
+    expect(() =>
+      authoredRevisionOf(registry, {
+        ...metadata,
+        sources: [...full, evidence, { ...evidence, path: `./${evidence.path}` }],
+      }),
+    ).toThrow('duplicate canonical paths');
+    const misplaced = {
+      ...evidence,
+      location: { ...runtime, placement: { ...runtime.placement, band: 100 as const } },
+    };
+    expect(() => authoredRevisionOf(registry, { ...metadata, sources: [...full, misplaced] })).toThrow('placement');
   });
 });
 describe('coordinate and authored dimensions', () => {

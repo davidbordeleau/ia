@@ -134,6 +134,11 @@
       "types": "./dist/host-observe.d.ts",
       "default": "./dist/host-observe.js"
     },
+    "./implementations": {
+      "development": "./src/implementations.ts",
+      "types": "./dist/implementations.d.ts",
+      "default": "./dist/implementations.js"
+    },
     "./lifecycle-registration": {
       "development": "./src/lifecycle-registration.ts",
       "types": "./dist/lifecycle-registration.d.ts",
@@ -232,6 +237,10 @@
     "./internal/ia-home": {
       "types": "./dist/ia-home.d.ts",
       "default": "./dist/ia-home.js"
+    },
+    "./internal/implementations": {
+      "types": "./dist/implementations.d.ts",
+      "default": "./dist/implementations.js"
     },
     "./internal/install": {
       "types": "./dist/install.d.ts",
@@ -417,6 +426,10 @@
         "types": "./dist/host-observe.d.ts",
         "default": "./dist/host-observe.js"
       },
+      "./implementations": {
+        "types": "./dist/implementations.d.ts",
+        "default": "./dist/implementations.js"
+      },
       "./lifecycle-registration": {
         "types": "./dist/lifecycle-registration.d.ts",
         "default": "./dist/lifecycle-registration.js"
@@ -508,6 +521,10 @@
       "./internal/ia-home": {
         "types": "./dist/ia-home.d.ts",
         "default": "./dist/ia-home.js"
+      },
+      "./internal/implementations": {
+        "types": "./dist/implementations.d.ts",
+        "default": "./dist/implementations.js"
       },
       "./internal/install": {
         "types": "./dist/install.d.ts",

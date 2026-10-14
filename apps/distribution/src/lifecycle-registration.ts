@@ -106,9 +106,13 @@ function identityMismatch(row: Record<string, unknown>, profile: LifecycleProfil
     return `Installed cache reports ${named(profile)} without its ${profile.maxContextCharacters}-character context cap`;
   return null;
 }
-/** Probe a verified emitted artifact for the binding's own profile row. A caller-supplied digest string is never accepted as executable evidence. */
+/**
+ * Probe a verified emitted artifact for the binding's own profile row. A caller-supplied digest string is never accepted
+ * as executable evidence. Review finding B-RC4: only the verified cache's launcher is read, so a 2.0.0 caller's value of
+ * the narrower verified-cache shape still type-checks.
+ */
 export function probeContextHookImplementation(
-  cache: ReturnType<typeof verifyHostCache>,
+  cache: Pick<ReturnType<typeof verifyHostCache>, 'launcher'>,
   profile: LifecycleProfile,
 ): string {
   const result = spawnSync(process.execPath, [cache.launcher, 'context', 'identity'], {

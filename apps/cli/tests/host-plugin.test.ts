@@ -1,5 +1,5 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { cleanup, scratch } from './scratch-fixture.js';
 import { repository, run } from './workspace-fixture.js';
@@ -313,5 +313,112 @@ describe('ia project --product plugin --check (A10)', () => {
       '--json',
     ]);
     expect(json(result.stdout)['code']).toBe('IA-ROUNDTRIP-DRIFT');
+  });
+});
+
+describe('ia project --product plugin --check (A10 fix round 1)', () => {
+  const readdirRecursive = (dir: string): string[] =>
+    readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join('/'))
+      .sort();
+  const check = (kit: string, ...compare: string[]) =>
+    run([
+      'project',
+      'claude',
+      '--product',
+      'plugin',
+      '--check',
+      ...(compare.length > 0 ? ['--compare', compare[0]!] : []),
+      '--root',
+      kit,
+      '--json',
+    ]);
+  type Report = {
+    compared: boolean;
+    diffs: { path: string; status: string }[];
+    drift: unknown[];
+    fixedPoint: string[];
+    unresolved: string[];
+  };
+  async function pair(label: string): Promise<{ plugin: string; kit: string }> {
+    const plugin = join(scratch(`host-plugin-${label}`), 'sample');
+    cpSync(SAMPLE, plugin, { recursive: true });
+    const kit = join(scratch(`host-plugin-${label}-kit`), 'sample-kit');
+    expect((await run(['init', kit, '--from', plugin, '--apply', '--yes', '--json'])).exitCode).toBe(0);
+    return { plugin, kit };
+  }
+
+  it('reports the compared files and no unresolved entries on the sample', async () => {
+    const kit = await lowered();
+    const result = await check(kit, SAMPLE);
+    const report = json(result.stdout) as unknown as Report;
+    expect(report.compared).toBe(true);
+    expect(report.unresolved).toEqual([]);
+    expect(report.diffs.map((d) => d.path)).toEqual(readdirRecursive(SAMPLE));
+    expect(report.diffs.every((d) => d.status === 'identical')).toBe(true);
+  });
+  it('says it is a fixed point only, without --compare', async () => {
+    const kit = await lowered();
+    const result = await run(['project', 'claude', '--product', 'plugin', '--check', '--root', kit]);
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(result.stdout).toContain('fixed point');
+    expect(result.stdout).not.toContain('content-exact');
+  });
+  it('names a lowered file the workspace holds differently, and keeps the report in the refusal', async () => {
+    const kit = await lowered();
+    const map = join(kit, 'assets/lowering-map.json');
+    writeFileSync(map, JSON.stringify(JSON.parse(readFileSync(map, 'utf8'))));
+    const result = await check(kit);
+    const body = json(result.stdout);
+    expect(body['code']).toBe('IA-ROUNDTRIP-DRIFT');
+    expect((body['details'] as Report).fixedPoint).toContain('assets/lowering-map.json');
+    expect(String(body['message'])).toContain('assets/lowering-map.json');
+  });
+  it('names a stray file under the plugin resources as a fixed-point mismatch', async () => {
+    const kit = await lowered();
+    writeFileSync(join(kit, '.ia/src/systems/sample-kit/plugin/stray.md'), 'not indexed\n');
+    const body = json((await check(kit)).stdout);
+    expect(body['code']).toBe('IA-ROUNDTRIP-DRIFT');
+    expect((body['details'] as Report).fixedPoint).toContain('.ia/src/systems/sample-kit/plugin/stray.md');
+  });
+  it('reports unresolved entries when the rendered plugin cannot be lowered again', async () => {
+    const kit = await lowered();
+    writeFileSync(join(kit, 'assets/plugin/README.md'), 'one\r\ntwo\r\n');
+    const body = json((await check(kit)).stdout);
+    expect(body['code']).toBe('IA-ROUNDTRIP-DRIFT');
+    expect((body['details'] as Report).unresolved.length).toBeGreaterThan(0);
+  });
+  it('reports a file the original lacks as extra and one it holds as missing, and re-runs with --compare', async () => {
+    const { plugin, kit } = await pair('extra-missing');
+    rmSync(join(plugin, 'README.md'));
+    writeFileSync(join(plugin, 'NOTES.md'), 'added after lowering\n');
+    const body = json((await check(kit, plugin)).stdout);
+    expect(body['code']).toBe('IA-ROUNDTRIP-DRIFT');
+    const byPath = new Map((body['details'] as Report).diffs.map((d) => [d.path, d.status]));
+    expect(byPath.get('README.md')).toBe('extra');
+    expect(byPath.get('NOTES.md')).toBe('missing');
+    expect(String(body['next'])).toContain('--compare');
+  });
+  it('calls frontmatter the lowering never parsed drift', async () => {
+    const { plugin, kit } = await pair('unparsed');
+    const agent = join(plugin, 'agents/sample-reader.md');
+    writeFileSync(agent, readFileSync(agent, 'utf8').replace('\n---\n', '\nmetadata:\n  owner: someone-else\n---\n'));
+    const body = json((await check(kit, plugin)).stdout);
+    expect(body['code']).toBe('IA-ROUNDTRIP-DRIFT');
+    const drift = (body['details'] as { drift: { path: string }[] }).drift;
+    expect(drift.map((d) => d.path)).toContain('agents/sample-reader.md');
+  });
+  it('refuses a workspace that does not hold exactly one system', async () => {
+    const kit = await lowered();
+    mkdirSync(join(kit, '.ia/src/systems/other'), { recursive: true });
+    const body = json((await check(kit)).stdout);
+    expect(body['code']).toBe('IA-PLUGIN-PRODUCT');
+  });
+  it('counts directories only under .ia/src/systems', async () => {
+    const kit = await lowered();
+    writeFileSync(join(kit, '.ia/src/systems/NOTES.txt'), 'a file, not a system\n');
+    const result = await check(kit, SAMPLE);
+    expect(result.exitCode, result.stdout).toBe(0);
   });
 });

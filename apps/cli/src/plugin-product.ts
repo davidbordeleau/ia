@@ -9,6 +9,8 @@ import {
   inventoryOf,
   lowerPlugin,
   readEntries,
+  RESOURCE_ROOT,
+  ASSET_ROOT,
 } from '@inventarch/workspace-runtime/internal/host-plugin';
 import type { Context, Result } from './consumer.js';
 import { confirm, Refusal, requireRoot } from './consumer.js';
@@ -28,13 +30,33 @@ const renderPluginPlan = (view: PluginView): string =>
     '\n',
   );
 
+const REFUSED = new Set(['drift', 'missing', 'extra']);
+
+/** Every regular file below `directory` (relative to `root`), as sorted POSIX paths; absent is empty. */
+function filesBelow(root: string, directory: string): string[] {
+  const base = resolve(root, directory);
+  if (!existsSync(base)) return [];
+  const found: string[] = [];
+  const walk = (relative: string): void => {
+    for (const entry of readdirSync(resolve(root, relative), { withFileTypes: true })) {
+      const path = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) walk(path);
+      else found.push(path);
+    }
+  };
+  walk(directory);
+  return found.sort();
+}
+
 /** Renders in memory, lowers the result again and proves content-exact plus fixed point; writes nothing. */
-function checkPluginProduct(context: Context, root: string, files: readonly PluginFile[]): Result {
+function checkPluginProduct(context: Context, root: string): Result {
   const { args, json } = context;
-  const compare = args.value('compare');
-  const diffs = compare === undefined ? [] : comparePlugin(readEntries(resolve(compare)), files);
-  const drift = diffs.filter((d) => d.status === 'drift' || d.status === 'missing' || d.status === 'extra');
-  const systems = readdirSync(resolve(root, '.ia/src/systems'));
+  const systemsRoot = resolve(root, '.ia/src/systems');
+  const systems = existsSync(systemsRoot)
+    ? readdirSync(systemsRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+    : [];
   if (systems.length !== 1)
     throw new Refusal(
       'IA-PLUGIN-PRODUCT',
@@ -44,36 +66,58 @@ function checkPluginProduct(context: Context, root: string, files: readonly Plug
       'Run "ia init --help" to lower the plugin into a kit workspace first.',
     );
   const system = systems[0]!;
+  const files: readonly PluginFile[] = renderPluginFor(root);
+  const compare = args.value('compare');
+  const diffs = compare === undefined ? [] : comparePlugin(readEntries(resolve(compare)), files);
+  const drift = diffs.filter((d) => REFUSED.has(d.status));
   const again = lowerPlugin(inventoryOf(files.map((f) => ({ path: f.path, bytes: f.bytes }))), system);
-  const fixedPoint = again.files
-    .filter((f) => !existsSync(resolve(root, f.path)) || !readFileSync(resolve(root, f.path)).equals(f.bytes))
-    .map((f) => f.path);
-  const report = {
-    compared: compare !== undefined,
-    diffs,
-    drift,
-    fixedPoint,
-    unresolved: again.unresolved,
-  };
-  if (drift.length > 0 || fixedPoint.length > 0 || again.unresolved.length > 0)
+  const lowered = new Map(again.files.map((f) => [f.path, f.bytes]));
+  // Both directions: a lowered file the workspace lacks or holds differently, and a workspace file lowering does not write.
+  const stray = [...filesBelow(root, RESOURCE_ROOT(system)), ...filesBelow(root, ASSET_ROOT)].filter(
+    (path) => !lowered.has(path),
+  );
+  const fixedPoint = [
+    ...[...lowered]
+      .filter(([path, bytes]) => !existsSync(resolve(root, path)) || !readFileSync(resolve(root, path)).equals(bytes))
+      .map(([path]) => path),
+    ...stray,
+  ].sort();
+  const report = { compared: compare !== undefined, diffs, drift, fixedPoint, unresolved: again.unresolved };
+  if (drift.length > 0 || fixedPoint.length > 0 || again.unresolved.length > 0) {
+    const parts = [
+      ...drift.map((d) => `${d.path} (${d.status}${d.reason === null ? '' : `: ${d.reason}`})`),
+      ...fixedPoint.map((path) => `${path} (fixed point)`),
+      ...again.unresolved.map((reason) => `unresolved: ${reason}`),
+    ];
+    const rerun = `ia project ${args.positionals[0] ?? 'claude'} --product plugin --check${compare === undefined ? '' : ` --compare ${quote(resolve(compare))}`} --root ${quote(root)} --json`;
     throw new Refusal(
       'IA-ROUNDTRIP-DRIFT',
-      `${drift.length} drifted file(s) and ${fixedPoint.length} fixed-point mismatch(es): ${[...drift.map((d) => d.path), ...fixedPoint].slice(0, 20).join(', ')}`,
+      `${drift.length} drifted file(s), ${fixedPoint.length} fixed-point mismatch(es), ${again.unresolved.length} unresolved: ${parts.slice(0, 20).join('; ')}${parts.length > 20 ? '; ...' : ''}`,
       1,
       { path: root },
-      `Run "ia project ${args.positionals[0] ?? 'claude'} --product plugin --check --root ${quote(root)} --json" for the full report.`,
+      `Run "${rerun}" for the full report.`,
+      null,
+      undefined,
+      report,
     );
-  return {
-    exitCode: 0,
-    stdout: json ? `${JSON.stringify(report)}\n` : renderCheck(report),
-    stderr: '',
-  };
+  }
+  return { exitCode: 0, stdout: json ? `${JSON.stringify(report)}\n` : renderCheck(report), stderr: '' };
 }
 
-const renderCheck = (report: { diffs: { path: string; status: string; rules: readonly string[] }[] }): string =>
+const renderCheck = (report: {
+  compared: boolean;
+  diffs: { path: string; status: string; rules: readonly string[]; reason: string | null }[];
+}): string =>
   [
-    'Round trip: content-exact and a fixed point.',
-    ...report.diffs.filter((d) => d.status !== 'identical').map((d) => `  ${d.path}: ${d.rules.join(', ')}`),
+    report.compared
+      ? 'Round trip: content-exact and a fixed point.'
+      : 'Round trip: a fixed point (not compared with an original).',
+    ...report.diffs
+      .filter((d) => d.status !== 'identical')
+      .map(
+        (d) =>
+          `  ${d.path}: ${d.status}${d.rules.length > 0 ? ` (${d.rules.join(', ')})` : ''}${d.reason === null ? '' : ` ${d.reason}`}`,
+      ),
     '',
   ].join('\n');
 
@@ -82,7 +126,7 @@ export async function runPluginProduct(context: Context): Promise<Result> {
   const root = requireRoot(context);
   const next = `Run "ia project ${args.positionals[0] ?? 'claude'} --product plugin --check --root ${quote(root)}" to compare without writing.`;
   try {
-    if (args.flag('check')) return checkPluginProduct(context, root, renderPluginFor(root));
+    if (args.flag('check')) return checkPluginProduct(context, root);
     const given = args.value('out');
     if (given === undefined)
       throw new Refusal('IA-CLI-USAGE', '--product plugin needs --out <directory> or --check', 2, null, next);

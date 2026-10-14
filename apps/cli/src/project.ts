@@ -338,7 +338,16 @@ function rootedRefusal(context: Context, error: unknown): unknown {
   const given = context.args.value('root'),
     host = projectHost(context.args.positionals[0]);
   if (!(error instanceof Refusal) || error.next === null || given === undefined || host === null) return error;
-  return new Refusal(error.code, error.message, error.exit, error.where, rootedNext(error.next, host, given), error.at);
+  return new Refusal(
+    error.code,
+    error.message,
+    error.exit,
+    error.where,
+    rootedNext(error.next, host, given),
+    error.at,
+    undefined,
+    error.details,
+  );
 }
 
 export async function runProject(context: Context): Promise<Result> {

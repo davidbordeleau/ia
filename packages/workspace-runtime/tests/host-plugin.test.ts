@@ -286,7 +286,8 @@ describe('compare (A10)', () => {
   });
   it('names scalar style and tool order, and calls a changed body drift', () => {
     const agent = 'agents/sample-reader.md';
-    const rendered = entries.map((e) =>
+    // The original is styled by hand; the rendered side is the emitter's form.
+    const original = entries.map((e) =>
       e.path === agent
         ? as(
             agent,
@@ -294,7 +295,7 @@ describe('compare (A10)', () => {
           )
         : e,
     );
-    expect(comparePlugin(entries, rendered).find((d) => d.path === agent)).toMatchObject({
+    expect(comparePlugin(original, entries).find((d) => d.path === agent)).toMatchObject({
       status: 'ruled',
       rules: ['frontmatter-scalar-style', 'tool-order'],
     });
@@ -302,5 +303,105 @@ describe('compare (A10)', () => {
       e.path === agent ? as(agent, e.bytes.toString('utf8').replace('Read only', 'Read all')) : e,
     );
     expect(comparePlugin(entries, changed).find((d) => d.path === agent)!.status).toBe('drift');
+  });
+});
+
+describe('compare, fix round 1', () => {
+  const entries = readEntries(SAMPLE);
+  const AGENT = 'agents/sample-reader.md';
+  const SKILL = 'skills/sample-run/SKILL.md';
+  const text = (path: string): string => entries.find((e) => e.path === path)!.bytes.toString('utf8');
+  const withFile = (path: string, next: string) =>
+    entries.map((e) => (e.path === path ? { path, bytes: Buffer.from(next) } : e));
+  const diffOf = (path: string, next: string) =>
+    comparePlugin(entries, withFile(path, next)).find((d) => d.path === path)!;
+  const agent = text(AGENT);
+
+  it.each([
+    ['an unsupported nested key', agent.replace('\n---\n', '\nmetadata:\n  owner: someone-else\n---\n')],
+    ['a comment line', agent.replace('tools:', '# a comment\ntools:')],
+    ['a duplicate key', agent.replace('\n---\n', '\nname: sample-reader\n---\n')],
+    ['an unterminated list', agent.replace('tools: Read, Grep, Glob', 'model: [haiku')],
+  ])('calls %s drift when the rendered side carries it', (_label, changed) => {
+    expect(diffOf(AGENT, changed).status).toBe('drift');
+  });
+  it('calls unparsed content in the original drift', () => {
+    const original = entries.map((e) =>
+      e.path === AGENT ? { path: AGENT, bytes: Buffer.from(agent.replace('tools:', '# a comment\ntools:')) } : e,
+    );
+    expect(comparePlugin(original, entries).find((d) => d.path === AGENT)).toMatchObject({
+      status: 'drift',
+      reason: expect.stringContaining('# a comment'),
+    });
+  });
+  it('calls a changed unterminated list and a respaced list drift', () => {
+    const open = (value: string) => agent.replace('tools: Read, Grep, Glob', `model: ${value}`);
+    const original = entries.map((e) => (e.path === AGENT ? { path: AGENT, bytes: Buffer.from(open('[opus')) } : e));
+    const rendered = withFile(AGENT, open('[haiku'));
+    expect(comparePlugin(original, rendered).find((d) => d.path === AGENT)!.status).toBe('drift');
+    const tight = entries.map((e) =>
+      e.path === AGENT
+        ? { path: AGENT, bytes: Buffer.from(agent.replace('tools: Read, Grep, Glob', 'tools: [Read,Grep,Glob]')) }
+        : e,
+    );
+    const spaced = withFile(AGENT, agent.replace('tools: Read, Grep, Glob', 'tools: [Read, Grep, Glob]'));
+    expect(comparePlugin(tight, spaced).find((d) => d.path === AGENT)!.status).toBe('drift');
+  });
+  it('names frontmatter-field-order', () => {
+    const swapped = agent.replace(
+      /name: (.*)\ndescription: (.*)\n/,
+      (_m, name: string, description: string) => `description: ${description}\nname: ${name}\n`,
+    );
+    expect(diffOf(AGENT, swapped)).toMatchObject({ status: 'ruled', rules: ['frontmatter-field-order'] });
+  });
+  it('names frontmatter-default-omitted', () => {
+    const original = entries.map((e) =>
+      e.path === SKILL
+        ? { path: SKILL, bytes: Buffer.from(text(SKILL).replace('\n---\n', '\nuser-invocable: true\n---\n')) }
+        : e,
+    );
+    expect(comparePlugin(original, entries).find((d) => d.path === SKILL)).toMatchObject({
+      status: 'ruled',
+      rules: ['frontmatter-default-omitted'],
+    });
+  });
+  it('names codex-hooks-suppressed', () => {
+    const codex = '.codex-plugin/plugin.json';
+    const parsed = JSON.parse(text(codex)) as Record<string, unknown>;
+    expect(parsed['hooks']).toEqual({ hooks: {} });
+    const { hooks: _hooks, ...without } = parsed;
+    const original = entries.map((e) =>
+      e.path === codex ? { path: codex, bytes: Buffer.from(JSON.stringify(without, null, 2) + '\n') } : e,
+    );
+    expect(comparePlugin(original, entries).find((d) => d.path === codex)).toMatchObject({
+      status: 'ruled',
+      rules: ['codex-hooks-suppressed', 'manifest-format'],
+    });
+  });
+  it('applies the tools rule to a pure reorder only', () => {
+    const tools = (value: string) => agent.replace('tools: Read, Grep, Glob', `tools: ${value}`);
+    const base = (value: string) =>
+      entries.map((e) => (e.path === AGENT ? { path: AGENT, bytes: Buffer.from(tools(value)) } : e));
+    const status = (from: string, to: string) =>
+      comparePlugin(base(from), withFile(AGENT, tools(to))).find((d) => d.path === AGENT)!.status;
+    expect(status('Read, Grep, Glob', 'Glob, Grep, Read')).toBe('ruled');
+    expect(status('false', '[]')).toBe('drift');
+    expect(status('Read, Grep', '[Read, Grep]')).toBe('drift');
+    expect(status('Read,Grep', 'Read, Grep')).toBe('drift');
+    expect(status('Read, Grep', 'Read, Glob')).toBe('drift');
+  });
+  it('calls an invalid manifest drift instead of throwing', () => {
+    const claude = '.claude-plugin/plugin.json';
+    const original = entries.map((e) => (e.path === claude ? { path: claude, bytes: Buffer.from('{ not json') } : e));
+    expect(comparePlugin(original, entries).find((d) => d.path === claude)).toMatchObject({
+      status: 'drift',
+      reason: 'manifest is not JSON',
+    });
+  });
+  it('reports missing and extra files', () => {
+    const rendered = entries.filter((e) => e.path !== 'LICENSE').concat({ path: 'stray.txt', bytes: Buffer.from('x') });
+    const diffs = comparePlugin(entries, rendered);
+    expect(diffs.find((d) => d.path === 'LICENSE')!.status).toBe('missing');
+    expect(diffs.find((d) => d.path === 'stray.txt')!.status).toBe('extra');
   });
 });

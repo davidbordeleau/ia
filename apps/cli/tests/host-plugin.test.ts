@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { cleanup, scratch } from './scratch-fixture.js';
@@ -133,5 +133,73 @@ describe('ia init --from (A7)', () => {
     const kit = await lowered();
     const written = readFileSync(join(kit, 'assets/plugin/LICENSE'));
     expect(written.equals(readFileSync(join(SAMPLE, 'LICENSE')))).toBe(true);
+  });
+});
+
+describe('ia project --product plugin (A9)', () => {
+  it('plans, then writes the plugin into an empty directory', async () => {
+    const kit = await lowered();
+    const out = join(scratch('host-plugin-out'), 'sample');
+    const plan = await run(['project', 'claude', '--product', 'plugin', '--out', out, '--root', kit, '--json']);
+    expect(plan.exitCode, plan.stdout).toBe(0);
+    expect(existsSync(out)).toBe(false);
+    const applied = await run([
+      'project',
+      'claude',
+      '--product',
+      'plugin',
+      '--out',
+      out,
+      '--root',
+      kit,
+      '--apply',
+      '--yes',
+      '--json',
+    ]);
+    expect(applied.exitCode, applied.stdout).toBe(0);
+    expect(readFileSync(join(out, 'skills/sample-run/SKILL.md'), 'utf8')).toBe(
+      readFileSync(join(SAMPLE, 'skills/sample-run/SKILL.md'), 'utf8'),
+    );
+  });
+  it('refuses a non-empty --out before writing anything', async () => {
+    const kit = await lowered();
+    const out = join(scratch('host-plugin-busy'), 'busy');
+    mkdirSync(out, { recursive: true });
+    writeFileSync(join(out, 'keep.txt'), 'mine\n');
+    const result = await run([
+      'project',
+      'claude',
+      '--product',
+      'plugin',
+      '--out',
+      out,
+      '--root',
+      kit,
+      '--apply',
+      '--yes',
+      '--json',
+    ]);
+    expect(json(result.stdout)['code']).toBe('IA-PLUGIN-OUT');
+    expect(readdirSync(out)).toEqual(['keep.txt']);
+  });
+  it('refuses a resource edited after lowering, writing nothing', async () => {
+    const kit = await lowered();
+    writeFileSync(join(kit, '.ia/src/systems/sample-kit/plugin/skills/sample-run/SKILL.body.md'), 'edited\n');
+    const out = join(scratch('host-plugin-digest'), 'sample');
+    const result = await run([
+      'project',
+      'claude',
+      '--product',
+      'plugin',
+      '--out',
+      out,
+      '--root',
+      kit,
+      '--apply',
+      '--yes',
+      '--json',
+    ]);
+    expect(json(result.stdout)['code']).toBe('IA-RESOURCE-DIGEST');
+    expect(existsSync(out)).toBe(false);
   });
 });

@@ -28,6 +28,7 @@ import { confirm, Refusal, requireRoot } from './consumer.js';
 import type { HostName } from './host-projection.js';
 import { applyHostProjection, renderProjectionFor } from './host-projection.js';
 import { sessionGate } from './profile.js';
+import { runPluginProduct } from './plugin-product.js';
 import type { Conflict, Element } from './host.js';
 import {
   GUARD_RETIRE,
@@ -342,6 +343,7 @@ function rootedRefusal(context: Context, error: unknown): unknown {
 
 export async function runProject(context: Context): Promise<Result> {
   const { args, caps, host, json } = context;
+  if (args.value('product') === 'plugin') return runPluginProduct(context);
   let view: ProjectView;
   try {
     view = collectProject(context);

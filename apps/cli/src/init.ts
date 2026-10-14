@@ -4,7 +4,6 @@ import { adoptedBindings } from '@inventarch/db';
 import { adoptionId, planAdoption, applyAdoption } from '@inventarch/distribution/registry';
 import type { WorkspaceRelease } from '@inventarch/distribution/registry';
 import { readBase, PIN_PATH, PACKAGE_ID, DAMAGED } from './bundled-base.js';
-import { SPDX_LICENSE_IDS } from './spdx-license-ids.js';
 import type { Base, BasePin } from './bundled-base.js';
 export { readBase, PIN_PATH, baseArchivePath, PACKAGE_ID } from './bundled-base.js';
 export type { Base, BasePin } from './bundled-base.js';
@@ -740,7 +739,6 @@ export function starterDescriptor(
   provenance: Provenance,
   distribution?: string | null,
   assets: Starter['assets'] = [],
-  license = 'UNLICENSED',
 ): Descriptor {
   return {
     formatVersion: 1,
@@ -751,7 +749,7 @@ export function starterDescriptor(
     language: ['1.0'],
     dependencies: baseDependencies(base),
     assets,
-    license,
+    license: 'UNLICENSED',
     description: `The ${name} workspace.`,
     source: provenance.source,
   };
@@ -808,16 +806,6 @@ const within = (base: string, path: string): boolean => {
   const here = relative(base, path);
   return here === '' || (here !== '..' && !here.startsWith(`..${sep}`) && !isAbsolute(here));
 };
-/**
- * The descriptor licence of a lowered kit: the Claude manifest's when it is one SPDX license identifier (an id of the
- * SPDX License List, current or deprecated, or a `LicenseRef-` reference), else `UNLICENSED`. A licence expression, a
- * name such as `Proprietary` or free text such as `SEE LICENSE IN …` is not an identifier.
- */
-export const loweredLicense = (license: string | null): string =>
-  license !== null &&
-  (SPDX_LICENSE_IDS.has(license) || (license.length <= 128 && /^LicenseRef-[A-Za-z0-9.-]+$/.test(license)))
-    ? license
-    : 'UNLICENSED';
 
 /**
  * `--from`: lower the plugin; any unresolved construct refuses before anything is planned or written, with every entry
@@ -1051,15 +1039,7 @@ export function collectInit(request: InitRequest): InitView {
       descriptor:
         id === null || name === null
           ? null
-          : starterDescriptor(
-              id,
-              name,
-              base,
-              provenance,
-              system ? null : undefined,
-              assets,
-              lowered === null ? undefined : loweredLicense(lowered.license),
-            ),
+          : starterDescriptor(id, name, base, provenance, system ? null : undefined, assets),
       base: base.pin,
       systems: base.systems,
       provenance,
@@ -1158,18 +1138,7 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
     root,
     DESCRIPTOR_PATH,
     Buffer.from(
-      descriptorText(
-        starterDescriptor(
-          id,
-          name,
-          base,
-          starter.provenance,
-          distribution ?? undefined,
-          starter.assets,
-          // The plan's licence: the lowered plugin's SPDX identifier with --from, else UNLICENSED.
-          starter.descriptor?.license,
-        ),
-      ),
+      descriptorText(starterDescriptor(id, name, base, starter.provenance, distribution ?? undefined, starter.assets)),
     ),
   );
   checkpoint('init:descriptor');

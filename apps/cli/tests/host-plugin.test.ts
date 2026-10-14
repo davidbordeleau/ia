@@ -1,7 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { loweredLicense } from '../src/init.js';
 import { cleanup, scratch } from './scratch-fixture.js';
 import { repository, run } from './workspace-fixture.js';
 
@@ -687,31 +686,12 @@ describe('final review: ia init --from', () => {
     expect(body['code']).toBe('IA-LOWER-UNRESOLVED');
     expect(body['details']).toHaveLength(25);
   });
-  it('takes the descriptor licence from the Claude manifest when it is an SPDX identifier', async () => {
+  // The licence guard belongs to packing (spec §5.2); until then a lowered kit's descriptor is UNLICENSED, whatever the
+  // plugin's manifest says (the sample's is Apache-2.0).
+  it('keeps the descriptor licence UNLICENSED for a lowered kit until the pack-time licence guard', async () => {
     const kit = await lowered();
-    expect(json(readFileSync(join(kit, '.ia/release.json'), 'utf8'))['license']).toBe('Apache-2.0');
-  });
-  it.each(['SEE LICENSE IN LICENSE', 'Proprietary'])(
-    'keeps UNLICENSED when the Claude manifest licence is %s, no SPDX identifier',
-    async (license) => {
-      const source = await plugin('licence');
-      for (const path of ['.claude-plugin/plugin.json', '.codex-plugin/plugin.json', '.grok-plugin/plugin.json']) {
-        const value = json(readFileSync(join(source, path), 'utf8'));
-        value['license'] = license;
-        writeFileSync(join(source, path), `${JSON.stringify(value, null, 2)}\n`);
-      }
-      const kit = join(scratch('host-plugin-licence-kit'), 'sample-kit');
-      const applied = await run(['init', kit, '--from', source, '--apply', '--yes', '--json']);
-      expect(applied.exitCode, applied.stdout).toBe(0);
-      expect(json(readFileSync(join(kit, '.ia/release.json'), 'utf8'))['license']).toBe('UNLICENSED');
-    },
-  );
-  it('judges a licence by the SPDX License List, not by its spelling', () => {
-    for (const id of ['Apache-2.0', 'MIT', '0BSD', 'GPL-2.0', 'LicenseRef-Acme-1'])
-      expect(loweredLicense(id), id).toBe(id);
-    for (const other of ['Proprietary', 'MIT OR Apache-2.0', 'Apache2', 'mit', '', 'LicenseRef-'])
-      expect(loweredLicense(other), other).toBe('UNLICENSED');
-    expect(loweredLicense(null)).toBe('UNLICENSED');
+    expect(json(readFileSync(join(SAMPLE, '.claude-plugin/plugin.json'), 'utf8'))['license']).toBe('Apache-2.0');
+    expect(json(readFileSync(join(kit, '.ia/release.json'), 'utf8'))['license']).toBe('UNLICENSED');
   });
   it('admits authored trigger records beside the lowered ones without breaking the fixed point (item 17)', async () => {
     const kit = await lowered();

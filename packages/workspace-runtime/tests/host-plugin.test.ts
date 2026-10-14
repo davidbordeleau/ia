@@ -448,7 +448,9 @@ describe('final review: lowering admits only what the renderer reproduces', () =
       ),
     );
     expect(plan.unresolved).toEqual([
-      expect.stringMatching(/^skills\/sample-guide\/SKILL\.md: disable-model-invocation: false /),
+      expect.stringMatching(
+        /^skills\/sample-guide\/SKILL\.md: disable-model-invocation: false .*remove the disable-model-invocation key/,
+      ),
     ]);
   });
   it('refuses a Codex interface without the displayName the renderer emits, naming the manifest and the key', () => {
@@ -566,9 +568,6 @@ describe('final review: lowering admits only what the renderer reproduces', () =
     expect(system).toContain(
       '  requires\n    - agent-composition-system\n    - agent-system\n    - compliance-system\n    - workspace-system\n',
     );
-  });
-  it('carries the Claude manifest licence on the plan', () => {
-    expect(lowerPlugin(readPlugin(SAMPLE), 'sample-kit').license).toBe('Apache-2.0');
   });
 });
 

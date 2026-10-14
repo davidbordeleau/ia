@@ -37,8 +37,6 @@ export interface LoweringPlan {
   readonly assets: readonly { readonly path: string; readonly role: AssetRole }[];
   readonly map: LoweringMap;
   readonly unresolved: readonly string[];
-  /** The Claude manifest's `license` when it is a string, else null; the caller decides whether it is SPDX. */
-  readonly license: string | null;
 }
 
 export const RESOURCE_ROOT = (system: string): string => `.ia/src/systems/${system}/plugin`;
@@ -104,7 +102,6 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   const lines: string[] = ['#! ia 1.0', ''];
   const records: LoweredRecord[] = [];
   const recordsPath = RECORDS_PATH(system);
-  let licence: string | null = null;
   const put = (d: Omit<Disposition, 'reason'> & { reason?: string }): void => {
     entries.push(Object.freeze({ ...d, reason: d.reason ?? null }));
   };
@@ -192,7 +189,6 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   const version = expectString(claude['version'], MANIFESTS.claude, 'version');
   const description = expectString(claude['description'], MANIFESTS.claude, 'description');
   const license = expectString(claude['license'], MANIFESTS.claude, 'license');
-  licence = license ?? null;
   const shortDescription = expectString(face['shortDescription'], MANIFESTS.codex, 'interface.shortDescription');
   const category = expectString(face['category'], MANIFESTS.codex, 'interface.category');
   // Each manifest must be the one the renderer writes for this product, compared by content: a key the renderer would
@@ -274,7 +270,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     // The renderer omits the default, so lowering its output again would lose this key and the fixed point with it.
     else if (disabled?.kind === 'boolean' && !disabled.value)
       unresolved.push(
-        `${where}: disable-model-invocation: false is the default, which this version of ia does not render back; remove the line`,
+        `${where}: disable-model-invocation: false is the default, which this version of ia does not render back; remove the disable-model-invocation key, which means the same`,
       );
     const hint = frontString(fields, 'argument-hint', where);
     lines.push(
@@ -572,7 +568,6 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       assets: Object.freeze(allAssets),
       map,
       unresolved: Object.freeze([...unresolved]),
-      license: licence,
     });
   }
 }

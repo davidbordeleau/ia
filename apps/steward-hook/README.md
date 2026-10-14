@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@inventarch/steward-hook?label=npm)](https://www.npmjs.com/package/@inventarch/steward-hook) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-> The edit guard IA registers in Claude Code. For each authored `@hook`, it refuses a file edit the hook selects unless a `@mandate` that governs the path grants the acting agent Synthesis, and it protects the files IA generates and owns. `ia host claude` registers it through [`@inventarch/distribution`](../distribution/README.md); you do not run it by hand.
+> The edit guard IA registers in Claude Code. For each authored `@hook`, it refuses a file edit the hook selects when a `@mandate` governs the path and none grants the acting agent Synthesis (an edit no mandate governs is allowed), and it protects the files IA generates and owns. `ia host claude` registers it through [`@inventarch/distribution`](../distribution/README.md); you do not run it by hand.
 
 ## ⚡ Quick start
 
@@ -62,7 +62,7 @@ In the root quick start's `my-project` workspace, whose starter mandate grants S
 | Path safety | Refuses a selected path reached through a link, junction or short name, any dangling link or Windows alternate data stream, and in `--hook` mode any file under the root with more than one hard link (`IA-HOOK-PATH-UNSAFE`). |
 | Failing closed | When the hook is not an admitted authored `@hook` or the records cannot be read, refuses edits under the selection last registered for it, or every edit under the root when none is recorded (`IA-HOOK-DECLARATION-UNAVAILABLE`, `IA-HOOK-MANDATE-UNAVAILABLE`). While an authored `@mandate` fails admission, refuses every edit the hook selects. Each reason names commands that work from a shell in that state. |
 | Legacy 1.x guard | Without `--hook`, applies managed-state protection and the retired steward rule for `.ia/src/systems/<name>/`, for a 1.x registration that survives. A 1.x steward file under `.claude/agents/` stays protected until removed. `ia host claude --apply` retires the 1.x registration and removes the marked steward files it owns. |
-| Exports | `runHook`, `evaluateMandateHook`, `evaluateHook`, `printable`, `deny` and `streamed`; `printable` strips terminal escapes and control characters from every refusal reason. `./context` holds the lifecycle context hook behind `ia host claude --context <identity>`. |
+| Exports | `runHook`, `evaluateMandateHook`, `evaluateHook`, `printable`, `deny` and `streamed`; `printable` strips terminal escapes and control characters from every refusal reason. `./context` holds the lifecycle context hook; `ia host claude --context` refuses in this release. |
 
 ## ⚖️ What it does not do
 

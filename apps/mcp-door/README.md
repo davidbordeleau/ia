@@ -70,7 +70,7 @@ The `ia_position` body is a pure function of the key and the admitted records. I
 ## ⚖️ What it does not do
 
 - **It never writes.** Every tool is annotated `readOnlyHint: true`, and the workspace files are unchanged after a session. Authoring, validation and capture stay with the CLI (`ia preview`, `ia author`, `ia validate`, `ia capture`).
-- **It checks no `@mandate`.** A mandate restricts only the CLI's mandate-checked commands, not these tools. Mandates are cooperative restrictions, not authentication or a sandbox.
+- **It checks no `@mandate`.** The CLI's mandate-checked commands, the edit guard and `ia-runner` check mandates; these tools do not. Mandates are cooperative restrictions, not authentication or a sandbox.
 - **It grants nothing.** `ia_select` and `ia_context` choose and deliver records; they execute nothing. A read certifies nothing: the digest identifies bytes, not whether they are true.
 - **Scope tokens are process-local.** A token from `ia_scope` lasts as long as the server process. Narrowing a token limits what later calls read through it.
 - **Bounded transport.** Stdio only, with no network listener. A line over 4 MiB or invalid UTF-8 ends the session, and `tools/list` issues no pagination cursor.

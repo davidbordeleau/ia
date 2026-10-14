@@ -26,7 +26,7 @@ One row per host decides what each command accepts:
 | --- | --- | --- | --- | --- |
 | `claude` | supported | yes | the Claude plugin | yes |
 | `codex` | partial | yes | none | no |
-| `cursor` | planned | no | none | no |
+| `cursor` | unsupported; refuses | no | none | no |
 
 `ia host cursor` and `ia host codex --user` refuse with `IA-DIST-HOST-UNSUPPORTED` and write nothing. `ia doctor --host` accepts all three; for a host with no workspace registration, the briefing says so and never suggests `ia host`.
 

@@ -39,7 +39,7 @@ The first prints the word's sections, fields, allowed values and relationships. 
 - Indent two spaces per level. A tab is refused with `IA-LANG-INDENT-TAB`.
 - Sections such as `meaning` and `work` hold fields. Head fields, such as a contract's `version`, come before the first section.
 
-Every value has one of the kernel's value types:
+Every value has one of the kernel's six value types, or is a list of one:
 
 | Type | Write it as | Example |
 | --- | --- | --- |

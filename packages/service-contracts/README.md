@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@inventarch/service-contracts?label=npm)](https://www.npmjs.com/package/@inventarch/service-contracts) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-> `@inventarch/service-contracts` holds browser-safe wire contracts for services that host IA work and for their clients: strict Zod schemas for requests, responses and views, with JSON Schema export. Zod is its only runtime dependency, and importing any export starts no filesystem, network, identity, native runtime, provider or storage work. It stands apart from the `@inventarch/language` to `@inventarch/workspace-runtime` stack and imports none of it.
+> `@inventarch/service-contracts` holds browser-safe structural wire contracts between an independently supplied IA service host and its clients: strict Zod schemas for requests, responses and views, with JSON Schema export. Zod is its only runtime dependency, and importing any export starts no filesystem, network, identity, native runtime, provider or storage work. It stands apart from the `@inventarch/language` to `@inventarch/workspace-runtime` stack and imports none of it.
 
 ## ⚡ Quick start
 

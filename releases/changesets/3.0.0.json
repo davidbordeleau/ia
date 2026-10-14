@@ -7,7 +7,7 @@
     "version": "2.0.0"
   },
   "bump": "major",
-  "summary": "Coordinated 3.0.0 release of the 23 public npm packages: Preserve attribution comments during rejected-file classification; Reserve administrative authoring and report missing source-protection declarations; An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it; `ia preview` and `ia author` admit checks structurally, as `ia validate` does; `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence; A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none; Check optional distribution files through their opened descriptors; Document removal of the exported CLI admission helper; `ia author` applies previewed permitted record edits with digest checks; Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated; `ia preview` shows what one new record, field or relationship would compile to; Remove the deprecated ia compile command in 3.0; Refuse dangling links in guarded edit paths; Explain distribution engine incompatibility and preserve exact pins during migration; replace and createFile remove their temporary file when a write fails; Declare engine marker activation incompatible with the published CLI; Require an established actor for participant mandate grants; `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined; workspace-runtime generates a claude agent file for each authored `@agent-profile`, or reports why it does not; The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`; `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them; The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared; workspace-runtime renders authored playbook skills, hook declarations and operation and harness definitions; Generated host ownership and pending journals require this release for cleanup; The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both; Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure; Run native profiles with bounded local execution and durable journals; A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`; The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile; Align native archives once and enforce independent content versions; Explain profile agents and CLI actor selection; Separate public vocabulary payloads from repository work and release controls; Repair public contract citations; Align public qualification documentation; Maintain public implementation and release contracts; Qualify separated workspace and public examples; Use native nested paths in registry advice tests; Install registry kits and adopt pinned source workspaces; Recognize repository native records and release roots; Validate retained root release controls consistently; Pin scope, evidence gate and editor byte preservation regressions; Admit bounded runner journal claims as optional runtime evidence; Recognize linked runner entry points; Preserve unowned hooks and external evidence during recovery; Keep workspace roots inert in suggested commands; `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission; Keep runtime release checks valid after note consumption.",
+  "summary": "Coordinated 3.0.0 release of the 23 public npm packages: Reserve administrative authoring and report missing source-protection declarations; An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it; `ia preview` and `ia author` admit checks structurally, as `ia validate` does; `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence; A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none; Check optional distribution files through their opened descriptors; Document removal of the exported CLI admission helper; `ia author` applies previewed permitted record edits with digest checks; Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated; `ia preview` shows what one new record, field or relationship would compile to; Remove the deprecated ia compile command in 3.0; Refuse dangling links in guarded edit paths; Explain distribution engine incompatibility and preserve exact pins during migration; replace and createFile remove their temporary file when a write fails; Declare engine marker activation incompatible with the published CLI; Require an established actor for participant mandate grants; `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined; workspace-runtime generates a claude agent file for each authored `@agent-profile`, or reports why it does not; The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`; `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them; The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared; workspace-runtime renders authored playbook skills, hook declarations and operation and harness definitions; Generated host ownership and pending journals require this release for cleanup; The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both; Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure; Run native profiles with bounded local execution and durable journals; A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`; The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile; Align native archives once and enforce independent content versions; Explain profile agents and CLI actor selection; Separate public vocabulary payloads from repository work and release controls; Repair public contract citations; Align public qualification documentation; Maintain public implementation and release contracts; Qualify separated workspace and public examples; Use native nested paths in registry advice tests; Install registry kits and adopt pinned source workspaces; Recognize repository native records and release roots; Validate retained root release controls consistently; Pin scope, evidence gate and editor byte preservation regressions; Admit bounded runner journal claims as optional runtime evidence; Recognize linked runner entry points; Preserve unowned hooks and external evidence during recovery; Keep workspace roots inert in suggested commands; `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission; Keep runtime release checks valid after note consumption.",
   "packages": {
     "@inventarch/agent-composition-system": {
       "previous": "2.0.0",
@@ -27,7 +27,7 @@
     "@inventarch/cli": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Preserve attribution comments during rejected-file classification. Reserve administrative authoring and report missing source-protection declarations. An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. `ia preview` and `ia author` admit checks structurally, as `ia validate` does. `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence. A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Document removal of the exported CLI admission helper. `ia author` applies previewed permitted record edits with digest checks. Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated. `ia preview` shows what one new record, field or relationship would compile to. Remove the deprecated ia compile command in 3.0. Explain distribution engine incompatibility and preserve exact pins during migration. Declare engine marker activation incompatible with the published CLI. Require an established actor for participant mandate grants. `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined. `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them. Generated host ownership and pending journals require this release for cleanup. The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls. Repair public contract citations. Align public qualification documentation. Maintain public implementation and release contracts. Qualify separated workspace and public examples. Use native nested paths in registry advice tests. Install registry kits and adopt pinned source workspaces. Pin scope, evidence gate and editor byte preservation regressions. Preserve unowned hooks and external evidence during recovery. Keep workspace roots inert in suggested commands. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission."
+      "summary": "Reserve administrative authoring and report missing source-protection declarations. An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. `ia preview` and `ia author` admit checks structurally, as `ia validate` does. `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence. A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Document removal of the exported CLI admission helper. `ia author` applies previewed permitted record edits with digest checks. Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated. `ia preview` shows what one new record, field or relationship would compile to. Remove the deprecated ia compile command in 3.0. Explain distribution engine incompatibility and preserve exact pins during migration. Declare engine marker activation incompatible with the published CLI. Require an established actor for participant mandate grants. `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined. `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them. Generated host ownership and pending journals require this release for cleanup. The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls. Repair public contract citations. Align public qualification documentation. Maintain public implementation and release contracts. Qualify separated workspace and public examples. Use native nested paths in registry advice tests. Install registry kits and adopt pinned source workspaces. Pin scope, evidence gate and editor byte preservation regressions. Preserve unowned hooks and external evidence during recovery. Keep workspace roots inert in suggested commands. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission."
     },
     "@inventarch/compliance": {
       "previous": "2.0.0",
@@ -42,7 +42,7 @@
     "@inventarch/db": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Preserve attribution comments during rejected-file classification. An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. `ia preview` and `ia author` admit checks structurally, as `ia validate` does. `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence. A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Explain distribution engine incompatibility and preserve exact pins during migration. Declare engine marker activation incompatible with the published CLI. The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. Separate public vocabulary payloads from repository work and release controls. Maintain public implementation and release contracts. Install registry kits and adopt pinned source workspaces. Validate retained root release controls consistently. Pin scope, evidence gate and editor byte preservation regressions. Admit bounded runner journal claims as optional runtime evidence. Preserve unowned hooks and external evidence during recovery. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission."
+      "summary": "An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. `ia preview` and `ia author` admit checks structurally, as `ia validate` does. `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence. A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Explain distribution engine incompatibility and preserve exact pins during migration. Declare engine marker activation incompatible with the published CLI. The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. Separate public vocabulary payloads from repository work and release controls. Maintain public implementation and release contracts. Install registry kits and adopt pinned source workspaces. Validate retained root release controls consistently. Pin scope, evidence gate and editor byte preservation regressions. Admit bounded runner journal claims as optional runtime evidence. Preserve unowned hooks and external evidence during recovery. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission."
     },
     "@inventarch/distribution": {
       "previous": "2.0.0",
@@ -87,7 +87,7 @@
     "@inventarch/runtime": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Preserve attribution comments during rejected-file classification. An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. Require an established actor for participant mandate grants. The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`. The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared. Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile. Separate public vocabulary payloads from repository work and release controls. Align public qualification documentation. Maintain public implementation and release contracts. Recognize repository native records and release roots. Keep workspace roots inert in suggested commands. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission. Keep runtime release checks valid after note consumption."
+      "summary": "An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. Require an established actor for participant mandate grants. The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`. The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared. Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile. Separate public vocabulary payloads from repository work and release controls. Align public qualification documentation. Maintain public implementation and release contracts. Recognize repository native records and release roots. Keep workspace roots inert in suggested commands. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission. Keep runtime release checks valid after note consumption."
     },
     "@inventarch/service-contracts": {
       "previous": "2.0.0",
@@ -126,21 +126,6 @@
     }
   },
   "changes": [
-    {
-      "id": "attribution-comment-classification",
-      "title": "Preserve attribution comments during rejected-file classification",
-      "summary": "Genuine full-line comments, including attribution written by `ia author`, no longer fabricate a refused `@mandate` when an unrelated file fails parsing. Admission still reports the original error. Unidentified lines, conflict markers, malformed authority, mandate identity facets and agent/workspace resolution dependencies retain fail-closed behavior.",
-      "packages": [
-        "@inventarch/cli",
-        "@inventarch/db",
-        "@inventarch/runtime"
-      ],
-      "paths": [
-        "apps/cli/",
-        "packages/db/",
-        "packages/runtime/"
-      ]
-    },
     {
       "id": "author-source-boundary",
       "title": "Reserve administrative authoring and report missing source-protection declarations",
@@ -267,7 +252,7 @@
     {
       "id": "cli-author",
       "title": "`ia author` applies previewed permitted record edits with digest checks",
-      "summary": "@inventarch/cli adds `ia author` (catalog row: mode author, move Synthesis) for permitted record words. It accepts the corresponding preview arguments and --digest <sha256>, the target file digest printed by the preview. It compiles the candidate again against one editor snapshot, applies the author-mode mandate profile, and writes only when the digest still identifies the current file and the candidate is clean. Existing files use an opened-handle recheck and guarded temporary-file replacement; new files use create-only publication. The edit preserves surrounding records, line endings, a byte-order mark and existing permission bits. One attribution comment records the acting participant, a governing mandate granting Synthesis and the authored revision; a later author replaces that comment rather than stacking it. Attribution and --actor are local declarations, not authentication. The final integrated source-protection boundary refuses author mutations of workspace, agent, mandate, system, schema, agent-profile and hook records for every actor, including an ungoverned actor. This covers creation, field edits and relationship edits, so `ia author system` does not write a starter system and changing actors does not bypass this administrative-word boundary. Existing profile, ownership and binding-mandate refusals keep precedence. Previews remain read-only; direct owner source edits followed by validation remain the administrative path. The separate administrative-authoring note describes this breaking boundary and doctor warnings. Every successful author command names a profile-judged next command. Refusals retain preview's diagnostics, plus missing or malformed --digest (IA-CLI-USAGE, exit 2), changed input (IA-CLI-EDIT-STALE, exit 1), an unclean candidate (IA-CLI-EDIT-UNCLEAN, exit 1), and distribution or volume failures (exit 3). A refusal writes nothing. One record, row or field is written per invocation, and `ia author` does not execute operations. Mandates and these CLI refusals are cooperative restrictions, not filesystem isolation: a direct file edit remains possible, and a source-protection declaration alone does not prove that a host enforces it.",
+      "summary": "@inventarch/cli adds `ia author` (catalog row: mode author, move Synthesis) for permitted record words. It accepts the corresponding preview arguments and --digest <sha256>, the target file digest printed by the preview. It compiles the candidate again against one editor snapshot, applies the author-mode mandate profile, and writes only when the digest still identifies the current file and the candidate is clean. Existing files use an opened-handle recheck and guarded temporary-file replacement; new files use create-only publication. The edit preserves surrounding records, line endings, a byte-order mark and existing permission bits. One attribution comment records the acting participant, a governing mandate granting Synthesis and the authored revision; a later author replaces that comment rather than stacking it. The comment declares nothing: if its file later fails parsing, admission reports that file's own error, and the mandate gate does not count the comment's `@mandate` reference as a refused mandate, except in the damaged files the mandate admission limits name. Attribution and --actor are local declarations, not authentication. The final integrated source-protection boundary refuses author mutations of workspace, agent, mandate, system, schema, agent-profile and hook records for every actor, including an ungoverned actor. This covers creation, field edits and relationship edits, so `ia author system` does not write a starter system and changing actors does not bypass this administrative-word boundary. Existing profile, ownership and binding-mandate refusals keep precedence. Previews remain read-only; direct owner source edits followed by validation remain the administrative path. The separate administrative-authoring note describes this breaking boundary and doctor warnings. Every successful author command names a profile-judged next command. Refusals retain preview's diagnostics, plus missing or malformed --digest (IA-CLI-USAGE, exit 2), changed input (IA-CLI-EDIT-STALE, exit 1), an unclean candidate (IA-CLI-EDIT-UNCLEAN, exit 1), and distribution or volume failures (exit 3). A refusal writes nothing. One record, row or field is written per invocation, and `ia author` does not execute operations. Mandates and these CLI refusals are cooperative restrictions, not filesystem isolation: a direct file edit remains possible, and a source-protection declaration alone does not prove that a host enforces it.",
       "packages": [
         "@inventarch/cli"
       ],
@@ -700,7 +685,7 @@
     {
       "id": "mandate-admission",
       "title": "A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`",
-      "summary": "Breaking from published 2.0.0: admission accepted a `@mandate` stating `authority.moves []`, and excluded a mandate that failed admission from the admitted graph. Published 2.0.0 had neither ia preview nor ia author and did not apply the new consumer mandate profile. In the unreleased generation-binding implementation before this fix, a mandate stating `moves [Bogus]` and `excluded-words [task]` let `ia preview task` run because that profile could no longer see it, where the same mandate with valid moves refused it (operator ruling 2026-10-12: fail closed for any `@mandate` that fails admission, reject `moves []` in the schema, the refusal names the record, `ia position` and hand edits still work). @inventarch/compliance: schema field validation, which db admission (validateGraphSchema) and the bootstrap validateSchema both run, refuses a stated empty authority.moves on a record whose word is `mandate`, when its schema declares that key as agent-system's does, with IA-COMP-FIELD-VALUE, an error at that field, each such occurrence on its own, whose message says 'authority.moves' must name at least one kernel move when stated; an absent authority.moves stays valid and restricts no move, and every other empty list stays valid (compliance C05 states this one exception). A workspace 2.0.0 admitted with `moves []` therefore has an admission error now: the machine routes keep their shapes, but over such a workspace the report route lists the finding and the read routes no longer return that mandate. @inventarch/db: every read handle and editor snapshot exposes unadmitted, with the UnadmittedRecord and UnadmittedFinding types: each record occurrence of the root view's sources that it does not admit, {identity?, word?, name?, band, path, line, endLine, finding}, for each occurrence refused names, both occurrences of an identity tie, and each record of a file refused whole by a language error or a duplicate requirement id; band is the band of the source's placement (100 authored, 90 for an adopted or installed base), and finding {code, path, line, message} the record's own admission finding from the diagnostics db already holds. A file refused whole is read from db's own parse (with the identity its compile gives, or spec 3.1's for a header the compile refused) and from its captured text, split at CRLF, CR or LF: a line opening with `@<word>` after any whitespace or Unicode format characters, which the parse did not read as a header, is listed with the name after it, wherever it stands, inside a parsed record too; on a line no parsed record spans every `@<word>` token is listed under its word; and a line that names no header is listed with no word, a record db cannot identify, when it holds one of the file's errors and no parsed record spans it (an error at a blank or `#` comment line being taken at the first line from there that is neither, so an empty or comment-only file lists nothing), when it opens with an at sign (`@`, U+FF20 or U+FE6B) after any whitespace or format characters, wherever it stands, or, in a file refused at its pragma, when it stands at column 0 and is neither blank nor a comment: a header spelled `@ mandate x`, with a full-width at sign or with a joiner after the at sign, UTF-16LE text without a byte-order mark, a stray top-level line; an error inside a parsed record's lines on a line no at sign opens stays that record's; refused, the report, the snapshot and the cache are unchanged, and nothing more is read from disk. @inventarch/runtime: the package root and ./internal/mandate-modes export refusedMandates(handle) with the RefusedMandate type, every authored (band 100) `@mandate` that failed admission, by path then line, each {identity?, path, line, code, message, unidentified?} with its own admission finding, an occurrence db lists with no word counting as a possible mandate, marked unidentified, once per line (a line db also lists a mandate at counts as that mandate), so an authored file refused whole whose records db cannot all identify fails closed, as far as db's readings reach; a mandate refused in an installed base (band 90) never counts. They also export refusedDependencies(handle), with the RefusedDependency type {dependent, field, reference, identity?, path, line, code, message}: each admitted authored `@mandate` whose authority.participant names a refused `@agent` or whose authority.scope names a refused `@workspace`, and each `@workspace` whose composition.steward names a refused `@agent`, each reference matched as authored by word and name against db's band-100 unadmitted entries, a line of a file refused whole opening `@agent <name>` or `@workspace <name>` among them; without this, a refused participant or steward `@agent` switched the default actor to another participant with looser mandates, and a refused `@workspace` left a scope-only mandate governing nowhere. A refused `@agent` or `@workspace` nothing names, a reference no authored record answers, and a record refused in an installed base keep today's reading. While either returns anything, requireMandatesAdmitted(handle, within), which governingMandates, seatedWorkspace and defaultActor call first, throws IA-RUNTIME-REQUEST-INVALID marked admission 'refused' (isAdmissionRefusal(error) reads the mark), deciding workspace-wide whatever the scope token, since a refused record's scope, covers and participant cannot be trusted; through a whole-workspace token the error names the first refused mandate db identifies, else the first it cannot, as an unidentified record at path:line, possibly a `@mandate`, counting the rest by kind, else the first dependency and the record that depends on it, with the refused record's identity when known, path:line, admission code and message, and locates it as where; through a narrowed token it names no path, record or finding and carries no where. RuntimeError gains optional fourth and fifth constructor arguments, a frozen where {path, line, identity?} (the RuntimeWhere type), which that refusal and every mandateAuthorityOf refusal carry, and admission; profileRefusal and mandateRefusal keep their own empty-move-list refusal. admissionReport(root?) spells the admission report command, `ia report --root <root>` with forward slashes on win32 only when every character of the root is a letter, a digit or one of `._-/:`, else `ia report` to run from the workspace root, never a root in double quotes. evaluateMandateGuard's request takes an optional root and its decision an optional where; it branches on isAdmissionRefusal: while a record a mandate resolution reads fails admission every edit the hook selects is IA-HOOK-MANDATE-UNAVAILABLE, whoever acts, naming the refused record's path:line, its finding and admissionReport(root) rather than `ia validate`, and an admitted mandate whose authority cannot be read still names its governance position. @inventarch/cli: while an authored `@mandate` fails admission, or a record an admitted mandate or workspace depends on does, `ia read`, `ia next`, `ia validate`, `ia preview`, `ia author`, `ia capture` (and `ia capture --preview`), `ia project` and a workspace `ia host <host> --apply` refuse with IA-RUNTIME-REQUEST-INVALID at exit 1, a where of {path, line, identity} at the first such record (identity null when unknown) and a message naming the record and its admission finding and saying a hand edit corrects it, since `ia preview` and `ia author` cannot target a record admission refused; it classifies the refusal by the runtime's mark, so a refused authored mandate sharing its identity with an admitted one of another band is no exception. The next command is the version 1 machine route `ia report`, which no mandate gates and which prints the admission report with the finding (exit 1 for a failing report, nothing on stderr): with the invocation's --root as every next command repeats it, else with the root spelled relative to the working directory (`.` or `..` segments only) when that spelling, resolved from the working directory as the route resolves --root, reaches the same real root (relative to the working directory as given first, which on win32 keeps a junction's spelling, then to its real path, so a junction or directory symlink in the path still names a root that runs), else `ia report` run from the workspace root with no path printed. An admitted mandate whose authority the runtime cannot read, such as one with a child under authority.moves, still refuses naming its governance position, now with where {path, line, identity}. `ia position`, `ia host <host> --remove --apply` (which still restores editing), `--user`, the Door and MCP reads, the install refresh, `ia-distribution`, `ia inspect` and `ia init` are unchanged and keep running. @inventarch/steward-hook: the `--hook` guard passes the registration's root to evaluateMandateGuard, so a refusal at a refused record names the admission report as admissionReport spells it; the main session's refusal still also names `ia host claude --root <root> --remove --apply --yes`; an edit the hook does not select is still not decided and managed-state protection is unchanged; a registration whose hook is not admitted, or not a declaration it can decide, is IA-HOOK-MANDATE-UNAVAILABLE naming the refused record while one is refused (the hook may share its file); when the records cannot be read, the refusal names `ia validate --root <root>` if the database cannot open at all, and once it opened, the admission report while a refused mandate or dependency is among what admission refused, else `ia validate --root <root>`; a failure while the edit is decided names the admission report. @inventarch/workspace-runtime: unchanged source, but agent-profile generation's fallback for a profile that names no mandate reads governingMandates, so while a record a mandate resolution reads fails admission the rendered agent says the fallback is unavailable and names that record. Limits: the fail-closed is workspace-wide, so one broken record blocks every gated command and selected edit for every actor until its source is corrected by hand, and no in-tool repair exists; in a file refused whole, a line that declares a record with its at sign behind another character on its line (a NUL, a letter, other text) is not seen when it stands inside the lines of a record the parse reads, or indented in a file refused at its pragma, since no reading names it and an error there is that record's (db D15 states the readings exactly), while any line outside such a record that only mentions `@mandate` and is not a genuine full-line comment proven by language trivia, any line an at sign opens that names no header, any error line outside a parsed record that names no header, and any top-level line of a file refused at its pragma that is neither blank nor a comment, is read as a possible mandate, failing closed; a mandate in a file db never reads (an extension other than lowercase `.ia`, or a path under node_modules, dist or .git) restricts nothing and is reported nowhere, as in 2.0.0; a --root the invocation gave is repeated as given, as every next command repeats it; position, body(K), the packet renderer and the Door operations render no mandate for a refused record and never refuse; the nine machine routes, MACHINE_PROTOCOL versions 1 and 2 and every `ia scope` form keep their shapes.",
+      "summary": "Breaking from published 2.0.0: admission accepted a `@mandate` stating `authority.moves []`, and excluded a mandate that failed admission from the admitted graph. Published 2.0.0 had neither ia preview nor ia author and did not apply the new consumer mandate profile. In the unreleased generation-binding implementation before this fix, a mandate stating `moves [Bogus]` and `excluded-words [task]` let `ia preview task` run because that profile could no longer see it, where the same mandate with valid moves refused it (operator ruling 2026-10-12: fail closed for any `@mandate` that fails admission, reject `moves []` in the schema, the refusal names the record, `ia position` and hand edits still work). @inventarch/compliance: schema field validation, which db admission (validateGraphSchema) and the bootstrap validateSchema both run, refuses a stated empty authority.moves on a record whose word is `mandate`, when its schema declares that key as agent-system's does, with IA-COMP-FIELD-VALUE, an error at that field, each such occurrence on its own, whose message says 'authority.moves' must name at least one kernel move when stated; an absent authority.moves stays valid and restricts no move, and every other empty list stays valid (compliance C05 states this one exception). A workspace 2.0.0 admitted with `moves []` therefore has an admission error now: the machine routes keep their shapes, but over such a workspace the report route lists the finding and the read routes no longer return that mandate. @inventarch/db: every read handle and editor snapshot exposes unadmitted, with the UnadmittedRecord and UnadmittedFinding types: each record occurrence of the root view's sources that it does not admit, {identity?, word?, name?, band, path, line, endLine, finding}, for each occurrence refused names, both occurrences of an identity tie, and each record of a file refused whole by a language error or a duplicate requirement id; band is the band of the source's placement (100 authored, 90 for an adopted or installed base), and finding {code, path, line, message} the record's own admission finding from the diagnostics db already holds. A file refused whole is read from db's own parse (with the identity its compile gives, or spec 3.1's for a header the compile refused) and from its captured text, split at CRLF, CR or LF: a line opening with `@<word>` after any whitespace or Unicode format characters, which the parse did not read as a header, is listed with the name after it, wherever it stands, inside a parsed record too; on a line no parsed record spans every `@<word>` token is listed under its word, unless, in a file with no bare CR, the language scanner reads the whole physical line, `#` after ASCII spaces or tabs, as a comment, as it reads the attribution `ia author` writes, which therefore declares nothing while admission still reports the file's own error; and a line that names no header is listed with no word, a record db cannot identify, when it holds one of the file's errors and no parsed record spans it (an error at a blank or `#` comment line being taken at the first line from there that is neither, so an empty or comment-only file lists nothing), when it opens with an at sign (`@`, U+FF20 or U+FE6B) after any whitespace or format characters, wherever it stands, or, in a file refused at its pragma, when it stands at column 0 and is neither blank nor a comment: a header spelled `@ mandate x`, with a full-width at sign or with a joiner after the at sign, UTF-16LE text without a byte-order mark, a stray top-level line; an error inside a parsed record's lines on a line no at sign opens stays that record's; refused, the report, the snapshot and the cache are unchanged, and nothing more is read from disk. @inventarch/runtime: the package root and ./internal/mandate-modes export refusedMandates(handle) with the RefusedMandate type, every authored (band 100) `@mandate` that failed admission, by path then line, each {identity?, path, line, code, message, unidentified?} with its own admission finding, an occurrence db lists with no word counting as a possible mandate, marked unidentified, once per line (a line db also lists a mandate at counts as that mandate), so an authored file refused whole whose records db cannot all identify fails closed, as far as db's readings reach; a mandate refused in an installed base (band 90) never counts. They also export refusedDependencies(handle), with the RefusedDependency type {dependent, field, reference, identity?, path, line, code, message}: each admitted authored `@mandate` whose authority.participant names a refused `@agent` or whose authority.scope names a refused `@workspace`, and each `@workspace` whose composition.steward names a refused `@agent`, each reference matched as authored by word and name against db's band-100 unadmitted entries, a line of a file refused whole opening `@agent <name>` or `@workspace <name>` among them; without this, a refused participant or steward `@agent` switched the default actor to another participant with looser mandates, and a refused `@workspace` left a scope-only mandate governing nowhere. A refused `@agent` or `@workspace` nothing names, a reference no authored record answers, and a record refused in an installed base keep today's reading. While either returns anything, requireMandatesAdmitted(handle, within), which governingMandates, seatedWorkspace and defaultActor call first, throws IA-RUNTIME-REQUEST-INVALID marked admission 'refused' (isAdmissionRefusal(error) reads the mark), deciding workspace-wide whatever the scope token, since a refused record's scope, covers and participant cannot be trusted; through a whole-workspace token the error names the first refused mandate db identifies, else the first it cannot, as an unidentified record at path:line, possibly a `@mandate`, counting the rest by kind, else the first dependency and the record that depends on it, with the refused record's identity when known, path:line, admission code and message, and locates it as where; through a narrowed token it names no path, record or finding and carries no where. RuntimeError gains optional fourth and fifth constructor arguments, a frozen where {path, line, identity?} (the RuntimeWhere type), which that refusal and every mandateAuthorityOf refusal carry, and admission; profileRefusal and mandateRefusal keep their own empty-move-list refusal. admissionReport(root?) spells the admission report command, `ia report --root <root>` with forward slashes on win32 only when every character of the root is a letter, a digit or one of `._-/:`, else `ia report` to run from the workspace root, never a root in double quotes. evaluateMandateGuard's request takes an optional root and its decision an optional where; it branches on isAdmissionRefusal: while a record a mandate resolution reads fails admission every edit the hook selects is IA-HOOK-MANDATE-UNAVAILABLE, whoever acts, naming the refused record's path:line, its finding and admissionReport(root) rather than `ia validate`, and an admitted mandate whose authority cannot be read still names its governance position. @inventarch/cli: while an authored `@mandate` fails admission, or a record an admitted mandate or workspace depends on does, `ia read`, `ia next`, `ia validate`, `ia preview`, `ia author`, `ia capture` (and `ia capture --preview`), `ia project` and a workspace `ia host <host> --apply` refuse with IA-RUNTIME-REQUEST-INVALID at exit 1, a where of {path, line, identity} at the first such record (identity null when unknown) and a message naming the record and its admission finding and saying a hand edit corrects it, since `ia preview` and `ia author` cannot target a record admission refused; it classifies the refusal by the runtime's mark, so a refused authored mandate sharing its identity with an admitted one of another band is no exception. The next command is the version 1 machine route `ia report`, which no mandate gates and which prints the admission report with the finding (exit 1 for a failing report, nothing on stderr): with the invocation's --root as every next command repeats it, else with the root spelled relative to the working directory (`.` or `..` segments only) when that spelling, resolved from the working directory as the route resolves --root, reaches the same real root (relative to the working directory as given first, which on win32 keeps a junction's spelling, then to its real path, so a junction or directory symlink in the path still names a root that runs), else `ia report` run from the workspace root with no path printed. An admitted mandate whose authority the runtime cannot read, such as one with a child under authority.moves, still refuses naming its governance position, now with where {path, line, identity}. `ia position`, `ia host <host> --remove --apply` (which still restores editing), `--user`, the Door and MCP reads, the install refresh, `ia-distribution`, `ia inspect` and `ia init` are unchanged and keep running. @inventarch/steward-hook: the `--hook` guard passes the registration's root to evaluateMandateGuard, so a refusal at a refused record names the admission report as admissionReport spells it; the main session's refusal still also names `ia host claude --root <root> --remove --apply --yes`; an edit the hook does not select is still not decided and managed-state protection is unchanged; a registration whose hook is not admitted, or not a declaration it can decide, is IA-HOOK-MANDATE-UNAVAILABLE naming the refused record while one is refused (the hook may share its file); when the records cannot be read, the refusal names `ia validate --root <root>` if the database cannot open at all, and once it opened, the admission report while a refused mandate or dependency is among what admission refused, else `ia validate --root <root>`; a failure while the edit is decided names the admission report. @inventarch/workspace-runtime: unchanged source, but agent-profile generation's fallback for a profile that names no mandate reads governingMandates, so while a record a mandate resolution reads fails admission the rendered agent says the fallback is unavailable and names that record. Limits: the fail-closed is workspace-wide, so one broken record blocks every gated command and selected edit for every actor until its source is corrected by hand, and no in-tool repair exists; in a file refused whole, a line that declares a record with its at sign behind another character on its line (a NUL, a letter, other text) is not seen when it stands inside the lines of a record the parse reads, or indented in a file refused at its pragma, since no reading names it and an error there is that record's (db D15 states the readings exactly), while any line outside such a record that only mentions `@mandate` and is not a genuine full-line comment proven by language trivia (a genuine attribution is still read so in a file that holds a bare CR anywhere, inside `\"\"\"` prose, as after a `\"\"\"` no line closes, and on line 1 after a byte-order mark in a file with no pragma), any line an at sign opens that names no header, any error line outside a parsed record that names no header, and any top-level line of a file refused at its pragma that is neither blank nor a comment, is read as a possible mandate, failing closed; a mandate in a file db never reads (an extension other than lowercase `.ia`, or a path under node_modules, dist or .git) restricts nothing and is reported nowhere, as in 2.0.0; a --root the invocation gave is repeated as given, as every next command repeats it; position, body(K), the packet renderer and the Door operations render no mandate for a refused record and never refuse; the nine machine routes, MACHINE_PROTOCOL versions 1 and 2 and every `ia scope` form keep their shapes.",
       "packages": [
         "@inventarch/cli",
         "@inventarch/compliance",
@@ -1476,12 +1461,12 @@
     {
       "path": "apps/cli/README.md",
       "sha256": "5e7ce972e89604f378c7af57d2e893e4ca9c451e1314cbdf465b51b7c3348d43",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/SPEC.md",
-      "sha256": "11346bb91706b0c257fe424b6a3a157820d0393653c92a87d156973dd9e64ff1",
-      "change": "attribution-comment-classification"
+      "sha256": "461e2479a42248e22976ab36be22a0f7c0bd7d72adf25b039de7533ff9ae12fd",
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/assets/vocabulary.json",
@@ -1492,27 +1477,27 @@
       "path": "apps/cli/package.json",
       "sha256": "031e2a271e0a99c354cea070ef7b2b007f186131dbdf08dccb08e26fb1a3c580",
       "cohortOnly": true,
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/adopt.ts",
       "sha256": "2ba2a4d178b8f1caf1e226e0b86934d1d0e869e6250d9355d75ea85b13fcbb9c",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/author.ts",
       "sha256": "1d22f5b0865b1c395e54d9c50d74cdb56bcce8f94b70e400955ff5be57d2d0cd",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/briefing.ts",
       "sha256": "744adf3f8f950f72119465719c3a5c884602858178c24f41d7ef26d7628ecb43",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/capture.ts",
       "sha256": "353f8cef093f9ebe8adcfd029b6cce0ceaed79228a50b7db9a2233103d6ca23a",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/commands.ts",
@@ -1522,27 +1507,27 @@
     {
       "path": "apps/cli/src/compile.ts",
       "sha256": "63a3a31f8507f38fe5771064363786ec786675ef18696b243c0b8343566964ac",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/consumer.ts",
       "sha256": "212609269df122a267ee3151d6ec5f435d513d082bfa11057718591c8d4e60d3",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/distribute.ts",
       "sha256": "2e48765c1fb863bbbacda7d21a3eb18ac56e78df305514a2d24fefc6474c10a9",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/doctor-authority.ts",
       "sha256": "6a499774f73c2eec3590afa828115db394605409a68b76d64d8fe32408d9746b",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/doctor-mounts.ts",
       "sha256": "ac32a2b42400305f43d54402e9c9df1f582a8383a158fbe8c67f725a81ada331",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/doctor.ts",
@@ -1552,17 +1537,17 @@
     {
       "path": "apps/cli/src/host-projection.ts",
       "sha256": "73bfeb4141407b08deaa869174a0431294ac3cfd8ec729ff197060ad9bc95660",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/host.ts",
       "sha256": "a28b40246bd0abb68beafd426efdb09c6599ec81f9fff12c83dfe6ddb0dfe270",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/init.ts",
       "sha256": "73eba30f374bc7aba7375e8dd6936332ccd67aecee88bd732d2dd92f5de0d26d",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/main.ts",
@@ -1572,7 +1557,7 @@
     {
       "path": "apps/cli/src/next.ts",
       "sha256": "7af6e56b8052a2a485e0a23cfddd0e3ade7b9c85b09cb9be02b1a32e55958d03",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/operation-help.ts",
@@ -1582,37 +1567,37 @@
     {
       "path": "apps/cli/src/position.ts",
       "sha256": "750bc8a785a3f6bf8c9ad7d01845d29e3f47b86395e258875b730859a10ff696",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/preview.ts",
       "sha256": "4ab6255ea8a5c7acb75fa51a27f87092266a47f7593f50e66d61857fadf8c9e8",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/profile.ts",
       "sha256": "4a5af89dcc49832842971c83e1938f287bb75d4e78a5a45b01eb89694819eb42",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/project.ts",
       "sha256": "52a2163d53a125363af4297fce53ad9bea458ec62737d9b756beba80468a0f95",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/read.ts",
       "sha256": "e446f5cd26bfc00149d0de761a7fbaa597fb0041b1f2948b4a3212400459371a",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/render.ts",
       "sha256": "7f78dc2ace27484819488d53d8d4a6d113630cafbfb725db1b63cd20e3800eba",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/session.ts",
       "sha256": "efca94e26d291fbf296da821aa9fbe5eb39580a3ca6c152673850e83ac3e443f",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/src/user-host.ts",
@@ -1627,57 +1612,57 @@
     {
       "path": "apps/cli/tests/adopt.test.ts",
       "sha256": "db79805db293c0fd239b2c4d344ed4dab7cc75636ee532afd5d6e14d3f4dd2f4",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/args.test.ts",
       "sha256": "b7e0ded1b2a5e9b7dce117e26d78c309037a6217cf38c7e9e1214902d82e2fa7",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/author.test.ts",
-      "sha256": "2ce122ed98ff78c908b5fd89b596247dc826da794f58d0ebea2a52f716456d85",
-      "change": "attribution-comment-classification"
+      "sha256": "6c8bd77f3d64fa77635a113afff5db14a7861fa111eae5a607f3e076d04d2d48",
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/bindings.test.ts",
       "sha256": "60beb7d68f6d4e823f854a8f66db5cbb3aafa2763d71ffe78747ee06412c7b0b",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/briefing.test.ts",
       "sha256": "0b0f3a195d7322fdd7b8ee32d1a10436a108766211a959968a0c7b37a8216afc",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/capture.test.ts",
       "sha256": "49baba1f946ed5e854ba9bacdc6313a4909bcc8108dd347e97baabfb7b94ff27",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/check-admission.test.ts",
       "sha256": "37a9dcf76bd2b5ffe2c5a97fc8f3423d06a9867baee30b87bac10531bcca3b40",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/consumer.test.ts",
       "sha256": "1c0096890830853a25f0e34b114984fcbafb70bcec32ee34337421683c22f77d",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/decline.test.ts",
       "sha256": "2b359e2c5ce8cc4c526fba0e2a2e90a57c99ef80677769f21aa2519cf15fc90e",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/distribution-verbs.test.ts",
       "sha256": "0968153d746900b4acee85f666a56dbdf679f917d2a67f9ae32660466ccc9a9a",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/equivalence.test.ts",
       "sha256": "876344485a50bd5e44e25bb23220bfe9ade3a2829ad4879816facac170ccb3bb",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/fixtures/composition-workspace/.ia/release.json",
@@ -1687,62 +1672,62 @@
     {
       "path": "apps/cli/tests/fixtures/composition-workspace/.ia/src/composition.ia",
       "sha256": "9760d3e7b5436526c5705c16577f125cbeef93f209947007f1103bfc1cb9c633",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/fixtures/composition-workspace/.ia/src/hooks.ia",
       "sha256": "57728dd997004367ba5ba77da8a5d56394c5c5ab65d435df62089ad18a1ef1c3",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/fixtures/composition-workspace/.ia/src/playbook.ia",
       "sha256": "868ee5da5d64a4622656ebc9d9d1b4ec4f5cee373c22665f48b7b5461efa5b84",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/fixtures/composition-workspace/.ia/src/workspace.ia",
       "sha256": "88019887ace04c3309ca039ddabc42869f2fc70a0865fe1ff56369bf27d6eb9f",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/host-doctor.test.ts",
       "sha256": "866f9169f13d0f39a548a84b11dce2d397d415f334acfb1fe673dfa5f8ea79f0",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/host-fixture.ts",
       "sha256": "99ba19b321995a452c6fb23b7359a81aaf3bccfd058226cf7be612d384889d55",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/host-generated.test.ts",
       "sha256": "c39e3fe8edf18e28c9255087b00cc3d537db6af2048148c95ae99aea0a7ea678",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/host-install.test.ts",
       "sha256": "3b423c2899331e68928a61fffd0c47b0e1036423f57f457835a9cc705f104136",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/host-projection.test.ts",
       "sha256": "08cc7d8f7bedfc1e090e735a1ac0f31195bc7429fafd5cd046f3a7043a7f3594",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/host-recovery.test.ts",
       "sha256": "6ce889b30c5e9c76a58d9a6192578f0bd33063a1dd850d51c64516d06f0821b3",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/host-registration.test.ts",
       "sha256": "a1d6ff162f545698a7f14f4d8a940866918f80e063cbd502bb9b6c98d78de312",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/init-migrate.test.ts",
       "sha256": "3dad2724dacfa3700cf540f1c5f2f4de68f14a5c8642a81e0438dc50f3ad574a",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/init.test.ts",
@@ -1752,22 +1737,22 @@
     {
       "path": "apps/cli/tests/next.test.ts",
       "sha256": "7843adcefbf250042a292cc2488bb1aba735e413bd403364bdb1c6de952e9ab2",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/position.test.ts",
       "sha256": "b7280796565078aeeaeac663ed036cb0db46a343f28db6b9eb93c555de0a1e1d",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/preview.test.ts",
       "sha256": "d92b916941cb0813d87226285452beefa139a1c9cef09424a227b9855f045d16",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/project.test.ts",
       "sha256": "db1dec41206decdbc60a0af643cf836e9d32a56b72ad71bbc81d80068d16eab3",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/protocols.test.ts",
@@ -1777,27 +1762,27 @@
     {
       "path": "apps/cli/tests/read.test.ts",
       "sha256": "19299c9a8ca921ab4eb280463113836b410a553267b699a5b4e3b46b80cb763c",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/refusal-next.test.ts",
       "sha256": "86b8964b071a5ddbb60a0757111a5e57726ae3cd652fc030044cd08d8842206a",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/registry-fixture.ts",
       "sha256": "a86ca684e2e3f2965c6901c02cc13716412e4ce88ae06b04be91658a4dec665e",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/registry.test.ts",
       "sha256": "9b77b360bfaad2ed35bfc4c0570ce315d56cb5cf64304bbef2334fa317dee6be",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/render.test.ts",
       "sha256": "00d4aabcd9c186731f769c1275e771036648639ca341f7d42cf1267e510f8d9b",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/user-host.test.ts",
@@ -1807,17 +1792,17 @@
     {
       "path": "apps/cli/tests/validate-checks.test.ts",
       "sha256": "d00814bcf96131fb396afffa60087345125f9f9f728922e299a9aa4dee9bd671",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/workspace-fixture.ts",
       "sha256": "ae08fd313d8968812c6795d63003c3f384cf7ff29c102b5473252fde87309348",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/cli/tests/workspace-verbs.test.ts",
       "sha256": "167d13343fe6cd8a7dc914a3d75d95ddbdb28dc7d750f6fa2a93c5adc7bcb826",
-      "change": "attribution-comment-classification"
+      "change": "author-source-boundary"
     },
     {
       "path": "apps/distribution/README.md",
@@ -2401,32 +2386,32 @@
     {
       "path": "packages/db/README.md",
       "sha256": "a225db4a80803785397535b5be29fcc228e70ab618f000feb3911f0e84b7369d",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/SPEC.md",
-      "sha256": "621918f07f6c7b2215d0269225322b1fc75c70944330dc34ec6d6bc71f64b3cf",
-      "change": "attribution-comment-classification"
+      "sha256": "5e3aaf088f310358477284ae8d6e7c4861e30122686ef31599822df159e86c9c",
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/package.json",
       "sha256": "51d5ce87410a6d79cc94b9d42c88fd2a6e9b01b080e2e879ec84b27b7e8cc1d9",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/checks.ts",
       "sha256": "b5533e4a71980d444e4d486082aefe6916cd5aa2bcd03a4dabd6e2bdb212df3b",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/descriptors/codec.ts",
       "sha256": "0903999f96a2db104d2376e992ecd3fcda9c0cb315f3506044af63ae6155dab2",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/descriptors/envelope.ts",
       "sha256": "6f1eebdbdf16b9e92bb4478445d43b7b497629815392064ddbeb677f9ba8f5ac",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/descriptors/index.ts",
@@ -2436,87 +2421,87 @@
     {
       "path": "packages/db/src/distribution/codec.ts",
       "sha256": "29bba71388f5724ec982cf19cf99cb67b35456fe028e611cc5b2d51543561d16",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/distribution/contracts.ts",
       "sha256": "d204238233f3b6c1fc70e4ddf767ffcfec9129ff5b5071636ad1500407171416",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/distribution/implementations.ts",
       "sha256": "a4e87ad9dea26c4623495e13e96c885cc3d862b63da5968809196e68b789519c",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/distribution/index.ts",
       "sha256": "448256cb2d178ab588a42602ef5b44ea83da980f6216076734381b7d0c342f6a",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/distribution/reader.ts",
       "sha256": "7d26aa3438867eed9121bceb640a2f0b85c885dac7f15efd1984f0d77d54d951",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/distribution/release-control.ts",
       "sha256": "8cb57aa926dd8dbb113c2ac66fbd2524910753db034d6cd476bbd7e4ab67aba4",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/editor/index.ts",
       "sha256": "d184482b1552583045a297de2455dde76574a692d7b9c61ce4997cfc9719ddfe",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/evidence.ts",
       "sha256": "06883527ed55a900879cd99422113d5d3155bad636fec3849e6c008417f5cf27",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/handle.ts",
       "sha256": "681c03d863a01b2e964ae2d5c8ce3a1e10eb90413c8ab37121b3803e229cfa1b",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/index.ts",
       "sha256": "5e41583d3036e90784afe6db19ee9f4d6a67f5995bf06f382c340e2d1498a2c7",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/inputs.ts",
       "sha256": "b3239303fe4e7788bacff3ae0bef8dff34d1ca90c795f0d8a6598be22619b76c",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/membership.ts",
       "sha256": "32641ca84597e72bb135917f3d39efcc248fc3ed172821237e22e563035ed9cf",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/preview.ts",
       "sha256": "7040ba159bf7b0e57cc0732ace034a6dd598923719a6048a06ffc9adc65c6a32",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/retention.ts",
       "sha256": "0aa72573b9dadbc3a76161738282a78c69630ba96219136d0d865cee2e577545",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/runner-evidence.ts",
       "sha256": "23b9b5b19f625ccb51f68e657d4c909436e47ca599d58c2b8cb641c39fe5c63c",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/src/view.ts",
-      "sha256": "16c137044a249cb471d748488e8cd8de7d2e9904f2ecccb6b48503ecb9d70939",
-      "change": "attribution-comment-classification"
+      "sha256": "974d5f616bb7ca83e0fe6d443592b3941db4955541ad9ab68838791243b7498a",
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/tests/check-evidence.test.ts",
       "sha256": "1685194e2ffabe46358b811cd9a674452d87fbcba0c577c5a3020c40ad96e68f",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/tests/descriptors.test.ts",
@@ -2526,32 +2511,32 @@
     {
       "path": "packages/db/tests/distribution-contracts.test.ts",
       "sha256": "8e24df7825846df5637e8744469d5969d6b37bb1fd18fd11aa88e4d7221d4bb8",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/tests/handle.test.ts",
-      "sha256": "7564a71708cb1633970a6c04dc2f9054cde782164f106d387248a4656068c69f",
-      "change": "attribution-comment-classification"
+      "sha256": "5a1141dd03a77d3318b88cf24a429e96470a3d40bffc9068d94f7f147319580d",
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/tests/retention.test.ts",
       "sha256": "9a5bf006b149e5374c5530fd555f0336f0d2b948b32ae1164c88f38dd7dfccca",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/tests/runner-evidence.test.ts",
       "sha256": "b77c65795f1afc40efea12a8a4e5d350de461e33961dd9ef0d152241197c3ade",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/tests/scope.test.ts",
       "sha256": "db286527d2a52970b1cbfad4894530aaaf14cb23820bb05f2d689fd695464366",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/db/tests/seat.test.ts",
       "sha256": "d8460204e17229f40cb8e2931b39d1ca6336d1229c5d2daa4370160aed519002",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/graph/README.md",
@@ -2653,57 +2638,57 @@
     {
       "path": "packages/runtime/README.md",
       "sha256": "4e327fa271a7cad48119e08d53784cbdb734f23651787ad8695f2be19642b77d",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/SPEC.md",
-      "sha256": "de5d24d82a466a873446cbbb81c02217d18da8dd103128debcffda1d8d417d42",
+      "sha256": "84879e600e08453665b6b26a9cdb4a1952cfd9c14b5a31e13b9706947e56bcd1",
       "change": "public-qualification-contracts"
     },
     {
       "path": "packages/runtime/package.json",
       "sha256": "0919386ce13f694ca98a000809fd15553efe5f7619162e2b72685a39bc4e9c06",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/authoring-execution/execution.ts",
       "sha256": "9da4101a4b8ffc5d2d3d3c49f0e71bd626cd245e67a25dea1e440bc256fcaf88",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/authoring-execution/inventory.ts",
       "sha256": "cd9b03b0b6b70228a6db9d6a1a07e2d3d94503bc108fb534c18a32562ecea386",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/authoring-execution/types.ts",
       "sha256": "9656f7796b77a40a3876064c384f05471573b40e15864b54d8282e67be3fb8fb",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/door.ts",
       "sha256": "1fe9cfd2354881bf47e62bda0cffb7ebebc2f0747a59a8c3f0c1d49d739ddb82",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/editor/index.ts",
       "sha256": "b75cba72413817face5e7b3ed93386f24a091f17a9a27ca9210d7f6de8c5dbeb",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/editor/workspace.ts",
       "sha256": "15bd12dea644287ff590832ae0fbe48b1ff0893976ffb0f74e72f64780b32e5b",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/errors.ts",
       "sha256": "07f30e7c7013034db43aaa08d7d2fe49578da1fe3b83269309372e3038a5adae",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/index.ts",
       "sha256": "05433c5d50ff1b17ed87a84d78ae60c9930d436fe746a3c0050419e9ebda814b",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/machine-protocol.ts",
@@ -2713,82 +2698,82 @@
     {
       "path": "packages/runtime/src/mandate-guard.ts",
       "sha256": "9f747aad95f4a2648dca2e21cf797a05e29074ea58db108f78a1272041c3286f",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/mandate-modes.ts",
-      "sha256": "f20f359e60395f64d7574628ef672adf73c154f8d79bd9842ec263693f9f3945",
-      "change": "attribution-comment-classification"
+      "sha256": "381dd13c0dfce676cc9f9183e58352e9e399518033d54c7964c139e492e097d5",
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/next.ts",
       "sha256": "f4806c042ea87a1585d67f7ac95ffaa7d38ef76b04f26f2c27d1a5cf8bb540f2",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/packet-host.ts",
       "sha256": "9481360ce8f72dc28e7beffa66f6ba8f59ad78548a0218f7d225976f5cdcb298",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/packet.ts",
       "sha256": "b59ef6ab4a31313f083ed01c38f9931c84a9ac6dc19aee0f74ba47a8651d957e",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/position.ts",
       "sha256": "65b50dde120302d8a34439550f2c288e34a6c31d4c93f77863b88be58bf931a9",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/src/steward.ts",
       "sha256": "16afd49f0915e663f6095a3d2dcc42f8a0233193c763f9be5e3c96ec25824956",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/composition.test.ts",
       "sha256": "95154902665dbdd616dac948b0ed92e80eb60ee9d2f00a2b06ea3bf1b6d08534",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/door-position.test.ts",
       "sha256": "83a5d715bba426b9da5ece5c9792161b866dfdfa9bc3fb0e359c63586e245c50",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/golden/packet-fresh-init.json",
       "sha256": "951062436696d57caa9845f5478073759de030e4175285c6168bf307d6285a88",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/mandate-modes.test.ts",
       "sha256": "b11ed832c5f6a0cebd5e6f63baffe528d7a63d8eb46cb6ff493301deccee4777",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/mandate-resolution.test.ts",
-      "sha256": "5b32106d0477604e39ee6ba7a538aa46893701df1f8b04c845cdc73ca1905a31",
-      "change": "attribution-comment-classification"
+      "sha256": "f35b26dc88813a974d2d38bc9390cdd854b1395cee5da9b05070344514dbad54",
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/next.test.ts",
       "sha256": "18cd0a00c2ab41e69a0487eabc7ff903a67bc9db4cc0a4dbaae4c2d11f2d0aea",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/packet-host.test.ts",
       "sha256": "d973eee6f8e61edcd3ede0f17cea7d2bb5ab8ff7b9d2be42120a46a9c10999c0",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/packet.test.ts",
       "sha256": "1ce3676d478bbc9dc8e86032dbd845735d4688e90d30ffae2a8e1ad240cf5f43",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/runtime/tests/purity.test.ts",
       "sha256": "9da1793e606b0f9c601c7cfde3b7ce211354fbc654e105b2dbe361c4cd49da27",
-      "change": "attribution-comment-classification"
+      "change": "authored-revision"
     },
     {
       "path": "packages/service-contracts/package.json",

@@ -528,6 +528,35 @@ it('keeps conservative attribution lookalikes and declarations following genuine
     db.close();
   }
 });
+it('keeps listing the mandate each guard of the full-line comment reading exists for', () => {
+  // Without its guard, each file's `@mandate` line would be read as a comment and fail nothing closed.
+  const root = workspace(),
+    damaged = '@agent unrelated\n  meaning\n    says "unfinished';
+  const guards = [
+    // The `#` prefix: the scanner strips a byte-order mark and reads a comment; the physical line opens with the mark.
+    ['prefix', '\uFEFF# authored-by @mandate m\n', 1],
+    // The full-line match: after a prose closer the scanner reads only `# c`, on a line that opens with `#`.
+    ['full-line', '@agent unrelated\n   bad\n      x """\n# @mandate z """ # c\n', 4],
+    // Bare CR: the scanner does not split it, so its comment at line 3 is the physical line 4, which reads the same.
+    // The blank line keeps the parsed record's span, in the scanner's numbering, off the physical line 4.
+    ['bare-cr-numbering', `#! ia 1.0\n# c\r# @mandate m\n# @mandate m\n\n${damaged}\n`, 3, 4],
+    // Bare CR after a genuine attribution: the whole file keeps the conservative token reading.
+    ['bare-cr-after', `#! ia 1.0\n# authored-by @mandate m\n${damaged}\r`, 2],
+  ] as const;
+  for (const [name, text] of guards) put(root, `.ia/src/guard-${name}.ia`, text);
+  const db = open(root, { cache: false });
+  try {
+    for (const [name, , ...lines] of guards)
+      expect(
+        db.unadmitted
+          .filter((entry) => entry.path === `.ia/src/guard-${name}.ia` && entry.word === 'mandate')
+          .map((entry) => entry.line),
+        name,
+      ).toEqual(lines);
+  } finally {
+    db.close();
+  }
+});
 it('closes idempotently and refuses all subsequent reads and refreshes', () => {
   const db = open(workspace(false), { cache: false });
   db.close();

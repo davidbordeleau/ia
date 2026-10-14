@@ -1541,6 +1541,15 @@ describe('a file refused whole whose records db cannot all identify (review D2-R
     expect(profileRefusal(mandates, 'read').refusal).toBeUndefined();
     expect(profileRefusal(mandates, 'effect').refusal?.code).toBe('IA-RUNTIME-MANDATE-MOVE');
   });
+  const thrownBy = (run: () => unknown): RuntimeError => {
+    try {
+      run();
+    } catch (error) {
+      if (error instanceof RuntimeError) return error;
+      throw error;
+    }
+    throw new Error('expected a RuntimeError');
+  };
   it('retains unidentified authority and resolution dependency refusals after an attribution comment', () => {
     const comment = `# authored-by @agent demo under @mandate demo-mandate at ${'a'.repeat(64)}`;
     for (const text of [
@@ -1559,19 +1568,14 @@ describe('a file refused whole whose records db cannot all identify (review D2-R
         () => defaultActor(db, within, demo),
         () => seatedWorkspace(db, within, '.ia/src/workspace.ia'),
         () => governingMandates(db, within, { actor: participant, workspace: demo }),
-      ])
-        expect(resolve, text).toThrow(expect.objectContaining({ admission: 'refused' }));
+      ]) {
+        const error = thrownBy(resolve);
+        expect(error.admission, text).toBe('refused');
+        // It names the record after the comment: read as a declaration, the comment's own references (line 2) would be.
+        expect(error.where, text).toMatchObject({ path: '.ia/src/extra.ia', line: 3 });
+      }
     }
   });
-  const thrownBy = (run: () => unknown): RuntimeError => {
-    try {
-      run();
-    } catch (error) {
-      if (error instanceof RuntimeError) return error;
-      throw error;
-    }
-    throw new Error('expected a RuntimeError');
-  };
   for (const [name, text, line] of [
     ['a space after the at sign', `#! ia 1.0\n\n@ mandate spaced\n${body}`, 3],
     ['a full-width at sign', `#! ia 1.0\n\n${String.fromCharCode(0xff20)}mandate wide\n${body}`, 3],

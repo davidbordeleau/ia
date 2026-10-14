@@ -238,7 +238,10 @@ export interface RefusedMandate {
  * then line, each with its own admission finding as db records it (db `unadmitted`): (a) one admission refused,
  * `refused` naming it; (b) both occurrences of a mandate identity that ties at band 100; (c) one a file refused whole
  * declares, by a language error or a duplicate requirement id, as db's own parse of the file reads its headers, or as
- * its captured text shows a header the parse could not read, or a `@mandate` token on a line no parsed record spans; and
+ * its captured text shows a header the parse could not read, or a `@mandate` token on a line no parsed record spans and
+ * the language scanner does not read as a whole-line comment (db D15), so the attribution `ia author` writes is none
+ * outside the damaged files D15 names (a bare CR anywhere, the comment inside `"""` prose, a byte-order mark before it
+ * on line 1 with no pragma); and
  * (d) review D2-R2: every record db cannot identify (db D15 lists it with no word, by the rules and limits D15 states),
  * which may be a mandate, so it counts as one, marked `unidentified`, except at a line db also lists a mandate at, which
  * is counted once, as that mandate (review D2 recheck F3). A record is a mandate when its word is `mandate` or its

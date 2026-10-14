@@ -195,7 +195,7 @@ const onlyChanged = (before: ReadonlyMap<string, string>, after: ReadonlyMap<str
   [...new Set([...before.keys(), ...after.keys()])].filter((id) => before.get(id) !== after.get(id)).sort();
 
 describe('ia author', () => {
-  it('does not treat its attribution comment as a mandate when an unrelated work file later fails parsing', async () => {
+  it('does not treat its attribution comment as a mandate when the work file holding it later fails parsing', async () => {
     const root = workspace();
     await authored(root, ['--set', '@plan p1', 'work.title=Retitled']);
     const written = readFileSync(resolve(root, '.ia/src/work.ia'), 'utf8');

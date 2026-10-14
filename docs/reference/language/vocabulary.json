@@ -2,7 +2,7 @@
   "version": 1,
   "language": "ia 1.0",
   "status": "public IA 1.0 language contract",
-  "sourceDigest": "0edfdca8a6bf69e9e592ef3a3c98b7430f7143c2544e02f3f2469d716238eabb",
+  "sourceDigest": "ee6f65b1bbdb2d3ee686dece78a2f0c800c7fb99c7e998676b1d9bd230113471",
   "words": [
     {
       "word": "agent",
@@ -1323,6 +1323,10 @@
             "required": true
           },
           {
+            "name": "product",
+            "required": false
+          },
+          {
             "name": "relationships",
             "required": false
           }
@@ -1342,6 +1346,61 @@
             "path": "distribution.records",
             "type": "list of ref",
             "required": true
+          },
+          {
+            "path": "product.name",
+            "type": "id",
+            "required": false
+          },
+          {
+            "path": "product.display-name",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.version",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.description",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.author",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.license",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.keywords",
+            "type": "list of text",
+            "required": false
+          },
+          {
+            "path": "product.hosts",
+            "type": "list of id",
+            "required": false,
+            "values": [
+              "claude",
+              "codex",
+              "grok"
+            ]
+          },
+          {
+            "path": "product.short-description",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.category",
+            "type": "text",
+            "required": false
           }
         ],
         "edges": []

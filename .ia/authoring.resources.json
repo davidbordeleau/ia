@@ -206,8 +206,8 @@
     },
     {
       "path": ".ia/src/systems/authoring-system/reference/distribution.md",
-      "bytes": 820,
-      "sha256": "6fe78f2a481cd55ff5437abff359ae6d0c387871d840fc30c1192dac3bdd6831",
+      "bytes": 1249,
+      "sha256": "5c9409862de26e0cc39e35e4cd131632004697d048f4427a8c884b25c59d415d",
       "mediaType": "text/markdown",
       "encoding": "utf8"
     },

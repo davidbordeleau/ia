@@ -2,7 +2,7 @@
 
 Generated from the public contract corpus by `pnpm vocabulary:generate`. Required sections and fields are structural obligations; `id` is not an implicit enumeration. See [the language guide](README.md) for shared syntax, allowed values, relationship resolution, domain constraints and evaluator limits. The [JSON catalogue](vocabulary.json) carries the same machine-readable contract.
 
-This catalogue contains 44 words. Source digest: `0edfdca8a6bf69e9e592ef3a3c98b7430f7143c2544e02f3f2469d716238eabb`.
+This catalogue contains 44 words. Source digest: `ee6f65b1bbdb2d3ee686dece78a2f0c800c7fb99c7e998676b1d9bd230113471`.
 
 ## @agent
 
@@ -390,13 +390,23 @@ Facets: `distribution`; the first is the default.
 
 Consumer: language/schema admission; graph resolution; explicitly selected domain consumer for stronger semantics.
 
-Required sections: meaning, distribution. Optional sections: relationships.
+Required sections: meaning, distribution. Optional sections: product, relationships.
 
 | Field | Type | Required |
 |---|---|---|
 | meaning.says | text | yes |
 | meaning.answers | text | yes |
 | distribution.records | list of ref | yes |
+| product.name | id | no |
+| product.display-name | text | no |
+| product.version | text | no |
+| product.description | text | no |
+| product.author | text | no |
+| product.license | text | no |
+| product.keywords | list of text | no |
+| product.hosts | list of id in [claude, codex, grok] | no |
+| product.short-description | text | no |
+| product.category | text | no |
 
 ## @execution-binding
 

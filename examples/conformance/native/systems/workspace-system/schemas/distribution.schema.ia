@@ -5,9 +5,20 @@
   sections
     must have meaning
     must have distribution
+    may have product
     may have relationships
     closed
   fields
     must have meaning.says as text
     must have meaning.answers as text
     must have distribution.records as list of ref
+    may have product.name as id
+    may have product.display-name as text
+    may have product.version as text
+    may have product.description as text
+    may have product.author as text
+    may have product.license as text
+    may have product.keywords as list of text
+    may have product.hosts as list of id in [claude, codex, grok]
+    may have product.short-description as text
+    may have product.category as text

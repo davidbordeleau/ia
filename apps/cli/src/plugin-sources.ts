@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { createFile } from '@inventarch/distribution/services';
 import type { PluginAsset, PluginFile, PluginResource } from '@inventarch/workspace-runtime/internal/generate';
@@ -16,16 +16,13 @@ interface Association {
   resources: { key: { path: string }; role: string; delivery: 'inline' | 'installed-reference' }[];
 }
 
+/** Whether `relative(base, path)` leaves `base`: `..` itself or a `..` segment first, never a name like `..x`. */
+const leaves = (here: string): boolean => here === '..' || here.startsWith(`..${sep}`) || isAbsolute(here);
+
 const contained = (base: string, path: string): string => {
   const resolved = resolve(base, path);
   const inside = relative(base, resolved);
-  if (
-    isAbsolute(path) ||
-    path.split(/[\/]/).includes('..') ||
-    inside === '' ||
-    inside.startsWith('..') ||
-    isAbsolute(inside)
-  )
+  if (isAbsolute(path) || path.split(/[\\/]/).includes('..') || inside === '' || leaves(inside))
     throw new HostPluginError('IA-PLUGIN-PRODUCT', `${path} escapes the workspace`);
   return resolved;
 };
@@ -41,8 +38,21 @@ const readJson = <T>(root: string, path: string): T => {
   }
 };
 
+/**
+ * A resource or asset's bytes, read only through real directories: a symbolic link or junction on any segment below the
+ * workspace root is refused (IA-PLUGIN-INPUT), so projection never reads, pins or copies bytes from outside the root.
+ */
 const readContained = (root: string, path: string): Buffer => {
   const resolved = contained(root, path);
+  const segments = relative(root, resolved).split(sep);
+  for (let index = 1; index <= segments.length; index += 1) {
+    const below = segments.slice(0, index).join('/');
+    if (lstatSync(resolve(root, below), { throwIfNoEntry: false })?.isSymbolicLink() === true)
+      throw new HostPluginError(
+        'IA-PLUGIN-INPUT',
+        `${below} is a symbolic link or junction; ${path} is read only through real directories below the workspace`,
+      );
+  }
   try {
     return readFileSync(resolved);
   } catch {
@@ -97,10 +107,8 @@ export function readPluginSources(root: string): { resources: PluginResource[]; 
  */
 export function checkPluginOut(root: string, out: string): string {
   const resolved = resolve(out);
-  const here = relative(resolve(root), resolved);
-  const inside = here === '' || (!here.startsWith('..') && !isAbsolute(here));
-  const parent = relative(resolved, resolve(root));
-  const contains = parent === '' || (!parent.startsWith('..') && !isAbsolute(parent));
+  const inside = !leaves(relative(resolve(root), resolved));
+  const contains = !leaves(relative(resolved, resolve(root)));
   if (inside || contains)
     throw new HostPluginError(
       'IA-PLUGIN-OUT',

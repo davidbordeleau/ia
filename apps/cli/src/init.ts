@@ -4,6 +4,7 @@ import { adoptedBindings } from '@inventarch/db';
 import { adoptionId, planAdoption, applyAdoption } from '@inventarch/distribution/registry';
 import type { WorkspaceRelease } from '@inventarch/distribution/registry';
 import { readBase, PIN_PATH, PACKAGE_ID, DAMAGED } from './bundled-base.js';
+import { SPDX_LICENSE_IDS } from './spdx-license-ids.js';
 import type { Base, BasePin } from './bundled-base.js';
 export { readBase, PIN_PATH, baseArchivePath, PACKAGE_ID } from './bundled-base.js';
 export type { Base, BasePin } from './bundled-base.js';
@@ -76,7 +77,7 @@ import {
   statSync,
   unlinkSync,
 } from 'node:fs';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { inertCommandRoot } from '@inventarch/runtime';
 import {
   decodeReleaseDescriptor,
@@ -739,6 +740,7 @@ export function starterDescriptor(
   provenance: Provenance,
   distribution?: string | null,
   assets: Starter['assets'] = [],
+  license = 'UNLICENSED',
 ): Descriptor {
   return {
     formatVersion: 1,
@@ -749,7 +751,7 @@ export function starterDescriptor(
     language: ['1.0'],
     dependencies: baseDependencies(base),
     assets,
-    license: 'UNLICENSED',
+    license,
     description: `The ${name} workspace.`,
     source: provenance.source,
   };
@@ -786,14 +788,63 @@ function filesBelow(root: string, path: string): readonly string[] {
   return found;
 }
 
-/** `--from`: lower the plugin; any unresolved construct refuses before anything is planned or written. */
-function lowerFrom(from: string, name: string | null, lower: boolean): ReturnType<typeof lowerPlugin> | null {
+/** `path` with its longest existing prefix resolved through links, junctions and the volume's own spelling. */
+function canonical(path: string): string {
+  let head = resolve(path);
+  const rest: string[] = [];
+  while (!existsSync(head) && dirname(head) !== head) {
+    rest.unshift(basename(head));
+    head = dirname(head);
+  }
+  try {
+    head = realpathSync.native(head);
+  } catch {
+    // An unreadable prefix is compared as spelled.
+  }
+  return join(head, ...rest);
+}
+/** Whether `path` is `base` or lies below it; an in-base name that only begins with `..`, such as `..x`, is below it. */
+const within = (base: string, path: string): boolean => {
+  const here = relative(base, path);
+  return here === '' || (here !== '..' && !here.startsWith(`..${sep}`) && !isAbsolute(here));
+};
+/**
+ * The descriptor licence of a lowered kit: the Claude manifest's when it is one SPDX license identifier (an id of the
+ * SPDX License List, current or deprecated, or a `LicenseRef-` reference), else `UNLICENSED`. A licence expression, a
+ * name such as `Proprietary` or free text such as `SEE LICENSE IN …` is not an identifier.
+ */
+export const loweredLicense = (license: string | null): string =>
+  license !== null &&
+  (SPDX_LICENSE_IDS.has(license) || (license.length <= 128 && /^LicenseRef-[A-Za-z0-9.-]+$/.test(license)))
+    ? license
+    : 'UNLICENSED';
+
+/**
+ * `--from`: lower the plugin; any unresolved construct refuses before anything is planned or written, with every entry
+ * in the refusal's details. A target that is the plugin directory or lies inside it is refused before the plugin is
+ * read, since lowering would write into its own source; a target that contains the plugin is legal.
+ */
+function lowerFrom(
+  from: string,
+  root: string,
+  name: string | null,
+  lower: boolean,
+): ReturnType<typeof lowerPlugin> | null {
+  const plugin = resolve(from);
   let plan: ReturnType<typeof lowerPlugin> | null = null;
   try {
     // The plugin is always read, so an input error refuses at once; lowering needs a name and a target free of conflicts.
-    if (statSync(resolve(from), { throwIfNoEntry: false })?.isDirectory() !== true)
+    if (statSync(plugin, { throwIfNoEntry: false })?.isDirectory() !== true)
       throw new HostPluginError('IA-PLUGIN-INPUT', `${from} is not a plugin directory`);
-    const inventory = readPlugin(resolve(from));
+    if (within(canonical(plugin), canonical(root)))
+      throw new Refusal(
+        'IA-PLUGIN-INPUT',
+        `${root} is the plugin directory or lies inside it; lowering never writes into its own source`,
+        1,
+        { path: plugin },
+        `Choose a target directory outside the plugin, then run "ia init <directory> --from ${quote(plugin)}".`,
+      );
+    const inventory = readPlugin(plugin);
     if (lower && name !== null) plan = lowerPlugin(inventory, name);
   } catch (error) {
     if (error instanceof HostPluginError)
@@ -801,7 +852,7 @@ function lowerFrom(from: string, name: string | null, lower: boolean): ReturnTyp
         error.code,
         error.message,
         1,
-        { path: resolve(from) },
+        { path: plugin },
         'Run "ia init --help" for what a plugin directory may hold.',
       );
     throw error;
@@ -809,10 +860,13 @@ function lowerFrom(from: string, name: string | null, lower: boolean): ReturnTyp
   if (plan !== null && plan.unresolved.length > 0)
     throw new Refusal(
       'IA-LOWER-UNRESOLVED',
-      `${plan.unresolved.length} construct(s) cannot be lowered yet: ${plan.unresolved.slice(0, 20).join('; ')}`,
+      `${plan.unresolved.length} construct(s) cannot be lowered yet: ${plan.unresolved.slice(0, 20).join('; ')}${plan.unresolved.length > 20 ? '; ...' : ''}`,
       1,
-      { path: resolve(from) },
+      { path: plugin },
       'Nothing was written; run "ia init --help" for what a plugin directory may hold.',
+      null,
+      undefined,
+      plan.unresolved,
     );
   return plan;
 }
@@ -856,7 +910,7 @@ export function collectInit(request: InitRequest): InitView {
   const lowered =
     request.from === undefined
       ? null
-      : lowerFrom(request.from, name, identity.conflict === null && !existsSync(resolve(root, DESCRIPTOR_PATH)));
+      : lowerFrom(request.from, root, name, identity.conflict === null && !existsSync(resolve(root, DESCRIPTOR_PATH)));
   const { files, records } =
     name === null
       ? { files: [], records: [] }
@@ -997,7 +1051,15 @@ export function collectInit(request: InitRequest): InitView {
       descriptor:
         id === null || name === null
           ? null
-          : starterDescriptor(id, name, base, provenance, system ? null : undefined, assets),
+          : starterDescriptor(
+              id,
+              name,
+              base,
+              provenance,
+              system ? null : undefined,
+              assets,
+              lowered === null ? undefined : loweredLicense(lowered.license),
+            ),
       base: base.pin,
       systems: base.systems,
       provenance,
@@ -1096,7 +1158,18 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
     root,
     DESCRIPTOR_PATH,
     Buffer.from(
-      descriptorText(starterDescriptor(id, name, base, starter.provenance, distribution ?? undefined, starter.assets)),
+      descriptorText(
+        starterDescriptor(
+          id,
+          name,
+          base,
+          starter.provenance,
+          distribution ?? undefined,
+          starter.assets,
+          // The plan's licence: the lowered plugin's SPDX identifier with --from, else UNLICENSED.
+          starter.descriptor?.license,
+        ),
+      ),
     ),
   );
   checkpoint('init:descriptor');
@@ -1627,7 +1700,8 @@ async function initialize(context: Context, root: string, id: string | undefined
     host: selected,
     id,
     system: args.value('from') === undefined && args.flag('system'),
-    from: args.value('from'),
+    // Read against the invocation's directory, as the target is, so `--from .` names the directory it was typed in.
+    from: args.value('from') === undefined ? undefined : resolve(host.cwd, args.value('from')!),
     packageRoot: host.packageRoot,
     git: gitIn(existing, host.env),
     invocation: invocationOf(context),

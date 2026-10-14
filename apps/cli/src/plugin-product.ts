@@ -1,6 +1,6 @@
 /** `ia project <host> --product plugin`: renders a lowered workspace back into a plugin directory, create-only. */
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { PluginFile } from '@inventarch/workspace-runtime/internal/generate';
 import {
@@ -67,8 +67,11 @@ function checkPluginProduct(context: Context, root: string): Result {
     );
   const system = systems[0]!;
   const files: readonly PluginFile[] = renderPluginFor(root);
-  const compare = args.value('compare');
-  const diffs = compare === undefined ? [] : comparePlugin(readEntries(resolve(compare)), files);
+  const given = args.value('compare');
+  const compare = given === undefined ? undefined : resolve(context.host.cwd, given);
+  if (compare !== undefined && statSync(compare, { throwIfNoEntry: false })?.isDirectory() !== true)
+    throw new HostPluginError('IA-PLUGIN-INPUT', `${compare} is not a plugin directory to compare with`);
+  const diffs = compare === undefined ? [] : comparePlugin(readEntries(compare), files);
   const drift = diffs.filter((d) => REFUSED.has(d.status));
   const again = lowerPlugin(inventoryOf(files.map((f) => ({ path: f.path, bytes: f.bytes }))), system);
   const lowered = new Map(again.files.map((f) => [f.path, f.bytes]));
@@ -84,18 +87,26 @@ function checkPluginProduct(context: Context, root: string): Result {
   ].sort();
   const report = { compared: compare !== undefined, diffs, drift, fixedPoint, unresolved: again.unresolved };
   if (drift.length > 0 || fixedPoint.length > 0 || again.unresolved.length > 0) {
-    const parts = [
-      ...drift.map((d) => `${d.path} (${d.status}${d.reason === null ? '' : `: ${d.reason}`})`),
-      ...fixedPoint.map((path) => `${path} (fixed point)`),
-      ...again.unresolved.map((reason) => `unresolved: ${reason}`),
-    ];
-    const rerun = `ia project ${args.positionals[0] ?? 'claude'} --product plugin --check${compare === undefined ? '' : ` --compare ${quote(resolve(compare))}`} --root ${quote(root)} --json`;
+    const listed = (label: string, items: readonly string[]): string[] =>
+      items.length === 0 ? [] : [`${label}: ${items.slice(0, 20).join('; ')}${items.length > 20 ? '; ...' : ''}.`];
+    const message = [
+      `${drift.length} drifted, ${fixedPoint.length} fixed-point mismatches, ${again.unresolved.length} unresolved.`,
+      ...listed('Files', [
+        ...drift.map((d) => `${d.path} (${d.status}${d.reason === null ? '' : `: ${d.reason}`})`),
+        ...fixedPoint.map((path) => `${path} (fixed point)`),
+      ]),
+      ...listed('Unresolved', again.unresolved),
+    ].join(' ');
+    const rerun = `ia project ${args.positionals[0] ?? 'claude'} --product plugin --check${compare === undefined ? '' : ` --compare ${quote(compare)}`} --root ${quote(root)}`;
     throw new Refusal(
       'IA-ROUNDTRIP-DRIFT',
-      `${drift.length} drifted file(s), ${fixedPoint.length} fixed-point mismatch(es), ${again.unresolved.length} unresolved: ${parts.slice(0, 20).join('; ')}${parts.length > 20 ? '; ...' : ''}`,
+      message,
       1,
       { path: root },
-      `Run "${rerun}" for the full report.`,
+      // With --json the full report is already the refusal's details.
+      json
+        ? `The full report is in details; correct each file it names, then run "${rerun}" again.`
+        : `Run "${rerun} --json" for the full report.`,
       null,
       undefined,
       report,
@@ -121,8 +132,35 @@ const renderCheck = (report: {
     '',
   ].join('\n');
 
+/** The plugin form's usage, judged before the workspace is read: its host, and `--compare` only with `--check`. */
+function pluginUsage(context: Context): void {
+  const { args } = context;
+  const given = args.value('root'),
+    option = given === undefined ? '' : ` --root ${quote(given)}`;
+  const host = args.positionals[0] ?? '';
+  // One plugin carries every host its product lists; the positional names the host the command runs for.
+  if (host !== 'claude' && host !== 'codex')
+    throw new Refusal(
+      'IA-CLI-USAGE',
+      `ia project --product plugin takes claude or codex; got ${host}. One plugin carries every host its product lists`,
+      2,
+      null,
+      `Run "ia project claude --product plugin --check${option}" to check the plugin, whose manifests cover every listed host.`,
+    );
+  const compare = args.value('compare');
+  if (compare !== undefined && !args.flag('check'))
+    throw new Refusal(
+      'IA-CLI-USAGE',
+      '--compare needs --check: only the check compares the rendered plugin with an original',
+      2,
+      null,
+      `Run "ia project ${host} --product plugin --check --compare ${quote(compare)}${option}" to compare without writing.`,
+    );
+}
+
 export async function runPluginProduct(context: Context): Promise<Result> {
   const { args, json } = context;
+  pluginUsage(context);
   const root = requireRoot(context);
   const next = `Run "ia project ${args.positionals[0] ?? 'claude'} --product plugin --check --root ${quote(root)}" to compare without writing.`;
   try {
@@ -130,7 +168,7 @@ export async function runPluginProduct(context: Context): Promise<Result> {
     const given = args.value('out');
     if (given === undefined)
       throw new Refusal('IA-CLI-USAGE', '--product plugin needs --out <directory> or --check', 2, null, next);
-    const out = checkPluginOut(root, given);
+    const out = checkPluginOut(root, resolve(context.host.cwd, given));
     const files: readonly PluginFile[] = renderPluginFor(root);
     const view: PluginView = {
       out,
@@ -163,7 +201,9 @@ export async function runPluginProduct(context: Context): Promise<Result> {
           ? 'Run "ia project --help" for the options, and choose an absent or empty output directory outside the workspace.'
           : error.code === 'IA-RESOURCE-DIGEST' || error.code === 'IA-PLUGIN-PRODUCT'
             ? 'Run "ia init --help" to lower the plugin again from its source, then project it.'
-            : next;
+            : error.code === 'IA-PLUGIN-INPUT'
+              ? `Name an existing plugin directory, or replace the link the message names with real files, then run "ia project ${args.positionals[0] ?? 'claude'} --product plugin --check --root ${quote(root)}".`
+              : next;
       throw new Refusal(error.code, error.message, 1, { path: root }, fix);
     }
     throw error;

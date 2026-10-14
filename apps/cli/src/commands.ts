@@ -498,7 +498,8 @@ export const COMMANDS: readonly CommandSpec[] = [
           kind: 'value',
           values: ['plugin'],
           placeholder: 'plugin',
-          summary: 'Render a host plugin instead of the workspace projection',
+          summary:
+            'Render the host plugin a lowered workspace describes instead of the workspace projection; one plugin carries every host listed in product.hosts, and the host named must be claude or codex',
         }),
         option({
           name: 'out',
@@ -517,7 +518,7 @@ export const COMMANDS: readonly CommandSpec[] = [
           name: 'compare',
           kind: 'value',
           placeholder: '<plugin-directory>',
-          summary: 'With --check: also compare against the original plugin',
+          summary: 'With --product plugin --check only: also compare against the original plugin directory',
         }),
       ],
       positionals('host', 1, 1),

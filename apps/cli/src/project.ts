@@ -350,9 +350,28 @@ function rootedRefusal(context: Context, error: unknown): unknown {
   );
 }
 
+/** `--out`, `--check` and `--compare` belong to the plugin form; without `--product plugin` each is usage (exit 2). */
+function requirePluginProduct(context: Context): void {
+  const { args } = context;
+  const stray = ['out', 'check', 'compare'].find((name) =>
+    name === 'check' ? args.flag(name) : args.value(name) !== undefined,
+  );
+  if (stray === undefined) return;
+  const given = args.value('root'),
+    named = projectHost(args.positionals[0]) ?? 'claude';
+  throw new Refusal(
+    'IA-CLI-USAGE',
+    `--${stray} belongs to the plugin form, ia project <host> --product plugin; the workspace projection takes none of --out, --check or --compare`,
+    2,
+    null,
+    `Run "ia project ${named} --product plugin --check${given === undefined ? '' : ` --root ${quote(given)}`}" to check the plugin a lowered workspace renders.`,
+  );
+}
+
 export async function runProject(context: Context): Promise<Result> {
   const { args, caps, host, json } = context;
   if (args.value('product') === 'plugin') return runPluginProduct(context);
+  requirePluginProduct(context);
   let view: ProjectView;
   try {
     view = collectProject(context);

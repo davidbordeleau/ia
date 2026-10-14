@@ -2161,6 +2161,7 @@
         "tests/boundary.test.ts",
         "tests/generate-agent-profile.test.ts",
         "tests/generate-playbook.test.ts",
+        "tests/host-plugin.test.ts",
         "tests/installed-catalog.test.ts",
         "tests/installed-sources.test.ts",
         "tests/lifecycle-profile.test.ts",

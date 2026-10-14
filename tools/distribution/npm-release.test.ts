@@ -130,7 +130,9 @@ it('publishes every new package name before any existing package moves its lates
 
 it('allows a missing version only in an existing package configured for first-publish setup', () => {
   expect(publicationPlan(release(), { '@inventarch/language': { versions: {} } })[0]!.action).toBe('publish');
-  expect(() => publicationPlan(release(), { '@inventarch/language': null })).toThrow(/create the package/);
+  expect(() => publicationPlan(release(), { '@inventarch/language': null })).toThrow(
+    /public registry metadata is missing; inspect with pnpm npm:setup/,
+  );
 });
 
 it('makes retries idempotent only when registry bytes match the qualified archive', () => {

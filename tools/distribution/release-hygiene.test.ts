@@ -254,7 +254,7 @@ it('preflights a partial registry cohort before writes and retries only identica
     ),
   ).toEqual(['skip-identical', 'publish']);
   expect(() => publicationPlan(release(), { [names[0]!]: published(), [names[1]!]: null })).toThrow(
-    /create the package/,
+    /public registry metadata is missing; inspect with pnpm npm:setup/,
   );
   const changed = published();
   changed.versions['1.1.0'].dist.integrity = 'sha512-other';

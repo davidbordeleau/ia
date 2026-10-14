@@ -202,4 +202,51 @@ describe('lowering (A6)', () => {
     );
     expect(lowerPlugin(readPlugin(root), 'sample-kit').unresolved.join('\n')).toMatch(/tools Edit/);
   });
+  it('lists an unquoted list-form argument-hint as unresolved instead of dropping it', () => {
+    const root = copy();
+    writeFileSync(
+      join(root, 'skills/sample-run/SKILL.md'),
+      '---\nname: sample-run\ndescription: Run it.\nargument-hint: [issue-number]\n---\nx\n',
+    );
+    expect(lowerPlugin(readPlugin(root), 'sample-kit').unresolved.join('\n')).toMatch(/argument-hint/);
+  });
+  it('lists a null author and a non-string version as unresolved without throwing', () => {
+    const root = copy();
+    const manifest = join(root, '.claude-plugin/plugin.json');
+    writeFileSync(manifest, JSON.stringify({ name: 'sample-plugin', author: null, version: 1 }));
+    let unresolved: readonly string[] = [];
+    expect(() => {
+      unresolved = lowerPlugin(readPlugin(root), 'sample-kit').unresolved;
+    }).not.toThrow();
+    expect(unresolved.join('\n')).toMatch(/author must be/);
+    expect(unresolved.join('\n')).toMatch(/version must be a string/);
+  });
+  it('lists a CRLF reference and a byte-order-marked README as unresolved, naming each', () => {
+    const root = copy();
+    writeFileSync(join(root, 'skills/sample-guide/references/guide.md'), 'one\r\ntwo\r\n');
+    writeFileSync(join(root, 'README.md'), Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('# hi\n')]));
+    const text = lowerPlugin(readPlugin(root), 'sample-kit').unresolved.join('\n');
+    expect(text).toMatch(/references[/]guide[.]md: has CR line endings/);
+    expect(text).toMatch(/README[.]md: has a byte-order mark/);
+  });
+  it('lists an agent model that is not an IA id as unresolved', () => {
+    const root = copy();
+    writeFileSync(
+      join(root, 'agents/sample-reader.md'),
+      '---\nname: sample-reader\ndescription: Read.\ntools: Read, Grep, Glob\nmodel: opus[1m]\n---\nx\n',
+    );
+    expect(lowerPlugin(readPlugin(root), 'sample-kit').unresolved.join('\n')).toMatch(
+      /model "opus\[1m\]" is not an IA id/,
+    );
+  });
+  it('does not report a skill and an agent of one name as colliding', () => {
+    const root = copy();
+    mkdirSync(join(root, 'skills/x'));
+    writeFileSync(join(root, 'skills/x/SKILL.md'), '---\nname: x\ndescription: Skill x.\n---\nx\n');
+    writeFileSync(join(root, 'agents/x.md'), '---\nname: x\ndescription: Agent x.\ntools: Read, Grep, Glob\n---\nx\n');
+    expect(lowerPlugin(readPlugin(root), 'sample-kit').unresolved.join('\n')).not.toMatch(/collides/);
+  });
+  it('refuses a system name that is not portable', () => {
+    expect(() => lowerPlugin(readPlugin(SAMPLE), 'Bad Name')).toThrow(/portable system name/);
+  });
 });

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { claudeProseCatalog, PROSE_EFFECT_TOOLS } from '../projection-host.js';
+import { HostPluginError } from './errors.js';
 import type { FrontField, FrontValue } from './frontmatter.js';
 import { MANIFESTS, NAME, type PluginEntry, type PluginHost, type PluginInventory } from './inventory.js';
 
@@ -64,7 +65,11 @@ const control = (text: string): boolean => [...text].some((c) => c.charCodeAt(0)
 const sha = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 const utf8 = (bytes: Buffer): boolean => Buffer.from(bytes.toString('utf8'), 'utf8').equals(bytes);
 
+const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+const ID = /^[A-Za-z][A-Za-z0-9-]*$/;
+
 export function lowerPlugin(inventory: PluginInventory, system: string): LoweringPlan {
+  if (!NAME.test(system)) throw new HostPluginError('IA-PLUGIN-INPUT', `${system} is not a portable system name`);
   const unresolved = [...inventory.unresolved];
   const entries: Disposition[] = [];
   const files: LoweredFile[] = [];
@@ -85,6 +90,37 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     field?.value.kind === 'string' ? field.value.text : undefined;
   const field = (fields: readonly FrontField[], key: string): FrontField | undefined =>
     fields.find((candidate) => candidate.key === key);
+  /** A value that, when present, must be a string; a present value of another kind is unresolved. */
+  const expectString = (value: unknown, where: string, key: string): string | undefined => {
+    if (value === undefined) return undefined;
+    if (typeof value === 'string') return value;
+    unresolved.push(`${where}: ${key} must be a string in slice 1`);
+    return undefined;
+  };
+  const frontString = (fields: readonly FrontField[], key: string, where: string): string | undefined => {
+    const found = field(fields, key);
+    if (found === undefined) return undefined;
+    if (found.value.kind === 'string') return found.value.text;
+    unresolved.push(`${where}: ${key} must be a string in slice 1`);
+    return undefined;
+  };
+  const frontId = (fields: readonly FrontField[], key: string, where: string): string | undefined => {
+    const value = frontString(fields, key, where);
+    if (value !== undefined && !ID.test(value)) {
+      unresolved.push(`${where}: ${key} "${value}" is not an IA id`);
+      return undefined;
+    }
+    return value;
+  };
+  /** Text a resource or asset may carry byte for byte: UTF-8, no byte-order mark, no carriage return. */
+  const textProblem = (bytes: Buffer): string | null =>
+    !utf8(bytes)
+      ? 'not UTF-8'
+      : bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))
+        ? 'has a byte-order mark'
+        : bytes.includes(0x0d)
+          ? 'has CR line endings'
+          : null;
 
   // The product, from the manifests. Claude's is required; Codex's and Grok's must agree with it.
   const claude = inventory.manifests.claude;
@@ -96,12 +132,20 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   const CLAUDE_KEYS = ['name', 'displayName', 'version', 'description', 'author', 'license', 'keywords'];
   for (const key of Object.keys(claude))
     if (!CLAUDE_KEYS.includes(key)) unresolved.push(`${MANIFESTS.claude}: key ${key} is lowered from slice 2`);
-  const author = claude['author'] as { name?: unknown } | undefined;
-  if (
-    author !== undefined &&
-    (typeof author !== 'object' || Object.keys(author).join() !== 'name' || typeof author.name !== 'string')
-  )
-    unresolved.push(`${MANIFESTS.claude}: author must be {"name": string}`);
+  const rawAuthor = claude['author'];
+  let authorName: string | undefined;
+  if (rawAuthor !== undefined) {
+    const shape = rawAuthor as { name?: unknown } | null;
+    if (
+      typeof shape !== 'object' ||
+      shape === null ||
+      Array.isArray(shape) ||
+      Object.keys(shape).join() !== 'name' ||
+      typeof shape.name !== 'string'
+    )
+      unresolved.push(`${MANIFESTS.claude}: author must be {"name": string}`);
+    else authorName = shape.name;
+  }
   const codex = inventory.manifests.codex;
   if (codex !== undefined) {
     const CODEX_KEYS = [
@@ -123,7 +167,14 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     if (codex['skills'] !== './skills/') unresolved.push(`${MANIFESTS.codex}: skills must be "./skills/"`);
     if (codex['hooks'] !== undefined && JSON.stringify(codex['hooks']) !== '{"hooks":{}}')
       unresolved.push(`${MANIFESTS.codex}: hooks other than {"hooks":{}} are lowered from slice 3`);
-    const codexFace = (codex['interface'] ?? {}) as Record<string, unknown>;
+    if (
+      codex['interface'] !== undefined &&
+      (typeof codex['interface'] !== 'object' || codex['interface'] === null || Array.isArray(codex['interface']))
+    )
+      unresolved.push(`${MANIFESTS.codex}: interface must be an object`);
+    const codexFace = (
+      typeof codex['interface'] === 'object' && codex['interface'] !== null ? codex['interface'] : {}
+    ) as Record<string, unknown>;
     for (const key of Object.keys(codexFace))
       if (!['displayName', 'shortDescription', 'category'].includes(key))
         unresolved.push(`${MANIFESTS.codex}: interface.${key} is lowered from slice 2`);
@@ -133,36 +184,47 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   const grok = inventory.manifests.grok;
   if (grok !== undefined && JSON.stringify(grok) !== JSON.stringify(claude))
     unresolved.push(`${MANIFESTS.grok}: differs from the Claude manifest`);
-  const face = (codex?.['interface'] ?? {}) as Record<string, unknown>;
+  const face = (
+    typeof codex?.['interface'] === 'object' && codex['interface'] !== null ? codex['interface'] : {}
+  ) as Record<string, unknown>;
   const hosts = HOST_ORDER.filter((host) => inventory.manifests[host] !== undefined);
-  const keywords = Array.isArray(claude['keywords']) ? (claude['keywords'] as unknown[]) : null;
-  if (keywords !== null && !keywords.every((k): k is string => typeof k === 'string'))
-    unresolved.push(`${MANIFESTS.claude}: keywords must be strings`);
+  let keywords: string[] | null = null;
+  if (claude['keywords'] !== undefined) {
+    const raw = claude['keywords'];
+    if (Array.isArray(raw) && raw.every((k): k is string => typeof k === 'string')) keywords = raw;
+    else unresolved.push(`${MANIFESTS.claude}: keywords must be a list of strings`);
+  }
+  const displayName = expectString(claude['displayName'], MANIFESTS.claude, 'displayName');
+  const version = expectString(claude['version'], MANIFESTS.claude, 'version');
+  const description = expectString(claude['description'], MANIFESTS.claude, 'description');
+  const license = expectString(claude['license'], MANIFESTS.claude, 'license');
+  const shortDescription = expectString(face['shortDescription'], MANIFESTS.codex, 'interface.shortDescription');
+  const category = expectString(face['category'], MANIFESTS.codex, 'interface.category');
 
   lines.push(
     `@distribution ${system}-distribution`,
     '  meaning',
-    `    says ${text(String(claude['description'] ?? name), `${MANIFESTS.claude} description`)}`,
+    `    says ${text(description ?? name, `${MANIFESTS.claude} description`)}`,
     `    answers "Which records does the ${name} plugin ship?"`,
     '  distribution',
     `    records [@system ${system}]`,
     '  product',
     `    name ${name}`,
   );
-  const productText = (key: string, value: unknown, source: string): void => {
-    if (typeof value !== 'string') return;
+  const productText = (key: string, value: string | undefined, source: string): void => {
+    if (value === undefined) return;
     lines.push(`    ${key} ${text(value, `${source} ${key}`)}`);
   };
-  productText('display-name', claude['displayName'], MANIFESTS.claude);
-  productText('version', claude['version'], MANIFESTS.claude);
-  productText('description', claude['description'], MANIFESTS.claude);
-  productText('author', author?.name, MANIFESTS.claude);
-  productText('license', claude['license'], MANIFESTS.claude);
+  productText('display-name', displayName, MANIFESTS.claude);
+  productText('version', version, MANIFESTS.claude);
+  productText('description', description, MANIFESTS.claude);
+  productText('author', authorName, MANIFESTS.claude);
+  productText('license', license, MANIFESTS.claude);
   if (keywords !== null)
-    lines.push(`    keywords [${keywords.map((k) => text(String(k), `${MANIFESTS.claude} keywords`)).join(', ')}]`);
+    lines.push(`    keywords [${keywords.map((k) => text(k, `${MANIFESTS.claude} keywords`)).join(', ')}]`);
   lines.push(`    hosts [${hosts.join(', ')}]`);
-  productText('short-description', face['shortDescription'], MANIFESTS.codex);
-  productText('category', face['category'], MANIFESTS.codex);
+  productText('short-description', shortDescription, MANIFESTS.codex);
+  productText('category', category, MANIFESTS.codex);
   lines.push('');
   records.push({ word: 'distribution', name: `${system}-distribution`, path: recordsPath });
   for (const host of hosts)
@@ -174,25 +236,29 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     });
 
   // Skills: one capability each, the body as an inline resource, owned Markdown as installed references.
-  const taken = new Set<string>([system, `${system}-steward`]);
+  const capabilityNames = new Set<string>();
+  const agentNames = new Set<string>([system, `${system}-steward`]);
   for (const skill of inventory.skills) {
     const where = skill.file.path;
     unresolved.push(...skill.frontmatter.unresolved);
-    if (taken.has(skill.name)) unresolved.push(`${where}: the name ${skill.name} collides with another record`);
-    taken.add(skill.name);
+    if (capabilityNames.has(skill.name))
+      unresolved.push(`${where}: the name ${skill.name} collides with another record`);
+    capabilityNames.add(skill.name);
     const fields = skill.frontmatter.fields;
     for (const f of fields)
       if (!['name', 'description', 'disable-model-invocation', 'argument-hint'].includes(f.key))
         unresolved.push(`${where}: frontmatter key ${f.key} is lowered from slice 2`);
     if (string(field(fields, 'name')) !== skill.name) unresolved.push(`${where}: name must equal the folder name`);
-    const description = string(field(fields, 'description'));
-    if (description === undefined) unresolved.push(`${where}: no description`);
+    const skillDescription = frontString(fields, 'description', where);
+    if (field(fields, 'description') === undefined) unresolved.push(`${where}: no description`);
     const disabled = field(fields, 'disable-model-invocation')?.value;
-    const hint = string(field(fields, 'argument-hint'));
+    if (disabled !== undefined && disabled.kind !== 'boolean')
+      unresolved.push(`${where}: disable-model-invocation must be a boolean in slice 1`);
+    const hint = frontString(fields, 'argument-hint', where);
     lines.push(
       `@capability ${skill.name}`,
       '  meaning',
-      `    says ${text(description ?? '', `${where} description`)}`,
+      `    says ${text(skillDescription ?? '', `${where} description`)}`,
       `    answers "Lowered from ${where}."`,
       '  execution',
       '    effects []',
@@ -204,7 +270,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     records.push({ word: 'capability', name: skill.name, path: recordsPath });
     put({ source: where, key: 'name', kind: 'derived', target: `@capability ${skill.name}` });
     put({ source: where, key: 'description', kind: 'field', target: `@capability ${skill.name} meaning.says` });
-    if (disabled !== undefined)
+    if (disabled?.kind === 'boolean')
       put({
         source: where,
         key: 'disable-model-invocation',
@@ -234,17 +300,20 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
   for (const agent of inventory.agents) {
     const where = agent.file.path;
     unresolved.push(...agent.frontmatter.unresolved);
-    for (const candidate of [agent.name, `${agent.name}-tools`]) {
-      if (taken.has(candidate)) unresolved.push(`${where}: the name ${candidate} collides with another record`);
-      taken.add(candidate);
-    }
+    if (agentNames.has(agent.name)) unresolved.push(`${where}: the name ${agent.name} collides with another record`);
+    agentNames.add(agent.name);
+    if (capabilityNames.has(`${agent.name}-tools`))
+      unresolved.push(`${where}: the name ${agent.name}-tools collides with another record`);
+    capabilityNames.add(`${agent.name}-tools`);
     const fields = agent.frontmatter.fields;
     for (const f of fields)
       if (!['name', 'description', 'tools', 'model', 'color', 'effort'].includes(f.key))
         unresolved.push(`${where}: frontmatter key ${f.key} is lowered from slice 2`);
     if (string(field(fields, 'name')) !== agent.name) unresolved.push(`${where}: name must equal the file name`);
-    const description = string(field(fields, 'description')) ?? '';
+    const agentDescription = frontString(fields, 'description', where) ?? '';
+    if (field(fields, 'description') === undefined) unresolved.push(`${where}: no description`);
     const toolsValue: FrontValue | undefined = field(fields, 'tools')?.value;
+    if (toolsValue?.kind === 'boolean') unresolved.push(`${where}: tools must be a string or a list in slice 1`);
     const tools =
       toolsValue?.kind === 'string'
         ? toolsValue.text.split(',').map((t) => t.trim())
@@ -254,13 +323,14 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     const effects = effectsFor(tools);
     if (effects === null) unresolved.push(`${where}: tools ${tools.join(', ') || '(none)'} match no effect yet`);
     const optional = (key: string, line: (value: string) => string): string[] => {
-      const value = string(field(fields, key));
+      const value = frontId(fields, key, where);
       return value === undefined ? [] : [line(value)];
     };
+    const color = frontId(fields, 'color', where);
     lines.push(
       `@agent ${agent.name}`,
       '  meaning',
-      `    says ${text(description, `${where} description`)}`,
+      `    says ${text(agentDescription, `${where} description`)}`,
       `    answers "Lowered from ${where}."`,
       '  governance',
       '    applies []',
@@ -274,7 +344,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       '',
       `@agent-profile ${agent.name}`,
       '  meaning',
-      `    says ${text(description, `${where} description`)}`,
+      `    says ${text(agentDescription, `${where} description`)}`,
       `    answers "Lowered from ${where}."`,
       '  composition',
       `    agent @agent ${agent.name}`,
@@ -287,9 +357,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       ...optional('effort', (v) => `    effort ${v}`),
       '  invocation',
       '    mode model',
-      ...(string(field(fields, 'color')) === undefined
-        ? []
-        : ['  presentation', `    color ${string(field(fields, 'color'))}`]),
+      ...(color === undefined ? [] : ['  presentation', `    color ${color}`]),
       '',
     );
     records.push(
@@ -324,12 +392,15 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
           ? 'example'
           : 'support';
     const path = `${RESOURCE_ROOT(system)}/${entry.path}`;
-    if (!utf8(entry.bytes)) unresolved.push(`${entry.path}: not UTF-8`);
+    const problem = textProblem(entry.bytes);
+    if (problem !== null) unresolved.push(`${entry.path}: ${problem}`);
     resources.push({ path, bytes: entry.bytes, owner, role, delivery: 'installed-reference' });
     put({ source: entry.path, key: null, kind: 'resource', target: path });
   }
   function asset(entry: PluginEntry): void {
-    if (!utf8(entry.bytes)) unresolved.push(`${entry.path}: binary assets are lowered from slice 2`);
+    const problem = textProblem(entry.bytes);
+    if (problem === 'not UTF-8') unresolved.push(`${entry.path}: binary assets are lowered from slice 2`);
+    else if (problem !== null) unresolved.push(`${entry.path}: ${problem}`);
     const path = `${ASSET_ROOT}/${entry.path}`;
     const base = entry.path.split('/').pop()!;
     const role: AssetRole = /^(?:LICENSE|LICENCE|COPYING)(?:\..*)?$/.test(base)
@@ -342,10 +413,23 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     put({ source: entry.path, key: null, kind: 'asset', target: path });
   }
   function finish(): LoweringPlan {
+    const seen = new Set<string>();
+    for (const out of [
+      ...files.map((f) => f.path),
+      ...resources.map((r) => r.path),
+      recordsPath,
+      SYSTEM_PATH(system),
+      '.ia/authoring.resources.json',
+      'assets/MIGRATION.md',
+      'assets/lowering-map.json',
+    ]) {
+      if (seen.has(out)) unresolved.push(`${out}: two lowered files share this output path`);
+      seen.add(out);
+    }
     for (const reason of unresolved)
       put({ source: reason.split(':')[0]!, key: null, kind: 'unresolved', target: '', reason });
     const sortedEntries = [...entries].sort((a, b) =>
-      a.source === b.source ? String(a.key ?? '').localeCompare(String(b.key ?? '')) : a.source < b.source ? -1 : 1,
+      a.source === b.source ? cmp(a.key ?? '', b.key ?? '') : cmp(a.source, b.source),
     );
     const map: LoweringMap = Object.freeze({
       format: 'ia.lowering-map.v1',
@@ -374,7 +458,7 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
     const manifest = {
       format: 'ia.authoring-resources.v1',
       files: [...resources]
-        .sort((a, b) => (a.path < b.path ? -1 : 1))
+        .sort((a, b) => cmp(a.path, b.path))
         .map((r) => ({
           path: r.path,
           bytes: r.bytes.length,
@@ -383,13 +467,13 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
           encoding: 'utf8',
         })),
       associations: [...owners.entries()]
-        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .sort(([a], [b]) => cmp(a, b))
         .map(([owner, uses]) => {
           const order = new Map<string, number>();
           return {
             owner: { source: 'self', path: recordsPath, identity: owner },
             resources: [...uses]
-              .sort((a, b) => (a.role === b.role ? (a.path < b.path ? -1 : 1) : a.role < b.role ? -1 : 1))
+              .sort((a, b) => (a.role === b.role ? cmp(a.path, b.path) : cmp(a.role, b.role)))
               .map((use) => {
                 const next = order.get(use.role) ?? 0;
                 order.set(use.role, next + 1);
@@ -434,12 +518,12 @@ export function lowerPlugin(inventory: PluginInventory, system: string): Lowerin
       { path: SYSTEM_PATH(system), bytes: Buffer.from(systemText) },
       { path: 'assets/MIGRATION.md', bytes: migration },
       { path: 'assets/lowering-map.json', bytes: mapBytes },
-    ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    ].sort((a, b) => cmp(a.path, b.path));
     const allAssets = [
       ...assets,
       { path: 'assets/MIGRATION.md', role: 'documentation' as const },
       { path: 'assets/lowering-map.json', role: 'asset' as const },
-    ].sort((a, b) => (a.path < b.path ? -1 : 1));
+    ].sort((a, b) => cmp(a.path, b.path));
     return Object.freeze({
       system,
       files: Object.freeze(all.map((f) => Object.freeze(f))),

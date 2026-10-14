@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { emitFrontmatter, isPlain, parseFrontmatter, sameValue } from '../src/host-plugin/frontmatter.js';
 import { readPlugin } from '../src/host-plugin/inventory.js';
+import { lowerPlugin } from '../src/host-plugin/lower.js';
 
 const b = (text: string): Buffer => Buffer.from(text, 'utf8');
 
@@ -135,5 +136,70 @@ describe('plugin inventory (A5)', () => {
     const git = copy();
     mkdirSync(join(git, '.git'));
     expect(() => readPlugin(git)).toThrow(/not plugin content/);
+  });
+});
+
+describe('lowering (A6)', () => {
+  it('lowers the sample into records, byte-exact resources and assets, with no unresolved entry', () => {
+    const plan = lowerPlugin(readPlugin(SAMPLE), 'sample-kit');
+    expect(plan.unresolved).toEqual([]);
+    const paths = plan.files.map((file) => file.path);
+    expect(paths).toEqual([
+      '.ia/authoring.resources.json',
+      '.ia/src/systems/sample-kit/plugin/agents/sample-reader.body.md',
+      '.ia/src/systems/sample-kit/plugin/skills/sample-guide/SKILL.body.md',
+      '.ia/src/systems/sample-kit/plugin/skills/sample-guide/assets/templates/card.md',
+      '.ia/src/systems/sample-kit/plugin/skills/sample-guide/references/guide.md',
+      '.ia/src/systems/sample-kit/plugin/skills/sample-run/SKILL.body.md',
+      '.ia/src/systems/sample-kit/records/plugin.ia',
+      '.ia/src/systems/sample-kit/system.ia',
+      'assets/MIGRATION.md',
+      'assets/lowering-map.json',
+      'assets/plugin/CODEX.md',
+      'assets/plugin/LICENSE',
+      'assets/plugin/README.md',
+      'assets/plugin/tests/sample.check.mjs',
+    ]);
+    const body = plan.files.find((file) => file.path.endsWith('sample-run/SKILL.body.md'))!;
+    expect(body.bytes.toString('utf8')).toBe('\nRun the sample method on $ARGUMENTS.\n');
+    const records = plan.files.find((file) => file.path.endsWith('records/plugin.ia'))!.bytes.toString('utf8');
+    expect(records).toContain('@capability sample-run');
+    expect(records).toContain('    mode user\n    argument-hint "[target]"');
+    expect(records).toContain('@agent-profile sample-reader');
+    expect(records.slice(records.indexOf('@agent-profile sample-reader'))).toContain('  invocation\n    mode model');
+    expect(records).toContain('    hosts [claude, codex, grok]');
+    expect(plan.assets).toEqual([
+      { path: 'assets/MIGRATION.md', role: 'documentation' },
+      { path: 'assets/lowering-map.json', role: 'asset' },
+      { path: 'assets/plugin/CODEX.md', role: 'documentation' },
+      { path: 'assets/plugin/LICENSE', role: 'license' },
+      { path: 'assets/plugin/README.md', role: 'documentation' },
+      { path: 'assets/plugin/tests/sample.check.mjs', role: 'asset' },
+    ]);
+  });
+  it('is deterministic', () => {
+    const one = lowerPlugin(readPlugin(SAMPLE), 'sample-kit'),
+      two = lowerPlugin(readPlugin(copy()), 'sample-kit');
+    expect(two.files.map((f) => [f.path, f.bytes.toString('base64')])).toEqual(
+      one.files.map((f) => [f.path, f.bytes.toString('base64')]),
+    );
+  });
+  it('lists a double quote in a description and an unknown frontmatter key as unresolved', () => {
+    const root = copy();
+    writeFileSync(
+      join(root, 'skills/sample-run/SKILL.md'),
+      '---\nname: sample-run\ndescription: Say "hi".\nmodel: haiku\n---\nx\n',
+    );
+    const plan = lowerPlugin(readPlugin(root), 'sample-kit');
+    expect(plan.unresolved.join('\n')).toMatch(/double quote/);
+    expect(plan.unresolved.join('\n')).toMatch(/model/);
+  });
+  it('lists an agent whose tools match no effect as unresolved', () => {
+    const root = copy();
+    writeFileSync(
+      join(root, 'agents/sample-reader.md'),
+      '---\nname: sample-reader\ndescription: Edit.\ntools: Edit\n---\nx\n',
+    );
+    expect(lowerPlugin(readPlugin(root), 'sample-kit').unresolved.join('\n')).toMatch(/tools Edit/);
   });
 });

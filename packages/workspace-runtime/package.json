@@ -150,6 +150,10 @@
       "types": "./dist/generate/index.d.ts",
       "default": "./dist/generate/index.js"
     },
+    "./internal/host-plugin": {
+      "types": "./dist/host-plugin/index.d.ts",
+      "default": "./dist/host-plugin/index.js"
+    },
     "./internal/index": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
@@ -396,6 +400,10 @@
       "./internal/generate": {
         "types": "./dist/generate/index.d.ts",
         "default": "./dist/generate/index.js"
+      },
+      "./internal/host-plugin": {
+        "types": "./dist/host-plugin/index.d.ts",
+        "default": "./dist/host-plugin/index.js"
       },
       "./internal/index": {
         "types": "./dist/index.d.ts",

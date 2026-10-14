@@ -1,5 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { cleanup, scratch } from './scratch-fixture.js';
 import { repository, run } from './workspace-fixture.js';
@@ -201,5 +201,70 @@ describe('ia project --product plugin (A9)', () => {
     ]);
     expect(json(result.stdout)['code']).toBe('IA-RESOURCE-DIGEST');
     expect(existsSync(out)).toBe(false);
+  });
+});
+
+describe('ia project --product plugin (A9 fix round 1)', () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
+    );
+  const project = (kit: string, out: string, ...more: string[]) =>
+    run(['project', 'claude', '--product', 'plugin', '--out', out, '--root', kit, '--json', ...more]);
+
+  it('writes every file byte-identical to the sample', async () => {
+    const kit = await lowered();
+    const out = join(scratch('host-plugin-tree'), 'sample');
+    const applied = await project(kit, out, '--apply', '--yes');
+    expect(applied.exitCode, applied.stdout).toBe(0);
+    const names = (dir: string) =>
+      walk(dir)
+        .map((file) => relative(dir, file))
+        .sort();
+    expect(names(out)).toEqual(names(SAMPLE));
+    for (const name of names(SAMPLE))
+      expect(readFileSync(join(out, name)).equals(readFileSync(join(SAMPLE, name))), name).toBe(true);
+  });
+  it('refuses a manifest path that escapes the workspace', async () => {
+    const kit = await lowered();
+    const file = join(kit, '.ia/authoring.resources.json');
+    const manifest = json(readFileSync(file, 'utf8')) as { files: { path: string }[] };
+    manifest.files[0]!.path = '../../etc/hosts';
+    writeFileSync(file, JSON.stringify(manifest));
+    const out = join(scratch('host-plugin-escape'), 'sample');
+    const result = await project(kit, out, '--apply', '--yes');
+    expect(json(result.stdout)['code']).toBe('IA-PLUGIN-PRODUCT');
+    expect(existsSync(out)).toBe(false);
+  });
+  it('refuses a missing authoring manifest with a code', async () => {
+    const kit = await lowered();
+    rmSync(join(kit, '.ia/authoring.resources.json'));
+    const out = join(scratch('host-plugin-nomanifest'), 'sample');
+    const result = await project(kit, out, '--apply', '--yes');
+    expect(json(result.stdout)['code']).toBe('IA-PLUGIN-PRODUCT');
+    expect(result.exitCode).not.toBe(3);
+    expect(existsSync(out)).toBe(false);
+  });
+  it('refuses an --out that is a file', async () => {
+    const kit = await lowered();
+    const out = join(scratch('host-plugin-file'), 'afile');
+    writeFileSync(out, 'x');
+    const result = await project(kit, out, '--apply', '--yes');
+    expect(json(result.stdout)['code']).toBe('IA-PLUGIN-OUT');
+  });
+  it('refuses an --out inside the workspace', async () => {
+    const kit = await lowered();
+    const out = join(kit, '.ia/out');
+    const result = await project(kit, out, '--apply', '--yes');
+    expect(json(result.stdout)['code']).toBe('IA-PLUGIN-OUT');
+    expect(existsSync(out)).toBe(false);
+  });
+  it('refuses a non-empty --out while planning', async () => {
+    const kit = await lowered();
+    const out = join(scratch('host-plugin-planbusy'), 'busy');
+    mkdirSync(out, { recursive: true });
+    writeFileSync(join(out, 'keep.txt'), 'mine\n');
+    const result = await project(kit, out);
+    expect(json(result.stdout)['code']).toBe('IA-PLUGIN-OUT');
   });
 });

@@ -4,7 +4,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { emitFrontmatter, isPlain, parseFrontmatter, sameValue } from '../src/host-plugin/frontmatter.js';
-import { readPlugin } from '../src/host-plugin/inventory.js';
+import { comparePlugin } from '../src/host-plugin/compare.js';
+import { readEntries, readPlugin } from '../src/host-plugin/inventory.js';
 import { lowerPlugin } from '../src/host-plugin/lower.js';
 
 const b = (text: string): Buffer => Buffer.from(text, 'utf8');
@@ -17,8 +18,18 @@ describe('frontmatter (A4)', () => {
     expect(parsed.unresolved).toEqual([]);
     expect(parsed.fields).toEqual([
       { key: 'name', value: { kind: 'string', text: 'audit', style: 'plain' } },
-      { key: 'description', value: { kind: 'string', text: 'Use when: a game feels flat', style: 'double' } },
-      { key: 'disable-model-invocation', value: { kind: 'boolean', value: true } },
+      {
+        key: 'description',
+        value: {
+          kind: 'string',
+          text: 'Use when: a game feels flat',
+          style: 'double',
+        },
+      },
+      {
+        key: 'disable-model-invocation',
+        value: { kind: 'boolean', value: true },
+      },
       { key: 'tools', value: { kind: 'list', items: ['Read', 'Grep'] } },
     ]);
     expect(parsed.body.toString('utf8')).toBe('\nBody line\n');
@@ -248,5 +259,48 @@ describe('lowering (A6)', () => {
   });
   it('refuses a system name that is not portable', () => {
     expect(() => lowerPlugin(readPlugin(SAMPLE), 'Bad Name')).toThrow(/portable system name/);
+  });
+});
+
+describe('compare (A10)', () => {
+  const entries = readEntries(SAMPLE);
+  const as = (path: string, text: string) => ({
+    path,
+    bytes: Buffer.from(text),
+  });
+  it('marks identical bytes identical and a reformatted manifest as manifest-format', () => {
+    const rendered = entries.map((e) =>
+      e.path === '.claude-plugin/plugin.json'
+        ? {
+            path: e.path,
+            bytes: Buffer.from(JSON.stringify(JSON.parse(e.bytes.toString('utf8')))),
+          }
+        : e,
+    );
+    const diffs = comparePlugin(entries, rendered);
+    expect(diffs.find((d) => d.path === '.claude-plugin/plugin.json')).toMatchObject({
+      status: 'ruled',
+      rules: ['manifest-format'],
+    });
+    expect(diffs.filter((d) => d.status === 'identical')).toHaveLength(entries.length - 1);
+  });
+  it('names scalar style and tool order, and calls a changed body drift', () => {
+    const agent = 'agents/sample-reader.md';
+    const rendered = entries.map((e) =>
+      e.path === agent
+        ? as(
+            agent,
+            '---\nname: "sample-reader"\ndescription: Read the supplied target and report what it says, without editing anything.\ntools: Read, Glob, Grep\n---\n\nRead only the target you are given and report what it says.\n',
+          )
+        : e,
+    );
+    expect(comparePlugin(entries, rendered).find((d) => d.path === agent)).toMatchObject({
+      status: 'ruled',
+      rules: ['frontmatter-scalar-style', 'tool-order'],
+    });
+    const changed = entries.map((e) =>
+      e.path === agent ? as(agent, e.bytes.toString('utf8').replace('Read only', 'Read all')) : e,
+    );
+    expect(comparePlugin(entries, changed).find((d) => d.path === agent)!.status).toBe('drift');
   });
 });

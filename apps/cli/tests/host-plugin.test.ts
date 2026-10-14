@@ -228,7 +228,9 @@ describe('ia project --product plugin (A9 fix round 1)', () => {
   it('refuses a manifest path that escapes the workspace', async () => {
     const kit = await lowered();
     const file = join(kit, '.ia/authoring.resources.json');
-    const manifest = json(readFileSync(file, 'utf8')) as { files: { path: string }[] };
+    const manifest = json(readFileSync(file, 'utf8')) as {
+      files: { path: string }[];
+    };
     manifest.files[0]!.path = '../../etc/hosts';
     writeFileSync(file, JSON.stringify(manifest));
     const out = join(scratch('host-plugin-escape'), 'sample');
@@ -266,5 +268,50 @@ describe('ia project --product plugin (A9 fix round 1)', () => {
     writeFileSync(join(out, 'keep.txt'), 'mine\n');
     const result = await project(kit, out);
     expect(json(result.stdout)['code']).toBe('IA-PLUGIN-OUT');
+  });
+});
+
+describe('ia project --product plugin --check (A10)', () => {
+  it('passes on the sample: content-exact against the original and a fixed point', async () => {
+    const kit = await lowered();
+    const result = await run([
+      'project',
+      'claude',
+      '--product',
+      'plugin',
+      '--check',
+      '--compare',
+      SAMPLE,
+      '--root',
+      kit,
+      '--json',
+    ]);
+    expect(result.exitCode, result.stdout).toBe(0);
+    const report = json(result.stdout) as {
+      drift: unknown[];
+      fixedPoint: unknown[];
+    };
+    expect(report.drift).toEqual([]);
+    expect(report.fixedPoint).toEqual([]);
+  });
+  it('reports drift when a regenerated file cannot be explained by a rule', async () => {
+    const plugin = join(scratch('host-plugin-drift'), 'sample');
+    cpSync(SAMPLE, plugin, { recursive: true });
+    const kit = join(scratch('host-plugin-drift-kit'), 'sample-kit');
+    expect((await run(['init', kit, '--from', plugin, '--apply', '--yes', '--json'])).exitCode).toBe(0);
+    writeFileSync(join(plugin, 'README.md'), '# Changed after lowering\n');
+    const result = await run([
+      'project',
+      'claude',
+      '--product',
+      'plugin',
+      '--check',
+      '--compare',
+      plugin,
+      '--root',
+      kit,
+      '--json',
+    ]);
+    expect(json(result.stdout)['code']).toBe('IA-ROUNDTRIP-DRIFT');
   });
 });

@@ -1089,6 +1089,7 @@
         "tests/decline.test.ts",
         "tests/distribution-verbs.test.ts",
         "tests/equivalence.test.ts",
+        "tests/host-plugin.test.ts",
         "tests/host-projection.test.ts",
         "tests/next.test.ts",
         "tests/position.test.ts",

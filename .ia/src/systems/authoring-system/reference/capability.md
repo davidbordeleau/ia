@@ -11,6 +11,7 @@ Default file: capability.ia, relative to the workspace's authored root (the sour
 Section meaning: required.
 Section composition: optional.
 Section execution: required.
+Section invocation: optional.
 Section relationships: optional.
 
 - meaning.says: text; required.
@@ -34,6 +35,13 @@ Section relationships: optional.
 - execution.limit-depth: number; optional.
 - execution.limit-bytes: number; optional.
 - execution.limit-duration-ms: number; optional.
+- invocation.mode: id in [model, user, delegated, none]; optional.
+- invocation.use-when: text; optional. — When a host should offer this capability, in the user's words.
+- invocation.triggers: list of text; optional. — Phrases that should select this capability.
+- invocation.avoid-when: text; optional. — Nearby requests this capability must not take.
+- invocation.argument-hint: text; optional. — The argument shape a user-invoked entry point shows.
+- invocation.paths: list of text; optional. — Path selections that make this capability relevant.
+- invocation.agent: ref; optional. — The agent a delegated invocation runs as.
 
 
 A valid declaration establishes structural conformance. Execution, host authority and evidence verification require their respective explicit consumers.

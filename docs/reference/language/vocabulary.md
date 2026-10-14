@@ -2,7 +2,7 @@
 
 Generated from the public contract corpus by `pnpm vocabulary:generate`. Required sections and fields are structural obligations; `id` is not an implicit enumeration. See [the language guide](README.md) for shared syntax, allowed values, relationship resolution, domain constraints and evaluator limits. The [JSON catalogue](vocabulary.json) carries the same machine-readable contract.
 
-This catalogue contains 44 words. Source digest: `0fe164d3e7bb2e18a73c3ded06d9d47d6b4ac8ffe7951fb42d181a633d025f3e`.
+This catalogue contains 44 words. Source digest: `0edfdca8a6bf69e9e592ef3a3c98b7430f7143c2544e02f3f2469d716238eabb`.
 
 ## @agent
 
@@ -36,29 +36,34 @@ Facets: `agent-profile`; the first is the default.
 
 Consumer: language/schema admission; generic composition compiler and installed catalog.
 
-Required sections: meaning, composition, execution. Optional sections: relationships.
+Required sections: meaning, composition, execution. Optional sections: invocation, presentation, relationships.
 
-| Field | Type | Required |
-|---|---|---|
-| meaning.says | text | yes |
-| meaning.answers | text | yes |
-| composition.agent | ref | yes |
-| composition.capabilities | list of ref | yes |
-| composition.voice | ref | no |
-| composition.mandate | ref | no |
-| composition.delegates | list of ref | no |
-| execution.role | id | yes |
-| execution.outcomes | id | yes |
-| execution.mandate-contract | id | yes |
-| execution.model-profile | id | no |
-| execution.limit-steps | number | no |
-| execution.limit-model-calls | number | no |
-| execution.limit-operations | number | no |
-| execution.limit-tokens | number | no |
-| execution.limit-children | number | no |
-| execution.limit-depth | number | no |
-| execution.limit-bytes | number | no |
-| execution.limit-duration-ms | number | no |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| meaning.says | text | yes |  |
+| meaning.answers | text | yes |  |
+| composition.agent | ref | yes |  |
+| composition.capabilities | list of ref | yes |  |
+| composition.voice | ref | no |  |
+| composition.mandate | ref | no |  |
+| composition.delegates | list of ref | no |  |
+| execution.role | id | yes |  |
+| execution.outcomes | id | yes |  |
+| execution.mandate-contract | id | yes |  |
+| execution.model-profile | id | no |  |
+| execution.limit-steps | number | no |  |
+| execution.limit-model-calls | number | no |  |
+| execution.limit-operations | number | no |  |
+| execution.limit-tokens | number | no |  |
+| execution.limit-children | number | no |  |
+| execution.limit-depth | number | no |  |
+| execution.limit-bytes | number | no |  |
+| execution.limit-duration-ms | number | no |  |
+| invocation.mode | id in [model, user, delegated, none] | no |  |
+| invocation.use-when | text | no | When a host should hand work to this profile. |
+| invocation.avoid-when | text | no | Work this profile must not take. |
+| presentation.color | id | no |  |
+| execution.effort | id | no |  |
 
 ## @artifact-set
 
@@ -144,31 +149,38 @@ Facets: `capability`; the first is the default.
 
 Consumer: language/schema admission; generic composition compiler and installed catalog.
 
-Required sections: meaning, execution. Optional sections: composition, relationships.
+Required sections: meaning, execution. Optional sections: composition, invocation, relationships.
 
-| Field | Type | Required |
-|---|---|---|
-| meaning.says | text | yes |
-| meaning.answers | text | yes |
-| composition.operations | list of ref | no |
-| composition.playbooks | list of ref | no |
-| composition.templates | list of ref | no |
-| composition.checks | list of ref | no |
-| composition.includes | list of ref | no |
-| execution.input | id | no |
-| execution.outcomes | id | no |
-| execution.context-profile | id | no |
-| execution.procedure-profile | id | no |
-| execution.mapping-profile | id | no |
-| execution.effects | list of id | yes |
-| execution.limit-steps | number | no |
-| execution.limit-model-calls | number | no |
-| execution.limit-operations | number | no |
-| execution.limit-tokens | number | no |
-| execution.limit-children | number | no |
-| execution.limit-depth | number | no |
-| execution.limit-bytes | number | no |
-| execution.limit-duration-ms | number | no |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| meaning.says | text | yes |  |
+| meaning.answers | text | yes |  |
+| composition.operations | list of ref | no |  |
+| composition.playbooks | list of ref | no |  |
+| composition.templates | list of ref | no |  |
+| composition.checks | list of ref | no |  |
+| composition.includes | list of ref | no |  |
+| execution.input | id | no |  |
+| execution.outcomes | id | no |  |
+| execution.context-profile | id | no |  |
+| execution.procedure-profile | id | no |  |
+| execution.mapping-profile | id | no |  |
+| execution.effects | list of id | yes |  |
+| execution.limit-steps | number | no |  |
+| execution.limit-model-calls | number | no |  |
+| execution.limit-operations | number | no |  |
+| execution.limit-tokens | number | no |  |
+| execution.limit-children | number | no |  |
+| execution.limit-depth | number | no |  |
+| execution.limit-bytes | number | no |  |
+| execution.limit-duration-ms | number | no |  |
+| invocation.mode | id in [model, user, delegated, none] | no |  |
+| invocation.use-when | text | no | When a host should offer this capability, in the user's words. |
+| invocation.triggers | list of text | no | Phrases that should select this capability. |
+| invocation.avoid-when | text | no | Nearby requests this capability must not take. |
+| invocation.argument-hint | text | no | The argument shape a user-invoked entry point shows. |
+| invocation.paths | list of text | no | Path selections that make this capability relevant. |
+| invocation.agent | ref | no | The agent a delegated invocation runs as. |
 
 ## @cardinality
 

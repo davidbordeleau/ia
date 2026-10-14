@@ -98,7 +98,7 @@ export function closedFields(node: CompiledRecord): void {
     voice: { communication: ['tone', 'terminology', 'explanation', 'uncertainty', 'audience', 'citations'] },
     'agent-profile': {
       composition: ['agent', 'voice', 'mandate', 'capabilities', 'delegates'],
-      execution: ['role', 'outcomes', 'mandate-contract', 'model-profile'],
+      execution: ['role', 'outcomes', 'mandate-contract', 'model-profile', 'effort'],
     },
     harness: { composition: ['workspace', 'profiles', 'bindings'], execution: ['host-profile'] },
     capability: {

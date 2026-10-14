@@ -126,6 +126,11 @@ describe('plugin inventory (A5)', () => {
     }
     expect(() => readPlugin(linked)).toThrow(/symbolic link/);
   });
+  it('refuses a .git file (linked worktree) before reading on', () => {
+    const git = copy();
+    writeFileSync(join(git, '.git'), 'gitdir: /elsewhere\n');
+    expect(() => readPlugin(git)).toThrow(/not plugin content/);
+  });
   it('refuses a .git directory before reading on', () => {
     const git = copy();
     mkdirSync(join(git, '.git'));

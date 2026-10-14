@@ -46,9 +46,9 @@ export function readEntries(root: string): PluginEntry[] {
       const stat = lstatSync(join(root, path));
       if (stat.isSymbolicLink())
         throw new HostPluginError('IA-PLUGIN-INPUT', `${path} is a symbolic link; lowering reads real files only`);
+      if (name === '.git' || name === 'node_modules')
+        throw new HostPluginError('IA-PLUGIN-INPUT', `${path} is not plugin content`);
       if (stat.isDirectory()) {
-        if (name === '.git' || name === 'node_modules')
-          throw new HostPluginError('IA-PLUGIN-INPUT', `${path} is not plugin content`);
         walk(path);
         continue;
       }

@@ -2,8 +2,8 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "80eab3b0f166cf2ff9e78baede3c49d95874217b",
-    "tree": "fcf21abf918ce50109f2e25e6eab90cec29c6b3d",
+    "commit": "b843a68f1c8e4739d507b1d8f0b32fbcd3597b35",
+    "tree": "580bf44793442578c2b577c81ad6bcebffc6f5d1",
     "dirty": true
   },
   "membership": {
@@ -6675,7 +6675,7 @@
     },
     {
       "path": "releases/changesets/3.0.0.json",
-      "sha256": "3ebc55bbaa8114a564bbffe9e2f8e2eb5d945f2fd58cc16c10151761f738461e"
+      "sha256": "c82e4b0252891db4fd4241f3069d92efb750e9396817bc33542635b35b9c03d3"
     },
     {
       "path": "releases/current.json",
@@ -6747,7 +6747,7 @@
     },
     {
       "path": "tools/distribution/NPM-PUBLISHING.md",
-      "sha256": "8b13390ed5bd32253dae25f208340ee511f70f18696418ece201a35cba64f2b1"
+      "sha256": "154e7fcffadbb022f1c12b99bf9f7c1c146de272c6c55ce0fd71d07e714bc533"
     },
     {
       "path": "tools/distribution/SPEC.md",
@@ -7554,5 +7554,5 @@
       "sha256": "291a1735a1bdf4a85d3baafef644f0bffe0d9bfbada49d63c648311ff4429ed1"
     }
   ],
-  "inputDigest": "51f6f0b112d566a45a101e0de52abfbe37099c63235ee29576f3f4cb0df2fb81"
+  "inputDigest": "5b1b9175b78e73132409c009f30db72d7b125f31341b01cb99cc54da00689505"
 }

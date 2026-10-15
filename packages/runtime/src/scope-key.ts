@@ -9,7 +9,7 @@ import { RuntimeError } from './errors.js';
 import { freeze } from './types.js';
 
 /**
- * The scope key K = (S, H, P, d, n, w) (position-and-projection §1, design item 10; decision scope-key-caps).
+ * The scope key K = (S, H, P, d, n, w) (SPEC R14).
  *
  * A key names where a reader sits (the seat), what it intends (the shape), the phase it works in, how many rows a body
  * may hop (depth) and how many entries it may load (budget), optionally restricted to one word. This module holds the

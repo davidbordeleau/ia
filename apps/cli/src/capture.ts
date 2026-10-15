@@ -1,5 +1,5 @@
 /**
- * `ia capture`: position-and-projection §5's capture effect, design rows 3 and 20.
+ * `ia capture`: the capture effect (SPEC `capture`; db D02a and D08a).
  *
  * The one verb that records what the workspace admits. It admits the workspace as every workspace verb does and writes
  * the admitted root snapshot to `.ia/work/snapshot/current.json`, an `ia-snapshot-1` document: the language identity,
@@ -156,7 +156,7 @@ const SEEDED: readonly string[] = ['.ia/src/floor/', '.ia/distributions/', '.ia/
  * The language's syntax diagnostics: the codes its scanner and parser emit, which language SPEC S03 calls parser-owned.
  * A source with one fails to parse. Every other language code is a registration, compilation or resolution result
  * over sources that parsed (a keyword two systems register, a schema or system a registration lacks, an unresolved or
- * unconsented row, a colliding identity), which position-and-projection §5 keeps as a finding, never a refusal.
+ * unconsented row, a colliding identity), which SPEC `capture` keeps as a finding, never a refusal.
  * tests/capture.test.ts holds this set to the codes packages/language/src/scanner and parser spell.
  */
 export const SYNTAX_CODES: ReadonlySet<string> = new Set([
@@ -199,7 +199,7 @@ function admit(root: string, gate?: SessionGate): Admitted {
   }
 }
 /**
- * Position-and-projection §5 and §11: the two cases a capture refuses, before anything is written, so the previous
+ * SPEC `capture`: the two cases a capture refuses, before anything is written, so the previous
  * snapshot is kept. A floor or seed input that fails to parse would drop its records from the snapshot, so it refuses
  * first and names `ia validate`; a root whose own `.ia/src` holds no `@workspace` is not a workspace to capture and
  * names `ia init`, unless its own sources have errors, which may be why none is read. Any other finding in a floor or

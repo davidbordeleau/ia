@@ -105,7 +105,7 @@ const LOCAL = `${FOLDER}/system.ia`;
 /** The user-authored record: its identity follows its word's owning system, work-system, not its folder. */
 const DECISION = 'work-system/definition/decision/api-response-format';
 const DISTRIBUTION = 'workspace-system/definition/distribution/demo-distribution';
-/** Position-and-projection §3's three records, as admission compiles a starter named `demo`. */
+/** SPEC `init`'s three records, as admission compiles a starter named `demo`. */
 const AUTHORED = [
   'workspace-system/definition/workspace/demo',
   'agent-system/binding/agent/demo',
@@ -842,7 +842,7 @@ it('--migrate --system keeps a packable system: the @system and its steward stay
     `${FOLDER}/records/distribution.ia`,
     LOCAL,
   ]);
-  // Composed, the local system gets its pointer line in the packet (position-and-projection §2 case 2).
+  // Composed, the local system gets its pointer line in the packet (SPEC `init --system`).
   expect(renderProjectionFor(root, 'claude').files[0]!.text).toContain(
     '- `floor/definition/system/demo`: words none; band 100; steward `agent-system/binding/agent/demo-steward`; reach `ia position --seat floor/definition/system/demo`',
   );

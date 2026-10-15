@@ -15,8 +15,7 @@ import type {
 } from '../src/index.js';
 import { database, freshInit } from './workspace.js';
 
-// R20 (position-and-projection §4, the host adapter contract, and items 11, 12 and 14; plan amendments B9, B10 and
-// B12): the claude and codex adapters render one position packet as files with the generated marker, and a receipt.
+// R20: the claude and codex adapters render one position packet as files with the generated marker, and a receipt.
 const repository = resolve(import.meta.dirname, '../../..'),
   version = (JSON.parse(readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8')) as { version: string })
     .version,

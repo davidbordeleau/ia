@@ -10,7 +10,7 @@ import { EditorDatabase } from '../src/editor/index.js';
 import { copyPublicLanguageFixture } from '../../../tools/native/public-fixture.js';
 import { put, workspace } from './workspace.js';
 
-// D02b (position-and-projection row 17): a path resolves to the seat it is declared at and to the records whose
+// D02b: a path resolves to the seat it is declared at and to the records whose
 // claimant fields select it, read from the graph's G06c index.
 const repository = resolve(import.meta.dirname, '../../..');
 const evidence = '.ia/src/systems/work-system/records/work.ia';

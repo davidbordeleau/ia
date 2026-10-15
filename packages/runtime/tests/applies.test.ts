@@ -10,9 +10,8 @@ import { normalizeScopeKey, positionBody, readBody, resolveScopeKey } from '../s
 import type { PositionBody, ScopeKey } from '../src/index.js';
 import { database, declare, law, lawId, lawPath, methodPath, playbook, put, workspace } from './workspace.js';
 
-// R17 (position-and-projection §6 and §7, rows 18 and 19; plan amendments A4 and A8; decision scope-key-caps): the
-// rules and playbooks that apply by word to body(K)'s loaded set, their cells at (P, primitive(H)), the blocking rules
-// reserved by word whatever the budget truncates, and the mandates that govern the seat.
+// R17: the rules and playbooks that apply by word to body(K)'s loaded set, their cells at (P, primitive(H)), the
+// blocking rules reserved by word whatever the budget truncates, and the mandates that govern the seat.
 const foundation = 'workspace-system/definition/workspace/foundation-workspace',
   governanceSystem = 'floor/definition/system/governance-system',
   check = 'compliance-system/check/gate/instance-schema-check',
@@ -127,9 +126,8 @@ it("delivers the fixture playbook's plan cell at phase plan, as ia read reads it
   expect(bodyOf(db, { shape: 'context', phase: 'plan' }).cells).toEqual([
     { playbook: procedure, address: `${procedure}#plan/Attention`, text: 'Sample fixture statement 10.' },
   ]);
-  // Here the phase changes only the cell delivered and the keys it is spelled in (design §6, routing): no conditional
-  // row bears on this body. A row whose condition holds at one phase only moves the loaded set (decision
-  // conditional-relations-in-delivery; tests/position.test.ts).
+  // Here the phase changes only the cell delivered and the keys it is spelled in: no conditional row bears on this
+  // body. A row whose condition holds at one phase only moves the loaded set (R15; tests/position.test.ts).
   const orient = bodyOf(db, { shape: 'governance', phase: 'orient' });
   expect(orient.cells).toEqual([
     { playbook: procedure, address: `${procedure}#orient/Inference`, text: 'Sample fixture statement 5.' },

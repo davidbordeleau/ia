@@ -209,7 +209,7 @@ try {
     invoke = (args) => run(['--import', './offline.mjs', cli, ...args], cliConsumer, env);
   assert.equal(invoke(['--version']).trim(), releasedVersion);
   assert.match(invoke(['--help']), /ia <command>/);
-  // Position-and-projection §3: three authored records, then the capture and project effects, each reported apart.
+  // The CLI contract's `init` row: three authored records, then the capture and project effects, each reported apart.
   qualifyInit(JSON.parse(invoke(['init', workspace, '--apply', '--yes', '--json'])), workspace);
   invoke(['validate', '--root', workspace, '--json']);
   for (const host of ['claude', 'codex']) invoke(['host', host, '--root', workspace, '--apply', '--yes', '--json']);

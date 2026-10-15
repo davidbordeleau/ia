@@ -17,12 +17,11 @@ export type { Base, BasePin } from './bundled-base.js';
  * conflicts detected now, the starter it would write, the bundled base pin and the steps. It exits 0 whether or not
  * conflicts were found, because reporting them is the command's job.
  *
- * Milestone position-packet task init-three-records (position-and-projection §3; plan amendments B7 and B13;
- * decisions local-system-at-init and identity-namespace): the starter is three authored records in
- * `.ia/src/workspace.ia` — the `@workspace`, its participant `@agent` and that participant's `@mandate` — and a
- * create-only `.ia/.gitignore`. No local `@system` and no `@distribution` are written unless `--system` asks for
- * them, inside `.ia/src/systems/<name>/`, where the packer finds a release's records; without them the release
- * descriptor names no distribution, so `ia pack` refuses until one is authored.
+ * SPEC `init`: the starter is three authored records in `.ia/src/workspace.ia` — the `@workspace`, its participant
+ * `@agent` and that participant's `@mandate` — and a create-only `.ia/.gitignore`. No local `@system` and no
+ * `@distribution` are written unless `--system` asks for them, inside `.ia/src/systems/<name>/`, where the packer
+ * finds a release's records; without them the release descriptor names no distribution, so `ia pack` refuses until
+ * one is authored.
  *
  * With `--apply` it runs the steps in order — verify the pin, install the bundled base unless it is already
  * installed as planned, author the starter create-only, admit and read the authored identities from the compiled
@@ -159,7 +158,7 @@ export type HostSelection = 'claude' | 'codex' | 'none';
 /** M5.2 §4.1. `recovery-required` is never rendered as a plan: it refuses before anything reasons about the target. */
 export type TargetState = 'fresh' | 'resumable' | 'recovery-required' | 'conflict';
 /**
- * The steps in apply order (position-and-projection §3): the base install, the create-only author step, admission,
+ * The steps in apply order (SPEC `init`): the base install, the create-only author step, admission,
  * the descriptor (the completion point), then the two effects, capture and, only with `--host`, project.
  */
 export type StepId = 'install' | 'author' | 'admission' | 'descriptor' | 'capture' | 'project';
@@ -276,7 +275,7 @@ export interface Applied {
   readonly authored: readonly string[];
   /** `.ia/.gitignore`: `written` by this apply, or `present`, already there and left as it is. */
   readonly ignore: 'written' | 'present';
-  /** Position-and-projection §3: the two effects after the completion point, each reported apart. */
+  /** SPEC `init`: the two effects after the completion point, each reported apart. */
   readonly effects: {
     readonly capture: CaptureEffect;
     /** `skipped` without `--host`. */
@@ -299,7 +298,7 @@ const systemFolder = (name: string): string => `.ia/src/systems/${name}`;
 /** Plan amendment C20: where `ia author system <name>` writes a local system, as `ia init --system` does. */
 export const systemPath = (name: string): string => `${systemFolder(name)}/system.ia`;
 const distributionPath = (name: string): string => `${systemFolder(name)}/records/distribution.ia`;
-/** Position-and-projection §3: the one file the three starter records share, at the root of the authored source. */
+/** SPEC `init`: the one file the three starter records share, at the root of the authored source. */
 export const WORKSPACE_PATH = '.ia/src/workspace.ia';
 /** Create-only: the local working state each clone makes for itself, never the authored records or the lock. */
 export const IGNORE_PATH = '.ia/.gitignore';
@@ -556,11 +555,11 @@ export function starterSystem(name: string): string {
   ].join('\n');
 }
 /**
- * Position-and-projection §3's three records, at placement authored (band 100), with only the fields their schemas
- * declare (plan amendment B13). The `@workspace` composes every installed system, so nothing installed is unreachable
- * (M5.1 §2.2), declares the authored root its records are captured under and names the participant as its steward.
- * The participant `@agent` implies no host permission, and its `@mandate` grants it closed moves over that workspace;
- * the mandate's one prose clause claims nothing. Every name is the workspace's (decision identity-namespace).
+ * SPEC `init`'s three records, at placement authored (band 100), with only the fields their schemas declare. The
+ * `@workspace` composes every installed system, so nothing installed is unreachable (M5.1 §2.2), declares the authored
+ * root its records are captured under and names the participant as its steward. The participant `@agent` implies no
+ * host permission, and its `@mandate` grants it closed moves over that workspace; the mandate's one prose clause
+ * claims nothing. Every name is the workspace's.
  */
 export function starterRecords(name: string, systems: readonly string[], sources: readonly string[] = []): string {
   return [
@@ -596,7 +595,7 @@ export function starterRecords(name: string, systems: readonly string[], sources
   ].join('\n');
 }
 /**
- * `--system`'s release root (position-and-projection §2 case 3: a distribution's roots are system registrations). It
+ * `--system`'s release root (a distribution's roots are system registrations). It
  * sits in the system folder, so the closure from it stays inside folders the packer can release
  * (apps/distribution/src/snapshot.ts, "Release roots must belong to native system folders").
  */
@@ -615,8 +614,8 @@ export function starterDistribution(name: string): string {
 }
 /**
  * The authored files in the order the author step writes them, and the records they hold, in file order. With
- * `--system` the `@workspace` composes the local system after `systems` (position-and-projection §2 case 2: a
- * repository that owns vocabulary composes its own system), so the packet renders a pointer line for it.
+ * `--system` the `@workspace` composes the local system after `systems` (a repository that owns vocabulary composes
+ * its own system), so the packet renders a pointer line for it.
  */
 export function starterFiles(
   name: string,
@@ -1067,7 +1066,7 @@ const INITIALIZED = 'The workspace is initialized.';
 const CAPTURED = 'The workspace is initialized and captured.';
 const UNCAPTURED = 'The workspace is initialized but not captured.';
 /**
- * M5.2 §3.1's steps, in position-and-projection §3's order. Each step before the descriptor either completes or leaves
+ * M5.2 §3.1's steps, in SPEC `init`'s order. Each step before the descriptor either completes or leaves
  * a state `collectInit` classifies as resumable or recovery-required. The signal is observed at step boundaries (§5):
  * before the first write it is the plain interruption and the target is byte-identical; after one, the interruption
  * names the rerun that finishes. Two effects follow the completion point, each reported apart, and each that fails or
@@ -1550,7 +1549,7 @@ export function renderApplied(view: InitView, applied: Applied, caps: Capabiliti
         { depth: 1, symbol: 'success' },
         caps,
       ),
-      // Position-and-projection §3: the records authored, then each effect, reported apart.
+      // SPEC `init`: the records authored, then each effect, reported apart.
       authoredEntry(applied, caps),
       capturedEntry(applied.effects.capture, caps),
       applied.effects.project === 'skipped'
@@ -1677,7 +1676,7 @@ async function initialize(context: Context, root: string, id: string | undefined
   // §2.8 rule 3, as `ia install` asks it: parsing already refused every `--apply` whose question cannot be answered.
   if (!args.flag('yes') && !(await confirm(host.interaction, renderInitSummary(view, caps), CONFIRMATION)))
     return { exitCode: 0, stdout: renderDeclined(view, caps, args.positionals[0], host), stderr: '' };
-  // The project effect, last (position-and-projection §3): the `ia host` path, whose apply writes the receipt.
+  // The project effect, last (SPEC `init`): the `ia host` path, whose apply writes the receipt.
   const project = selected === 'none' ? undefined : (done: string) => registerHost(context, selected, root, done);
   try {
     return rendered(await applyInit(view, { packageRoot: host.packageRoot, signal: host.signal, project }));

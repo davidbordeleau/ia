@@ -8,7 +8,7 @@ import { K0, context, normalizeScopeKey, position, positionBody, resolveScopeKey
 import type { PositionBody, PositionOutput, ScopeKey } from '../src/index.js';
 import { database, law, lawId, lawPath, put, workspace } from './workspace.js';
 
-// R16 (position-and-projection §1 and item 11; plan amendment A9): position(handle, within, partial) returns body(K),
+// R16: position(handle, within, partial) returns body(K),
 // its digest and the host note. The body is a function of the key and the admitted revision alone: no root, token,
 // request text or capture enters it, and no record at runtime placement (band 0) does (decision evidence-placement),
 // nor does a runtime-band source move its revision, the authored one (plan amendment C13), though admission's findings

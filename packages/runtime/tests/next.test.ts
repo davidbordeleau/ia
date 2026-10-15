@@ -1019,7 +1019,7 @@ it('counts exit evidence at runtime placement as it counts authored evidence', (
 });
 
 /**
- * Decision conditional-relations-in-delivery: the base fixture with guide-format's grounding of guide and
+ * R18's conditional rows: the base fixture with guide-format's grounding of guide and
  * release-notes' requirement of guide each conditional on phase act, as `more` rewrites the fixture further.
  */
 function conditional(more: (text: string) => string = (text) => text): string {
@@ -1503,7 +1503,7 @@ it('serves the delivery view on the Door through its token, and answers a refusa
   });
 });
 
-// Decision conditional-relations-in-delivery through the Door: a token `scope` binds to a phase decides a conditional
+// R18's conditional rows through the Door: a token `scope` binds to a phase decides a conditional
 // row as deliveryView does through the same binding, and the position key's phase decides it for `position`.
 it('reads a conditional row on the Door as deliveryView and position do, by the phase the token or key binds', () => {
   const root = conditional(),

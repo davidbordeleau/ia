@@ -27,7 +27,7 @@ const section = (text: string, heading: string): readonly string[] =>
 
 it('renders a consumer workspace for claude as its position packet, with no agent file and no machine path', async () => {
   const root = await initialized();
-  // Position-and-projection §3: the starter is the @workspace, its participant @agent and that @mandate, and no local
+  // SPEC `init`: the starter is the @workspace, its participant @agent and that @mandate, and no local
   // @system; no steward of an installed system is an agent either.
   expect(read(root, '.ia/src/workspace.ia')).toContain('@mandate demo-mandate');
   const { files, receipt } = renderProjectionFor(root, 'claude');

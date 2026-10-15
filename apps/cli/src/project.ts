@@ -1,6 +1,5 @@
 /**
- * `ia project`: position-and-projection §5's project effect (design items 11 and 12; plan amendments B1, B5, B8, B11
- * and B12; decision cli-commands-as-operations), milestone position-packet task ia-project-verb.
+ * `ia project`: the project effect (SPEC `project`; runtime R19 and R20).
  *
  * The workspace projection alone: the position packet of the workspace's admitted records (runtime R19), rendered by
  * the host's adapter for the consumer target (R20) through `renderProjectionFor`, the render `ia host`, `ia doctor` and

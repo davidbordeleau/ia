@@ -122,8 +122,8 @@ export interface Context {
 }
 
 /**
- * §4: a refusal carries the service's own code unchanged, its exit class, and where it happened. Design row 27
- * (position-and-projection §12): it also names its next action, which quotes exactly one command carrying every value
+ * §4: a refusal carries the service's own code unchanged, its exit class, and where it happened. It also names its
+ * next action, which quotes exactly one command carrying every value
  * this invocation supplied that the command needs. A manual step the CLI cannot take for the user (delete or move a
  * named file, set a variable) may come first; an explanation may follow. It spells no other command or option.
  *

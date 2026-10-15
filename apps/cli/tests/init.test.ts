@@ -113,7 +113,7 @@ const plan = (root: string, extra: readonly string[] = [], options: HostOptions 
   run(['init', root, '--json', ...extra], options);
 const view = (root: string, system = false) =>
   collectInit({ root, host: 'none', system, packageRoot: cli, git: gitIn(root, {}) });
-/** Position-and-projection §3's three records, as admission compiles a starter named `demo`. */
+/** SPEC `init`'s three records, as admission compiles a starter named `demo`. */
 const AUTHORED = [
   'workspace-system/definition/workspace/demo',
   'agent-system/binding/agent/demo',
@@ -162,7 +162,7 @@ it('initializes an empty directory offline with no fetch and no cache, into exac
     records: ['@workspace demo', '@agent demo', '@mandate demo-mandate'],
     ignore: { path: '.ia/.gitignore', status: 'create' },
   });
-  // Position-and-projection §3: exactly three authored records, then the capture and project effects, reported apart.
+  // SPEC `init`: exactly three authored records, then the capture and project effects, reported apart.
   expect(envelope.applied).toEqual({
     status: 'initialized',
     resumed: false,
@@ -289,7 +289,7 @@ it('creates a target that did not exist yet, and renders what it applied', async
   expect(human.stdout).toContain('Init  local/demo');
   expect(human.stdout).toContain('Initialized local/demo; release descriptor .ia/release.json.');
   expect(human.stdout).toContain('counter 1.');
-  // Position-and-projection §3 in the human layout: the records authored and the ignore file, then each effect apart,
+  // SPEC `init` in the human layout: the records authored and the ignore file, then each effect apart,
   // and, with no distribution to pack, the position body as the way on.
   const text = human.stdout.replace(/\s+/g, ' '),
     snapshot = JSON.parse(readFileSync(resolve(root, '.ia/work/snapshot/current.json'), 'utf8'));
@@ -371,7 +371,7 @@ it('init --system authors the local system, its steward and a @distribution root
   expect(readFileSync(resolve(root, '.ia/src/systems/demo/records/distribution.ia'), 'utf8')).toContain(
     '  distribution\n    records [@system demo]\n',
   );
-  // Position-and-projection §2 case 2: a repository that owns vocabulary composes its own system, after the base's,
+  // SPEC `init --system`: a repository that owns vocabulary composes its own system, after the base's,
   // so the packet renders a pointer line for it.
   expect(readFileSync(resolve(root, '.ia/src/workspace.ia'), 'utf8')).toContain(
     `    systems [${[...base.systems, 'demo'].map((system) => `@system ${system}`).join(', ')}]\n`,

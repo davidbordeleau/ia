@@ -11,9 +11,8 @@ import type { ResolvedScopeKey, ResolvedSeat, ScopeKey } from './scope-key.js';
 import { freeze } from './types.js';
 
 /**
- * The position body: body(K), position-and-projection §1, §6 (bound, order keys, quantification) and §7 (traversal),
- * design item 10; decision scope-key-caps. `position` returns it with its digest and the host note (design §1 and item
- * 11, R16).
+ * The position body: body(K), with its bound, order keys, quantification and traversal (SPEC R15 and R17). `position`
+ * returns it with its digest and the host note (R16).
  *
  * One scope key, resolved through one scope token, gives one body: the seat, the composition one level from it at cost
  * 0, the seeds the shape's kind or lane focus picks from it, the records reached by hops along the shape's predicate
@@ -355,8 +354,8 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
         : 'ia position',
     );
   }
-  // A row with a condition is a row of the body only where its condition holds at the key's coordinate (decision
-  // conditional-relations-in-delivery), read as graph traversal reads it for the same coordinate: graph `conditionHolds`
+  // A row with a condition is a row of the body only where its condition holds at the key's coordinate (R15), read as
+  // graph traversal reads it for the same coordinate: graph `conditionHolds`
   // over the coordinate scopeCoordinate builds, the condition's subject being the record that states the row, the
   // author graph G06 keeps as an edge's condition subject. A row that does not hold is never followed, primes nothing
   // and names no pointer or frontier record, so nothing is reached through it. A conditional row stated by a record the

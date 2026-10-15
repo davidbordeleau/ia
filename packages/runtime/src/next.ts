@@ -9,7 +9,7 @@ import { statedText } from './render.js';
 import { freeze } from './types.js';
 
 /**
- * The delivery view: position-and-projection §9 step 2, the five lines of §10 and design row 21, which `ia next` reads.
+ * The delivery view, with the five state lines of each task (SPEC R18), which `ia next` reads.
  *
  * One @plan, its milestones and their tasks in one prerequisites-first order, each task with the basis lines of its
  * effective prerequisites, one verdict and the five state lines, then the review items and the next command. It is a
@@ -27,7 +27,7 @@ import { freeze } from './types.js';
  * (db PT5, the only one that may disclose admission findings) while admission refuses a @task, or a whole file (D03).
  *
  * A relation row that carries a condition, such as `grounds @task guide when phase is act`, counts only where its
- * condition holds at the coordinate the scope binds (decision conditional-relations-in-delivery), decided as graph
+ * condition holds at the coordinate the scope binds (R18), decided as graph
  * traversal decides it; where the coordinates the scope may still be completed to disagree on it, as on an axis the
  * scope binds no value for, the row is conditional and its basis unknown, so it is never satisfied: a conditional
  * requirement blocks as unknown and orders nothing, and the intent read through a conditional grounding or supersession
@@ -324,7 +324,7 @@ export function deliveryView(handle: ReadHandle, within: string, seat?: string):
     rowsOf(identity)
       .filter((row) => row.kind === 'field-ref' && row.field === field && row.direction === direction)
       .map((row) => row.counterpart);
-  // Decision conditional-relations-in-delivery: the coordinate the scope binds, a phase or none (db resolveScope binds no
+  // R18: the coordinate the scope binds, a phase or none (db resolveScope binds no
   // other condition axis), which a row's condition is read against as graph traversal reads it.
   const bound: Coordinate = snapshot.phase === undefined ? {} : { phase: snapshot.phase },
     BOUND: Reading = { at: bound, closed: false };

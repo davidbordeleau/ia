@@ -288,7 +288,7 @@ jobs:
             if (target.status !== "ok") process.exit(1);
             if (process.config.variables.node_shared_zlib !== true) { console.log("This Node bundles its own zlib instead of linking the system one"); process.exit(1); }
           ' "$scratch/doctor.json"
-          # Position-and-projection §3: three authored records, then the capture and project effects, reported apart.
+          # The CLI contract's init row: three authored records, then the capture and project effects, reported apart.
           "$node_bin" "$cli" init "$scratch/demo" --apply --yes --json > "$scratch/init.json"
           "$node_bin" -e '
             const { applied } = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));

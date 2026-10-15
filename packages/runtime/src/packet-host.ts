@@ -8,8 +8,7 @@ import type { ScopeKey } from './scope-key.js';
 import { freeze } from './types.js';
 
 /**
- * The host adapters: position-and-projection §4 (the host adapter contract) and items 11, 12 and 14; plan amendments
- * B9, B10 and B12 (milestone position-packet). `renderHost` renders one position packet (R19) for the claude or the
+ * The host adapters (SPEC R20). `renderHost` renders one position packet (R19) for the claude or the
  * codex host as files that each carry the generated marker, and returns them with a receipt. It is a pure function of
  * its arguments and this package's version: it reads no workspace, writes and deletes no file, and renders no agent
  * file for any host (design §4: the N system stewards are pointer lines, never agent definitions).

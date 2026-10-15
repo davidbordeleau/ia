@@ -1,6 +1,5 @@
 /**
- * `ia position` (position-and-projection §1, §6 and §7, design item 10; decisions scope-key-caps and
- * scope-verb-dispatch), end to end against copies of the conformance corpus and of the runtime's delivery fixture laid
+ * `ia position` (runtime SPEC R14 to R17), end to end against copies of the conformance corpus and of the runtime's delivery fixture laid
  * over it, whose workspace declares its sources.
  *
  * The exit evidence of plan task ia-position-verb: `ia position --shape governance --phase act --word law` loads the seat

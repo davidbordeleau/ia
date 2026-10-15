@@ -17,7 +17,7 @@ import {
 import type { ScopeKey, Shape } from '../src/index.js';
 import { database, lawId, lawPath, methodId, put, workspace } from './workspace.js';
 
-// R14 (position-and-projection §1, design item 10; decision scope-key-caps): the scope key, its caps, defaults and K0,
+// R14: the scope key, its caps, defaults and K0,
 // its seat and the coordinate it derives, kept apart from the frozen version 1 context and select requests.
 const foundation = 'workspace-system/definition/workspace/foundation-workspace',
   governanceSystem = 'floor/definition/system/governance-system',

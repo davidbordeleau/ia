@@ -43,9 +43,9 @@ export interface CommandSpec {
   readonly syntax: readonly string[];
   readonly grammar: Grammar;
   /**
-   * Plan amendment B5 (decision cli-commands-as-operations): an agent command of position-and-projection §5 renders as
-   * one row of the position packet's command catalog. `refuses` summarises the command's main refusal and `next` is
-   * the one command that refusal names, both as the command's own code builds them.
+   * An agent command renders as one row of the position packet's command catalog (runtime R19). `refuses` summarises
+   * the command's main refusal and `next` is the one command that refusal names, both as the command's own code builds
+   * them.
    */
   readonly catalog?: CatalogTag;
 }
@@ -290,7 +290,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     ),
   },
   {
-    // Position-and-projection §5: the capture effect. It takes no output option, because a snapshot has one place.
+    // SPEC `capture`: the capture effect. It takes no output option, because a snapshot has one place.
     name: 'capture',
     group: 'workspace',
     summary: 'Admit the workspace and write its current and previous snapshot',
@@ -359,7 +359,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     ),
   },
   {
-    // Position-and-projection §5 and design row 23: the body reader. A body is never structure, which stays in
+    // SPEC `read`: the body reader. A body is never structure, which stays in
     // `ia inspect`, and never a certification.
     name: 'read',
     group: 'workspace',
@@ -383,7 +383,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     ),
   },
   {
-    // Position-and-projection §1, §6 and §7 and design item 10: body(K) for a scope key, with its digest and host note,
+    // SPEC `position` (runtime R14 to R17): body(K) for a scope key, with its digest and host note,
     // the consumer verb beside the frozen `ia scope` route (decision scope-verb-dispatch). It is the Door's `position`
     // operation (MACHINE_PROTOCOL version 2) as a consumer verb, never a machine route (plan amendment A2). The key's
     // closed sets and caps are the runtime's, which refuses a value outside them naming the call to run instead, so no
@@ -444,7 +444,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     ]),
   },
   {
-    // Position-and-projection §9 step 2 and design rows 21 and 22: the delivery view, computed per read and never
+    // SPEC `next` (runtime R18): the delivery view, computed per read and never
     // stored. It is the Door's `next` operation (MACHINE_PROTOCOL version 2) as a consumer verb, never a machine route
     // (plan amendment A2).
     name: 'next',
@@ -471,9 +471,9 @@ export const COMMANDS: readonly CommandSpec[] = [
     ]),
   },
   {
-    // Position-and-projection §5's project effect and design items 11 and 12 (plan amendments B8, B11 and B12): the
-    // workspace projection alone, the plan and apply of `ia host`'s projection element. The host is a positional the
-    // handler checks against the packet's two adapters, so any other host is still usage (exit 2).
+    // SPEC `project` (runtime R19 and R20): the workspace projection alone, the plan and apply of `ia host`'s
+    // projection element. The host is a positional the handler checks against the packet's two adapters, so any other
+    // host is still usage (exit 2).
     name: 'project',
     group: 'workspace',
     summary: "Plan or apply the position packet's files for one host",

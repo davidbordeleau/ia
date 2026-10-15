@@ -1,5 +1,5 @@
 /**
- * `ia read`: position-and-projection §5's body reader, design row 23.
+ * `ia read`: the body reader (SPEC `read`; runtime, body reader).
  *
  * The one verb that returns a body rather than structure. The runtime's `readBody` resolves the locator against the
  * admitted workspace and returns the body behind it: a cell's or requirement's text for a fragment, else the document a

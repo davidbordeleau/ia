@@ -5,8 +5,8 @@ import { compare, stableSerialize } from './revision.js';
 import type { Claim, Graph, Node } from './types.js';
 
 /**
- * G06c: the claimant fields, each a section field whose text values are path selections (position-and-projection row
- * 17; the covers-field-vs-predicate decision keeps `covers` a field, not a predicate): `covers` in a @mandate's
+ * G06c: the claimant fields, each a section field whose text values are path selections (db D02b;
+ * `covers` stays a field, not a predicate): `covers` in a @mandate's
  * `authority`, a @law's or @convention's `subject`, a @spec's `work` and a @check's `check` (milestone
  * generation-binding plan amendment C17), and a @hook's `hook.paths`. A field is read by its path on any winner that
  * holds it; schema admission keeps undeclared ones out. A @check's `check.scope` is never one (decision
@@ -140,7 +140,7 @@ export interface Claimant {
 }
 /**
  * G06c: the winners whose claims select `path`, holders outside `scope` pruned, ordered band descending then identity
- * ascending (position-and-projection row 17). Reads the load-time claimant index; nothing is rescanned per query.
+ * ascending (db D02b). Reads the load-time claimant index; nothing is rescanned per query.
  */
 export function claimants(graph: Graph, path: string, scope?: ReadonlySet<string>): readonly Claimant[] {
   const target = pathSegments(path);

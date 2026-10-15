@@ -7,7 +7,7 @@ import type { RuntimeCode, RuntimeWhere } from './errors.js';
 import { freeze } from './types.js';
 
 /**
- * Mandate authority as closed moves (position-and-projection design, items 2c and 13).
+ * Mandate authority as closed moves (SPEC, mandate authority and R21).
  *
  * A `@mandate` may declare an `authority` section: the participant it binds, the moves it allows (closed to the five
  * kernel moves), the workspaces it scopes, and the words and path selections it excludes or covers. This module

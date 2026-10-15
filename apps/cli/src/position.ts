@@ -1,6 +1,5 @@
 /**
- * `ia position`: position-and-projection §1, §6 and §7 and design item 10; decisions scope-key-caps and
- * scope-verb-dispatch.
+ * `ia position`: the position body for a scope key (runtime R14 to R17).
  *
  * The consumer verb over the runtime's `position`: body(K) for the scope key the flags name, its digest and the host
  * note. No flag names K0, the repository's workspace with its pointers and tallies only; a key naming any part takes

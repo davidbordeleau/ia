@@ -1,5 +1,5 @@
 /**
- * `ia next` (position-and-projection §9 step 2, design rows 21 and 22), end to end against copies of the runtime's
+ * `ia next` (runtime SPEC R18), end to end against copies of the runtime's
  * delivery fixtures laid over the conformance corpus, a copy of the loop fixture, which authors no plan, and the
  * repository's own maintenance plan.
  *

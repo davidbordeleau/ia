@@ -11,7 +11,7 @@ import { entryCount, position, renderHost, renderPacket } from '../src/index.js'
 import type { PacketCatalogRow, PacketOutput } from '../src/index.js';
 import { database, declare, freshInit, law, packetFixture, put, workspace } from './workspace.js';
 
-// R19 (position-and-projection §4 and items 11 and 12; plan amendments B1 to B5 and B8): the position packet. The golden
+// R19: the position packet. The golden
 // packet is regenerated only by `node packages/runtime/tests/golden/write.mjs`, which sets IA_POSITION_GOLDEN=write for
 // the golden cases alone; its diff is reviewed with the change that makes it.
 const fixture = packetFixture,

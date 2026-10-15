@@ -317,7 +317,7 @@ it("serves ia_next through the door: one plan's delivery view inside the scope, 
     structuredContent: { ok: false, code: 'IA-RUNTIME-REQUEST-INVALID' },
   });
 });
-// Decision conditional-relations-in-delivery: ia_next reads a conditional row against the phase its token binds, and
+// Runtime R18's conditional rows: ia_next reads a conditional row against the phase its token binds, and
 // ia_position against its key's phase, as the Door does.
 it('reads a conditional row through ia_next and ia_position at the phase the token or the key binds', () => {
   const root = delivery(),

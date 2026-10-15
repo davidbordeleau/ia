@@ -1,5 +1,5 @@
 /**
- * `ia capture` (position-and-projection §5, design rows 3 and 20), end to end against copies of the committed loop
+ * `ia capture` (SPEC `capture`), end to end against copies of the committed loop
  * fixture. The removed `ia compile` command refuses without changing capture state.
  *
  * The exit evidence of plan task ia-capture-verb: two captures with no edit between them report 0 changed, and an edit
@@ -510,7 +510,7 @@ it('refuses a snapshot path it does not admit and names the capture to run once 
 });
 
 it('refuses a root whose own sources declare no @workspace, writing nothing, and names ia init', async () => {
-  // Position-and-projection §5 and §11: no @workspace at this root.
+  // SPEC `capture`: no @workspace at this root.
   const empty = realpathSync(scratch('capture-empty'));
   const refused = await run(['capture', '--root', empty, '--json']);
   expect(refused.exitCode).toBe(3);
@@ -537,7 +537,7 @@ it('refuses a root whose own sources declare no @workspace, writing nothing, and
 });
 
 it('refuses a floor input that fails to parse, keeping both snapshot files, and names ia validate', async () => {
-  // Position-and-projection §5 and §11: a floor/seed input fails to parse (previous snapshot kept).
+  // SPEC `capture`: a floor/seed input fails to parse (previous snapshot kept).
   const root = workspace();
   await capture(root);
   edit(root);
@@ -617,7 +617,7 @@ function adopt(root: string, mounts: Readonly<Record<string, Readonly<Record<str
 }
 
 it('captures seed inputs that parse but collide, and keeps the collision as findings, as validate reports them', async () => {
-  // Position-and-projection §5: only a floor/seed input that fails to parse refuses; a keyword two adopted systems both
+  // SPEC `capture`: only a floor/seed input that fails to parse refuses; a keyword two adopted systems both
   // register is a registration finding over sources that parsed, written into the snapshot like any other.
   const root = nativeWorkspace('capture-collide');
   adopt(root, { a: gadgetSystem('a'), b: gadgetSystem('b') });
@@ -720,7 +720,7 @@ it('refuses a root whose only @workspace is installed or adopted, since the root
   const installed = resolve(scratch('capture-installed-only'), 'demo');
   const initialized = await run(['init', installed, '--apply', '--yes', '--json']);
   expect(initialized.exitCode, initialized.stdout).toBe(0);
-  // `ia init` captures once it has initialized (position-and-projection §3), so the pair exists; the refusal keeps it.
+  // `ia init` captures once it has initialized (SPEC `init`), so the pair exists; the refusal keeps it.
   const kept = bytesAt(installed, CURRENT);
   expect(JSON.parse(kept.toString('utf8')).revision).toBe(
     JSON.parse(initialized.stdout).applied.effects.capture.revision,

@@ -1,5 +1,5 @@
 /**
- * Design row 27 (position-and-projection §12): every refusal names one next command. The codes are enumerated from
+ * Every refusal names one next command (consumer CLI contract). The codes are enumerated from
  * their sources — every IA code the CLI and the services it calls spell, and every distribution `fail()` code — and
  * the construction sites from the CLI source itself, each next action resolved through the type checker, so a refusal
  * added later without a runnable next command fails here rather than reaching a user. `--json` carries the command in
@@ -1102,7 +1102,7 @@ function invocations(): readonly {
       argv: ['capture', '--root', snapshotLinked],
       command: `ia capture --root ${quote(snapshotLinked)}`,
     },
-    // Position-and-projection §11: a root with no @workspace names `ia init`, a floor that fails to parse `ia validate`.
+    // SPEC `capture`: a root with no @workspace names `ia init`, a floor that fails to parse `ia validate`.
     {
       code: 'IA-DB-ROOT-INVALID',
       argv: ['capture', '--root', empty],

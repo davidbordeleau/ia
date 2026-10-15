@@ -1,6 +1,5 @@
 /**
- * `ia project` acceptance (milestone position-packet task ia-project-verb; position-and-projection §5, design items 11
- * and 12; plan amendments B1, B5, B8, B11 and B12): the plan writes nothing, `--apply` writes the packet and its
+ * `ia project` acceptance (SPEC `project`; runtime R19 and R20): the plan writes nothing, `--apply` writes the packet and its
  * receipt through the writer `ia host` uses, `ia doctor` reads the receipt, a registered 1.x workspace upgrades, and
  * every refusal names one next command, its `ia project`, `ia validate` and `ia init` commands with the root as given
  * and its `ia-distribution` recoveries, and the `ia validate` an unopenable workspace names, with the resolved root.

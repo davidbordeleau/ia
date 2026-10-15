@@ -1,5 +1,5 @@
 /**
- * `ia next`: position-and-projection §9 step 2 and design rows 21 and 22, the delivery view.
+ * `ia next`: the delivery view (runtime R18).
  *
  * The runtime's `deliveryView` reads one plan: its milestones and tasks in one prerequisites-first order, each task with
  * a basis line per requirement, one verdict, its self-declared status and the five state lines of design §10, then the

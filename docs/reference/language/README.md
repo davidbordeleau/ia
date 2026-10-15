@@ -155,13 +155,13 @@ The [language package contract](../../../packages/language/SPEC.md) defines the 
 | --- | --- |
 | `@agent` | A participant. It grants no host permission. |
 | `@mandate` | The participant's bounded authority: the moves it allows, the workspaces it scopes, the words it excludes and the paths it covers. |
-| `@capability` | Operations, procedures, templates, checks and included capabilities, with execution bounds. |
-| `@agent-profile` | An agent with its capabilities and an optional mandate, voice and delegates. |
+| `@capability` | Operations, procedures, templates, checks and included capabilities, with execution bounds, and optionally how a host invokes it (`invocation`: by the model, by the user, delegated or not at all). |
+| `@agent-profile` | An agent with its capabilities and an optional mandate, voice and delegates, and optionally its invocation and presentation. |
 | `@harness` | Profiles and execution bindings composed in a workspace under a host contract. |
 | `@execution-binding` | A native target connected to a host-installed entry or operation. |
 | `@voice` | Communication attributes, separate from authority and procedure. |
 
-Declaring these records installs and runs nothing. `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the installed implementation catalog a host has joined. `compileHarness` from `@inventarch/agent-composition-system` compiles a harness without calling a model, and refuses a missing profile, a recursive capability or an unavailable host implementation. A `@playbook` holds procedure cells at kernel phase and primitive coordinates; `ia position` delivers the cells that apply within its budget and executes none. A `@template` describes rendering, a `@hook` describes an event binding that a host adapter registers, and a `@run` describes execution state without starting it. The [composition contract](../../../.ia/src/systems/agent-composition-system/SPEC.md) covers the compiler.
+Declaring these records installs and runs nothing. `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the installed implementation catalog a host has joined. `compileHarness` from `@inventarch/agent-composition-system` compiles a harness without calling a model, and refuses a missing profile, a recursive capability or an unavailable host implementation. A `@playbook` holds procedure cells at kernel phase and primitive coordinates; `ia position` delivers the cells that apply within its budget and executes none. A `@template` describes rendering, a `@hook` describes an event binding that a host adapter registers, and a `@run` describes execution state without starting it. A `@distribution` with a `product` section describes a host plugin: `ia init --from` writes these records when it lowers a plugin, and `ia project --product plugin` renders them back. The [composition contract](../../../.ia/src/systems/agent-composition-system/SPEC.md) covers the compiler.
 
 ## Quality, architecture and evidence
 

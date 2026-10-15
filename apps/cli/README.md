@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@inventarch/cli?label=npm)](https://www.npmjs.com/package/@inventarch/cli) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-> `@inventarch/cli` is the `ia` command, the entry point to IA for people and coding agents. It creates workspaces, previews and authors records, validates and captures them, prints the position and delivery view an agent starts from, projects that position for Claude Code and Codex, and installs native distributions.
+> `@inventarch/cli` is the `ia` command, the entry point to IA for people and coding agents. It creates workspaces, previews and authors records, validates and captures them, prints the position and delivery view an agent starts from, projects that position for Claude Code and Codex, turns a host plugin into a kit workspace and back, and installs native distributions.
 >
 > It bundles the language base, vocabulary catalogue and host payload its commands need, so `ia init` and `ia validate` run offline. The [MCP server](https://github.com/inventarch/ia/blob/main/apps/mcp-door/README.md) and the [runner](https://github.com/inventarch/ia/blob/main/apps/runner/README.md) are separate packages.
 
@@ -60,7 +60,7 @@ Automation should read the exit value together with the diagnostic code:
 
 | Command | What it does |
 | --- | --- |
-| `ia init [<directory>]` | Plans a workspace. `--apply` installs the bundled `inventarch/language` base, writes `.ia/src/workspace.ia` with three starter records (a `@workspace`, its participant `@agent` and that agent's `@mandate`), `.ia/.gitignore` and `.ia/release.json`, then captures. `--host claude` or `--host codex` also registers that host, as `ia host --apply` does. `--system` adds a local `@system` and `@distribution` so `ia pack` can release it. `--migrate` moves a workspace an IA 1.0 or 1.1 `init` created to this layout. |
+| `ia init [<directory>]` | Plans a workspace. `--apply` installs the bundled `inventarch/language` base, writes `.ia/src/workspace.ia` with three starter records (a `@workspace`, its participant `@agent` and that agent's `@mandate`), `.ia/.gitignore` and `.ia/release.json`, then captures. `--host claude` or `--host codex` also registers that host, as `ia host --apply` does. `--system` adds a local `@system` and `@distribution` so `ia pack` can release it. `--from <plugin-directory>` lowers a Claude, Codex or Grok plugin into the new workspace as a kit instead (see [host plugins](#-host-plugins)). `--migrate` moves a workspace an IA 1.0 or 1.1 `init` created to this layout. |
 | `ia preview` | Shows what one new record, one field (`--set`) or one relationship (`--relate`) would compile to: the record before and after, the findings it adds and the target file's `sha256`. `ia preview <word>` prints a word's schema, default file and permitted relationships. It writes nothing. |
 | `ia author` | Writes what the same preview showed. It takes the preview's arguments plus `--digest <sha256>`, writes only while the file still has that digest and the candidate is clean, and adds one `# authored-by` line naming the participant and mandate above the record. |
 | `ia validate [<path>...]` | Admits the workspace and reports findings, with `--severity` and `--max-findings`. It can record the checks that passed or failed as evidence under `.ia/work/evidence/`. |
@@ -122,7 +122,7 @@ Choose a response format for the public API.
 
 | Command | What it does |
 | --- | --- |
-| `ia project <claude\|codex>` | Plans the position packet files for one host. `--apply` writes them and a receipt. It registers no MCP server. |
+| `ia project <claude\|codex>` | Plans the position packet files for one host. `--apply` writes them and a receipt. It registers no MCP server. With `--product plugin` it renders the host plugin a lowered workspace describes instead (see [host plugins](#-host-plugins)). |
 | `ia host <claude\|codex>` | Plans the host registration: the MCP server, the same projection and the skills generated from your authored `@playbook` records, plus, for Claude, the agents and edit guards generated from `@agent-profile` and `@hook` records. `--apply` writes it; `--remove` plans removing what it owns. `ia host claude --user` registers a user-level plugin that needs no workspace. |
 | `ia doctor` | Reports runtime, workspace, installation and host state, and suggests repairs without making them. `--host claude` or `--host codex` adds that host's session briefing. |
 
@@ -139,6 +139,25 @@ ia doctor
 ```
 
 The receipt is `.ia/distributions/hosts/<host>-receipt.json`. `ia doctor` compares it with the files and with a fresh render, so an edited record shows as an `outdated` projection that names `ia project claude --apply`. A file IA did not write at one of these paths is named in the plan and refused by `--apply`. `ia host` treats what it writes as machine-local; do not commit those files. Codex reports generated agents and hooks as unsupported, and `ia host cursor` refuses with `IA-DIST-HOST-UNSUPPORTED`. The source-protection row of `ia doctor` warns when an authored `@mandate` declares a restriction but no authored `@hook` covers `.ia/src/**` for `Write`, `Edit` and `MultiEdit`. It never widens a hook's paths.
+
+### 🧩 Host plugins
+
+A Claude Code, Codex or Grok plugin directory can become a kit workspace, and that workspace renders the plugin back:
+
+| Command | What it does |
+| --- | --- |
+| `ia init <directory> --from <plugin-directory>` | Plans a workspace that holds the plugin as a kit: the three starter records, a system named after the workspace, `records/plugin.ia` (the product `@distribution`, a `@capability` for each skill, and an `@agent`, a tools `@capability` and an `@agent-profile` for each agent), each skill body, agent prompt and owned Markdown file as a pinned resource, every other file as an asset, and a lowering map with a generated `MIGRATION.md`. `--apply` writes it. It takes `--id`, but not `--system`, `--migrate`, `--adopt` or the decline options. |
+| `ia project <claude\|codex> --product plugin --out <directory>` | Plans the plugin the workspace's product `@distribution` describes, with a manifest for every host its `product.hosts` lists, into an absent or empty directory outside the workspace. `--apply` writes it, create-only. |
+| `ia project <claude\|codex> --product plugin --check [--compare <plugin-directory>]` | Renders the plugin in memory, lowers it again and requires the result to match the workspace byte for byte. `--compare` also compares each rendered file with the original plugin. It writes nothing. |
+
+```sh
+ia init my-kit --from my-plugin
+ia init my-kit --from my-plugin --apply --yes
+ia project claude --product plugin --check --compare my-plugin --root my-kit
+ia project claude --product plugin --out rendered --root my-kit --apply --yes
+```
+
+A successful check prints `Round trip: content-exact and a fixed point.` Lowering accepts only what rendering writes back: hooks, MCP and LSP configuration, `commands/`, and frontmatter or manifest forms the renderer would not reproduce are refused with `IA-LOWER-UNRESOLVED`, which counts and names them, and nothing is written. A drifted round trip fails with `IA-ROUNDTRIP-DRIFT`; `--json` carries the full report in `details`. The kit's release descriptor keeps the `UNLICENSED` license whatever the plugin's manifest states. The rules are in the [package contract](SPEC.md#host-plugins).
 
 ### 📦 Distributions
 

@@ -15,7 +15,9 @@
 - **Open and method-neutral.** Everything here runs locally, and initialization and validation need no network connection. You can define your own words, systems, workspaces and methods with the same public contracts IA uses for its own vocabulary.
 
 > [!NOTE]
-> **IA 3.0** adds a governed write path (`ia preview`, then `ia author`), commands checked against the acting participant's mandates, check bindings whose passes and failures `ia validate` records as evidence, host agents, skills and hook guards generated from authored records, registry kits, source-only workspace adoption (`ia adopt`) and the local `ia-runner`.
+> **IA 3.1** turns a Claude Code, Codex or Grok plugin into a kit workspace (`ia init --from`) and renders the workspace back into the plugin (`ia project --product plugin`), with a check that the round trip is exact. [`@inventarch/compliance`](packages/compliance/README.md) can now produce its own kernel and fixture conformance evidence, on request.
+>
+> **IA 3.0** added a governed write path (`ia preview`, then `ia author`), commands checked against the acting participant's mandates, check bindings whose passes and failures `ia validate` records as evidence, host agents, skills and hook guards generated from authored records, registry kits, source-only workspace adoption (`ia adopt`) and the local `ia-runner`.
 
 > [!IMPORTANT]
 > **Upgrading from 2.x.** `ia compile` is removed; use `ia capture`. `ia read`, `next`, `validate`, `preview`, `author`, `capture`, `project` and a workspace `host --apply` now refuse when the acting participant's mandates do not grant the move, and a `@mandate` that fails admission, including one stating `authority.moves []`, closes all of them. `ia validate` can write evidence under `.ia/work/evidence/`, so a CI job needs a writable `.ia/work`. The first applied `init`, `install` or `update` moves the workspace lock to a distribution engine the 2.x CLI cannot read, so commit or back up `.ia/` first. Read the [3.0.0 changelog](CHANGELOG.md#300) before upgrading.
@@ -244,7 +246,7 @@ The extension analyzes files locally, without an account or hosted service. See 
 | **Position** | `ia position` returns the body for a scope key of seat, shape, phase, depth, budget and word. The body is a pure function of the key and the admitted records, with a digest, so two agents asking the same question read the same context. |
 | **Projection** | `ia project` and `ia host` render the position packet, the `ia-authoring` skill and the agents and skills generated from authored records, with a receipt that `ia doctor` checks. Only `ia host` registers the MCP server and the hook groups. |
 | **Evidence** | `ia validate` binds each `@check` to its evaluator, built in or from the installed catalog, and records the ones that passed or failed as `@observation` evidence under `.ia/work/evidence/`. Evidence never changes the authored revision. |
-| **Distribution and kit** | `ia pack` builds digest-named archives with pinned closures; `ia install` resolves and installs them, including kits that group several requests. `ia adopt` mounts a pinned, source-only workspace from a registry directory or URL you name with `--registry` or configure. |
+| **Distribution and kit** | `ia pack` builds digest-named archives with pinned closures; `ia install` resolves and installs them, including kits that group several requests. `ia adopt` mounts a pinned, source-only workspace from a registry directory or URL you name with `--registry` or configure. `ia init --from` turns an existing Claude Code, Codex or Grok plugin into a kit workspace, and `ia project --product plugin` renders it back. |
 | **Runner** | `ia-runner`, from [`@inventarch/runner`](apps/runner/README.md), runs one admitted agent profile with bounded local execution and a durable journal. It selects no model provider and creates no credentials. |
 
 ---
@@ -351,6 +353,8 @@ The [language floor](.ia/src/floor/README.md) supplies the kernel. These systems
 | **Machine protocol** | `scope`, `context`, `select`, `get`, `records`, `resolve`, `search`, `traverse`, `report`: frozen, JSON in through `--params`, one JSON line out |
 
 `init`, `install`, `adopt`, `update`, `remove`, `project` and `host` show a plan and act only with `--apply`, plus `--yes` without a terminal; `restore` also needs `--apply` but has no preview yet. The other commands that write say so in their flags: `ia author` writes after checking `--digest`, `ia capture` writes its snapshot unless given `--preview`, `ia format --write` rewrites files, `ia pack` writes an archive, `ia recover` repairs an interrupted transaction, and `ia validate` can record check evidence under `.ia/work/evidence/`.
+
+`ia init <directory> --from <plugin-directory>` lowers a host plugin into a kit workspace, and `ia project <claude|codex> --product plugin` renders that kit back into a plugin (`--out`) or checks the round trip without writing (`--check`).
 
 `--json` returns one structured value, and every consumer-command refusal names the one command to run next. `read`, `next`, `validate`, `preview`, `author`, `capture`, `project` and a workspace `host --apply` (not `--remove` or `--user`) are checked against the acting participant's mandates; `--actor <agent>` names which authored participant is acting. `ia --help` and `ia <command> --help` give the full syntax, and the [CLI guide](apps/cli/README.md) and [consumer CLI contract](docs/specs/consumer-cli-contract/README.md) give the detail.
 

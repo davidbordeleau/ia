@@ -38,10 +38,10 @@ Consumed means allocated to a release. Publication to the registry is separate, 
 | `pnpm release:check --strict` | Before preparing archives | Also refuses pending notes and incomplete or stale changed-file coverage |
 | `pnpm release:version` | Any time as a dry run; `--write` by the release workflow or a maintainer | Computes the next version and, with `--write`, applies it |
 | `pnpm release:collect` | After editing release prose by hand | Re-derives coverage and regenerates `CHANGELOG.md` |
-| `pnpm native:version` | When a native archive changes | Previews the native versions that archive content selects; `--write` applies them |
+| `pnpm native:version` | When the npm target or a native archive changes | Previews the native selection, which follows the npm target; `--write` applies it |
 | `pnpm native:release:check` | In `pnpm platform:qualify` and `pnpm npm:prepare` | Rebuilds every native archive and refuses a stale selection, changed bytes under a published version or a stale ledger |
 
-Native archive versions, for the language base and each native system, are independent of the npm version. `pnpm native:version --write` updates the system declarations, their public language copies, the native policy and `native/current.json`; it never publishes or changes npm versions. A change that alters a native archive's bytes needs its own entry in `native/notes.json` before the selection can be written. The native check reads its baseline from the latest `v<version>` tag reachable from `HEAD`, so fetch the release tags first.
+Since npm 3.0.0, native archive versions, for the language base and each native system, follow the npm target in `current.json`, including archives whose content did not change; syntax, format, engine and protocol versions stay independent. `pnpm native:version --write` updates the system declarations, their public language copies, the native policies and `native/current.json`; it never publishes or changes npm versions. A change that alters a native archive's bytes needs its own entry in `native/notes.json` before the selection can be written. A note sets the minimum acceptable bump; it never selects a separate version. The native check reads its baseline from the latest `v<version>` tag reachable from `HEAD`, so fetch the release tags first.
 
 ## What the checks do not establish
 

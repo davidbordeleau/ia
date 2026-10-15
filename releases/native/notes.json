@@ -1,69 +1,69 @@
 {
   "format": "ia.native-release-notes.v1",
   "baseline": {
-    "tag": "v2.0.0",
-    "commit": "53885910dc2b22809fddb46c31091660930ade48"
+    "tag": "v3.0.0",
+    "commit": "8f9220040d29fce02f230c2899ff284b69293ff3"
   },
   "changes": [
     {
       "id": "inventarch/agent-composition-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "minor",
+      "summary": "`@capability` gains an optional invocation section, and `@agent-profile` gains optional invocation and presentation sections and `execution.effort`, so a Claude, Codex or Grok plugin can be lowered into records and rendered back; existing records remain valid and IA syntax remains 1.0."
     },
     {
       "id": "inventarch/agent-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/authoring-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "minor",
+      "summary": "Reference guides for `@capability`, `@agent-profile` and `@distribution` document the new optional invocation, presentation and product fields; exact dependency versions move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/compliance-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/governance-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/hook-authoring-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/language",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "minor",
+      "summary": "Embeds the extended agent-profile, capability and distribution schemas and every public system declaration at 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/learning-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/session-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/template-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/work-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/workspace-system",
-      "bump": "major",
-      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
+      "bump": "minor",
+      "summary": "`@distribution` gains an optional product section (name, display name, version, description, author, licence, keywords, hosts, short description and category) for plugin projection; existing records remain valid and IA syntax remains 1.0."
     }
   ]
 }

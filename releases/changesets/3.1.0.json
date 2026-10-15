@@ -1,0 +1,972 @@
+{
+  "format": "ia.npm-changeset.v1",
+  "version": "3.1.0",
+  "state": "consumed",
+  "baseline": {
+    "commit": "8f9220040d29fce02f230c2899ff284b69293ff3",
+    "version": "3.0.0"
+  },
+  "bump": "minor",
+  "summary": "Coordinated 3.1.0 release of the 23 public npm packages: Lower and project host plugins; Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES.",
+  "packages": {
+    "@inventarch/agent-composition-system": {
+      "previous": "3.0.0",
+      "kind": "changed",
+      "summary": "Lower and project host plugins."
+    },
+    "@inventarch/agent-system": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/authoring-system": {
+      "previous": "3.0.0",
+      "kind": "changed",
+      "summary": "Lower and project host plugins."
+    },
+    "@inventarch/cli": {
+      "previous": "3.0.0",
+      "kind": "changed",
+      "summary": "Lower and project host plugins."
+    },
+    "@inventarch/compliance": {
+      "previous": "3.0.0",
+      "kind": "changed",
+      "summary": "Lower and project host plugins. Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES."
+    },
+    "@inventarch/compliance-system": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/db": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/distribution": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/governance-system": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/graph": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/hook-authoring-system": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/language": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/learning-system": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/mcp-door": {
+      "previous": "3.0.0",
+      "kind": "changed",
+      "summary": "Lower and project host plugins."
+    },
+    "@inventarch/runner": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/runtime": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/service-contracts": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/session-system": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/steward-hook": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/template-system": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/work-system": {
+      "previous": "3.0.0",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/workspace-runtime": {
+      "previous": "3.0.0",
+      "kind": "changed",
+      "summary": "Lower and project host plugins."
+    },
+    "@inventarch/workspace-system": {
+      "previous": "3.0.0",
+      "kind": "changed",
+      "summary": "Lower and project host plugins."
+    }
+  },
+  "changes": [
+    {
+      "id": "lower-and-project-host-plugins",
+      "title": "Lower and project host plugins",
+      "summary": "The `@capability` and `@agent-profile` words gain an invocation section and `@distribution` a product section; ia init --from lowers a Claude, Codex or Grok plugin into a kit workspace; ia project --product plugin renders it back and --check proves the round trip.",
+      "packages": [
+        "@inventarch/agent-composition-system",
+        "@inventarch/authoring-system",
+        "@inventarch/cli",
+        "@inventarch/compliance",
+        "@inventarch/mcp-door",
+        "@inventarch/workspace-runtime",
+        "@inventarch/workspace-system"
+      ],
+      "paths": [
+        ".ia/authoring.resources.json",
+        ".ia/src/systems/agent-composition-system/",
+        ".ia/src/systems/authoring-system/",
+        ".ia/src/systems/workspace-system/",
+        "CLAUDE.md",
+        "apps/cli/",
+        "apps/mcp-door/",
+        "docs/",
+        "examples/",
+        "packages/compliance/",
+        "packages/workspace-runtime/",
+        "tools/"
+      ]
+    },
+    {
+      "id": "native-conformance-evidence",
+      "title": "Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES",
+      "summary": "Compliance C31. @inventarch/compliance adds verifyKernel(floor?) and verifyFixtures(), isConformanceEvidence(value, subject?), CONFORMANCE_PROFILE ('package-v1') and the KernelEvidence, FixtureEvidence, ConformanceEvidence, ConformanceToolchain, ConformanceProfile, OutOfProfileSuite, KernelSource, ConformanceOptions and ConformanceSummary types. verifyKernel regenerates the kernel from a floor (the embedded one by default) in-process and compares it with the running @inventarch/language; verifyFixtures runs the package-v1 profile of the shipped language, refusal and evidence fixtures against a generated inventory. Both run only when called and read only this package's own files. Their evidence is deeply frozen and accepted only from the producing module instance. evaluate's new opt-in conformance: {inputs, kernel, fixtures} option binds that evidence to the evaluated graph: evidence for another revision, language version, kernel digest, floor or toolchain stays not-evaluated, each check judged on its own evidence, a verified failure on the graph's own floor fails, and copied, hand-built or swapped evidence, or evidence together with conformance, is a TypeError. evaluate reads the inputs once and refuses fields that are not strings. Results verified from evaluated evidence carry the new Verdict.basis 'verified' and add Report.conformance for those checks, a verified fixture result with the suites it did not run. Results taken from the caller-asserted evidence map now carry basis 'caller-asserted' and are rebuilt from their check, scope, outcome and findings, so other keys a caller put on such a verdict no longer reach the report: outcomes are unchanged, but reports from callers that pass the map change digest. Reports that pass neither option are unchanged. Limits: the profile does not run the hook, runtime, execution or publication suites, and every fixture result lists them as out of profile; the evidence verifies the installed package against itself, and the binding trusts the Graph it is given, so a consumer pins kernelDigest and inventoryDigest and relies on npm integrity.",
+      "packages": [
+        "@inventarch/compliance"
+      ],
+      "paths": [
+        "packages/compliance/",
+        "tools/"
+      ]
+    },
+    {
+      "id": "cohort-alignment",
+      "title": "Coordinated version alignment",
+      "summary": "Package and native artifact version metadata follows the coordinated 3.1.0 release.",
+      "packages": [
+        "@inventarch/agent-system",
+        "@inventarch/compliance-system",
+        "@inventarch/db",
+        "@inventarch/distribution",
+        "@inventarch/governance-system",
+        "@inventarch/graph",
+        "@inventarch/hook-authoring-system",
+        "@inventarch/language",
+        "@inventarch/learning-system",
+        "@inventarch/runner",
+        "@inventarch/runtime",
+        "@inventarch/service-contracts",
+        "@inventarch/session-system",
+        "@inventarch/steward-hook",
+        "@inventarch/template-system",
+        "@inventarch/work-system"
+      ],
+      "paths": [
+        ".ia/src/systems/agent-system/package.json",
+        ".ia/src/systems/agent-system/system.ia",
+        ".ia/src/systems/compliance-system/package.json",
+        ".ia/src/systems/compliance-system/system.ia",
+        ".ia/src/systems/governance-system/package.json",
+        ".ia/src/systems/governance-system/system.ia",
+        ".ia/src/systems/hook-authoring-system/package.json",
+        ".ia/src/systems/hook-authoring-system/system.ia",
+        ".ia/src/systems/learning-system/package.json",
+        ".ia/src/systems/learning-system/system.ia",
+        ".ia/src/systems/session-system/package.json",
+        ".ia/src/systems/session-system/system.ia",
+        ".ia/src/systems/template-system/package.json",
+        ".ia/src/systems/template-system/system.ia",
+        ".ia/src/systems/work-system/package.json",
+        ".ia/src/systems/work-system/system.ia",
+        "apps/distribution/package.json",
+        "apps/runner/package.json",
+        "apps/steward-hook/package.json",
+        "packages/db/package.json",
+        "packages/graph/package.json",
+        "packages/language/package.json",
+        "packages/runtime/package.json",
+        "packages/service-contracts/package.json"
+      ]
+    },
+    {
+      "id": "repository-maintenance",
+      "title": "Repository maintenance",
+      "summary": "Tooling, workflow, documentation and release bookkeeping outside the published package contents.",
+      "packages": [],
+      "internal": true,
+      "paths": [
+        "SPEC.md",
+        "apps/vscode/THIRD_PARTY_NOTICES.txt",
+        "apps/vscode/package.json",
+        "releases/"
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "path": ".ia/authoring.resources.json",
+      "sha256": "636d6d1c1b2d2704a39f75945445bbbc5bd44419f1097eb0a7c563ed49f73ae2",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/agent-composition-system/package.json",
+      "sha256": "78233099decb213e2c151740da3a2ba42509b74b5646c4f7dcdfdeb55da6acc4",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/agent-composition-system/schemas/agent-profile.schema.ia",
+      "sha256": "9e34d77bcede11a99c302a79d380ca3518e7389463795257889f5c0dcba394a1",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/agent-composition-system/schemas/capability.schema.ia",
+      "sha256": "fd9b0a97ac33c7086c5af8540b08f75fa5f5170c7d2149b3b6722cb0a1fc541f",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/agent-composition-system/src/fields.ts",
+      "sha256": "957a8fb25d2606c39ed3543dd01ba919ee91344b3e182ecaea13fa452295bfc2",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/agent-composition-system/system.ia",
+      "sha256": "9e2b5e5b4d21e2c92ac3413c292c368b4d5a62a963ea120b77c7a2c7b9684a78",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/agent-system/package.json",
+      "sha256": "c67e1416b37e7d23c5038946d5049023282b21c5910cb193f03022d6e3f8b290",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/agent-system/system.ia",
+      "sha256": "beb188e9d50b6b75b782f279ed36bee353c5107c67f80482867ef84404be754b",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/authoring-system/package.json",
+      "sha256": "a566d1e52320beb637f3b2f4f2736f17d660639691bbc514147a3aaa38e61572",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/authoring-system/reference/agent-profile.md",
+      "sha256": "1892cc6572f69e1bc1271277a4fb1319e9efdbbc26ecde5cc3b2ea8f4b5bef1c",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/authoring-system/reference/capability.md",
+      "sha256": "dd9e2627f019703566bfb1801a2ce2b9c6a22c58e837adeb3faee696b369f242",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/authoring-system/reference/distribution.md",
+      "sha256": "5c9409862de26e0cc39e35e4cd131632004697d048f4427a8c884b25c59d415d",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/authoring-system/system.ia",
+      "sha256": "78a7bde072bb6b394b7b19322f9850b923bb6e7bf7c84a00ed8c864ae444d352",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/compliance-system/package.json",
+      "sha256": "f93c4aae6d06e400522981c0052353528a0daee2fbc68344e5e58c492b8b2f97",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/compliance-system/system.ia",
+      "sha256": "46804ff25dd67dd50942e85c822d41f4b7ddfe7248f74415845ad850e8597742",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/governance-system/package.json",
+      "sha256": "ed66c9685d5836bc983fa54448fba347d73296388e1931400e2e0802d9a176b7",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/governance-system/system.ia",
+      "sha256": "5cbf539ad94b4f3e0abd5c7ba63c91f3965af7d126eb995c5ab22b3ce28fba9c",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/hook-authoring-system/package.json",
+      "sha256": "83a2df6a5c9dfd59ae3de2fd79cbcadd13f23b83bf95fbebd4cb2f83d67aa8cf",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/hook-authoring-system/system.ia",
+      "sha256": "b0455bed61bdf8bb9be887e5e3444df914cfe2a2f495580915987ede34baf51c",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/learning-system/package.json",
+      "sha256": "f885854868807dbac81791860004899ceee109555527fe8113360ceb69d452da",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/learning-system/system.ia",
+      "sha256": "7ffe279e22ffbf7ec9c0f1ee2ef8175a572b81dd7e96015b2e1be37fcc73b3ba",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/session-system/package.json",
+      "sha256": "9b6b216bc2bb571ebb6b64e376441be7a8ad2064ff4804d4f231da09655eb47b",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/session-system/system.ia",
+      "sha256": "e258018ed149cc1aa34540aaa808a5a9b2690156f4bc81a637e7a0820be29e07",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/template-system/package.json",
+      "sha256": "9aa0d238235fad13e8d0fef5cd049325f1079223ca6fc1f402f7e7854595c5c6",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/template-system/system.ia",
+      "sha256": "d14912ad57a228cbddf04e988d9e61278ff67d332738861828299398a1e658c4",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/work-system/package.json",
+      "sha256": "48970c940645692417a3e95ea9f31d01e2e0444447c05947297e13d7b130b1ac",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/work-system/system.ia",
+      "sha256": "1d0147eff2f5db316d66fa82a413ecc7940763f0aea822778dfde005f4aec07b",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/workspace-system/package.json",
+      "sha256": "f64eeddf4dc64cf8a3c0c921cabdd6b2937b0fd244882e7a37ca7327f49cc298",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/workspace-system/schemas/distribution.schema.ia",
+      "sha256": "2871fb43951789c54d13cedee6f8176ef1336764eef64d45aad24ab375b75242",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": ".ia/src/systems/workspace-system/system.ia",
+      "sha256": "4268fe8eac81e16b461d64d0020bc686a95dddb9e9b5d861daa8d23a1bdecf27",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "0b99dd7f9a9f9e3047d0b7d0fd735089ae2554207dd4a1d4743cea3a640697b4",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "SPEC.md",
+      "sha256": "9e61a9937ec252a3074e3c1f66e96ef1db61b600456939bd86b9e28c5fff957f",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "apps/cli/SPEC.md",
+      "sha256": "e77a068756291e3489f915c2ade74c65e94204b04b3f4e0d6e91f88ac563047a",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/assets/vocabulary.json",
+      "sha256": "e96bd341bc0837d15bc23b517ac1a27cacafd6888250fb4e9deca4a4cb7e9242",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/package.json",
+      "sha256": "968cc79e085600e9116a1140145685a37d8bcaaefb07fcc8509a7c17ac276359",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/src/commands.ts",
+      "sha256": "573b6566ef1af3c1ea23ab39139e1c3f0fddcf0fcaff53d250e5ef54db537690",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/src/consumer.ts",
+      "sha256": "676fdc59e436b5953f5b93f3eb4b01dc67ebd7d3342900094232e8b46836d706",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/src/host-projection.ts",
+      "sha256": "e2f2bc60965157668f0664a3b2a970b9f12fd81a8fc62aa6491e5376cb0df902",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/src/init.ts",
+      "sha256": "1472ae181d3785838a3f8d7e9b61843cf833cc5ae560202ae5a5db79b4a88262",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/src/plugin-product.ts",
+      "sha256": "599ddb4d81c378ddcd7c5c79bec0215222735f1e9b63059c3f58914e1b6f13e9",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/src/plugin-sources.ts",
+      "sha256": "6e36e748262bcc4390cb902d757fb67952e9e9db35270a7aee72835b5c8c7818",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/src/profile.ts",
+      "sha256": "4f0d143a8ca63955facd0cf87c595d77c895cd61e9881e53302195b68484a245",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/src/project.ts",
+      "sha256": "c502e162cc97798aaae3eddd9cc1b8fc4b20ff32589a6f30abdbdee1c07a7cf0",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/composition-workspace/.ia/release.json",
+      "sha256": "0fcd1560eb93b5500dccbe0a199c4a7f37031235242932c7a61ef2a78d065ea9",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/cli/tests/host-plugin.test.ts",
+      "sha256": "c63815813c5ce776a46849a40de857c360a20e5c0bd1ac46c9ce3b181c3043ee",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/distribution/package.json",
+      "sha256": "5ba767422fc5e4580e145eda7365a37a3c381833ac171b4402abf5b0cd097c5a",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/mcp-door/assets/vocabulary.json",
+      "sha256": "e96bd341bc0837d15bc23b517ac1a27cacafd6888250fb4e9deca4a4cb7e9242",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/mcp-door/package.json",
+      "sha256": "c1e221a1aca0f1652cf1ad3e08073d705181e5a0f5845fd911791b06d1492746",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "apps/runner/package.json",
+      "sha256": "dc97e3955993b98edcd8c5ffa97ddcc250420cf32036ba1d35c6056ef754c973",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/steward-hook/package.json",
+      "sha256": "61d14adae698f996f807bc4b27def19447cfe4112a768b69711c300c6ab1b3a0",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/vscode/THIRD_PARTY_NOTICES.txt",
+      "sha256": "c32ffe59abc54161c6b22b649726ec0c3483fec237e5f8458f0966309aa21428",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "apps/vscode/package.json",
+      "sha256": "2ce3793566a13ee21c59f30c1494936985441a1ba7c10cf74c766a2619692c03",
+      "cohortOnly": true,
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "docs/reference/language/vocabulary.json",
+      "sha256": "e96bd341bc0837d15bc23b517ac1a27cacafd6888250fb4e9deca4a4cb7e9242",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "docs/reference/language/vocabulary.md",
+      "sha256": "57154ef56785be1f830fb9fb5aa6c2f1a90400de22a82a7f8880dc20ef3cd08d",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/conformance/native/systems/agent-composition-system/schemas/agent-profile.schema.ia",
+      "sha256": "9e34d77bcede11a99c302a79d380ca3518e7389463795257889f5c0dcba394a1",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/conformance/native/systems/agent-composition-system/schemas/capability.schema.ia",
+      "sha256": "fd9b0a97ac33c7086c5af8540b08f75fa5f5170c7d2149b3b6722cb0a1fc541f",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/conformance/native/systems/workspace-system/schemas/distribution.schema.ia",
+      "sha256": "2871fb43951789c54d13cedee6f8176ef1336764eef64d45aad24ab375b75242",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/agent-composition-system.ia",
+      "sha256": "9e2b5e5b4d21e2c92ac3413c292c368b4d5a62a963ea120b77c7a2c7b9684a78",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/agent-system.ia",
+      "sha256": "beb188e9d50b6b75b782f279ed36bee353c5107c67f80482867ef84404be754b",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/authoring-system.ia",
+      "sha256": "78a7bde072bb6b394b7b19322f9850b923bb6e7bf7c84a00ed8c864ae444d352",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/compliance-system.ia",
+      "sha256": "46804ff25dd67dd50942e85c822d41f4b7ddfe7248f74415845ad850e8597742",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/governance-system.ia",
+      "sha256": "5cbf539ad94b4f3e0abd5c7ba63c91f3965af7d126eb995c5ab22b3ce28fba9c",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/hook-authoring-system.ia",
+      "sha256": "b0455bed61bdf8bb9be887e5e3444df914cfe2a2f495580915987ede34baf51c",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/learning-system.ia",
+      "sha256": "7ffe279e22ffbf7ec9c0f1ee2ef8175a572b81dd7e96015b2e1be37fcc73b3ba",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/session-system.ia",
+      "sha256": "e258018ed149cc1aa34540aaa808a5a9b2690156f4bc81a637e7a0820be29e07",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/template-system.ia",
+      "sha256": "d14912ad57a228cbddf04e988d9e61278ff67d332738861828299398a1e658c4",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/work-system.ia",
+      "sha256": "1d0147eff2f5db316d66fa82a413ecc7940763f0aea822778dfde005f4aec07b",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/contracts/workspace-system.ia",
+      "sha256": "4268fe8eac81e16b461d64d0020bc686a95dddb9e9b5d861daa8d23a1bdecf27",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "examples/public-language/versions.json",
+      "sha256": "9ca4d7fed459aa51ba8f6f6b181c1aa288ede3f09e07cc495064b1d71b971b9a",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/README.md",
+      "sha256": "a535644ae3a75d0e0cb02ac4057f432140f05d53aaa7ac88e0c2bcdb04f58e39",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/SPEC.md",
+      "sha256": "5ae599cca0e4a3a7559f44f473d2b869a9bed1f890e85cd77045165c402ce2b0",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/fixtures/loop/.ia/src/systems/workspace-system/schemas/distribution.schema.ia",
+      "sha256": "2871fb43951789c54d13cedee6f8176ef1336764eef64d45aad24ab375b75242",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/fixtures/refusals.ts",
+      "sha256": "e44f24af91ef283b4702f0e5d8e0940d46bf73f807fe94508c61eb021f4c8b72",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/package.json",
+      "sha256": "485d3ce69e62cf1d9b835d3007e354200d1cdd5fd1eed36d34e0b6644c24052d",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/bind.ts",
+      "sha256": "9e4fc1dce2f2aeec0e2e3e763a77ffdd0f36d5395309e1f3ed72ae69470bf383",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/corpus.ts",
+      "sha256": "e8734b2bb751e1b6891ae861adcaff149a5195eeff4f7c18a5425f68300ffa4b",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/evidence-fixtures.ts",
+      "sha256": "04de47cd21529b240cd7b3bd2304befd4ff8b6dc9d22ae5171f86f565445f56a",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/evidence.ts",
+      "sha256": "5a2f4e5366c970e146f26a0b5bffcbe948ca96ce1c56f7ccdf5ad8fde1b93785",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/inventory.generated.ts",
+      "sha256": "d4425751bb0cb4b8db9e6e6a5438eddba858920a3c75a93cf5947796f8f7c831",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/inventory.ts",
+      "sha256": "a423b5e277bb7814a68d09261cc009c0130da36f25b47b24c72f55413da1502d",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/refusals.ts",
+      "sha256": "799d4d40d7e83c983d1c577fe97f0e92d45c3176854327d6f60bc1fa80d71600",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/verify-kernel.ts",
+      "sha256": "481ce85eff7bd9405537e8221d2de69be49178fd5be321f12818a25836d155ec",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/conformance/verify.ts",
+      "sha256": "9346af4fc7ba20ced8367f7fe572f03014f8fe9463b61ed906f4575d03087d0b",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/index.ts",
+      "sha256": "9f1321e3f75096fd6787b19d69446059ccc689d3d562103ce322e87c14c4902a",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/kernel.ts",
+      "sha256": "be9fd2f6bc18c98713fd0b230e70fcf76602a9bf5639aba8907428509862d534",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/report.ts",
+      "sha256": "27e6c6c6998388460e423049a7545aea0b5af72cdfb16aa29ff9a06eb3690325",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/src/types.ts",
+      "sha256": "2a8bdeae623dcdca49363e33a37c7ce3ebd46f0fe1dd7e3b7bb57c6c6640ff03",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/compliance/tests/report.test.ts",
+      "sha256": "16f37f64cb7270486d776059b8d24e3536c25cb774723919a9c363f86c41a115",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/db/package.json",
+      "sha256": "35a4689de477e4b18fe5cdd2655c69cc46c80a546cdc314a00eb07ace234a24c",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/graph/package.json",
+      "sha256": "461d73860606a95a18b6fe01f0b455f068d1ed8a575b4a25a349b98f28dbe55b",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/language/package.json",
+      "sha256": "53b1f0c7c0ac9972d05051590f7369477b785a771ea47a8ade472728fbe1d927",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/runtime/package.json",
+      "sha256": "61b5a60cd34d1e671184a6e7741cd96760ab5cec8947b693ac90b1c84121e5d4",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/service-contracts/package.json",
+      "sha256": "5f84b66121dfc5dca4281dc3b759197c8bc29dc2cb53b19f54101090e9eceb17",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/workspace-runtime/README.md",
+      "sha256": "e854062005d0c64f7dcd9c4687b31719811f871cb04910be123a5a77c1822521",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/SPEC.md",
+      "sha256": "ae6b7bb99be84cf47533d3dabc5ac84baf62e95debebfa789e7cc191be74c998",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/package.json",
+      "sha256": "beda505c72a6b0d46f956a7514e10aa7fa4fedb9a6491109064e11a2b27016a0",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/generate/index.ts",
+      "sha256": "05118b158f9f936da1d0a3ab0512ea71828d70b572a30de1a6ff27cbe7e2a9c7",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/generate/plugin.ts",
+      "sha256": "8241e859e2cc8880e32a1b0579db1a1ab40a2d22fc99446471c345195d2b5c44",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/host-plugin/compare.ts",
+      "sha256": "a0c4f14f81b08c8f0a6b30704f5f993b377b4e59fe0c4a93dad3dcea4fa2efd0",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/host-plugin/errors.ts",
+      "sha256": "dd9a4f867bb9350a5590ad323a81ad5e8af09bd0062e962accb0fc58864c5c45",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/host-plugin/frontmatter.ts",
+      "sha256": "243c378b41aa3c1abb3706384dc09f03b1f20ecb145651035aa0541ee463f602",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/host-plugin/index.ts",
+      "sha256": "f34524ac873a4a5bb0618a85fe06722d854b48471ab3eed33a1a10a32f90446f",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/host-plugin/inventory.ts",
+      "sha256": "2e30b63b9e0eb192b38b5f53006ad13c1927554ed0b4d8cf7ac312e338b9ae1f",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/host-plugin/json.ts",
+      "sha256": "09a425035d911476a07f0b014bc5f96ea545dfb31311295ab221543b462a90c4",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/host-plugin/lower.ts",
+      "sha256": "f843aa3b88c5bdababfcf2cd7192df0017c3d699819e7161fb9679f7b73dd476",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/host-plugin/manifest.ts",
+      "sha256": "01604001c8d08459f693b55de4235371e141fa864664f612dd7f094142a2cc11",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/src/projection-host.ts",
+      "sha256": "971c7aa21929b43c53d4cadc8ebf9a7d98d7c42e4353ac1b5c50a88bb4cc70d1",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/tests/generate-agent-profile.test.ts",
+      "sha256": "d7b92e2d4272e0b1dc16b2828025ff6f6d371aca25fbe819e74f3321638225c8",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/tests/generate-plugin.test.ts",
+      "sha256": "dfd42cc7d9f0157871f99a877565847e94aebc67e36decfb21a705b62b8ccf71",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/tests/host-plugin.test.ts",
+      "sha256": "aac0e8053cf6cec60957635847b5a43608350493b6fce2a66b0eb4380e12d899",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "packages/workspace-runtime/tests/projections.test.ts",
+      "sha256": "0c6f346fb160dfb5fdbd5973d05bcdea8512f20bbe14befde511b9dca435bf7f",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "releases/current.json",
+      "sha256": "9bd2473da30426e16f6b7de0cdb53285134395e52791801201f1de720c5cc52f",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/native/current.json",
+      "sha256": "60f63980f3c345f833b129b48ace77a5849ad31527c448b1da5215bce6cdbda0",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/native/notes.json",
+      "sha256": "b90a18ea2f0e16a6599eb94c1161641859c73f866fc4fa3e86406b16ffb631d6",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "tools/compliance/SPEC.md",
+      "sha256": "433f809a7fa96b1917fb84a303462f974c65e22d2c7afba085e85baeb559dc4c",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/compliance/check.test.ts",
+      "sha256": "be7af303d11499d990a9ea3f02b4ec29b3f435af94a98af525091626f37609a7",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/compliance/check.ts",
+      "sha256": "cf946353961c3d35f850c4d3837a3220f1659401ec9196ccf3a72ccf042cb626",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/compliance/evidence-fixtures.ts",
+      "sha256": "f371b91883e4157f526972f23a47f2ee94149354eb5714285971e38762b44e15",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/compliance/inventory.ts",
+      "sha256": "7086a6f7cb8dda192f3cc65ace9fc6ebbe016f732b02a5f40d3ae98a4ecd6c2c",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/distribution/NPM-PUBLISHING.md",
+      "sha256": "a59238656270f3f18aa928c77324cf01d8d66044f2b90c5c7b3f9c28f313c88d",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/distribution/system-package-policy.json",
+      "sha256": "fdc9e590521083c1e9bac543e8203554f318c6c98ce44088114f0e82e2f73bd6",
+      "cohortOnly": true,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/kernel/closed-contract.json",
+      "sha256": null,
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/kernel/generate.ts",
+      "sha256": "493f479cf56693c275a5832bde0fd99f94ccffd85aa0b3f453e8dd4b72d63682",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/.claude-plugin/plugin.json",
+      "sha256": "caac080d3c0f701ddcd4e40aad62f97e81e42abb6472c970fa882307eaea7d50",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/.codex-plugin/plugin.json",
+      "sha256": "c59194fce0dad82b8bc295fa0cadc4fc20b5610db625fd81a3856c22a6fa9b02",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/.grok-plugin/plugin.json",
+      "sha256": "caac080d3c0f701ddcd4e40aad62f97e81e42abb6472c970fa882307eaea7d50",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/CODEX.md",
+      "sha256": "2896db28fdb0fc49288867e73e63be0c2356f4e21151e0e75c67d0f0d7d9c703",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/LICENSE",
+      "sha256": "143dd2247eef29aa16c8d8e862c3f08971d1ba44e9a2cd20ebecdb1f0963028f",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/README.md",
+      "sha256": "2f81ef3c6102745180340a5e5ab71833e886379b526acb8f1ddc10eb4c7a19a3",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/agents/sample-reader.md",
+      "sha256": "bf731c1602d4473275e7e5c74cf41231d60d387f45749a5cc4ac22cd7d1dd26b",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/skills/sample-guide/SKILL.md",
+      "sha256": "be5924d90c482ab0d1a4e8888af73b2cdae5ec712a97798a4c2031523befec0a",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/skills/sample-guide/assets/templates/card.md",
+      "sha256": "3c6e9edf0f1b53a3479302d7b99959d0156b9070e41f288fefa96ae3cecae267",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/skills/sample-guide/references/guide.md",
+      "sha256": "856729ff8528cf378cdc32d88d441512831d4d64de4ac99faeb3ce543743eb99",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/skills/sample-run/SKILL.md",
+      "sha256": "9536de2dd5a7d19321e676aa302effeb91f54183b668d219cf41d19222ffd65b",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/projections/fixtures/host-plugin/sample/tests/sample.check.mjs",
+      "sha256": "a4118f86dceeb85e0ecec434544d134b0650119f4e09a837ad2d9b3831e2a4b5",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/release/SPEC.md",
+      "sha256": "08965a7433b8dab364c55ab69eae4a11ccf8675fad11c54455ced29e0523c9c1",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/testing/inventory.test.ts",
+      "sha256": "2f79b71e95e9bda5e8bacc5ea933aa7ea4d11217d2639c4e86f231169db818f0",
+      "change": "lower-and-project-host-plugins"
+    },
+    {
+      "path": "tools/testing/tasks.json",
+      "sha256": "69d79228d2969be3bcf882b900e50e8ea36c3da8ecae319f7b7ba883f4f9f6dd",
+      "change": "lower-and-project-host-plugins"
+    }
+  ]
+}

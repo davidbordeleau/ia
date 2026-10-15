@@ -197,7 +197,7 @@ function saved(content: string | null, root: string, id: string): State | null {
     )
       fail('INPUT-INVALID', 'Invalid owned hook timeout');
     // The recorded Node is kept as written, as the guard's is, so a registration made under another Node (or before the Homebrew
-    // `opt` link was recorded) is still owned and re-applying rewrites it; it must still be an absolute path (#323).
+    // `opt` link was recorded) is still owned and re-applying rewrites it; it must still be an absolute path (crowncodes/ia#323).
     const command = handler['command'];
     if (
       typeof command !== 'string' ||

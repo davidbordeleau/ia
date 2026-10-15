@@ -63,7 +63,7 @@ function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 /**
- * Rules key names with db `pathKey`: case on win32; normalization and full case folding on darwin (#315, #323). It folds
+ * Rules key names with db `pathKey`: case on win32; normalization and full case folding on darwin (crowncodes/ia#315, crowncodes/ia#323). It folds
  * by platform, whatever the volume, so on a case-sensitive directory there a sibling spelled in another case matches too.
  */
 const fold = pathKey;

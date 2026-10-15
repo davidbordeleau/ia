@@ -160,7 +160,7 @@ it('plans, applies and removes exact context groups while preserving steward gua
   expect(readFileSync(join(root, '.claude/settings.json'), 'utf8')).toBe(project);
   expect(readFileSync(join(root, '.ia/retained/data.json'), 'utf8')).toBe('retained data');
 });
-it('keeps owning context groups recorded under another Node, and records a Homebrew keg by its stable link (#323)', () => {
+it('keeps owning context groups recorded under another Node, and records a Homebrew keg by its stable link (crowncodes/ia#323)', () => {
   const root = temp(),
     input = request(root),
     statePath = '.ia/distributions/hosts/claude-context-fixture.json';

@@ -1521,7 +1521,7 @@ it('refuses before any write when the bundled bytes do not match the pin', async
   ).toMatchObject({ code: 'IA-CLI-FAILED', exit: 3 });
   expect(readdirSync(root)).toEqual([]);
 });
-it('reads the macOS git stub that asks for the Command Line Tools as git being unavailable (#323)', () => {
+it('reads the macOS git stub that asks for the Command Line Tools as git being unavailable (crowncodes/ia#323)', () => {
   const stub = (stderr: string) => gitAnswer({ status: 1, stdout: '', stderr });
   expect(
     stub(

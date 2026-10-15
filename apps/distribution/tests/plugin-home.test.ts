@@ -99,7 +99,7 @@ it('refuses an absolute path, posix- or windows-shaped, before writing anything'
   expect(existsSync(home)).toBe(false);
 });
 // The set must install on every platform, and macOS and Windows volumes fold case, so case-distinct paths are one path
-// everywhere (#315): on macOS the second write used to collide with a raw EEXIST after the first had been written.
+// everywhere (crowncodes/ia#315): on macOS the second write used to collide with a raw EEXIST after the first had been written.
 it('refuses duplicate paths, case-insensitively on every platform, before writing anything', () => {
   const home = join(temp(), '.ia');
   const dupes = [
@@ -113,7 +113,7 @@ it('refuses duplicate paths, case-insensitively on every platform, before writin
       { path: 'same.txt', text: 'y' },
     ]),
   ).toThrow(expect.objectContaining({ code: 'IA-DIST-PATH-UNSAFE' }));
-  // APFS also folds full Unicode case, so these are one path on a Mac too (#323).
+  // APFS also folds full Unicode case, so these are one path on a Mac too (crowncodes/ia#323).
   for (const other of ['plugins/ia/cla\u00df.txt', 'plugins/ia/\ufb01le.txt', 'plugins/ia/\u017f.txt']) {
     const first = other.replace('cla\u00df', 'class').replace('\ufb01le', 'file').replace('\u017f', 's');
     expect(() =>

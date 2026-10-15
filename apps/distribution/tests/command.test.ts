@@ -32,7 +32,7 @@ beforeAll(() => {
   const capture = captureWorkspace(root),
     inventory = resourceOccurrences(capture),
     owner = inventory.occurrences.find((o) => o.identity.endsWith('/fictional-reviewer'))!;
-  // #444: an agent export needs its agent profile, whose capability effects bound the host tools.
+  // crowncodes/ia#444: an agent export needs its agent profile, whose capability effects bound the host tools.
   const profile = inventory.occurrences.find((o) => o.identity.endsWith('/fictional-review-profile'))!;
   const resources = captureResources(capture, { roots: [], files: [], associations: [] });
   writeFileSync(join(root, 'resources.json'), JSON.stringify(resources));

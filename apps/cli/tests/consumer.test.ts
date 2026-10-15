@@ -401,11 +401,11 @@ it('never discovers the IA home as a workspace root', () => {
   mkdirSync(resolve(base, 'project'));
   expect(discoverRoot(resolve(base, 'project'))).toBe(base);
   expect(discoverRoot(resolve(base, 'project'), resolve(base, '.ia'))).toBeUndefined();
-  // The home is recognized on disk, however IA_HOME spells it: APFS and NTFS open `.IA` as `.ia` (#315).
+  // The home is recognized on disk, however IA_HOME spells it: APFS and NTFS open `.IA` as `.ia` (crowncodes/ia#315).
   expect(discoverRoot(resolve(base, 'project'), resolve(base, '.IA'))).toBe(
     existsSync(resolve(base, '.IA')) ? undefined : base,
   );
-  // An IA_HOME that cannot be examined, here a link loop, is compared by spelling and never fails discovery (#323).
+  // An IA_HOME that cannot be examined, here a link loop, is compared by spelling and never fails discovery (crowncodes/ia#323).
   if (process.platform !== 'win32') {
     const loop = resolve(base, 'loop');
     symlinkSync(loop, loop);

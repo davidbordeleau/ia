@@ -4,7 +4,7 @@ import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } fr
 /**
  * Path identity on volumes that fold case or Unicode normalization, as APFS and NTFS do by default: two spellings of one
  * entry are one path, and only a link or junction makes a path an alias. Strings are compared only where nothing exists yet
- * to compare (`pathKey`). Issue #315.
+ * to compare (`pathKey`). Issue crowncodes/ia#315.
  */
 
 /** Some existing component of `path` is a symbolic link or junction. A component that does not exist yet is not one. */
@@ -104,7 +104,7 @@ export function pathKey(path: string): string {
 
 /**
  * A name as APFS compares names: canonical normalization and full Unicode case folding, so `ß` and `ss`, `ſ` and `s`, and `ﬁ`
- * and `fi` are one name as well as `A` and `a` (#323). The dotless `ı` stays out of the round trip, since upper-casing it gives
+ * and `fi` are one name as well as `A` and `a` (crowncodes/ia#323). The dotless `ı` stays out of the round trip, since upper-casing it gives
  * `I` and APFS keeps it apart from `i`. Checked against APFS on macOS 26: for every code point up to U+1FFFF with a case or
  * normalization mapping, two spellings get the same key exactly when APFS opens them as the same name.
  */

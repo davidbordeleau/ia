@@ -1,4 +1,4 @@
-// PT9 (#274) helpers for the synthetic fixture's host feature matrix. Node built-ins only.
+// PT9 (crowncodes/ia#274) helpers for the synthetic fixture's host feature matrix. Node built-ins only.
 // featureRows builds an ia.host-feature-matrix.v1 value from per-host observations; requestCarries decides
 // from one captured model request whether the host supplied a projected feature; resourcesResolve checks an
 // installed (relocated) product's resource references. None of them runs a host or a model.

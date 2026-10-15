@@ -58,7 +58,7 @@ function safe(root: string, path: string): string {
     rel = relative(base, target);
   if (isAbsolute(rel) || rel === '..' || rel.startsWith('..' + sep))
     throw new Error(`Projection path escapes root: ${path}; ${SHOW_RENDERER} that emitted it`);
-  // Another case or normalization of the same names is not an alias (#315); a link anywhere in the root still is.
+  // Another case or normalization of the same names is not an alias (crowncodes/ia#315); a link anywhere in the root still is.
   if (!unaliased(base, realpathSync.native(base)))
     throw new Error(
       `Projection root is aliased; open the repository at ${realpathSync.native(base)}, then ${GENERATE}`,

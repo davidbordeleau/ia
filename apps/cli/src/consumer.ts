@@ -408,7 +408,7 @@ export function renderCommandHelp(command: CommandSpec, caps: Capabilities): str
 export function discoverRoot(start: string, iaHome?: string): string | undefined {
   let current = resolve(start);
   for (;;) {
-    // The IA home by device and inode, so a home spelled in another case or normalization is still recognized (#315).
+    // The IA home by device and inode, so a home spelled in another case or normalization is still recognized (crowncodes/ia#315).
     if (existsSync(resolve(current, '.ia/src')) && (iaHome === undefined || !sameFile(resolve(current, '.ia'), iaHome)))
       return current;
     const parent = dirname(current);
@@ -486,7 +486,7 @@ export function requireRoot(context: Context): string {
       );
     // The root the user chose opens at its real path, as `ia host` resolves it, so a root reached through links (macOS
     // /tmp, a linked checkout) works; every path below it is still checked link by link. The JS `realpathSync`, not
-    // `.native`: it keeps each name's case as typed, which the steward guard now folds (`unaliased`, #315). An 8.3
+    // `.native`: it keeps each name's case as typed, which the steward guard now folds (`unaliased`, crowncodes/ia#315). An 8.3
     // short name or a subst drive that the JS form keeps is still an alias to the guard.
     return realpathSync(path);
   }

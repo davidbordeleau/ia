@@ -456,7 +456,7 @@ it('gates every planned platform on its runner, from the plan rather than rows w
 });
 
 it('runs the Homebrew smoke on the pinned macOS label the lanes and the gate use, so a bump moves every macOS job', () => {
-  // The macOS label names a versioned arm64 image and is bumped deliberately, never followed through macos-latest (#323).
+  // The macOS label names a versioned arm64 image and is bumped deliberately, never followed through macos-latest (crowncodes/ia#323).
   // The lanes and the gate row take it from RUNNERS; the smoke job spells it itself, in its runner and its check name.
   expect(RUNNERS.macos).toMatch(/^macos-\d+$/);
   const smoke = workflowJobs(workflow()).get('homebrew-node');
@@ -581,7 +581,7 @@ it("plans each platform with the workflow's shard counts through the command lin
 it('writes every matrix line before it exits, however slowly the Plan job reads them', async () => {
   // A child's piped stdout is a socket off Windows, which Node writes asynchronously: what the socket cannot take yet is
   // queued in the process, and process.exit() drops it. macOS gives such a socket an 8 KiB buffer, so a planner that
-  // exits that way can lose matrix lines whenever its reader falls behind (#323). Here the reader takes nothing until the
+  // exits that way can lose matrix lines whenever its reader falls behind (crowncodes/ia#323). Here the reader takes nothing until the
   // planner has output queued, behind a socket a preload filled first; Windows writes pipes synchronously, so there
   // nothing is queued and the reader starts when the planner exits.
   const directory = mkdtempSync(resolve(tmpdir(), 'ia-plan-')),

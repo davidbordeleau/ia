@@ -1,6 +1,6 @@
 {
   "format": "ia-markdown-conformance/1",
-  "source": "2026-10-01 PR #438 audit; unique authored syntax/container/indentation combinations. Expectations frozen before the implementation change using mdast 2.0.3 + GFM 3.0.0/3.1.0, with representative GitHub render checks. Specification-derived inputs are excluded.",
+  "source": "2026-10-01 PR crowncodes/ia#438 audit; unique authored syntax/container/indentation combinations. Expectations frozen before the implementation change using mdast 2.0.3 + GFM 3.0.0/3.1.0, with representative GitHub render checks. Specification-derived inputs are excluded.",
   "target": "missing.md",
   "cases": [
     {"name":"syntax-containers/inline/plain","markdown":"[audit](missing.md)","check":true,"catalog":true},

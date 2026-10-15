@@ -764,11 +764,11 @@ describe('the selected Claude Code version (HOST-04)', () => {
   });
 });
 
-// #447 review (findings 3 and 6). 2.1.300 stands for any Claude Code row added from here: it is not installed, so the
+// crowncodes/ia#447 review (findings 3 and 6). 2.1.300 stands for any Claude Code row added from here: it is not installed, so the
 // cases build it through the internal profileFromRows seam over the installed table plus that one row.
 const withRow = (fields: readonly string[]): ReadonlyMap<string, readonly string[]> =>
   new Map<string, readonly string[]>([...claudeCodeRows, ['2.1.300', fields]]);
-describe('profile row field tables and segmented digests (#447 review)', () => {
+describe('profile row field tables and segmented digests (crowncodes/ia#447 review)', () => {
   /** Other profiles, a row that is not installed, altered digest strings and non-strings. */
   const unsegmented: unknown[] = [
     lifecycleProfile('ia-native', '1').digest,

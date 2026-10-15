@@ -148,9 +148,9 @@ it('passes the fake only the variables this invocation was given', async () => {
   }
   expect(calls(log)).toEqual(registration(env.IA_HOME));
 });
-// #436: ia looks claude up itself, on qualified PATH entries only, and runs what it found by absolute path from the home
+// crowncodes/ia#436: ia looks claude up itself, on qualified PATH entries only, and runs what it found by absolute path from the home
 // directory with only those entries in PATH; Windows rules run here on every platform with an in-memory file system.
-it('runs claude on Windows by absolute path: a claude.exe without a shell, else a claude.cmd through cmd.exe (#436)', () => {
+it('runs claude on Windows by absolute path: a claude.exe without a shell, else a claude.cmd through cmd.exe (crowncodes/ia#436)', () => {
   const seen: { command: string; args: readonly string[]; options: Readonly<Record<string, unknown>> }[] = [];
   const result = (status: number | null) =>
     ({ pid: 0, output: [], stdout: '', stderr: '', status, signal: null }) as SpawnSyncReturns<string>;
@@ -228,7 +228,7 @@ it('runs claude on Windows by absolute path: a claude.exe without a shell, else 
   ).toBe(false);
   expect(seen).toEqual([]);
 });
-it('runs claude on POSIX by the absolute path found on a qualified PATH entry, from the home directory (#436)', () => {
+it('runs claude on POSIX by the absolute path found on a qualified PATH entry, from the home directory (crowncodes/ia#436)', () => {
   const seen: { command: string; args: readonly string[]; options: Readonly<Record<string, unknown>> }[] = [];
   const record = (command: string, args: readonly string[], options: Readonly<Record<string, unknown>>) =>
     (seen.push({ command, args, options }),

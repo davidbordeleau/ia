@@ -2852,7 +2852,7 @@ async function migrate(context: Context, root: string): Promise<Result> {
 /**
  * A finished git run's answer, or null when git is not really there: it could not start, or it is the macOS stub
  * `/usr/bin/git`, which only asks for the Xcode Command Line Tools and fails; reading that as "not a Git checkout" would
- * send the user after the wrong fix (#323).
+ * send the user after the wrong fix (crowncodes/ia#323).
  */
 export function gitAnswer(result: {
   readonly error?: Error | undefined;

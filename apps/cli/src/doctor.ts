@@ -49,7 +49,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-// `within` judges nesting on disk, so a home or cache spelled in another case or normalization is still where it is (#315).
+// `within` judges nesting on disk, so a home or cache spelled in another case or normalization is still where it is (crowncodes/ia#315).
 import { pathKey, within } from '@inventarch/db';
 import { decodeDistributionJson, INSTALL_PATHS } from '@inventarch/db/distribution';
 import type { DistributionLock } from '@inventarch/db/distribution';

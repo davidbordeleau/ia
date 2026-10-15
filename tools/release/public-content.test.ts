@@ -101,6 +101,9 @@ const PLANNING_IDS: readonly RegExp[] = [
   /\bOD\d\b/g,
   /\bIM-\d+\b/g,
   /\bM\d\.\d\b/g,
+  // Issues and pull requests of the predecessor repository, which this one's numbering has not reached: written bare,
+  // they would resolve to unrelated items here, so each is cited as crowncodes/ia#N.
+  /(?<![\w/.-])#(?:274|315|317|323|398|436|438|443|444|445|447|474|479|491|524)\b/g,
 ];
 /** Published release history is immutable: a consumed changeset and the changelog generated from it keep their bytes. */
 const IMMUTABLE = (path: string): boolean => path === 'CHANGELOG.md' || path.startsWith('releases/changesets/');
@@ -175,13 +178,15 @@ it('finds planning ids by line and leaves public clause ids, sections and number
       ['O', 'D4'],
       ['IM', '-43'],
       ['M5', '.1'],
+      ['#', '315'],
     ].map((parts) => parts.join('')),
     files = new Map([
       ['a.md', `intro\nsee ${ids.join(', ')} and §2.3\n`],
       [
         'b.md',
         'runtime R19, db D08b and PT5, compliance C31, graph G06c, W02, B11, #43, e83a5dd, IA-PT9-ROW-MISSING,\n' +
-          'COMP-FIELD, host plugin distribution spec §6.1, the registry spec §5.1, @milestone M1, milestone 1, A-1\n',
+          'COMP-FIELD, host plugin distribution spec §6.1, the registry spec §5.1, @milestone M1, milestone 1, A-1,\n' +
+          'crowncodes/ia#315, #000, #123456\n',
       ],
     ]);
   expect(planningIds(files)).toEqual(ids.map((id) => `a.md:2 ${id}`));

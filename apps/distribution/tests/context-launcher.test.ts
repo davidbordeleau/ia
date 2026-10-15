@@ -180,7 +180,7 @@ it('refuses a --root that lies inside the cache, not only one that equals it', a
   });
 });
 it('refuses a --root inside the cache spelled in another case wherever the volume opens it as the cache', async () => {
-  // APFS and NTFS fold case, so there the upper-case spelling is the cache itself (#315); elsewhere it is another path.
+  // APFS and NTFS fold case, so there the upper-case spelling is the cache itself (crowncodes/ia#315); elsewhere it is another path.
   const selected = doorCache(),
     other = join(dirname(selected.root), basename(selected.root).toUpperCase(), 'runtime');
   const result = await selected.launch(['door', 'records', '--root', other]);
@@ -222,7 +222,7 @@ it('prints native and host identity keys from verify, real for v1 and null for a
   expect(v2.status, v2.stderr).toBe(0);
   expect(JSON.parse(v2.stdout)).toMatchObject({ status: 'verified', native: null, host: null });
 });
-it('skips the unpinned Finder and AppleDouble files a Mac writes into the cache, and still refuses any other extra file (#323)', async () => {
+it('skips the unpinned Finder and AppleDouble files a Mac writes into the cache, and still refuses any other extra file (crowncodes/ia#323)', async () => {
   const selected = cache();
   for (const path of [
     '.DS_Store',
@@ -241,7 +241,7 @@ it('skips the unpinned Finder and AppleDouble files a Mac writes into the cache,
     message: 'Plugin cache payload differs: runtime/notes.txt',
   });
 });
-it('verifies a pinned file named like a Mac file, and refuses it once it changes (#323)', async () => {
+it('verifies a pinned file named like a Mac file, and refuses it once it changes (crowncodes/ia#323)', async () => {
   const selected = cache({ pinned: { '._pinned': 'pinned\n' } }),
     verified = await selected.launch(['verify']);
   expect(verified.status, verified.stderr).toBe(0);
@@ -250,7 +250,7 @@ it('verifies a pinned file named like a Mac file, and refuses it once it changes
   expect(refused.status).toBe(1);
   expect(JSON.parse(refused.stderr)).toEqual({ status: 'refused', message: 'Plugin cache payload differs: ._pinned' });
 });
-it("skips exactly the names @inventarch/db's platformDebris skips, since it runs without that package (#323)", async () => {
+it("skips exactly the names @inventarch/db's platformDebris skips, since it runs without that package (crowncodes/ia#323)", async () => {
   for (const name of ['.DS_Store', '._x', '._', '.DS_Store.bak', 'x._y', '.ds_store', '.npmrc', '.hidden.mjs']) {
     const selected = cache();
     writeFileSync(join(selected.root, 'runtime', name), 'written by the platform');

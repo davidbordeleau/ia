@@ -525,7 +525,7 @@ it('collects only verified orphan archives and preserves every retained generati
   expect(readFileSync(join(root, 'keep.txt'), 'utf8')).toBe('keep');
   expect(collectInstallationGarbage(root, true).archives).toEqual([]);
 });
-it('reads and collects an installation a Mac wrote Finder and AppleDouble files into, and still refuses any other extra file (#323)', () => {
+it('reads and collects an installation a Mac wrote Finder and AppleDouble files into, and still refuses any other extra file (crowncodes/ia#323)', () => {
   const root = install(),
     clean = readInputs(root).fingerprint,
     store = `.ia/distributions/store/${packed.archiveDigest}`,
@@ -558,7 +558,7 @@ it('reads and collects an installation a Mac wrote Finder and AppleDouble files 
   put(cached, '.ia/distributions/cache/notes.txt', 'mine');
   expect(() => collectInstallationGarbage(cached)).toThrow(/Unrecognized cache entry/);
 });
-it('still refuses another dotfile, and a directory or link named like a Mac file (#323)', () => {
+it('still refuses another dotfile, and a directory or link named like a Mac file (crowncodes/ia#323)', () => {
   const store = `.ia/distributions/store/${packed.archiveDigest}`,
     generation = `.ia/distributions/generations/${pointer.generation}`;
   const dotfile = install();
@@ -576,7 +576,7 @@ it('still refuses another dotfile, and a directory or link named like a Mac file
   symlinkSync(join(linked, '.ia/distributions.lock.json'), join(linked, '.ia/distributions/cache/.DS_Store'));
   expect(() => collectInstallationGarbage(linked)).toThrow(/Unrecognized cache entry/);
 });
-it('verifies a pinned installed file named like a Mac file, and refuses it once it changes (#323)', () => {
+it('verifies a pinned installed file named like a Mac file, and refuses it once it changes (crowncodes/ia#323)', () => {
   const path = '.ia/src/systems/governance-system/records/._pinned.ia',
     text = readFileSync(
       join(repository, 'examples/conformance/native/systems/governance-system/records/sample-convention.ia'),
@@ -593,7 +593,7 @@ it('verifies a pinned installed file named like a Mac file, and refuses it once 
   );
   expect(() => open(root, { cache: false })).toThrow(/Installed content differs: .*\._pinned\.ia/);
 }, 30000);
-it('removes an orphan store directory together with the Finder and AppleDouble files in it, and refuses one holding another file (#323)', () => {
+it('removes an orphan store directory together with the Finder and AppleDouble files in it, and refuses one holding another file (crowncodes/ia#323)', () => {
   const orphaned = (extra: readonly string[]): { root: string; directory: string; archive: string } => {
     const root = fresh();
     applyInstallation(planInstallation(root, selected.lock, 'install'));

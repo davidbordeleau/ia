@@ -362,7 +362,7 @@ export function userRows(input: {
           ),
     );
   }
-  // The same directory on disk, however either path is spelled (#315).
+  // The same directory on disk, however either path is spelled (crowncodes/ia#315).
   const frameworkSource = channel.kind === 'checkout' && input.root !== undefined && sameFile(input.root, channel.root);
   const updates = disabled || cached === null ? null : { latest: newer, behind };
   return { checks, facts: { channel, home, plugin, decision, frameworkSource, updates, refresh } };

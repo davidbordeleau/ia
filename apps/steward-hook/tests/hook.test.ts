@@ -122,16 +122,16 @@ it('refuses lexical and physical aliases into protected paths, including missing
 });
 it('normalizes dot segments, and case wherever the volume folds it, before ownership matching', async () => {
   let path = resolve(fixture, '.ia/src/systems/governance-system/records/../records/new.ia');
-  // APFS and NTFS open the upper-case spelling as the same path (#315); elsewhere it would be another, absent path.
+  // APFS and NTFS open the upper-case spelling as the same path (crowncodes/ia#315); elsewhere it would be another, absent path.
   if (existsSync(path.toUpperCase())) path = path.toUpperCase();
   expect(await run(event(path, { agent_type: 'governance-steward' }))).toEqual({});
 });
-it('runs a hook registered with another spelling of the root, and still protects what that root protects (#315)', async () => {
+it('runs a hook registered with another spelling of the root, and still protects what that root protects (crowncodes/ia#315)', async () => {
   // A root typed in another case used to register and then refuse every edit as an aliased root on macOS. Where the volume
   // keeps the spellings apart, that root is simply absent.
   const ordinary = resolve(fixture, 'docs/ordinary.md'),
     owned = '.ia/src/systems/governance-system/records/new.ia';
-  // Another case, and on APFS another Unicode case: `\u017f` for the last `s` (#323).
+  // Another case, and on APFS another Unicode case: `\u017f` for the last `s` (crowncodes/ia#323).
   for (const spelled of [fixture.toUpperCase(), fixture.replace(/s([^s]*)$/, '\u017f$1')]) {
     if (!existsSync(spelled)) {
       expect(await code(event(ordinary), spelled)).toBe('IA-HOOK-PATH-UNSAFE');
@@ -177,7 +177,7 @@ it('places a path spelled through the loopback admin share by identity, and prot
   );
   expect(await run(event(share(resolve(outside, 'new.ia'))), aliased)).toEqual({});
 });
-it('protects a managed folder that does not exist yet when the path spells it in another case (#315)', async () => {
+it('protects a managed folder that does not exist yet when the path spells it in another case (crowncodes/ia#315)', async () => {
   // The protected prefix is matched on the physical path, whose missing tail keeps the typed case; folding it as the platform's
   // volumes fold names keeps `.CLAUDE/SKILLS/…` managed where that is `.claude/skills/…`, and on a case-sensitive APFS volume
   // too. Where names do not fold, it is another, unmanaged path.
@@ -187,13 +187,13 @@ it('protects a managed folder that does not exist yet when the path spells it in
     folds ? 'IA-HOOK-PROJECTION-MANAGED' : undefined,
   );
   expect(await code(event(resolve(base, '.claude/skills/new/SKILL.md')), base)).toBe('IA-HOOK-PROJECTION-MANAGED');
-  // APFS also folds full Unicode case: `\u017f` spells `s` there, and `\u00df` spells `ss` (#323).
+  // APFS also folds full Unicode case: `\u017f` spells `s` there, and `\u00df` spells `ss` (crowncodes/ia#323).
   const full = process.platform === 'darwin';
   for (const path of ['.claude/\u017fkills/new/SKILL.md', '.ia/di\u017ftributions/active.json'])
     expect(await code(event(resolve(base, path)), base)).toBe(full ? 'IA-HOOK-PROJECTION-MANAGED' : undefined);
   expect(existsSync(resolve(base, '.claude'))).toBe(false);
 });
-it('resolves a relative path where the kernel does: `..` from a linked cwd follows the link on POSIX, and not on Windows (#323)', async () => {
+it('resolves a relative path where the kernel does: `..` from a linked cwd follows the link on POSIX, and not on Windows (crowncodes/ia#323)', async () => {
   const base = temp(),
     outside = temp(),
     type = process.platform === 'win32' ? 'junction' : 'dir',
@@ -262,7 +262,7 @@ it('binds exact namespaced actors to a current native identity without prefix gu
   writeFileSync(map, JSON.stringify({ ...value, revision: '0'.repeat(64) }));
   expect((await invoke('fixture-plugin:owner')).hookSpecificOutput.permissionDecisionReason).toContain('stale');
   // A `link/..` spelling is refused off win32: the kernel walks it through the link, to another map than the spelling names
-  // (#323). Windows removes the `..` before it follows the junction, so there the spelling names the (stale) map it reads.
+  // (crowncodes/ia#323). Windows removes the `..` before it follows the junction, so there the spelling names the (stale) map it reads.
   mkdirSync(resolve(base, 'elsewhere/sub'), { recursive: true });
   writeFileSync(resolve(base, 'elsewhere/actors.json'), JSON.stringify(value));
   symlinkSync(resolve(base, 'elsewhere/sub'), resolve(base, 'hop'), process.platform === 'win32' ? 'junction' : 'dir');

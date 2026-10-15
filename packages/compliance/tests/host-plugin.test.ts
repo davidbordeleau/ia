@@ -100,7 +100,7 @@ it('the init skill respects a prior decline instead of re-offering', () => {
 it('hooks.json runs exactly the plugin-relative hook script on the verified matcher', () => {
   const files = Object.fromEntries(renderClaudePlugin(input).map((file) => [file.path, file.text]));
   const hooks = JSON.parse(files['plugins/ia/hooks/hooks.json']!);
-  // #436: the recorded Node, quoted, on macOS and Linux; on Windows the earlier `node` (host-plugin-node.test.ts covers both).
+  // crowncodes/ia#436: the recorded Node, quoted, on macOS and Linux; on Windows the earlier `node` (host-plugin-node.test.ts covers both).
   const node = process.platform === 'win32' ? 'node' : `"${process.execPath}"`;
   expect(hooks.hooks.SessionStart[0].hooks[0].command).toBe(node + ' "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"');
   // The `compact` matcher stayed unverified, so only `startup|clear` is registered.
@@ -530,9 +530,9 @@ it('hook: the Windows lookup takes only fully qualified PATH entries and program
   expect(checked[0]).toBe('C:\\first');
 });
 
-// #474: on Windows an entry is qualified only under a drive letter. A share is not, however it is spelled: a synchronous
+// crowncodes/ia#474: on Windows an entry is qualified only under a drive letter. A share is not, however it is spelled: a synchronous
 // check of one that cannot be reached waits for the network with no bound the hook can set. Nothing is checked to decide.
-it('hook: on Windows only a PATH entry under a drive letter is qualified, never a share (#474)', () => {
+it('hook: on Windows only a PATH entry under a drive letter is qualified, never a share (crowncodes/ia#474)', () => {
   const { qualified } = renderedAsWindows({}, () => {
     throw new Error('qualifying an entry must not touch the file system');
   });
@@ -554,7 +554,7 @@ it('hook: on Windows only a PATH entry under a drive letter is qualified, never 
   expect(others.filter((entry) => qualified(entry))).toEqual([]);
 });
 
-it('hook: the Windows lookup never checks a share, and takes the ia in the drive entry after it (#474)', () => {
+it('hook: the Windows lookup never checks a share, and takes the ia in the drive entry after it (crowncodes/ia#474)', () => {
   // Each share holds an ia that the lookup would take if it checked the share.
   const shares = ['\\\\server\\share\\bin', '//server/share/bin', '\\\\?\\UNC\\server\\share\\bin'];
   const { found, checked } = lookUpAsWindows([...shares, 'C:\\tools'].join(';'), [
@@ -571,7 +571,7 @@ it('hook: the Windows lookup never checks a share, and takes the ia in the drive
   ]);
 });
 
-it('hook: the child PATH leaves out every share on Windows (#474)', () => {
+it('hook: the child PATH leaves out every share on Windows (crowncodes/ia#474)', () => {
   expect(
     childEnvAs('win32', { PATH: '\\\\server\\share\\bin;C:\\a;//server/share/b;\\\\?\\UNC\\server\\share\\c' })['PATH'],
   ).toBe('C:\\a');
@@ -591,9 +591,9 @@ it('hook: the Windows lookup passes over a file whose path cmd.exe would expand 
   expect(found).toBe('C:\\tools\\ia.cmd');
 });
 
-// #474: only a .bat or .cmd file runs through cmd.exe, so only its path is passed over for a %. A .com or .exe starts
+// crowncodes/ia#474: only a .bat or .cmd file runs through cmd.exe, so only its path is passed over for a %. A .com or .exe starts
 // directly, and nothing expands its path.
-it('hook: the Windows lookup passes over a % only in the path of a file cmd.exe would run (#474)', () => {
+it('hook: the Windows lookup passes over a % only in the path of a file cmd.exe would run (crowncodes/ia#474)', () => {
   const dir = 'C:\\Users\\100%x\\npm',
     path = `${dir};C:\\tools`;
   expect(
@@ -658,9 +658,9 @@ it('hook: on Windows the ia found runs as cmd.exe /d /v:off /s /c with the quote
   ]);
 });
 
-// #474: Node starts a .bat or .cmd only through a shell, so those two go through cmd.exe; a .com or .exe is a program,
+// crowncodes/ia#474: Node starts a .bat or .cmd only through a shell, so those two go through cmd.exe; a .com or .exe is a program,
 // started by its absolute path with Node's own quoting, and no shell reads its path.
-it('hook: on Windows a .com or .exe found starts directly; only a .bat or .cmd goes through cmd.exe (#474)', () => {
+it('hook: on Windows a .com or .exe found starts directly; only a .bat or .cmd goes through cmd.exe (crowncodes/ia#474)', () => {
   const bin = 'C:\\Users\\dev\\a b & c!\\npm';
   const env = { PATH: bin, SystemRoot: 'C:\\WINDOWS', CLAUDE_PROJECT_DIR: 'C:\\project' };
   const options = {
@@ -698,7 +698,7 @@ it('hook: on Windows a .com or .exe found starts directly; only a .bat or .cmd g
 // as a script. Its directory's name holds %OS%: the old lookup passed it over, and cmd.exe would expand it to Windows_NT
 // and miss the file, so only a direct start reports the workspace.
 windowsIt(
-  'hook: an ia.exe starts directly, even under a path that cmd.exe would expand (#474)',
+  'hook: an ia.exe starts directly, even under a path that cmd.exe would expand (crowncodes/ia#474)',
   async () => {
     const { hookPath } = renderPluginWithEntry(null);
     const project = tempDir(),
@@ -858,10 +858,10 @@ windowsIt(
   20_000,
 );
 
-// #474: with no qualified PATH entry, doctor still gets the System32 directory, so a system program it starts by name
+// crowncodes/ia#474: with no qualified PATH entry, doctor still gets the System32 directory, so a system program it starts by name
 // runs; with an empty PATH and NoDefaultCurrentDirectoryInExePath libuv searched nowhere.
 windowsIt(
-  'hook: with no qualified PATH entry doctor can still start a System32 program by name (#474)',
+  'hook: with no qualified PATH entry doctor can still start a System32 program by name (crowncodes/ia#474)',
   async () => {
     const project = tempDir();
     const { hookPath } = renderPluginWithEntry(
@@ -901,9 +901,9 @@ it('hook: the update refresh starts from the home directory with only qualified 
   expect(seen!.path).toBe(bin);
 }, 25_000);
 
-// #474 for Windows: there an empty PATH finds nothing at all, so the child gets the System32 directory beside the cmd.exe
+// crowncodes/ia#474 for Windows: there an empty PATH finds nothing at all, so the child gets the System32 directory beside the cmd.exe
 // the hook names, from a qualified SystemRoot or the default Windows directory. It replaces an empty PATH, never adds to one.
-it('hook: with no qualified PATH entry the child gets the system directories on every platform, never an empty PATH (LKI-41, #474)', () => {
+it('hook: with no qualified PATH entry the child gets the system directories on every platform, never an empty PATH (LKI-41, crowncodes/ia#474)', () => {
   expect(childEnvAs('linux', { PATH: 'bin::.' })['PATH']).toBe('/usr/bin:/bin');
   expect(['bin', ';', ''].map((PATH) => childEnvAs('win32', { PATH })['PATH'])).toEqual([
     'C:\\Windows\\System32',
@@ -918,9 +918,9 @@ it('hook: with no qualified PATH entry the child gets the system directories on 
   expect(childEnvAs('win32', { PATH: 'bin;D:\\tools', SystemRoot: 'E:\\Win' })['PATH']).toBe('D:\\tools');
 });
 
-// #474: the refresh starts in the home directory even when that directory is missing. The start then fails (Node 22 on
+// crowncodes/ia#474: the refresh starts in the home directory even when that directory is missing. The start then fails (Node 22 on
 // macOS reports ENOENT as an 'error' event) and the hook ignores it, so the briefing is still emitted.
-it('hook: a missing home directory costs the update refresh, never the briefing (#474)', async () => {
+it('hook: a missing home directory costs the update refresh, never the briefing (crowncodes/ia#474)', async () => {
   const project = tempDir(),
     home = resolve(tempDir(), 'missing-home'),
     probe = resolve(tempDir(), 'probe.mjs');

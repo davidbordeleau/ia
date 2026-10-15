@@ -1,6 +1,6 @@
 /**
  * Host plugin distribution spec §11: the cached update check and local compatibility. Sources are injected, so no
- * case reaches the npm registry; only the two #436 process cases at the end run the built CLI, a stand-in npm and
+ * case reaches the npm registry; only the two crowncodes/ia#436 process cases at the end run the built CLI, a stand-in npm and
  * this machine's git.
  */
 import {
@@ -214,7 +214,7 @@ it('refresh-updates is the one mechanism command without a workspace, and valida
     await expect(runNative(argv), argv.join(' ')).rejects.toMatchObject({ code: 'IA-DIST-INPUT-INVALID' });
 });
 
-// #436: refresh-updates run by hand from a directory the repository controls never starts an npm or git planted there,
+// crowncodes/ia#436: refresh-updates run by hand from a directory the repository controls never starts an npm or git planted there,
 // through a relative or empty PATH entry or, on Windows, the search of the working directory. The built CLI runs from
 // such a directory, so `pnpm --filter @inventarch/distribution build` first.
 const CLI = join(import.meta.dirname, '../dist/cli.js');
@@ -266,7 +266,7 @@ const seenFrom = (log: string) =>
 const home = windows ? homedir().toLowerCase() : realpathSync(homedir());
 
 it(
-  'refresh-updates run by hand never starts an npm planted in the working directory; the qualified npm answers from home (#436)',
+  'refresh-updates run by hand never starts an npm planted in the working directory; the qualified npm answers from home (crowncodes/ia#436)',
   async () => {
     const project = temp(),
       bin = temp(),
@@ -309,7 +309,7 @@ async function git(args: readonly string[]): Promise<void> {
 }
 
 it(
-  'refresh-updates run by hand never starts a git planted in the working directory; the qualified git counts the checkout (#436)',
+  'refresh-updates run by hand never starts a git planted in the working directory; the qualified git counts the checkout (crowncodes/ia#436)',
   async () => {
     const project = temp(),
       upstream = temp(),

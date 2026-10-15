@@ -135,7 +135,7 @@ it('refuses a workspace inside the host home and a host home inside the workspac
   }
 });
 it('refuses a home and a workspace that nest under another spelling wherever the volume opens it as the same directory', () => {
-  // APFS and NTFS fold case (#315): there `WORKSPACE` is the workspace and `HOME` the home, so each nests in the other;
+  // APFS and NTFS fold case (crowncodes/ia#315): there `WORKSPACE` is the workspace and `HOME` the home, so each nests in the other;
   // on a volume that keeps them apart they are other, unrelated directories.
   const base = temp(),
     home = join(base, 'home'),

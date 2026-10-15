@@ -111,7 +111,7 @@ it('registers one PreToolUse group with an explicit root and removes exactly it'
   const after = JSON.parse(readFileSync(resolve(root, settings), 'utf8'));
   expect(after.permissions).toEqual(unrelated.permissions);
   expect(after.hooks.PreToolUse).toHaveLength(2);
-  // POSIX runs the guard through /bin/sh so that a guard that cannot run denies (#323); win32 has no /bin/sh.
+  // POSIX runs the guard through /bin/sh so that a guard that cannot run denies (crowncodes/ia#323); win32 has no /bin/sh.
   const direct = [join(cache, 'scripts/ia.mjs'), 'guard', '--root', root];
   expect(after.hooks.PreToolUse[1]).toEqual({
     matcher: 'Write|Edit|MultiEdit',
@@ -327,7 +327,7 @@ it.each(['pending', 'config', 'state', 'complete'])(
   },
 );
 const SUBPROCESS = Number(process.env['IA_TEST_SUBPROCESS_TIMEOUT_MS']) || 10_000;
-it("runs the registered guard so that a Node that is gone denies, and passes the guard's own answer through (#323)", async () => {
+it("runs the registered guard so that a Node that is gone denies, and passes the guard's own answer through (crowncodes/ia#323)", async () => {
   // Claude Code blocks a PreToolUse call only on exit 2 or a deny; a hook command that cannot start is a non-blocking
   // error, so a guard whose recorded Node was deleted (a Homebrew upgrade and cleanup) would let every edit through.
   const root = temp(),
@@ -373,7 +373,7 @@ it("runs the registered guard so that a Node that is gone denies, and passes the
   expect(echoed.status).toBe(0);
   expect(JSON.parse(echoed.stdout)).toEqual([oddLauncher, 'guard', '--root', oddRoot]);
 });
-it("reads the guard's Node from the direct and the /bin/sh form, and refuses any other handler (#323)", () => {
+it("reads the guard's Node from the direct and the /bin/sh form, and refuses any other handler (crowncodes/ia#323)", () => {
   const launcher = join(temp(), 'scripts', 'ia.mjs'),
     root = temp(),
     direct = [launcher, 'guard', '--root', root];
@@ -400,7 +400,7 @@ it("reads the guard's Node from the direct and the /bin/sh form, and refuses any
   ])
     expect(guardNode(other, launcher, root)).toBeNull();
 });
-it('pins every guard script a release has written, and keeps a registration made with an earlier one owned (#323)', () => {
+it('pins every guard script a release has written, and keeps a registration made with an earlier one owned (crowncodes/ia#323)', () => {
   // Literal strings, not the constants: changing the script without keeping the previous one would strand every existing
   // registration, which plan, remove and doctor would then refuse as not IA's.
   expect(FAIL_CLOSED_ACCEPTED).toEqual([
@@ -444,7 +444,7 @@ it('pins every guard script a release has written, and keeps a registration made
   expect(applyGuardRegistration(planGuardRegistration(root, { remove: 'workspace' })).status).toBe('guard-removed');
   expect(existsSync(resolve(root, statePath))).toBe(false);
 });
-it('keeps reading a guard registered in the direct form, and re-applying writes the current form (#323)', () => {
+it('keeps reading a guard registered in the direct form, and re-applying writes the current form (crowncodes/ia#323)', () => {
   const root = temp(),
     cache = cacheV2(),
     launcher = join(cache, 'scripts/ia.mjs');
@@ -463,7 +463,7 @@ it('keeps reading a guard registered in the direct form, and re-applying writes 
     guardGroup(launcher, root),
   ]);
 });
-it("records a Homebrew keg's stable link in the MCP entry and the guard, whichever form it takes (#323)", () => {
+it("records a Homebrew keg's stable link in the MCP entry and the guard, whichever form it takes (crowncodes/ia#323)", () => {
   const prefix = temp(),
     keg = join(prefix, 'Cellar', 'node@22', '22.22.0', 'bin', basename(process.execPath)),
     link = join(prefix, 'opt', 'node@22'),
@@ -484,7 +484,7 @@ it("records a Homebrew keg's stable link in the MCP entry and the guard, whichev
     process.execPath = running;
   }
 });
-it("records a Homebrew keg's Node by its stable opt link while that link reaches the same executable (#323)", () => {
+it("records a Homebrew keg's Node by its stable opt link while that link reaches the same executable (crowncodes/ia#323)", () => {
   const prefix = temp(),
     keg = join(prefix, 'Cellar', 'node@22', '22.22.0', 'bin', 'node'),
     link = join(prefix, 'opt', 'node@22');

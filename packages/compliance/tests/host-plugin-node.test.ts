@@ -1,5 +1,5 @@
 /**
- * #436 item 1, as revised for the review of #491. On macOS and Linux the plugin's hooks.json starts the session hook with
+ * crowncodes/ia#436 item 1, as revised for the review of crowncodes/ia#491. On macOS and Linux the plugin's hooks.json starts the session hook with
  * the Node recorded at render time, by absolute path and in shell form: `"<node>" "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"`.
  * Claude Code's hooks reference: a handler without `args` goes to `sh -c` on macOS and Linux, so sh runs the quoted file
  * and looks no `node` up. On Windows the handler stays the earlier `node "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"`:
@@ -58,7 +58,7 @@ const BEFORE =
   '/hooks/session-start.mjs\\"",\n            "timeout": 10\n          }\n        ]\n      }\n    ]\n  }\n}\n';
 
 it.each(['darwin', 'linux'] as const)(
-  'on %s hooks.json starts the hook in shell form with the recorded Node quoted, never a node looked up by name (#436)',
+  'on %s hooks.json starts the hook in shell form with the recorded Node quoted, never a node looked up by name (crowncodes/ia#436)',
   (platform) => {
     expect(hooksOf(NODE, platform)).toStrictEqual({
       hooks: {
@@ -73,7 +73,7 @@ it.each(['darwin', 'linux'] as const)(
   },
 );
 
-it('on Windows hooks.json keeps the earlier command byte for byte, and no Node refusal applies (#436)', () => {
+it('on Windows hooks.json keeps the earlier command byte for byte, and no Node refusal applies (crowncodes/ia#436)', () => {
   for (const node of [
     NODE,
     process.execPath,
@@ -87,7 +87,7 @@ it('on Windows hooks.json keeps the earlier command byte for byte, and no Node r
     expect(hooksText(node, 'win32'), node).toBe(BEFORE);
 });
 
-it('the renderer refuses a Node that is not absolute, or that the host would substitute into (#436)', () => {
+it('the renderer refuses a Node that is not absolute, or that the host would substitute into (crowncodes/ia#436)', () => {
   // A bare name, relative paths, an empty one, Windows paths (relative under sh) and placeholders, one of them inside an
   // absolute path: the ${ refusal comes before the character rule, so it keeps its own message.
   for (const node of [
@@ -124,7 +124,7 @@ const refused = [
   ['a final backslash', ['/opt/node\\']],
 ] as const;
 it.each(refused)(
-  'the renderer refuses a Node path holding %s, which double quotes in sh do not keep as written (#436)',
+  'the renderer refuses a Node path holding %s, which double quotes in sh do not keep as written (crowncodes/ia#436)',
   (_, nodes) => {
     for (const node of nodes)
       expect(
@@ -137,7 +137,7 @@ it.each(refused)(
 // The other side of each rule: U+0020 follows U+001F, ~ precedes U+007F and U+00A0 follows U+009F; a single backslash
 // inside the path is literal; # and & neighbour $ and %; the rest are special to sh only outside quotes.
 const ACCEPTED = "/opt/n o~\u00a0a\\b#&'()*;<>?[]^{}|=/node";
-it('the renderer accepts the characters next to each refused one (#436)', () => {
+it('the renderer accepts the characters next to each refused one (crowncodes/ia#436)', () => {
   expect(hooksOf(ACCEPTED, 'linux').hooks.SessionStart[0].hooks[0].command).toBe(
     `"${ACCEPTED}" "${PLACEHOLDER}/hooks/session-start.mjs"`,
   );
@@ -191,7 +191,7 @@ function hostEnv(path: string): NodeJS.ProcessEnv {
 // command byte for byte.
 const posixIt = it.skipIf(process.platform === 'win32');
 posixIt(
-  'a node planted in the project or behind a relative PATH entry never starts the hook, and sh runs the recorded Node as written (#436)',
+  'a node planted in the project or behind a relative PATH entry never starts the hook, and sh runs the recorded Node as written (crowncodes/ia#436)',
   async () => {
     // The recorded Node sits under a directory named with the accepted characters, linked to this process's Node.
     const node = resolve(tempDir(), ACCEPTED.slice('/opt/'.length));

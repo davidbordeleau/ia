@@ -21,7 +21,8 @@ export declare function npmSetupPlan(
 export type Stage = { id: string; packageName: string; version: string; status: string };
 export type Stages = { state: 'known' | 'unknown'; items: Stage[] };
 export type NpmState = {
-  access: 'public' | 'private' | 'not-found' | 'unknown';
+  access: 'public' | 'non-public' | 'not-found' | 'unknown';
+  metadata: 'present' | 'not-found' | 'unknown';
   public: 'present' | 'not-found' | 'unknown';
   stages: Stages;
   trust: { state: TrustState | 'not-found'; config?: unknown };
@@ -36,6 +37,7 @@ export type SetupPlan = NpmState & {
 };
 export type NpmCommand = (args: string[], options?: object) => string;
 export type PublicLookup = (name: string) => Promise<unknown>;
+export type MetadataLookup = (name: string) => string | Promise<string>;
 export declare function interactiveTrustResult(result: {
   status: number | null;
   signal?: string | null;
@@ -53,6 +55,7 @@ export declare function inspectNpm(
   npm: NpmCommand,
   names: readonly string[],
   readPublic?: PublicLookup,
+  readMetadata?: MetadataLookup,
 ): Promise<Record<string, NpmState>>;
 export declare function applyNpm(
   npm: NpmCommand,
@@ -60,6 +63,7 @@ export declare function applyNpm(
   options?: {
     bootstrapNames?: readonly string[];
     readPublic?: PublicLookup;
+    readMetadata?: MetadataLookup;
     log?: (message: string) => void;
   },
 ): Promise<SetupPlan[]>;

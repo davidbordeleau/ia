@@ -84,6 +84,20 @@ export function trustState(listing) {
   } catch {
     return { state: 'unknown' };
   }
+  const nonempty = (value) => typeof value === 'string' && value.trim().length > 0;
+  if (
+    !config ||
+    typeof config !== 'object' ||
+    Array.isArray(config) ||
+    !nonempty(config.id) ||
+    !nonempty(config.type) ||
+    (config.permissions !== undefined && (!Array.isArray(config.permissions) || !config.permissions.every(nonempty))) ||
+    (config.type === 'github' &&
+      (!nonempty(config.repository) ||
+        !nonempty(config.file) ||
+        (config.environment !== undefined && typeof config.environment !== 'string')))
+  )
+    return { state: 'unknown' };
   const matches =
     config?.type === 'github' &&
     Array.isArray(config?.permissions) &&
@@ -113,10 +127,9 @@ export function npmSetupPlan(names, state, bootstrapNames = []) {
   for (const name of bootstrapNames) assert.ok(names.includes(name), `Unknown bootstrap package: ${name}`);
   return names.map((name) => {
     const current = state[name];
-    const { access, public: published, stages, trust } = current;
+    const { access, metadata, public: published, stages, trust } = current;
     const existing =
-      access === 'public' ||
-      access === 'private' ||
+      metadata === 'present' ||
       published === 'present' ||
       stages.items.length > 0 ||
       trust.state === 'configured' ||
@@ -124,20 +137,33 @@ export function npmSetupPlan(names, state, bootstrapNames = []) {
     const bootstrap =
       !existing &&
       access === 'not-found' &&
+      metadata === 'not-found' &&
       published === 'not-found' &&
       stages.state === 'known' &&
       ['missing', 'not-found'].includes(trust.state);
     const blocked = [];
-    if (access === 'unknown' || published === 'unknown' || stages.state === 'unknown' || trust.state === 'unknown')
+    if (
+      access === 'unknown' ||
+      metadata === 'unknown' ||
+      published === 'unknown' ||
+      stages.state === 'unknown' ||
+      trust.state === 'unknown'
+    )
       blocked.push('inspection failed; resolve authentication, permissions or registry errors before applying');
     if (trust.state === 'different')
       blocked.push('trusted publisher differs or lacks direct-publish permission; owner review required');
-    if (access === 'private')
-      blocked.push('package exists but is private; owner-authorized registry recovery required');
+    if (access === 'non-public')
+      blocked.push(
+        existing
+          ? 'package exists but is non-public; owner-authorized registry recovery required'
+          : 'visibility is non-public; package existence remains unconfirmed',
+      );
     if (existing && access === 'not-found')
       blocked.push('package evidence conflicts with authenticated 404; owner investigation required');
     if (existing && trust.state === 'not-found')
       blocked.push('trust returned 404 for an existing package; owner investigation required');
+    if (existing && metadata === 'not-found')
+      blocked.push('authenticated metadata returned 404 despite package evidence; owner investigation required');
     const candidates = stages.items.filter((stage) => stage.version === BOOTSTRAP_VERSION);
     if (candidates.length > 1 || candidates.some((stage) => stage.status !== 'staged'))
       blocked.push('bootstrap stage identity or status is ambiguous; owner review required');
@@ -220,7 +246,8 @@ export function stageState(listing, name) {
 export function accessState(listing, name) {
   try {
     const value = JSON.parse(listing);
-    return Object.keys(value).length === 1 && ['public', 'private'].includes(value[name]) ? value[name] : 'unknown';
+    if (Object.keys(value).length !== 1 || !['public', 'private'].includes(value[name])) return 'unknown';
+    return value[name] === 'private' ? 'non-public' : 'public';
   } catch {
     return 'unknown';
   }
@@ -228,7 +255,7 @@ export function accessState(listing, name) {
 // Keep diagnostics to error codes: npm errors can include credentials or sensitive response bodies.
 const errorCode = (error) =>
   failure(error).match(
-    /\bE(?:404|401|403|OTP|NOTTY|AUTHFAILED|AUTHRESULT|CANCELED|NPMVERSION|NOTFOUND|CONNRESET|TIMEDOUT)\b/,
+    /\bE(?:404|401|403|429|500|502|503|504|OTP|NOTTY|AUTHFAILED|AUTHRESULT|CANCELED|NPMVERSION|NPMCLI|NOTFOUND|CONNRESET|CONNREFUSED|TIMEDOUT|USAGE|METADATARESULT|METADATAFAILED)\b/,
   )?.[0] ?? 'read failed';
 const AUTH_RECOVERY =
   'Run pnpm npm:setup --interactive-auth --skip-github in a terminal with stdin and stdout attached. ' +
@@ -281,7 +308,7 @@ export function npmWithInteractiveAuth(
     }
   };
 }
-export async function inspectNpm(npm, names, readPublic = registryPackage) {
+export async function inspectNpm(npm, names, readPublic = registryPackage, readMetadata = () => '') {
   const state = {};
   for (const name of names) {
     const errors = [];
@@ -296,6 +323,20 @@ export async function inspectNpm(npm, names, readPublic = registryPackage) {
     };
     const access =
       read(['access', 'get', 'status', name, '--json'], (text) => accessState(text, name), 'not-found') ?? 'unknown';
+    let metadata = 'unknown';
+    try {
+      const result = JSON.parse(await readMetadata(name));
+      if (result?.ok === true && result.name === name) metadata = 'present';
+      else if (result?.ok === false && typeof result.code === 'string') {
+        const code = errorCode(new Error(result.code));
+        if (code === result.code) {
+          if (code === 'E404') metadata = 'not-found';
+          errors.push('authenticated metadata: ' + code);
+        } else errors.push('authenticated metadata: malformed response');
+      } else errors.push('authenticated metadata: malformed response');
+    } catch (error) {
+      errors.push('authenticated metadata: ' + errorCode(error));
+    }
     const stages = read(['stage', 'list', name, '--json'], (text) => stageState(text, name)) ?? {
       state: 'unknown',
       items: [],
@@ -315,7 +356,7 @@ export async function inspectNpm(npm, names, readPublic = registryPackage) {
     } catch (error) {
       errors.push(`public metadata: ${error.status ?? errorCode(error)}`);
     }
-    state[name] = { access, stages, trust, public: published, errors };
+    state[name] = { access, metadata, stages, trust, public: published, errors };
   }
   return state;
 }
@@ -493,9 +534,9 @@ function applyGithub(gh, issues, reviewer) {
 export async function applyNpm(
   npm,
   names,
-  { bootstrapNames = [], readPublic = registryPackage, log = console.log } = {},
+  { bootstrapNames = [], readPublic = registryPackage, readMetadata, log = console.log } = {},
 ) {
-  const plan = npmSetupPlan(names, await inspectNpm(npm, names, readPublic), bootstrapNames);
+  const plan = npmSetupPlan(names, await inspectNpm(npm, names, readPublic, readMetadata), bootstrapNames);
   const blockers = plan.flatMap((row) => row.blocked.map((reason) => row.name + ': ' + reason));
   assert.equal(blockers.length, 0, blockers.join('\n'));
   const retained = new Map();
@@ -524,7 +565,7 @@ export async function applyNpm(
         assert.ok(id, row.name + ': staging returned no exact bootstrap identity; inspect stages before retrying');
         retained.set(row.name, id);
         log(row.name + '@' + BOOTSTRAP_VERSION + ': retaining bootstrap stage ' + id + '; never approve it');
-        const confirmed = await inspectNpm(npm, [row.name], readPublic);
+        const confirmed = await inspectNpm(npm, [row.name], readPublic, readMetadata);
         const stage = confirmed[row.name].stages.items.find((item) => item.id === id);
         assert.ok(
           stage?.version === BOOTSTRAP_VERSION && stage.status === 'staged',
@@ -551,7 +592,7 @@ export async function applyNpm(
       }
     }
   }
-  const final = npmSetupPlan(names, await inspectNpm(npm, names, readPublic));
+  const final = npmSetupPlan(names, await inspectNpm(npm, names, readPublic, readMetadata));
   for (const row of final) {
     const id = retained.get(row.name);
     if (
@@ -577,6 +618,7 @@ function reportNpm(plan) {
       name: row.name,
       existence: row.existence,
       access: row.access,
+      metadata: row.metadata,
       public: row.public,
       trust: row.trust.state,
       stages:
@@ -635,11 +677,17 @@ if (isEntry(process.argv[1], import.meta.url)) {
           ),
         { enabled: values['interactive-auth'] },
       );
+    const readMetadata = (name) =>
+      run(nodeBin, [resolve(import.meta.dirname, 'release-setup-metadata.mjs'), cli, name], {
+        stdio: 'pipe',
+        timeout: 40_000,
+        maxBuffer: 1024 * 1024,
+      });
     let user = null;
     try {
       user = npm(['whoami'], { stdio: 'pipe' }).trim();
     } catch {}
-    const state = await inspectNpm(npm, names);
+    const state = await inspectNpm(npm, names, registryPackage, readMetadata);
     const plan = npmSetupPlan(names, state, values['bootstrap-name']);
     reportNpm(plan);
     console.log(
@@ -647,7 +695,7 @@ if (isEntry(process.argv[1], import.meta.url)) {
     );
     if (values.apply) {
       assert.ok(user, 'npm login is required to apply');
-      await applyNpm(npm, names, { bootstrapNames: values['bootstrap-name'] });
+      await applyNpm(npm, names, { bootstrapNames: values['bootstrap-name'], readMetadata });
     } else if (!user || !plan.every((row) => row.ready)) process.exitCode = 1;
   }
   if (!values['skip-github']) {

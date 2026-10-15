@@ -372,14 +372,14 @@
         "Memory",
         "Attention"
       ],
-      "changes": "--phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery)"
+      "changes": "--phase selects the playbook cell delivered and decides which conditional relation rows apply"
     },
     {
       "phase": "plan",
       "primitives": [
         "Inference"
       ],
-      "changes": "--phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery)"
+      "changes": "--phase selects the playbook cell delivered and decides which conditional relation rows apply"
     },
     {
       "phase": "act",
@@ -387,14 +387,14 @@
         "Decision",
         "Escalation"
       ],
-      "changes": "--phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery)"
+      "changes": "--phase selects the playbook cell delivered and decides which conditional relation rows apply"
     },
     {
       "phase": "learn",
       "primitives": [
         "Learning"
       ],
-      "changes": "--phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery)"
+      "changes": "--phase selects the playbook cell delivered and decides which conditional relation rows apply"
     }
   ],
   "commands": [

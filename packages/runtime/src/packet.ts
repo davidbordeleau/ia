@@ -31,10 +31,10 @@ import { statedText, valueText } from './render.js';
 import { freeze } from './types.js';
 
 /**
- * The position packet: position-and-projection §4 and items 11 and 12; plan amendments B1 to B5 and B8 (milestone
- * position-packet). One host-neutral packet a host adapter renders: body(K0)'s digest, the seat, the participants and
- * their mandates, the N system pointer lines, the captured-record tallies, the intent and phase tables, the command
- * catalog the caller passes in, the three SPEC lines and provenance. The host note sits beside it, never digested.
+ * The position packet (SPEC R19). One host-neutral packet a host adapter renders: body(K0)'s digest, the seat, the
+ * participants and their mandates, the N system pointer lines, the captured-record tallies, the intent and phase
+ * tables, the command catalog the caller passes in, the three SPEC lines and provenance. The host note sits beside it,
+ * never digested.
  *
  * It is a pure function of the admitted records the scope token reads and the catalog: like body(K) it carries no
  * absolute path, token, time, capture state or CLI version, and nothing is written. Every read goes through `within`,
@@ -177,8 +177,7 @@ export interface PacketOutput {
 const NO_PARTICIPANT = 'none (no authored @mandate names an @agent)' as const;
 const UNRESOLVED = 'unresolved' as const;
 const INSTALLED = 'unknown (no join checked here)' as const;
-const PHASE_CHANGES =
-  '--phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery)';
+const PHASE_CHANGES = '--phase selects the playbook cell delivered and decides which conditional relation rows apply';
 /** Design §4's three SPEC-owned lines, `ia scope` read as `ia position` (decision scope-verb-dispatch). */
 const LINES: readonly string[] = [
   'run ia position; if it refuses, run the command it names',

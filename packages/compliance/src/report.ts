@@ -5,6 +5,8 @@ import { validateAdoption } from './adoption.js';
 import type { AdoptionEvaluators } from './adoption.js';
 import { assertCatalog } from './catalog.js';
 import type { EvaluatorCatalog } from './catalog.js';
+import { bindConformance } from './conformance/bind.js';
+import type { ConformanceOptions, ConformanceSummary } from './conformance/bind.js';
 import {
   validateCheck,
   validateCheckStructure,
@@ -26,7 +28,10 @@ export interface ReportOptions {
   readonly admission?: readonly Assessment[];
   readonly sourceDiagnostics?: readonly Diagnostic[];
   readonly folders?: readonly SystemFolder[];
+  /** Caller-asserted COMP-KERNEL and COMP-FIXTURES verdicts (C19); a result taken from it is labelled `caller-asserted`. */
   readonly evidence?: ReadonlyMap<'COMP-KERNEL' | 'COMP-FIXTURES', Verdict>;
+  /** Verified conformance evidence bound to this graph (C31). Not with `evidence`. */
+  readonly conformance?: ConformanceOptions;
   readonly adoptionEvaluators?: AdoptionEvaluators;
   readonly coordinate?: Coordinate;
   /** Trusted evaluator catalog (C26). Absent: built-in-only COMP-CHECK, unchanged. */
@@ -44,6 +49,8 @@ export interface Report {
   readonly verdicts: readonly Verdict[];
   readonly findings: readonly Finding[];
   readonly shadows: readonly Shadow[];
+  /** Present only when both COMP-KERNEL and COMP-FIXTURES are verified evidence bound to this graph (C31). */
+  readonly conformance?: ConformanceSummary;
 }
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 function unavailable(check: string, message: string): Assessment {
@@ -51,6 +58,9 @@ function unavailable(check: string, message: string): Assessment {
 }
 export function evaluate(graph: Graph, options: ReportOptions = {}): Report {
   if (options.catalog !== undefined) assertCatalog(options.catalog);
+  if (options.evidence !== undefined && options.conformance !== undefined)
+    throw new TypeError('Pass caller-asserted evidence or verified conformance, not both');
+  const bound = options.conformance === undefined ? undefined : bindConformance(graph, options.conformance);
   const nodes = [...graph.nodes.values()];
   const sourceDiagnostics = options.sourceDiagnostics?.filter(
     (d) =>
@@ -89,14 +99,24 @@ export function evaluate(graph: Graph, options: ReportOptions = {}): Report {
   for (const diagnostic of graph.diagnostics)
     if (diagnostic.code === 'IA-GRAPH-DIMENSION-UNKNOWN')
       assessments.push(assess('COMP-SCHEMA', `${diagnostic.path}:${diagnostic.line}`, [diagnostic]));
-  for (const check of ['COMP-KERNEL', 'COMP-FIXTURES'] as const) {
-    const evidence = options.evidence?.get(check);
-    assessments.push(
-      evidence === undefined || evidence.revision !== graph.revision || evidence.check !== check
-        ? unavailable(check, `${check}: matching-revision verification evidence was not supplied`)
-        : evidence,
-    );
-  }
+  const basis = new WeakMap<Assessment, NonNullable<Verdict['basis']>>();
+  if (bound !== undefined)
+    for (const result of bound.results) {
+      assessments.push(result.assessment);
+      if (result.verified) basis.set(result.assessment, 'verified');
+    }
+  else
+    for (const check of ['COMP-KERNEL', 'COMP-FIXTURES'] as const) {
+      const evidence = options.evidence?.get(check);
+      if (evidence === undefined || evidence.revision !== graph.revision || evidence.check !== check)
+        assessments.push(unavailable(check, `${check}: matching-revision verification evidence was not supplied`));
+      else {
+        const { scope, outcome, findings } = evidence,
+          asserted: Assessment = { check, scope, outcome, findings };
+        basis.set(asserted, 'caller-asserted');
+        assessments.push(asserted);
+      }
+    }
   const grouped = new Map<string, Assessment>();
   const rank = { pass: 0, 'not-evaluated': 1, fail: 2 } as const;
   for (const assessment of assessments) {
@@ -112,7 +132,12 @@ export function evaluate(graph: Graph, options: ReportOptions = {}): Report {
   }
   const verdicts = Object.freeze(
     [...grouped.values()]
-      .map((a) => verdict(a, graph.revision))
+      .map((a): Verdict => {
+        // Only this assembler labels a result's basis; a `basis` an input carried is dropped.
+        const { basis: _carried, ...result } = verdict(a, graph.revision),
+          label = basis.get(a);
+        return Object.freeze(label === undefined ? result : { ...result, basis: label });
+      })
       .sort((a, b) => compare(a.check, b.check) || compare(a.scope, b.scope)),
   );
   const findings = new Map<string, Finding>();
@@ -132,5 +157,6 @@ export function evaluate(graph: Graph, options: ReportOptions = {}): Report {
       ),
     ),
     shadows: graph.shadows,
+    ...(bound?.summary === undefined ? {} : { conformance: bound.summary }),
   });
 }

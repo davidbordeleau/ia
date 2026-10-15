@@ -4,67 +4,66 @@
     "tag": "v2.0.0",
     "commit": "53885910dc2b22809fddb46c31091660930ade48"
   },
-  "alignment": "2.1.0",
   "changes": [
     {
       "id": "inventarch/agent-composition-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/agent-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/authoring-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/compliance-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/governance-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/hook-authoring-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/language",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/learning-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/session-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/template-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/work-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/workspace-system",
       "bump": "major",
-      "summary": "Apply the one-time native 2.1 alignment and preserve exact content and dependency version identity for subsequent independent native releases."
+      "summary": "Preserve the reviewed content and exact dependency identities since the published baseline while aligning public native artifacts with the coordinated npm release target; IA syntax remains 1.0."
     }
   ]
 }

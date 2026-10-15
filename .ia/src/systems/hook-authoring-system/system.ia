@@ -2,7 +2,7 @@
 
 @system hook-authoring-system
   provider "inventarch.local"
-  version "2.1.0"
+  version "3.0.0"
   describes "Public hook-authoring-system vocabulary contracts"
   steward @agent public-hook-authoring-system-steward
   requires

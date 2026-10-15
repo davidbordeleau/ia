@@ -62,6 +62,7 @@ export declare function trackedChanges(
   policy: Pick<ReleasePolicy, 'version' | 'baseline'>,
   since?: string,
 ): { path: string; sha256: string | null; cohortOnly?: true }[];
+export declare function changeApplies(change: ChangeEntry, row: { path: string; cohortOnly?: boolean }): boolean;
 export declare function renderChangelog(entries: Changeset[]): string;
 export declare function validateChangesetStructure(
   entry: Changeset,

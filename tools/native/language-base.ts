@@ -63,7 +63,7 @@ export function languageBaseDescriptor(version: string, engine = `^${DISTRIBUTIO
   };
 }
 
-/** Independently selected native version; npm and protocol versions do not supply it. */
+/** Derived native artifact selector; release preparation aligns it to npm without changing syntax or protocol versions. */
 export function languageVersion(root: string): string {
   const policy = JSON.parse(readFileSync(resolve(root, 'examples/public-language/versions.json'), 'utf8')) as {
     format: string;

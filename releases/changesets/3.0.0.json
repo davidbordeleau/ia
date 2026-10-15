@@ -7,27 +7,27 @@
     "version": "2.0.0"
   },
   "bump": "major",
-  "summary": "Coordinated 3.0.0 release of the 23 public npm packages: Reserve administrative authoring and report missing source-protection declarations; An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it; `ia preview` and `ia author` admit checks structurally, as `ia validate` does; `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence; A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none; Check optional distribution files through their opened descriptors; Document removal of the exported CLI admission helper; `ia author` applies previewed permitted record edits with digest checks; Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated; `ia preview` shows what one new record, field or relationship would compile to; Remove the deprecated ia compile command in 3.0; Refuse dangling links in guarded edit paths; Explain distribution engine incompatibility and preserve exact pins during migration; replace and createFile remove their temporary file when a write fails; Declare engine marker activation incompatible with the published CLI; Require an established actor for participant mandate grants; `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined; workspace-runtime generates a claude agent file for each authored `@agent-profile`, or reports why it does not; The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`; `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them; The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared; workspace-runtime renders authored playbook skills, hook declarations and operation and harness definitions; Generated host ownership and pending journals require this release for cleanup; The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both; Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure; Run native profiles with bounded local execution and durable journals; A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`; The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile; Align native archives once and enforce independent content versions; Explain profile agents and CLI actor selection; Separate public vocabulary payloads from repository work and release controls; Repair public contract citations; Align public qualification documentation; Maintain public implementation and release contracts; Qualify separated workspace and public examples; Use native nested paths in registry advice tests; Install registry kits and adopt pinned source workspaces; Recognize repository native records and release roots; Validate retained root release controls consistently; Pin scope, evidence gate and editor byte preservation regressions; Admit bounded runner journal claims as optional runtime evidence; Recognize linked runner entry points; Preserve unowned hooks and external evidence during recovery; Keep workspace roots inert in suggested commands; `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission; Keep runtime release checks valid after note consumption.",
+  "summary": "Coordinated 3.0.0 release of the 23 public npm packages: Reserve administrative authoring and report missing source-protection declarations; An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it; `ia preview` and `ia author` admit checks structurally, as `ia validate` does; `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence; A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none; Check optional distribution files through their opened descriptors; Document removal of the exported CLI admission helper; `ia author` applies previewed permitted record edits with digest checks; Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated; `ia preview` shows what one new record, field or relationship would compile to; Remove the deprecated ia compile command in 3.0; Refuse dangling links in guarded edit paths; Explain distribution engine incompatibility and preserve exact pins during migration; replace and createFile remove their temporary file when a write fails; Declare engine marker activation incompatible with the published CLI; Require an established actor for participant mandate grants; `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined; workspace-runtime generates a claude agent file for each authored `@agent-profile`, or reports why it does not; The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`; `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them; The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared; workspace-runtime renders authored playbook skills, hook declarations and operation and harness definitions; Generated host ownership and pending journals require this release for cleanup; The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both; Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure; Run native profiles with bounded local execution and durable journals; A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`; The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile; Align public native artifacts with every coordinated npm release; Explain profile agents and CLI actor selection; Separate public vocabulary payloads from repository work and release controls; Repair public contract citations; Align public qualification documentation; Maintain public implementation and release contracts; Qualify separated workspace and public examples; Use native nested paths in registry advice tests; Install registry kits and adopt pinned source workspaces; Recognize repository native records and release roots; Validate retained root release controls consistently; Pin scope, evidence gate and editor byte preservation regressions; Admit bounded runner journal claims as optional runtime evidence; Recognize linked runner entry points; Preserve unowned hooks and external evidence during recovery; Keep workspace roots inert in suggested commands; `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission; Keep runtime release checks valid after note consumption.",
   "packages": {
     "@inventarch/agent-composition-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls. Align public qualification documentation. Install registry kits and adopt pinned source workspaces."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls. Align public qualification documentation. Install registry kits and adopt pinned source workspaces."
     },
     "@inventarch/agent-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/authoring-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls. Recognize repository native records and release roots."
+      "summary": "A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls. Recognize repository native records and release roots."
     },
     "@inventarch/cli": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Reserve administrative authoring and report missing source-protection declarations. An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. `ia preview` and `ia author` admit checks structurally, as `ia validate` does. `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence. A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Document removal of the exported CLI admission helper. `ia author` applies previewed permitted record edits with digest checks. Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated. `ia preview` shows what one new record, field or relationship would compile to. Remove the deprecated ia compile command in 3.0. Explain distribution engine incompatibility and preserve exact pins during migration. Declare engine marker activation incompatible with the published CLI. Require an established actor for participant mandate grants. `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined. `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them. Generated host ownership and pending journals require this release for cleanup. The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls. Repair public contract citations. Align public qualification documentation. Maintain public implementation and release contracts. Qualify separated workspace and public examples. Use native nested paths in registry advice tests. Install registry kits and adopt pinned source workspaces. Pin scope, evidence gate and editor byte preservation regressions. Preserve unowned hooks and external evidence during recovery. Keep workspace roots inert in suggested commands. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission."
+      "summary": "Reserve administrative authoring and report missing source-protection declarations. An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it. `ia preview` and `ia author` admit checks structurally, as `ia validate` does. `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence. A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Document removal of the exported CLI admission helper. `ia author` applies previewed permitted record edits with digest checks. Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated. `ia preview` shows what one new record, field or relationship would compile to. Remove the deprecated ia compile command in 3.0. Explain distribution engine incompatibility and preserve exact pins during migration. Declare engine marker activation incompatible with the published CLI. Require an established actor for participant mandate grants. `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined. `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them. Generated host ownership and pending journals require this release for cleanup. The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both. A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`. Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls. Repair public contract citations. Align public qualification documentation. Maintain public implementation and release contracts. Qualify separated workspace and public examples. Use native nested paths in registry advice tests. Install registry kits and adopt pinned source workspaces. Pin scope, evidence gate and editor byte preservation regressions. Preserve unowned hooks and external evidence during recovery. Keep workspace roots inert in suggested commands. `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission."
     },
     "@inventarch/compliance": {
       "previous": "2.0.0",
@@ -37,7 +37,7 @@
     "@inventarch/compliance-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/db": {
       "previous": "2.0.0",
@@ -52,7 +52,7 @@
     "@inventarch/governance-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/graph": {
       "previous": "2.0.0",
@@ -62,7 +62,7 @@
     "@inventarch/hook-authoring-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/language": {
       "previous": "2.0.0",
@@ -72,12 +72,12 @@
     "@inventarch/learning-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/mcp-door": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none. Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/runner": {
       "previous": null,
@@ -97,7 +97,7 @@
     "@inventarch/session-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/steward-hook": {
       "previous": "2.0.0",
@@ -107,12 +107,12 @@
     "@inventarch/template-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/work-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     },
     "@inventarch/workspace-runtime": {
       "previous": "2.0.0",
@@ -122,7 +122,7 @@
     "@inventarch/workspace-system": {
       "previous": "2.0.0",
       "kind": "changed",
-      "summary": "Align native archives once and enforce independent content versions. Separate public vocabulary payloads from repository work and release controls."
+      "summary": "Align public native artifacts with every coordinated npm release. Separate public vocabulary payloads from repository work and release controls."
     }
   },
   "changes": [
@@ -391,7 +391,7 @@
     {
       "id": "engine-marker-activation",
       "title": "Declare engine marker activation incompatible with the published CLI",
-      "summary": "Published `@inventarch/cli` 2.0.0 reads distribution engine 0.1.0. This successor uses engine 0.1.1, distinct from npm 3.0.0 and native 2.1.0. It can read compatible exact old locks without rewriting them, but new initialization with --apply and every applied install or update, including an applied no-op update, activate an engine 0.1.1 lock. The published CLI then refuses reads of that workspace before writing, even when unchanged package versions remain locked. Native package removal preserves the existing lock engine marker; removing a package from a compatible 0.1.0 lock does not itself migrate that marker, although its registered-host refresh can still write newer host state. Archive engine requirements stay strict. Older doctor, recover and restore commands cannot upgrade their running CLI or understand newer host journal formats; host removal alone cannot reverse an engine migration. Before upgrading, retain a complete workspace and state backup, its exact archives and the matching old CLI. For downgrade, finish pending recovery and necessary owned host cleanup with the newer CLI, then restore the complete pre-upgrade backup and use its matching old CLI. Preserve authored bytes, archive pins and ranges; never edit an engine marker to bypass the reader. No publication is performed by these migration instructions.",
+      "summary": "Published `@inventarch/cli` 2.0.0 reads distribution engine 0.1.0. This successor uses engine 0.1.1, distinct from the coordinated npm and native artifact version 3.0.0. It can read compatible exact old locks without rewriting them, but new initialization with --apply and every applied install or update, including an applied no-op update, activate an engine 0.1.1 lock. The published CLI then refuses reads of that workspace before writing, even when unchanged package versions remain locked. Native package removal preserves the existing lock engine marker; removing a package from a compatible 0.1.0 lock does not itself migrate that marker, although its registered-host refresh can still write newer host state. Archive engine requirements stay strict. Older doctor, recover and restore commands cannot upgrade their running CLI or understand newer host journal formats; host removal alone cannot reverse an engine migration. Before upgrading, retain a complete workspace and state backup, its exact archives and the matching old CLI. For downgrade, finish pending recovery and necessary owned host cleanup with the newer CLI, then restore the complete pre-upgrade backup and use its matching old CLI. Preserve authored bytes, archive pins and ranges; never edit an engine marker to bypass the reader. No publication is performed by these migration instructions.",
       "packages": [
         "@inventarch/cli",
         "@inventarch/db",
@@ -735,8 +735,8 @@
     },
     {
       "id": "native-content-versions",
-      "title": "Align native archives once and enforce independent content versions",
-      "summary": "The bundled public language and system archives move once to native 2.1.0. The current composition fixture tracks that selected native base while retaining exact equality with the initialized starter. Future native releases retain unchanged archive versions, require individual change notes, and refuse changed bytes under an already published native identity and version. Native selection remains independent of the coordinated npm release version.",
+      "title": "Align public native artifacts with every coordinated npm release",
+      "summary": "All twelve public native system and language archives follow the npm artifact target, including unchanged archives. This artifact-version alignment retains IA syntax 1.0 and makes no further schema, format, engine or protocol changes. Changed native content and dependency consumers still require individual baseline-bound impact notes; immutable published bytes, native membership and complete fresh candidate ledgers remain enforced. The composition fixture tracks the selected bundled language dependency on subsequent releases.",
       "packages": [
         "@inventarch/agent-composition-system",
         "@inventarch/agent-system",
@@ -883,7 +883,7 @@
     {
       "id": "public-release-ownership",
       "title": "Maintain public implementation and release contracts",
-      "summary": "Package source citations now resolve to maintained public specifications. Release preparation uses a public repository input seal and reviewed package membership, with independent native and npm versions; local qualification does not establish registry publication or host activation.",
+      "summary": "Package source citations now resolve to maintained public specifications. Release preparation uses a public repository input seal and reviewed package membership, with aligned native and npm artifact versions and independent syntax and protocol compatibility numbers; local qualification does not establish registry publication or host activation.",
       "packages": [
         "@inventarch/cli",
         "@inventarch/db",

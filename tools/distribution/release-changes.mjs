@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isEntry } from '../entry/is-entry.mjs';
 import { publicPackageInputs } from '../release/public-pack.mjs';
+import { nativeVersionOnly, NATIVE_COMPOSITION_FIXTURE } from '../release/native-selectors.mjs';
 
 export const RELEASE_POLICY = 'releases/current.json';
 export const SYSTEM_PACKAGE_POLICY = 'tools/distribution/system-package-policy.json';
@@ -109,8 +110,35 @@ export function trackedChanges(root, policy, since = policy.baseline.commit) {
             : value;
       if (JSON.stringify(canonical(before)) === JSON.stringify(canonical(after))) row.cohortOnly = true;
     }
+    if (
+      row.sha256 &&
+      (path === NATIVE_COMPOSITION_FIXTURE ||
+        path === SYSTEM_PACKAGE_POLICY ||
+        path === 'examples/public-language/versions.json' ||
+        /^\.ia\/src\/systems\/[^/]+\/system\.ia$/.test(path) ||
+        /^examples\/public-language\/contracts\/[^/]+\.ia$/.test(path)) &&
+      git(root, 'ls-tree', '--name-only', since, '--', path) &&
+      nativeVersionOnly(
+        root,
+        path,
+        execFileSync('git', ['show', since + ':' + path], {
+          cwd: root,
+          encoding: 'utf8',
+          windowsHide: true,
+          maxBuffer: 16 * 1024 * 1024,
+        }),
+        readFileSync(resolve(root, path), 'utf8'),
+      )
+    )
+      row.cohortOnly = true;
     return row;
   });
+}
+/** Generated alignment scopes cover only freshly proven version metadata at the exact named file. */
+export function changeApplies(change, row) {
+  return change.paths.some((prefix) =>
+    change.id === 'cohort-alignment' ? row.cohortOnly === true && row.path === prefix : row.path.startsWith(prefix),
+  );
 }
 export function renderChangelog(entries) {
   return (
@@ -221,10 +249,7 @@ export function validateChangeset(entry, policy, projects, actualCoverage) {
   }
   for (const row of entry.coverage) {
     const change = entry.changes.find((change) => change.id === row.change);
-    assert.ok(
-      change && change.paths.some((prefix) => row.path.startsWith(prefix)),
-      'Changed file lacks an applicable changeset entry',
-    );
+    assert.ok(change && changeApplies(change, row), 'Changed file lacks an applicable changeset entry');
     const owner = projects.find((project) => row.path.startsWith(project.directory + '/'));
     assert.ok(!owner || change.packages.includes(owner.manifest.name), 'Changed package omitted from its change entry');
     assert.ok(
@@ -395,6 +420,7 @@ export function collectChanges(root, projects) {
     entry = json(root, path);
   entry.coverage = trackedChanges(root, policy).map((row) => {
     const matches = entry.changes
+      .filter((change) => changeApplies(change, row))
       .flatMap((change) =>
         change.paths.filter((prefix) => row.path.startsWith(prefix)).map((prefix) => ({ change: change.id, prefix })),
       )

@@ -1,8 +1,8 @@
 {
   "format": "ia.npm-change-note.v1",
   "bump": "none",
-  "title": "Refresh the package READMEs for 3.0",
-  "summary": "Each package README now has a badge row, a short summary, a verified quick start or example, its main commands or exports, its limits and links, in the voice of the repository README. The CLI README is the 3.0 command guide: preview and author, mandate checks and --actor, the removal of ia compile, and Claude Code and Codex as the supported hosts. Documentation only; no package behaviour, export or dependency changes.",
+  "title": "Refresh the package READMEs for 3.1",
+  "summary": "Each package README now has a badge row, a short summary, a verified quick start or example, its main commands or exports, its limits and links, in the voice of the repository README. The CLI README is the 3.x command guide: preview and author, mandate checks and --actor, the removal of ia compile, Claude Code and Codex as the supported hosts, and the 3.1 host plugin commands ia init --from and ia project --product plugin. The compliance README shows the opt-in conformance evidence and the workspace-runtime README the host plugin subpaths. Documentation only; no package behaviour, export or dependency changes.",
   "packages": [
     "@inventarch/cli",
     "@inventarch/compliance",

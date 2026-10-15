@@ -1,14 +1,16 @@
 /**
- * Milestone generation-binding plan amendments C9 and C10, operator decision OD4: the guard re-keyed to `@mandate`. A
- * registration for one authored `@hook` runs `guard --root <root> --hook <identity>` for every edit tool; the hook decides
- * an edit only when its paths select the file and its tools name the tool, and the edit proceeds only when the acting
- * `@agent` holds a governing mandate that grants Synthesis there. The workspace is the conformance corpus with apps/cli's
- * composition fixture laid over it, so its `.ia/src` holds the fixture's `@hook note-edits` (PreToolUse
- * Write|Edit|MultiEdit over `docs/**` and `restricted/**`), `docs-mandate` (the demo participant, Synthesis, covers
- * `docs/`), `reviewer-docs` (the reviewer, Observation, covers `restricted/`), `demo-mandate` (the demo participant,
- * every move, scoped to the demo workspace, whose steward it is) and the `reviewer` `@agent-profile`. The corpus adds its
- * own `sample-mandate` (agent-steward; Observation, Verification; covers `docs/**`) and `agent-steward-profile`. Every
- * path a hook selects is in the demo workspace, so demo-mandate governs it (C1 with the workspace).
+ * The guard re-keyed to `@mandate` (runtime R22). A registration for one authored `@hook` runs
+ * `guard --root <root> --hook <identity>` for every edit tool; the hook decides an edit only when its paths select the
+ * file and its tools name the tool, and the edit proceeds only when the acting `@agent` holds a governing mandate that
+ * grants Synthesis there. An event that carries `agent_id` is a subagent, acting as the `@agent` of the
+ * `@agent-profile` its `agent_type` names; the main session, one launched with `--agent` included, acts as the
+ * workspace's default actor. The workspace is the conformance corpus with apps/cli's composition fixture laid over it,
+ * so its `.ia/src` holds the fixture's `@hook note-edits` (PreToolUse Write|Edit|MultiEdit over `docs/**` and
+ * `restricted/**`), `docs-mandate` (the demo participant, Synthesis, covers `docs/`), `reviewer-docs` (the reviewer,
+ * Observation, covers `restricted/`), `demo-mandate` (the demo participant, every move, scoped to the demo workspace,
+ * whose steward it is) and the `reviewer` `@agent-profile`. The corpus adds its own `sample-mandate` (agent-steward;
+ * Observation, Verification; covers `docs/**`) and `agent-steward-profile`. Every path a hook selects is in the demo
+ * workspace, so demo-mandate, a mandate scoped to that workspace, governs it.
  */
 import {
   cpSync,
@@ -35,7 +37,7 @@ import type { HookOutput } from '../src/main.js';
 // Every decision opens the disk-backed workspace.
 vi.setConfig({ testTimeout: 60_000 });
 /**
- * Review D-R4: a seam over runtime's openDatabase, so a test can make the records unreadable after the database opens
+ * A seam over runtime's openDatabase, so a test can make the records unreadable after the database opens
  * (its scope cannot be resolved), which the guard reports as records that cannot be read. Off, it is openDatabase.
  */
 const breaking = vi.hoisted(() => ({ scope: false }));
@@ -71,7 +73,7 @@ const repository = resolve(import.meta.dirname, '../../..'),
   SUBPROCESS = Number(process.env['IA_TEST_SUBPROCESS_TIMEOUT_MS']) || 20_000;
 const mandate = (name: string): string => `agent-system/policy/mandate/${name}`,
   governance = (name: string): string => `ia position --seat ${mandate(name)} --shape governance`;
-/** The fixture's reviewer as a subagent: OD4's subagent carries `agent_id`. */
+/** The fixture's reviewer as a subagent: a subagent's event carries `agent_id`. */
 const reviewer = { agent_id: 'subagent-1', agent_type: 'reviewer' },
   stranger = { agent_id: 'subagent-3', agent_type: 'stranger' };
 const roots: string[] = [];
@@ -165,14 +167,14 @@ it.each(['docs/not-created', '.ia/distributions/not-created'])(
   },
 );
 
-it('allows the main session where its mandate grants Synthesis, a session launched with --agent included (OD4)', () => {
+it('allows the main session where its mandate grants Synthesis, a session launched with --agent included', () => {
   const root = workspace();
   expect(check(root, 'docs/guide.md')).toEqual({});
   // A main session launched with --agent carries agent_type but no agent_id: still the main session, the demo steward.
   expect(check(root, 'docs/guide.md', { agent_type: 'reviewer' })).toEqual({});
   expect(check(root, 'docs/deep/new.md', { agent_type: 'stranger' }, 'Edit')).toEqual({});
   expect(check(root, 'docs/guide.md', {}, 'MultiEdit')).toEqual({});
-  // demo-mandate is scoped to the workspace, so it governs every path the hook selects there (C1 with the workspace).
+  // demo-mandate is scoped to the workspace, so it governs every path the hook selects there.
   expect(check(root, 'restricted/plan.md')).toEqual({});
 });
 
@@ -234,7 +236,7 @@ it('allows any actor where the hook selects nothing; where nothing governs, allo
     expect(check(root, 'README.md', extra, 'Edit'), JSON.stringify(extra)).toEqual({});
   }
   // open/** is selected and no mandate governs it: a mandate only adds restrictions, so an established actor may write,
-  // but an unknown subagent is refused at any path the hook selects (G-R1).
+  // but an unknown subagent is refused at any path the hook selects.
   expect(check(root, 'open/notes.md')).toEqual({});
   expect(check(root, 'open/notes.md', reviewer)).toEqual({});
   const unknown = check(root, 'open/notes.md', stranger);
@@ -242,7 +244,7 @@ it('allows any actor where the hook selects nothing; where nothing governs, allo
   expect(reason(unknown)).toContain(`Next: ia position --seat ${DEMO} --shape governance`);
 });
 
-it('refuses the main session with no default actor or an ambiguous one wherever a mandate governs (G-R5)', () => {
+it('refuses the main session with no default actor or an ambiguous one wherever a mandate governs', () => {
   // No composition.steward and no participant scoped to the workspace: the main session has no default actor, and the
   // mandates that govern docs/ name participants it cannot be.
   const none = workspace({
@@ -266,7 +268,7 @@ it('refuses the main session with no default actor or an ambiguous one wherever 
   expect(code(ambiguous)).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
   expect(reason(ambiguous)).toContain('2 participants');
   expect(reason(ambiguous)).toContain(`Next: ia position --seat ${DEMO} --shape governance`);
-  // The main session's refusal also names the shell command that lifts every hook (G-N1); a subagent's does not.
+  // The main session's refusal also names the shell command that lifts every hook; a subagent's does not.
   expect(reason(ambiguous)).toContain(`ia host claude --root ${JSON.stringify(two)} --remove --apply --yes`);
   expect(reason(check(none, 'docs/guide.md', stranger))).not.toContain('--remove --apply');
   // The reviewer subagent is established all the same, and reviewer-mandate grants it docs/.
@@ -300,7 +302,7 @@ function installedBase(
   return root;
 }
 
-it('judges the main session as the one authored participant when the steward is an installed agent (review C2-R1)', () => {
+it('judges the main session as the one authored participant when the steward is an installed agent', () => {
   // The installed corpus's work-steward as composition.steward: runtime defaultActor counts only an authored steward,
   // so the choice falls to the authored participants, as the CLI's mandate profile reads it.
   const installed = 'agent-system/binding/agent/work-steward',
@@ -334,9 +336,9 @@ it('judges the main session as the one authored participant when the steward is 
   expect(reason(ambiguous)).toContain(`Next: ia position --seat ${DEMO} --shape governance`);
 });
 
-it('lets every established actor author where a governing mandate naming no participant grants Synthesis (G-N6)', () => {
-  // C1's `binds`: a mandate that names no participant binds every actor. demo-mandate observes only, so only the
-  // participant-less mandate can grant restricted/; an unknown subagent is still not established.
+it('lets every established actor author where a governing mandate naming no participant grants Synthesis', () => {
+  // A mandate that names no participant binds every actor. demo-mandate observes only, so only the participant-less
+  // mandate can grant restricted/; an unknown subagent is still not established.
   const root = workspace({
     '.ia/src/workspace.ia': OBSERVING + authorized('open-restricted', ['moves [Synthesis]', 'covers ["restricted/"]']),
   });
@@ -345,7 +347,7 @@ it('lets every established actor author where a governing mandate naming no part
   expect(code(check(root, 'restricted/plan.md', stranger))).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
 });
 
-it('decides each hook independently, each by its own message, its tools applying only to its paths (G-R2)', () => {
+it('decides each hook independently, each by its own message, its tools applying only to its paths', () => {
   const second =
     '\n@hook write-only\n  meaning\n    says "Guard documentation writes."\n    answers "Who may write documentation?"\n  hook\n    event PreToolUse\n    tools [Write]\n    paths ["docs/**"]\n    message "Second hook: writes need the documentation mandate."\n';
   const root = workspace({ '.ia/src/hooks.ia': HOOKS + second }),
@@ -377,9 +379,9 @@ it('decides each hook independently, each by its own message, its tools applying
       expect(code(check(root, path, reviewer, tool, other)), `${tool} ${path}`).toBe('IA-HOOK-PROJECTION-MANAGED');
 });
 
-it('decides only what the hook selects: governing records are guarded by selecting them, and the managed state always (C10)', () => {
-  // C10 as accepted: a hook decides only the paths it selects. Without `.ia/src/**` in its paths, an edit of the hook's
-  // own record is no edit it decides; a hook that selects `.ia/src/**` guards the workspace's governing records.
+it('decides only what the hook selects: governing records are guarded by selecting them, and the managed state always', () => {
+  // A hook decides only the paths it selects. Without `.ia/src/**` in its paths, an edit of the hook's own record is no
+  // edit it decides; a hook that selects `.ia/src/**` guards the workspace's governing records.
   const plain = workspace();
   expect(check(plain, '.ia/src/hooks.ia', reviewer, 'Edit')).toEqual({});
   const guarded = workspace({ '.ia/src/hooks.ia': hooks(['"restricted/**"]', '"restricted/**", ".ia/src/**"]']) });
@@ -539,7 +541,7 @@ it('runs from the built entry with --hook, as the launcher passes its guard argu
   expect(code(await run(reviewer))).toBe('IA-HOOK-NOT-MANDATED');
 });
 
-it('refuses a win32 path that names an alternate data stream, in both modes, before any rule or selection reads it (G-R3)', () => {
+it('refuses a win32 path that names an alternate data stream, in both modes, before any rule or selection reads it', () => {
   // A `:` after the drive designator names a stream (or a drive-relative path): the write lands on the file without
   // it, which the typed spelling does not name.
   expect(streamed('C:\\w\\docs\\x.md')).toBe(false);
@@ -556,7 +558,7 @@ it('refuses a win32 path that names an alternate data stream, in both modes, bef
   }
 });
 
-it('refuses no more than the last registered selection of a hook whose record is gone, naming commands that restore editing (G-N4, G-R7)', () => {
+it('refuses no more than the last registered selection of a hook whose record is gone, naming commands that restore editing', () => {
   // The record of the hook the registration names is renamed: the declaration cannot be read.
   const root = workspace({
     '.ia/src/hooks.ia': hooks(
@@ -600,7 +602,7 @@ it('refuses no more than the last registered selection of a hook whose record is
     for (const command of commands) expect(reason(refused)).toContain(command);
   }
   // An unreadable state is no selection: refused under the root again, naming the state repair the removal itself
-  // would need, then the removal (A-F3).
+  // would need, then the removal.
   put(root, '.ia/distributions/hosts/claude-hooks-workspace.json', '{ not json');
   const unreadable = check(root, 'src/app.ts');
   expect(code(unreadable)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
@@ -610,7 +612,7 @@ it('refuses no more than the last registered selection of a hook whose record is
   expect(reason(unreadable)).toContain(`"ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`);
 });
 
-it('refuses a file with more than one link, whose other name a hook may select, and protects the launcher a registration runs (G-N3, G-N5)', () => {
+it('refuses a file with more than one link, whose other name a hook may select, and protects the launcher a registration runs', () => {
   const root = workspace({ 'docs/guide.md': 'guarded\n', 'notes/plain.md': 'plain\n' });
   linkSync(resolve(root, 'docs/guide.md'), resolve(root, 'notes/alias.md'));
   for (const extra of [{}, reviewer]) {
@@ -655,7 +657,7 @@ const ownership = (root: string, groups: readonly (readonly [string, readonly st
     }),
   );
 
-it('denies every selected edit while an authored @mandate fails admission, naming it and a report that runs (lane D, D4)', () => {
+it('denies every selected edit while an authored @mandate fails admission, naming it and a report that runs', () => {
   // The probe: demo-mandate states an unknown move and excludes task, so admission refuses it and it governs nothing.
   const root = workspace({
     '.ia/src/workspace.ia': starter([
@@ -683,10 +685,10 @@ it('denies every selected edit while an authored @mandate fails admission, namin
     if ('agent_id' in extra) expect(reason(denied), path).not.toContain(lift);
     else expect(reason(denied), path).toContain(lift);
   }
-  // Paths the hook does not select are still not decided, broken mandate or not (C10).
+  // Paths the hook does not select are still not decided, broken mandate or not.
   expect(check(root, 'src/app.ts')).toEqual({});
   expect(check(root, 'notes/todo.md', reviewer, 'Edit')).toEqual({});
-  // One refused in an installed base never governs, so it fails nothing closed (review D-N6).
+  // One refused in an installed base never governs, so it fails nothing closed.
   const installed = installedBase(
     {},
     {
@@ -720,9 +722,9 @@ it('denies every selected edit while an authored @mandate fails admission, namin
   }
 });
 
-it('denies every selected edit while a record an admitted @mandate depends on fails admission (lane D, D9)', () => {
-  // The D8 probes: demo-mandate observes only, and the hook also selects notes/**, which only the scoped demo-mandate
-  // governs. A second participant, ops, may make every move there.
+it('denies every selected edit while a record an admitted @mandate depends on fails admission', () => {
+  // demo-mandate observes only, and the hook also selects notes/**, which only the scoped demo-mandate governs. A
+  // second participant, ops, may make every move there.
   const hooksWithNotes = hooks(['"restricted/**"]', '"restricted/**", "notes/**"]']);
   const ops = `#! ia 1.0\n${authorized('ops-mandate', ['participant @agent ops', 'moves [Observation, Verification, Synthesis, Delegation, Execution]', 'scope [@workspace demo]'])}\n@agent ops\n  meaning\n    says "A second participant."\n    answers "Who is ops?"\n  governance\n    applies []\n`;
   const broken = (text: string, after: string): string => edited(text, [[after, `${after}  bogus\n    note x\n`]]);
@@ -756,7 +758,7 @@ it('denies every selected edit while a record an admitted @mandate depends on fa
   }
   expect(check(agent, 'src/app.ts')).toEqual({});
   // A registration whose hook is not admitted fails closed at the dependency too, naming the admission report, since
-  // ia validate refuses there (review D-N1).
+  // ia validate refuses there.
   const absentHook = check(agent, 'notes/x.md', {}, 'Write', 'hook-authoring-system/binding/hook/absent');
   expect(code(absentHook)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
   const absent = reason(absentHook)!;
@@ -778,7 +780,7 @@ it('denies every selected edit while a record an admitted @mandate depends on fa
   }
 });
 
-it('decides as before beside an unrelated refused @agent or a never-authored participant (lane D, D9)', () => {
+it('decides as before beside an unrelated refused @agent or a never-authored participant', () => {
   const hooksWithNotes = hooks(['"restricted/**"]', '"restricted/**", "notes/**"]']);
   const stray =
     '#! ia 1.0\n\n@agent stray\n  meaning\n    says "x"\n    answers "y"\n  governance\n    applies []\n  bogus\n    note x\n';
@@ -801,7 +803,7 @@ it('decides as before beside an unrelated refused @agent or a never-authored par
   expect(check(root, 'docs/guide.md')).toEqual({});
 });
 
-it('never prints a shell-active character of the root in the admission report it names (review D-R1, D-N2)', () => {
+it('never prints a shell-active character of the root in the admission report it names', () => {
   const safe = `caf${String.fromCharCode(0xe9)}`;
   // Direct byte copies retain Unicode destination spelling without renaming a tree Windows may still have open.
   const copyUnicode = (source: string, target: string): void => {
@@ -853,7 +855,7 @@ it('never prints a shell-active character of the root in the admission report it
   }
 });
 
-it('names the admission report, not a position, for a refused authored mandate shadowing an admitted installed one (review D-R2)', () => {
+it('names the admission report, not a position, for a refused authored mandate shadowing an admitted installed one', () => {
   const root = installedBase({
     '.ia/src/shadow.ia': `#! ia 1.0\n${authorized('sample-mandate', ['participant @agent demo', 'moves [Bogus]'])}`,
   });
@@ -872,7 +874,7 @@ it('names the admission report, not a position, for a refused authored mandate s
   expect(reason(denied)).not.toContain(`Next: ${governance('sample-mandate')}`);
 });
 
-it('names what runs when the records cannot be read: the report while a mandate is refused, else ia validate (review D-R4)', () => {
+it('names what runs when the records cannot be read: the report while a mandate is refused, else ia validate', () => {
   const refused = workspace({
     '.ia/src/workspace.ia': starter([
       'moves [Observation, Verification, Synthesis, Delegation, Execution]',
@@ -908,7 +910,7 @@ it('keeps naming the governance position for an admitted mandate whose authority
   expect(check(root, 'src/app.ts')).toEqual({});
 });
 
-it('refuses no more than the last registered selection when the records cannot open, naming only the removal (H-R8, H-N14)', () => {
+it('refuses no more than the last registered selection when the records cannot open, naming only the removal', () => {
   // A descriptor the db cannot read: the workspace's records do not open at all.
   const root = workspace({ '.ia/workspace.json': '{ not json' });
   const removal = `"ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`,
@@ -937,14 +939,14 @@ it('refuses no more than the last registered selection when the records cannot o
   expect(reason(refused)).toContain(removal);
 });
 
-it('names only the removal when the hook record is gone and the workspace does not admit (H-R2)', () => {
+it('names only the removal when the hook record is gone and the workspace does not admit', () => {
   // A syntax error in hooks.ia: the hook is no admitted record and the workspace does not admit, so re-registering
   // would refuse; the removal and the admission report are the commands that work. The file holds docs-mandate and
-  // reviewer-docs too, which admission refuses with it, so `ia validate`, mandate-gated, would refuse (lane D).
+  // reviewer-docs too, which admission refuses with it, so `ia validate`, mandate-gated, would refuse.
   const root = workspace({ '.ia/src/hooks.ia': hooks(['@hook note-edits', '@hook note-edits\n  bogus\nzzz']) });
   ownership(root, [[HOOK, ['docs/**', '.ia/src/**']]]);
   const refused = check(root, '.ia/src/hooks.ia', {}, 'Edit');
-  // Review D-N1: the hook shares its refused file with the two mandates, so the edit fails closed at the first of them.
+  // The hook shares its refused file with the two mandates, so the edit fails closed at the first of them.
   expect(code(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
   expect(reason(refused)).toContain(`${mandate('docs-mandate')} (.ia/src/hooks.ia:15) failed admission`);
   expect(reason(refused)).toContain(`"ia host claude --root ${JSON.stringify(root)} --remove --apply --yes"`);
@@ -968,7 +970,7 @@ it('names only the removal when the hook record is gone and the workspace does n
     named = reason(check(plain, '.ia/src/hooks.ia', {}, 'Edit'));
   expect(named).toContain(`"ia validate --root ${JSON.stringify(plain)}"`);
   expect(named).not.toContain('ia report');
-  // Review D2-R2: a stray top-level line there is a record db cannot identify, possibly a mandate, so the edit fails
+  // A stray top-level line there is a record db cannot identify, possibly a mandate, so the edit fails
   // closed at it and names the admission report.
   const stray = plainly('@hook note-edits\n  bogus\nzzz'),
     closed = reason(check(stray, '.ia/src/hooks.ia', {}, 'Edit'));

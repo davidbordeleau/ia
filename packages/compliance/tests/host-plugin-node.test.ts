@@ -186,8 +186,9 @@ function hostEnv(path: string): NodeJS.ProcessEnv {
   return { ...env, PATH: path };
 }
 
-// Windows keeps the earlier command, which looks node up on PATH (host plugin distribution design §6.1, residual limit),
-// so this case runs on macOS and Linux only; the Windows rendering case above checks that command byte for byte.
+// Windows keeps the earlier command, which looks node up on PATH: a residual limit of the rendering (host plugin
+// distribution spec §6.1). So this case runs on macOS and Linux only; the Windows rendering case above checks that
+// command byte for byte.
 const posixIt = it.skipIf(process.platform === 'win32');
 posixIt(
   'a node planted in the project or behind a relative PATH entry never starts the hook, and sh runs the recorded Node as written (#436)',

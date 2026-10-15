@@ -1,9 +1,8 @@
 /**
- * `ia author` and the mandate profile on every gated mode (milestone generation-binding plan amendments C1, C3, C19 and
- * C20; continuation lane C; review claude-v1 B2), on an `ia init` workspace with the CLI composition fixture laid over
- * it and a small plan authored. A successful author writes exactly the candidate its preview showed, with one
- * attribution comment, and moves no other record's digest; every refusal writes nothing, and its next command runs in
- * the state that refused.
+ * `ia author` and the mandate profile on every gated mode, on an `ia init` workspace with the CLI composition fixture
+ * laid over it and a small plan authored. A successful author writes exactly the candidate its preview showed, with
+ * one attribution comment, and moves no other record's digest; every refusal writes nothing, and its next command runs
+ * in the state that refused.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -28,9 +27,9 @@ vi.setConfig({ testTimeout: 240_000, hookTimeout: 240_000 });
 afterAll(cleanup);
 
 /**
- * Review C2-N3: every workspace session a command opens, counted at the distribution service the CLI's session module
- * opens it through (that module imports the dispatcher, so it is not mocked itself). Review C2-N15: `replaceError`, when
- * set, is what the distribution's `replace` throws, as a volume would.
+ * Every workspace session a command opens, counted at the distribution service the CLI's session module opens it
+ * through (that module imports the dispatcher, so it is not mocked itself). `replaceError`, when set, is what the
+ * distribution's `replace` throws, as a volume would.
  */
 const sessions = vi.hoisted(() => ({ opened: 0, replaceError: undefined as Error | undefined }));
 vi.mock('@inventarch/distribution/services', async (importOriginal) => {
@@ -137,7 +136,7 @@ function digests(root: string): ReadonlyMap<string, string> {
 const body = (result: Result) => JSON.parse(result.stdout) as Record<string, unknown> & { readonly next?: string };
 const ia = (root: string, argv: readonly string[]): Promise<Result> =>
   run([...argv, '--root', root, '--json'], { env: HOMES });
-/** The IA homes every command here runs with (review C-N6), so a write to either is seen. */
+/** The IA homes every command here runs with, so a write to either is seen. */
 const HOMES = { IA_HOST_HOME: scratch('author-host-home'), IA_CONFIG_HOME: scratch('author-config-home') };
 const trees = (root: string) => ({
   root: tree(root),
@@ -273,7 +272,7 @@ describe('ia author', () => {
     );
     expect((await ia(root, ['validate'])).exitCode).toBe(0);
   });
-  it('writes an edit beside an error already in another record of the file (review C-R4)', async () => {
+  it('writes an edit beside an error already in another record of the file', async () => {
     const root = workspace((at) =>
       rewrite(
         at,
@@ -420,7 +419,7 @@ describe('doctor makes source protection declarations visible', () => {
   });
 });
 
-describe('structural check admission on the authoring paths (C21)', () => {
+describe('structural check admission on the authoring paths', () => {
   const check = (name: string, runner: string, scope: string) =>
     `\n@check ${name}\n  meaning\n    says "Bind ${name} for the test."\n    answers "What does ${name} select?"\n  check\n    runs ${runner}\n    scope "${scope}"\n`;
   const ID = (name: string) => `compliance-system/check/gate/${name}`;
@@ -507,7 +506,7 @@ describe('structural check admission on the authoring paths (C21)', () => {
   });
 });
 
-describe('the next command after an author (review C2-N11, C2-N13)', () => {
+describe('the next command after an author', () => {
   it('names the governance position, not an ia validate the profile refuses, under Synthesis without Verification', async () => {
     const root = workspace((at) => moves(at, 'Observation, Synthesis'));
     const digest = createHash('sha256')
@@ -552,7 +551,7 @@ describe('ia author refusals, each writing nothing', () => {
     writeFileSync(resolve(root, '.ia/src/task.ia'), '#! ia 1.0\n');
     await refused(root, ['author', ...draft, '--digest', empty], 'IA-CLI-EDIT-STALE');
   });
-  it('refuses a write the volume refuses as IA-CLI-FAILED naming the repair, never as a raw errno (review C2-N15)', async () => {
+  it('refuses a write the volume refuses as IA-CLI-FAILED naming the repair, never as a raw errno', async () => {
     const root = workspace();
     const form = ['--set', '@milestone m1', 'work.owner=Tom'];
     const digest = await previewed(root, form);
@@ -626,7 +625,7 @@ describe('ia author refusals, each writing nothing', () => {
       ['author', 'task', 't9', 'meaning.says=x', '--at', 'docs/task.ia', '--digest', EMPTY],
       'IA-CLI-EDIT-UNOWNED',
     );
-    // Another spelling of an existing source is judged as the volume spells it (review C-R1), on a volume that folds case.
+    // Another spelling of an existing source is judged as the volume spells it, on a volume that folds case.
     if (existsSync(resolve(root, '.IA/SRC'))) {
       const digest = createHash('sha256')
         .update(readFileSync(resolve(root, '.ia/src/work.ia')))
@@ -656,11 +655,11 @@ describe('ia author refusals, each writing nothing', () => {
     );
     expect(unclean['message']).toContain('IA-COMP-FIELD-MISSING');
     expect(nextArgv(unclean['next'] as string)[0]).toBe('preview');
-    // Review C2-N12: the first error is located once, not as `path:line: path:line:`.
+    // The first error is located once, not as `path:line: path:line:`.
     const located = /at (\S+:\d+): /.exec(unclean['message'] as string)![1]!;
     expect(unclean['message']).not.toContain(`${located}: ${located}:`);
   });
-  it('tells an empty --digest from an absent one, and an absent file from an empty one (review C2-N12)', async () => {
+  it('tells an empty --digest from an absent one, and an absent file from an empty one', async () => {
     const root = workspace();
     const form = ['--set', '@milestone m1', 'work.owner=Tom'];
     // An empty value is the parser's usage error; an absent one is judged after the profile and names the preview.
@@ -754,7 +753,7 @@ describe('ia author refusals, each writing nothing', () => {
       'IA-CLI-EDIT-MANDATE',
     );
   });
-  it('holds a restricting mandate against its own participant when it excludes workspace, agent and mandate (review C3-R1)', async () => {
+  it('holds a restricting mandate against its own participant when it excludes workspace, agent and mandate', async () => {
     // The documented recipe: a mandate that should hold against its own participant excludes the words that would let it
     // move the mandate out of the closure, add a participant with a broader mandate, or name a new steward.
     const root = workspace((at) => {
@@ -785,7 +784,7 @@ describe('ia author refusals, each writing nothing', () => {
       expect(refusal['message'], `(${route}) ${argv.join(' ')}`).toBe(`${mandate('demo-mandate')} excludes ${word}`);
     }
   });
-  it('judges the profile before a missing or malformed digest, so the preview it names runs (review C2-R4)', async () => {
+  it('judges the profile before a missing or malformed digest, so the preview it names runs', async () => {
     const form = ['--set', '@milestone m1', 'work.owner=Tom'];
     // An open actor choice is refused before the digest.
     const ambiguous = workspace((at) => {
@@ -795,8 +794,8 @@ describe('ia author refusals, each writing nothing', () => {
         `#! ia 1.0\n${AGENT('ops')}${MANDATE('ops-mandate', ['participant @agent ops', 'moves [Observation, Verification]', 'scope [@workspace demo]'])}`,
       );
     });
-    // Review C3-R2: without a usable digest the next is the preview with the actor named, one hop that runs and prints
-    // the digest; with one, it is the author form itself, the digest kept.
+    // Without a usable digest the next is the preview with the actor named, one hop that runs and prints the digest;
+    // with one, it is the author form itself, the digest kept.
     for (const digest of [[], ['--digest', 'abc']]) {
       const open = await refused(ambiguous, ['author', ...form, ...digest], 'IA-RUNTIME-MANDATE-ACTOR');
       const named = nextArgv(open['next'] as string);
@@ -877,7 +876,7 @@ describe('the mandate profile on every gated mode', () => {
     expect((await ia(root, ['position'])).exitCode).toBe(0);
     expect((await ia(root, ['position', '--seat', mandate('demo-mandate'), '--shape', 'governance'])).exitCode).toBe(0);
   });
-  it('gates a workspace ia host --apply as an effect, and leaves its plan, --remove and --user alone (review C2-R7)', async () => {
+  it('gates a workspace ia host --apply as an effect, and leaves its plan, --remove and --user alone', async () => {
     const root = workspace((at) => moves(at, 'Observation, Verification'));
     const refusal = await refused(root, ['host', 'claude', '--apply', '--yes'], 'IA-RUNTIME-MANDATE-MOVE');
     expect(refusal['message']).toBe(
@@ -912,7 +911,7 @@ describe('the mandate profile on every gated mode', () => {
     for (const command of ['ia host claude', 'ia host claude --remove --apply', 'ia host claude --user --apply'])
       expect(nextOf(command), command).toBe(`Run "${command}" to repair it.`);
   });
-  it('judges validate, capture and project on the session that reads the verdict or the effect (review C2-N3)', async () => {
+  it('judges validate, capture and project on the session that reads the verdict or the effect', async () => {
     const root = workspace();
     for (const argv of [['validate'], ['capture', '--preview'], ['project', 'claude']]) {
       sessions.opened = 0;
@@ -921,7 +920,7 @@ describe('the mandate profile on every gated mode', () => {
       expect(sessions.opened, argv.join(' ')).toBe(1);
     }
   });
-  it('applies the projection its gate judged, through that one session, for project and host --apply (review C3-N2)', async () => {
+  it('applies the projection its gate judged, through that one session, for project and host --apply', async () => {
     for (const argv of [
       ['project', 'claude', '--apply', '--yes'],
       ['host', 'claude', '--apply', '--yes'],
@@ -934,7 +933,7 @@ describe('the mandate profile on every gated mode', () => {
       expect(existsSync(resolve(root, '.claude/rules/ia-workspace.md')), argv.join(' ')).toBe(true);
     }
   });
-  it('names the actor-less command after a mistyped actor only where its profile allows it (review C2-N7)', async () => {
+  it('names the actor-less command after a mistyped actor only where its profile allows it', async () => {
     // No steward and no participant: the one mandate names none and grants Observation alone.
     const root = workspace((at) => {
       rewrite(at, '.ia/src/workspace.ia', (text) =>
@@ -948,7 +947,7 @@ describe('the mandate profile on every gated mode', () => {
     const read = await refused(root, ['read', participant, '--actor', 'nobody'], 'IA-RUNTIME-MANDATE-ACTOR');
     expect(nextArgv(read['next'] as string)).toEqual(commandRoots(['read', participant, '--root', root]));
   });
-  it('judges excluded words only for preview and author, leaving read, validate, next and capture alone (review C2-N10)', async () => {
+  it('judges excluded words only for preview and author, leaving read, validate, next and capture alone', async () => {
     const root = workspace((at) =>
       rewrite(at, '.ia/src/workspace.ia', (text) =>
         text.replace(
@@ -986,7 +985,7 @@ describe('the mandate profile on every gated mode', () => {
       commandRoots(['position', '--seat', mandate('demo-mandate'), '--shape', 'governance', '--root', readOnly]),
     );
     expect(refusal['next']).toContain('preview needs Verification and @plan');
-    // Review C-R6: an excluded @plan is no command the profile allows either.
+    // An excluded @plan is no command the profile allows either.
     const excluded = workspace((at) => {
       rmSync(resolve(at, '.ia/src/work.ia'));
       rewrite(at, '.ia/src/workspace.ia', (text) =>
@@ -1012,7 +1011,7 @@ describe('the mandate profile on every gated mode', () => {
     const ops = await refused(open, ['next', '--actor', 'agent-system/binding/agent/ops'], 'IA-RUNTIME-NEXT-NO-PLAN');
     expect(nextArgv(ops['next'] as string)[0]).toBe('position');
   });
-  it('keeps CRLF line endings and a byte-order mark in what it writes (review C-R8)', async () => {
+  it('keeps CRLF line endings and a byte-order mark in what it writes', async () => {
     const bom = String.fromCharCode(0xfeff);
     for (const [label, encode] of [
       ['CRLF', (text: string) => text.replaceAll('\n', '\r\n')],
@@ -1124,7 +1123,7 @@ describe('the mandate profile on every gated mode', () => {
   });
 });
 
-describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)', () => {
+describe('a @mandate that fails admission', () => {
   /** The probe: demo-mandate states an unknown move and excludes task, so admission refuses it. */
   const probe = (at: string): void => {
     moves(at, 'Bogus');
@@ -1311,7 +1310,7 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
     expect(validated.exitCode).toBe(1);
     expect(body(validated)).toMatchObject({ status: 'refused' });
   });
-  it('names an admission report that runs from the cwd alone, printing no character of the root (review D-R1, D-N2, D-N6)', async () => {
+  it('names an admission report that runs from the cwd alone, printing no character of the root', async () => {
     // Construct the final directory directly: Windows may refuse a fixture-tree rename after its files were opened.
     const copyUnicode = (source: string, target: string): void => {
       mkdirSync(target, { recursive: true });
@@ -1372,10 +1371,10 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
       if (omitted) expect(given.next, name).toContain('from the workspace root');
       expect((await run(nextArgv(given.next!), { cwd: root, env: HOMES })).exitCode, name).toBe(1);
     }
-    // Review D2-R1: a cwd reached through a link inside the workspace keeps the link's spelling, and the CLI and db read
-    // a relative --root lexically against it, so the next names a root that resolves there to the workspace: a junction
-    // (a directory symlink off win32) to a deeper folder, and a pnpm-style one under node_modules; and (review D2 recheck
-    // F5) one above the root, a link to the workspace itself that the cwd is spelled through.
+    // A cwd reached through a link inside the workspace keeps the link's spelling, and the CLI and db read a relative
+    // --root lexically against it, so the next names a root that resolves there to the workspace: a junction (a
+    // directory symlink off win32) to a deeper folder, and a pnpm-style one under node_modules; and one above the root,
+    // a link to the workspace itself that the cwd is spelled through.
     const linked = workspace(probe);
     mkdirSync(resolve(linked, 'a/b/c'), { recursive: true });
     mkdirSync(resolve(linked, 'packages/pkg'), { recursive: true });
@@ -1412,7 +1411,7 @@ describe('a @mandate that fails admission (lane D, operator ruling 2026-10-12)',
           );
         }
   });
-  it('names the admission report and a hand edit for a refused authored mandate shadowing an admitted installed one (review D-R2)', async () => {
+  it('names the admission report and a hand edit for a refused authored mandate shadowing an admitted installed one', async () => {
     // The installed sample-mandate is admitted at band 90; an authored override of it fails admission.
     const root = resolve(scratch('author-shadow'), 'shadow'),
       vendor = 'vendor/foundation';

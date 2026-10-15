@@ -1,6 +1,6 @@
-// D14 and D15 (milestone generation-binding; plan amendments C14, C15, C21 and C22): every `@check` bound at validate
-// against the verdicts its scope selects or the host's evaluator catalog, and the runtime evidence a validate effect
-// records for the bound checks that passed or failed. Binding and discovery only read; `writeEvidence` is the writer.
+// D13 and D14: every `@check` bound at validate against the verdicts its scope selects or the host's evaluator
+// catalog, and the runtime evidence a validate effect records for the bound checks that passed or failed. Binding and
+// discovery only read; `writeEvidence` is the writer.
 import { spawn } from 'node:child_process';
 import {
   chmodSync,
@@ -80,7 +80,7 @@ const entry = (id: string, availability: Record<string, string>, digest = 'a') =
   availability,
 });
 
-it('aggregates the verdicts a scope selects: fail, then not-evaluated, then pass; nothing selected is not-evaluated (C22)', () => {
+it('aggregates the verdicts a scope selects: fail, then not-evaluated, then pass; nothing selected is not-evaluated (D13)', () => {
   const verdict = (scope: string, outcome: Verdict['outcome'], check = 'COMP-X'): Verdict =>
     ({ check, scope, outcome, findings: [], revision: 'r' }) as Verdict;
   const all = [
@@ -121,7 +121,7 @@ it('selects exact scopes without admitting descendants, lexical prefixes or ance
   }
 });
 
-it('binds a built-in check to the admission verdicts its scope selects, and a prose scope to not-evaluated (C15, C22)', () => {
+it('binds a built-in check to the admission verdicts its scope selects, and a prose scope to not-evaluated (D13)', () => {
   const root = workspace();
   fixture(
     root,
@@ -154,7 +154,7 @@ it('binds a built-in check to the admission verdicts its scope selects, and a pr
   });
 });
 
-it('selects verdicts by check.scope alone: check.covers claims paths and never changes a binding (C17, C22)', () => {
+it('selects verdicts by check.scope alone: check.covers claims paths and never changes a binding (D13)', () => {
   const root = workspace();
   const covered = (name: string, scope: string) =>
     check(name, 'COMP-SCHEMA', scope).replace(
@@ -184,7 +184,7 @@ it('selects verdicts by check.scope alone: check.covers claims paths and never c
   });
 });
 
-it('admits an unknown evaluator only structurally, and binds it unavailable, revoked or supported-but-not-run (C15, C21)', () => {
+it('admits an unknown evaluator only structurally, and binds it unavailable, revoked or supported-but-not-run (D13)', () => {
   const root = workspace();
   fixture(root, check('typing-check', 'acme-strict-typing', 'package'), check('lint-check', 'acme-lint', 'package'));
   // Strict admission, every existing reader's default, still refuses the record.
@@ -262,7 +262,7 @@ function validateOnce(root: string, now = new Date('2026-10-11T12:00:00.000Z')) 
   });
 }
 
-it('records a passing built-in check as an admitted runtime observation without moving the authored revision (C14)', () => {
+it('records a passing built-in check as an admitted runtime observation without moving the authored revision (D14)', () => {
   const root = workspace();
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   const before = using(structural(root), (db) => ({ authored: db.authoredRevision, revision: db.revision }));
@@ -301,14 +301,14 @@ it('records a passing built-in check as an admitted runtime observation without 
   expect(using(structural(root), (db) => db.authoredRevision)).toBe(before.authored);
 });
 
-it('records nothing for an unbound, unavailable or not-evaluated check, and keeps no file then (C14, C22)', () => {
+it('records nothing for an unbound, unavailable or not-evaluated check, and keeps no file then (D14)', () => {
   const root = workspace();
   fixture(root, check('typing-check', 'acme-strict-typing', 'package'), check('prose-check', 'COMP-SCHEMA', 'prose'));
   expect(validateOnce(root)).toEqual({ path: null, written: false, pruned: [], observations: [] });
   expect(existsSync(resolve(root, EVIDENCE_DIRECTORY))).toBe(false);
 });
 
-it('discovers only the current authored revision’s file, and the writer prunes the others and nothing else (C14)', () => {
+it('discovers only the current authored revision’s file, and the writer prunes the others and nothing else (D14)', () => {
   const root = workspace();
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   const older = `${EVIDENCE_DIRECTORY}/${'0'.repeat(64)}.ia`,
@@ -339,7 +339,7 @@ it('discovers only the current authored revision’s file, and the writer prunes
   );
 });
 
-it('ignores evidence that would collide with an authored observation or add a finding of its own (C14)', () => {
+it('ignores evidence that would collide with an authored observation or add a finding of its own (D14)', () => {
   const root = workspace();
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   const first = validateOnce(root),
@@ -373,7 +373,7 @@ it('ignores evidence that would collide with an authored observation or add a fi
   );
 });
 
-it('never reads or writes evidence through a link or junction or at an entry of the wrong kind (C14)', () => {
+it('never reads or writes evidence through a link or junction or at an entry of the wrong kind (D14)', () => {
   const root = workspace(),
     elsewhere = workspace(false);
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
@@ -414,7 +414,7 @@ it('never reads or writes evidence through a link or junction or at an entry of 
   expect(statSync(resolve(root, `${EVIDENCE_DIRECTORY}/${revision}.ia`)).nlink).toBe(1);
 });
 
-it('fails cleanly where the evidence cannot be written, leaving what it found and no staged file (C14)', () => {
+it('fails cleanly where the evidence cannot be written, leaving what it found and no staged file (D14)', () => {
   const root = workspace();
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   const first = validateOnce(root),
@@ -437,7 +437,7 @@ it('fails cleanly where the evidence cannot be written, leaving what it found an
   expect(statSync(target).isFile()).toBe(true);
 });
 
-it('stages and renames, so repeated writes of differing evidence always leave one whole file (C14)', () => {
+it('stages and renames, so repeated writes of differing evidence always leave one whole file (D14)', () => {
   const root = workspace();
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   const revision = using(structural(root), (db) => db.authoredRevision),
@@ -468,7 +468,7 @@ const findingLines = (db: Handle) =>
     .filter((finding) => !finding.path.startsWith(EVIDENCE_DIRECTORY))
     .map((finding) => `${finding.code} ${finding.path}`);
 
-it('admits only evidence exactly as the writer makes it, which never changes what the authored records admit (B3-R4)', () => {
+it('admits only evidence exactly as the writer makes it, which never changes what the authored records admit (D14)', () => {
   const root = workspace();
   fixture(
     root,
@@ -529,7 +529,7 @@ it('admits only evidence exactly as the writer makes it, which never changes wha
       genuine.text.replaceAll(genuineName, genuineName.replace('whole-schema-check', 'absent-check')),
     ],
     ['an extra field', genuine.text.replace('    move Verification\n', '    move Verification\n    note "planted"\n')],
-    // Review finding B4-RC1: writer-shaped, but not what the writer writes for this view.
+    // Writer-shaped, but not what the writer writes for this view.
     ['a forged verdict', genuine.text.replace(/(@observation whole-schema-check[\s\S]*?verdict )success/, '$1refusal')],
     [
       'a forged reason',
@@ -567,7 +567,7 @@ it('admits only evidence exactly as the writer makes it, which never changes wha
   }
 });
 
-it('renders a failing built-in check as a refusal, failure dominating the real report, which no reader admits for a refused admission (B3-R2, F1)', () => {
+it('renders a failing built-in check as a refusal, failure dominating the real report, which no reader admits for a refused admission (D14)', () => {
   const root = workspace();
   fixture(
     root,
@@ -594,7 +594,7 @@ it('renders a failing built-in check as a refusal, failure dominating the real r
     ['whole-schema-check', 'refusal'],
   ]);
   // A failing verdict always refuses admission, and the validate request records nothing for a refused admission, so
-  // the writer's own output for this view is still not evidence to any reader (review finding F1).
+  // the writer's own output for this view is still not evidence to any reader.
   expect(using(structural(root), (db) => db.report.findings.some((finding) => finding.severity === 'error'))).toBe(
     true,
   );
@@ -602,7 +602,7 @@ it('renders a failing built-in check as a refusal, failure dominating the real r
   using(open(root, { cache: false, evidence: true }), (db) => expect(band0(db)).toEqual([]));
 });
 
-it('prunes best effort, never refusing with nothing to record or for a file it may not remove (B3-R1, B3-N2, B3-N6)', () => {
+it('prunes best effort, never refusing with nothing to record or for a file it may not remove (D14)', () => {
   const root = workspace();
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   const first = validateOnce(root),
@@ -644,7 +644,7 @@ it('prunes best effort, never refusing with nothing to record or for a file it m
   expect(() => writeEvidence(root, revision, '#! ia 1.0\n')).toThrow(code('IA-DB-PATH-UNSAFE'));
 });
 
-it('previews a draft as the handle admits it, never with evidence, and caches no structural graph (B3-N5)', () => {
+it('previews a draft as the handle admits it, never with evidence, and caches no structural graph (D13)', () => {
   const root = workspace();
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   validateOnce(root);
@@ -668,7 +668,7 @@ it('previews a draft as the handle admits it, never with evidence, and caches no
   expect(existsSync(cache)).toBe(true);
 });
 
-it('opens an editor database structurally only when asked, and lists no evidence into it or its drafts (C21)', () => {
+it('opens an editor database structurally only when asked, and lists no evidence into it or its drafts (D13)', () => {
   const root = workspace();
   fixture(
     root,
@@ -726,7 +726,7 @@ it('opens an editor database structurally only when asked, and lists no evidence
   }
 });
 
-it('never counts COMP-CHECK passing a check only structural admission admits (B3-N1)', () => {
+it('never counts COMP-CHECK passing a check only structural admission admits (D13)', () => {
   const root = workspace();
   fixture(root, check('check-check', 'COMP-CHECK', '*'));
   expect(using(structural(root), (db) => byName(db)['check-check']!.outcome)).toBe('pass');
@@ -740,7 +740,7 @@ it('never counts COMP-CHECK passing a check only structural admission admits (B3
   });
 });
 
-it('touches an unchanged current file, so a validation of an older revision that began earlier never prunes it (B4-RC3)', () => {
+it('touches an unchanged current file, so a validation of an older revision that began earlier never prunes it (D14)', () => {
   const root = workspace();
   fixture(root, check('whole-schema-check', 'COMP-SCHEMA', '*'));
   const first = validateOnce(root),
@@ -757,7 +757,7 @@ it('touches an unchanged current file, so a validation of an older revision that
   expect(readFileSync(current, 'utf8')).toBe(text);
 });
 
-it('replaces the evidence file while another process holds it open, as a concurrent validate reading it does (review D2-N3)', async () => {
+it('replaces the evidence file while another process holds it open, as a concurrent validate reading it does (D14)', async () => {
   // On win32 a replacing rename fails (EPERM) while any other handle holds the target: a concurrent validate reading the
   // evidence it found. The writer retries until the reader lets go, so one whole file, the writer's bytes, results.
   const root = workspace(false),

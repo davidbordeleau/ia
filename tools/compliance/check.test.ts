@@ -19,10 +19,9 @@ it('discovers the actual conformance tree without stray entries', () => {
 it('executes native graph, all language fixtures, all refusal-code boundaries and kernel generation', () => {
   const { report, fixtures, boundaries, qualification } = checkCompliance(root);
   expect(fixtures).toBe(179);
-  // IA-COMP-PROJECTION-INVALID retired with the projection renderers (milestone position-packet task replace-renderers);
-  // the mandate resolver adds the default-actor and two profile refusals (milestone generation-binding task
-  // mandate-resolution), the `@mandate` guard its three hook refusals (task generation-hook-governance), and lane D a
-  // second IA-COMP-FIELD-VALUE boundary, the stated empty `authority.moves` admission refuses.
+  // IA-COMP-PROJECTION-INVALID retired with the projection renderers; the mandate resolver adds the default-actor and
+  // two profile refusals, the `@mandate` guard its three hook refusals, and admission a second IA-COMP-FIELD-VALUE
+  // boundary, the stated empty `authority.moves` it refuses.
   expect(boundaries).toBe(120);
   expect(qualification).toEqual({
     platform: process.platform,

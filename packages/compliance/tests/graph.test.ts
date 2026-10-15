@@ -110,7 +110,7 @@ describe('full native graph checks', () => {
     expect(missing.findings.map((f) => f.code)).toEqual(['IA-COMP-CHECK-UNKNOWN']);
     expect(missing.findings[0]!.message).toContain("Unknown or missing check.implementation or check.runs ''");
   });
-  it('admits any named evaluator structurally, refusing only a conflict or no evaluator, while strict stays (C21)', () => {
+  it('admits any named evaluator structurally, refusing only a conflict or no evaluator, while strict stays (C30)', () => {
     const check = [...native.nodes.values()].find((n) => n.discriminator === 'check')!;
     const withCheck = (fields: Record<string, string | null>): Node => ({
       ...check,
@@ -466,7 +466,7 @@ describe('graph schema obligations', () => {
     expect(result.outcome).toBe('pass');
     expect(result.findings.map((f) => [f.code, f.severity])).toEqual([['IA-COMP-FIELD-REF-MISSING', 'warning']]);
   });
-  it('refuses a duplicated non-list field key on the graph path and keeps checking each occurrence (D3)', () => {
+  it('refuses a duplicated non-list field key on the graph path and keeps checking each occurrence (C04)', () => {
     const doubled = {
       path: 'doubled.ia',
       text: '#! ia 1.0\n@playbook source\n  work\n    parent @playbook target\n    parent @playbook nobody\n    tags [a]\n    tags [b]\n@playbook target\n',
@@ -502,7 +502,7 @@ describe('graph schema obligations', () => {
       `'work.parent' is declared once by @schema playbook; found 2 occurrences`,
     );
   });
-  it('refuses an undeclared key in a closed declared section on the graph path and leaves the same key alone under open (D1)', () => {
+  it('refuses an undeclared key in a closed declared section on the graph path and leaves the same key alone under open (C04b)', () => {
     const extra = {
       path: 'extra.ia',
       text: '#! ia 1.0\n@playbook source\n  work\n    parent @playbook target\n    ready true\n  governance\n    requires "kept as a variant"\n    severity blocking\n@playbook target\n  work\n    parent @playbook source\n',
@@ -556,7 +556,7 @@ describe('graph schema obligations', () => {
   });
 });
 
-describe("agent-system's mandate moves (lane D, D5)", () => {
+describe("agent-system's mandate moves (C05)", () => {
   /** A probe `@mandate` of the native agent-system, `authority` its authority lines. */
   const AUTHORED = {
     placement: { kind: 'authored' as const, band: 100 as const, reach: '' },

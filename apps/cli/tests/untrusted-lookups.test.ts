@@ -168,7 +168,8 @@ it('ia host claude --user --apply records the Node running it, by absolute path,
   const hooks = JSON.parse(
     readFileSync(resolve(env['IA_HOME']!, 'claude/marketplace/plugins/ia/hooks/hooks.json'), 'utf8'),
   );
-  // Shell form: the Node quoted on macOS and Linux; on Windows the earlier `node` by name (host plugin distribution design §6.1).
+  // Shell form: the Node quoted on macOS and Linux; on Windows the earlier `node` by name (host plugin distribution
+  // spec §6.1).
   const command = windows ? 'node' : `"${nodeCommand(process.execPath)}"`;
   expect(hooks.hooks.SessionStart).toStrictEqual([
     {

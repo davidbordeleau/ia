@@ -126,7 +126,7 @@ it('saves output only as a new relative file under .ia/work', () => {
   );
 });
 
-it('removes its temporary file when a replace or a create fails before it publishes (review C2-N14)', () => {
+it('removes its temporary file when a replace or a create fails before it publishes', () => {
   const root = fixture.target();
   mkdirSync(join(root, 'out'), { recursive: true });
   // The temporary file is opened, then the write refuses content that is no buffer.

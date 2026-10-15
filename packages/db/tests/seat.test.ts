@@ -351,8 +351,8 @@ it('orders claimants band descending then identity ascending across claimant fie
   const db = open(root, { cache: false, locations: { [lawPath]: adopted } });
   try {
     expect(errors(db)).toEqual([]);
-    // The check claims through its covers (plan amendment C17); its scope reads as a path but is text that selects
-    // verdicts, so it claims nothing (G06c, C22).
+    // The check claims through its covers; its scope reads as a path but is text that selects verdicts, so it claims
+    // nothing (graph G06c).
     expect(brief(db.resolveSeat('src/billing/invoice.ts')).claimants).toEqual([
       [mandateId, 100, 'authority.covers src/**'],
       ['compliance-system/check/gate/billing-check', 100, 'check.covers src/**'],
@@ -383,8 +383,8 @@ it('names each claimant selection the dialect reads as none, where it is authore
     lawPath,
     '#! ia 1.0\n\n@law rooted-law\n  meaning\n    says "A rooted law."\n    answers "Which law covers billing?"\n  governance\n    severity blocking\n  subject\n    covers ["/src/billing/", "./src/billing/**", "src/billing/"]\n',
   );
-  // A check's scope is text, not a claimant selection (graph G06c, C22), so even one the dialect would read as none is
-  // never named here; its covers is a claimant field (C17), whose selections are.
+  // A check's scope is text, not a claimant selection (graph G06c), so even one the dialect would read as none is
+  // never named here; its covers is a claimant field, whose selections are.
   put(
     root,
     '.ia/src/systems/compliance-system/checks/prose-check.ia',

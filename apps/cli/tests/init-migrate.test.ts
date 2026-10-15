@@ -1,5 +1,5 @@
 /**
- * `ia init --migrate`: milestone position-packet task init-migrate-flag's exit evidence.
+ * `ia init --migrate`: the migration tests docs/specs/workspace-initialization/README.md §7 names.
  *
  * The 1.1.0 fixture (tests/fixtures/workspace-1.1.0) is the v1.1.0 starter of a workspace named `demo` — its local
  * `@system demo` and `@agent demo-steward`, its `@workspace demo` and `@distribution demo-distribution`, and the
@@ -664,7 +664,7 @@ it('leaves the migration and its capture in place when a projection apply fails,
     message: 'file write failed',
     next: `The workspace is migrated and captured. Repair the reported filesystem problem, then run "ia init ${quote(root)} --migrate --apply --yes" to finish migrating.`,
   });
-  // Every earlier result stays (design §3); the guard was retired before the first projection file changed (B11).
+  // Every earlier result stays; the guard was retired before the first projection file changed.
   expect(existsSync(resolve(root, '.ia/src/notes.ia'))).toBe(true);
   expect(existsSync(resolve(root, FOLDER))).toBe(false);
   expect(existsSync(resolve(root, '.ia/work/snapshot/current.json'))).toBe(true);
@@ -1530,7 +1530,7 @@ it('refreshes completed migration host notes after capture repair while preservi
   }
 });
 
-it('refuses a migration whose projection effect would refuse a hook group changed by hand, before anything is written (H-R3)', async () => {
+it('refuses a migration whose projection effect would refuse a hook group changed by hand, before anything is written', async () => {
   const { root, env } = await legacyWorkspace();
   await registered(root, env);
   // A hook group registered against the materialized payload, then changed in the settings by hand.

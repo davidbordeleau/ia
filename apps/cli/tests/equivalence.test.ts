@@ -1,13 +1,13 @@
 /**
- * M4.5's second obligation: the human and the machine entrypoint agree on semantics because M4.2 put one service
- * behind both. Every case here runs the two built binaries over the same workspace and compares the facts the
- * shared service produced — revisions, findings, digests, identities, counters, refusal codes.
+ * The human and the machine entrypoint agree on semantics because one service stands behind both. Every case here
+ * runs the two built binaries over the same workspace and compares the facts the shared service produced —
+ * revisions, findings, digests, identities, counters, refusal codes.
  *
  * What is deliberately not compared, and what would be wrong to compare: spacing, column positions, status
  * symbols, colour, wrapping and wording. tests/render.test.ts owns presentation and tools/docs/cli-examples.ts
  * pins §7 byte for byte; a column assertion in this file would be in the wrong file. Exit classes and streams are
  * compared as the deliberate divergence they are rather than asserted equal: §1.4, §3 and §4.4 require the three
- * protocols to stay observably different, and decisions.md:65 forbids normalizing them.
+ * protocols to stay observably different, and none is normalized to another.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -291,8 +291,8 @@ it('refuses the same bad input with the same service code on both entrypoints', 
 
 /**
  * Every entry under `roots` and each root itself, with each directory's modification time and each file's size,
- * modification time and digest: a write anywhere changes it, and so does creating a root that was absent (review
- * finding B2-N4: an IA home created empty, or a file created and removed again, still shows).
+ * modification time and digest: a write anywhere changes it, and so does creating a root that was absent (an IA home
+ * created empty, or a file created and removed again, still shows).
  */
 function tree(...roots: string[]): Record<string, string> {
   const entries: Record<string, string> = {};
@@ -334,13 +334,13 @@ interface BindingRow {
   readonly status: string;
   readonly reason: string;
 }
-it('reports one Bindings section through ia validate --json and ia-distribution validate, and neither writes (C23, C24)', async () => {
+it('reports one Bindings section through ia validate --json and ia-distribution validate, and neither writes', async () => {
   const root = resolve(scratch('equivalence-bindings'), 'workspace'),
     home = resolve(scratch('equivalence-bindings-home'), '.ia'),
     env = { ...process.env, IA_HOME: home };
   expect((await spawned(MAIN, ['init', root, '--apply', '--yes', '--json'], env)).status).toBe(0);
   writeFileSync(resolve(root, '.ia/src/bindings.ia'), BINDINGS);
-  // Review finding B2-R2: each validation trusts a join only through its own installation's payload. ia's is the one its
+  // Each validation trusts a join only through its own installation's payload. ia's is the one its
   // bundled pin names in IA_HOME; ia-distribution's is the payload it runs from, as the payload's launcher runs it.
   // Before any payload is materialized, the repository's own ia-distribution reports the same unjoined workspace.
   let machineBinary = DISTRIBUTION;
@@ -399,7 +399,7 @@ it('reports one Bindings section through ia validate --json and ia-distribution 
     writeFileSync(handler, original);
   }
   // A registration naming a copy of the payload inside the workspace, at the genuine release: neither validation
-  // trusts or opens it, so nothing binds (B2-R2).
+  // trusts or opens it, so nothing binds.
   const copy = resolve(root, '.ia/work/payload');
   cpSync(registration.cache, copy, { recursive: true });
   const genuine = readFileSync(state);
@@ -440,7 +440,7 @@ const CHECKS = `#! ia 1.0
   governance
     severity blocking
 `;
-it('reports one Checks result through both validation binaries, which record the same evidence (C14, C15, C23)', async () => {
+it('reports one Checks result through both validation binaries, which record the same evidence', async () => {
   const root = resolve(scratch('equivalence-checks'), 'workspace'),
     home = resolve(scratch('equivalence-checks-home'), '.ia'),
     env = { ...process.env, IA_HOME: home };
@@ -494,7 +494,7 @@ const TYPING = `#! ia 1.0
   governance
     severity blocking
 `;
-it('fails ia-distribution validate, as ia validate, for a check a damaged catalog revokes alone (B3-R2)', async () => {
+it('fails ia-distribution validate, as ia validate, for a check a damaged catalog revokes alone', async () => {
   const root = resolve(scratch('equivalence-revoked'), 'workspace'),
     home = resolve(scratch('equivalence-revoked-home'), '.ia'),
     env = { ...process.env, IA_HOME: home };

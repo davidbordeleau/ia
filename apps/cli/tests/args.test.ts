@@ -98,7 +98,7 @@ it('gives every shipped command a grammar that admits its own documented syntax'
     // Every flag the syntax line names has to exist in the grammar, or the help would document a refusal.
     for (const flag of command.syntax.join(' ').matchAll(/--([a-z-]+)/g)) expect(names).toContain(flag[1]);
   }
-  // Every surface is implemented: since M5.3 no row carries a refusal note, and init's --host names what it does.
+  // Every surface is implemented: no row carries a refusal note, and init's --host names what it does.
   expect(COMMANDS.filter((command) => 'unimplemented' in command).map((command) => command.name)).toEqual([]);
   expect(findCommand('init')?.grammar.options.find((row) => row.name === 'host')?.summary).toBe(
     'Host to register after initialization',
@@ -128,7 +128,7 @@ it('suggests only genuinely near tokens and refuses to guess at an unrelated wor
   expect(nearestTokens('instal', ['install', 'inspect'])).toEqual(['install']);
 });
 
-/** What keeps a catalog row from rendering (plan amendment B5): its command, or the next command it names, is no verb. */
+/** What keeps a catalog row from rendering: its command, or the next command it names, is no verb. */
 const catalogDefects = (rows: readonly PacketCatalogRow[]): readonly string[] =>
   rows.flatMap((row) =>
     [row.command, row.next].flatMap((line) => {
@@ -141,20 +141,20 @@ const catalogDefects = (rows: readonly PacketCatalogRow[]): readonly string[] =>
 
 it('tags the agent commands for the packet catalog in table order, each naming one next command of the table', () => {
   const rows = packetCatalog();
-  // Plan amendment B5's table: each command's mode and the move design item 13 maps it to (CatalogTag holds a row's
-  // move to its mode at typecheck; this pins which mode each command is).
+  // The catalog table: each command's mode and the kernel move that mode maps to (CatalogTag holds a row's move to
+  // its mode at typecheck; this pins which mode each command is).
   expect(rows.map((row) => [row.command, row.mode, row.move])).toEqual([
     ['ia init', 'effect', 'Execution'],
     ['ia validate', 'validate', 'Verification'],
-    // Milestone generation-binding plan amendment C3: the eighth row.
+    // The eighth row added to the catalog.
     ['ia preview', 'validate', 'Verification'],
-    // Plan amendment C3: the ninth row, with C19's author form.
+    // The ninth row added, with the author form.
     ['ia author', 'author', 'Synthesis'],
     ['ia capture', 'effect', 'Execution'],
     ['ia read', 'read', 'Observation'],
     ['ia position', 'read', 'Observation'],
     ['ia next', 'read', 'Observation'],
-    // Task ia-project-verb: the seventh row, C = 7 (plan amendment B1).
+    // The seventh row added.
     ['ia project', 'effect', 'Execution'],
   ]);
   // Each row carries the catalog's five fields only, and its refusal is one line.

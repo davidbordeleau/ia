@@ -137,8 +137,8 @@ describe('the path selection dialect (G06c)', () => {
 
 describe('the claimant index (G06c)', () => {
   it('names the claimant fields', () => {
-    // A @check claims paths through `check.covers` (plan amendment C17); its `check.scope` stays text that selects
-    // verdicts and is never a path selection (decision check-scope-claims, C22).
+    // A @check claims paths through `check.covers`; its `check.scope` stays text that selects verdicts and is never a
+    // path selection.
     expect(CLAIM_FIELDS).toEqual(['authority.covers', 'subject.covers', 'work.covers', 'hook.paths', 'check.covers']);
     expect(Object.isFrozen(CLAIM_FIELDS)).toBe(true);
   });
@@ -217,7 +217,7 @@ describe('claimants of a path (G06c)', () => {
     expect(brief('README.md')).toEqual([[law, 100, ['subject.covers **']]]);
   });
 
-  it('names a check whose covers selects a path as its claimant, and never its prose scope (C17, C22)', () => {
+  it('names a check whose covers selects a path as its claimant, and never its prose scope (G06c)', () => {
     // Exit evidence: `covers ["src/**"]` claims src/x.ts; the scope, which reads as a path, claims nothing.
     expect(brief('src/x.ts').find(([identity]) => identity === check)).toEqual([check, 100, ['check.covers src/**']]);
     expect(brief('docs/a.md').some(([identity]) => identity === check)).toBe(false);

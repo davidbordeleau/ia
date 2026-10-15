@@ -1,7 +1,7 @@
 /**
- * Operator decision 2026-09-23 ("narrow + disclose"): a workspace with a projection ownership state is a consumer
- * workspace, where the guard protects only what `ia host` owns plus the native installation state. Steward
- * enforcement on `.ia/src/systems/<name>/**` is the same in both modes. tests/hook.test.ts keeps the legacy list.
+ * Since 2026-09-23, a workspace with a projection ownership state is a consumer workspace, where the guard protects
+ * only what `ia host` owns plus the native installation state. Steward enforcement on `.ia/src/systems/<name>/**` is
+ * the same in both modes. tests/hook.test.ts keeps the legacy list.
  */
 import {
   cpSync,
@@ -109,12 +109,12 @@ it("leaves the user's own instruction, skill and agent files editable and protec
     expect(check(root, path), path).toEqual({});
   for (const path of [
     '.claude/rules/ia-workspace.md',
-    // A 1.x steward file stays protected while the state lists it, until the next projection apply removes it (B9).
+    // A 1.x steward file stays protected while the state lists it, until the next projection apply removes it.
     '.claude/agents/demo-steward.md',
     '.ia/distributions.lock.json',
     '.ia/distributions/active.json',
     '.ia/distributions/hosts/claude-projection.json',
-    // The receipt the projection apply writes beside its state (B12).
+    // The receipt the projection apply writes beside its state.
     '.ia/distributions/hosts/claude-receipt.json',
   ])
     expect(code(root, path, { agent_type: 'demo-steward' }), path).toBe('IA-HOOK-PROJECTION-MANAGED');
@@ -453,7 +453,7 @@ it('preserves legacy marker decisions for stable files, including hardlinks and 
 });
 
 it('protects the agents and skills a projection state owns as generated, and leaves every other one to the user', () => {
-  // Milestone generation-binding: PROJECTION_OWNED admits what authored generation writes (distribution GENERATED_PATHS).
+  // PROJECTION_OWNED admits what authored generation writes (distribution GENERATED_PATHS).
   const root = workspace();
   write(
     root,

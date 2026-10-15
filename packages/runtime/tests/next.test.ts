@@ -152,8 +152,8 @@ it('orders the plan in one sort, prerequisites first and ties by milestone then 
 });
 
 it('names the authored revision: exit evidence placed at runtime moves the verdicts, never the revision', () => {
-  // Plan amendment C13 and decision evidence-placement: evidence an `ia validate` writes sits at runtime placement, the
-  // view reads it as exit evidence, and the authored revision the view names leaves it out.
+  // Evidence an `ia validate` writes sits at runtime placement, the view reads it as exit evidence, and the authored
+  // revision the view names leaves it out.
   const root = delivery('base'),
     file = '.ia/src/runtime-evidence.ia',
     runtime: Location = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' },
@@ -992,8 +992,8 @@ it('reads what a narrowed scope leaves out as unknown, never as met', () => {
   });
 });
 
-// Decision evidence-placement: runtime-band evidence is admitted below authored and is visible to `ia next`, so exit
-// evidence counts whatever its placement, though no position body enters a runtime-band record (R15).
+// Runtime-band evidence is admitted below authored and is visible to `ia next`, so exit evidence counts whatever its
+// placement, though no position body enters a runtime-band record (R15).
 it('counts exit evidence at runtime placement as it counts authored evidence', () => {
   const root = delivery('base'),
     authored = view(root),
@@ -1592,8 +1592,9 @@ it('names the records admission refused on the Door only through a whole-workspa
   }
 });
 
-// spec-0012 DRF-02 for the next row: its example reads the delivery fixture (the loop fixture the other rows' examples
-// read authors no plan, so there it is refused), it requires no parameter, and its refusal list is proven both ways.
+// The next row of the machine protocol description: its example reads the delivery fixture (the loop fixture the other
+// rows' examples read authors no plan, so there it is refused), it requires no parameter, and its refusal list is
+// proven both ways.
 it('holds the next row of the machine protocol table to the Door', () => {
   const row = MACHINE_PROTOCOL.operations.find((operation) => operation.name === 'next')!;
   expect(row).toMatchObject({ since: 2, mcp: 'ia_next' });

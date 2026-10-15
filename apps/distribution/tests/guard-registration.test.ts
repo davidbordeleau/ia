@@ -517,9 +517,9 @@ it('removes an exact recorded old-root guard after a workspace move, while regis
 });
 
 /*
- * Milestone generation-binding plan amendment C9: each authored `@hook` becomes exactly one owned PreToolUse group that
- * runs `guard --root <root> --hook <identity>`. The rows come from the composition fixture's records (apps/cli's
- * fixture over the conformance corpus), rendered by workspace-runtime's hook generation as the projection will.
+ * Each authored `@hook` becomes exactly one owned PreToolUse group that runs `guard --root <root> --hook <identity>`.
+ * The rows come from the composition fixture's records (apps/cli's fixture over the conformance corpus), rendered by
+ * workspace-runtime's hook generation as the projection will.
  */
 const repository = resolve(import.meta.dirname, '../../..'),
   HOOK = 'hook-authoring-system/binding/hook/note-edits',
@@ -625,7 +625,7 @@ it("renders the fixture's @hook as one owned group, keeps every unrelated key an
   expect(both.map((row) => row.identity)).toEqual([HOOK, other]);
   applyHookRegistration(planHookRegistration(root, { cache, hooks: both }));
   const second = JSON.parse(readFileSync(resolve(root, settings), 'utf8')).hooks.PreToolUse[2];
-  // Every group matches every edit tool (G-R2): the hook's own tools apply to its paths, read from the record.
+  // Every group matches every edit tool: the hook's own tools apply to its paths, read from the record.
   expect(second).toEqual({ matcher: 'Write|Edit|MultiEdit', hooks: [handler(cache, root, other)] });
   const removal = planHookRegistration(root, { cache, hooks: both.slice(1) });
   expect(removal.hooks).toEqual([
@@ -706,7 +706,7 @@ it('refuses an owned group changed by hand, an unmanaged identical group, disabl
   put(root, settings, json(edited));
   for (const request of [{ cache, hooks: rows }, { cache, hooks: [] }, { remove: 'workspace' }])
     expect(() => planHookRegistration(root, request), JSON.stringify(request)).toThrow(/changed or was duplicated/);
-  // A group deleted by hand: re-registering it refuses, naming the removal (G-N2); dropping the hook drops ownership.
+  // A group deleted by hand: re-registering it refuses, naming the removal; dropping the hook drops ownership.
   edited.hooks.PreToolUse = [];
   put(root, settings, json(edited));
   expect(() => planHookRegistration(root, { cache, hooks: rows })).toThrow(
@@ -725,7 +725,8 @@ it('leaves the retired steward guard and the hook groups each to their own owner
     rows = fixtureRows();
   applyGuardRegistration(planGuardRegistration(root, { cache }));
   applyHookRegistration(planHookRegistration(root, { cache, hooks: rows }));
-  // B11's retirement check recognizes only the guard's own group, so a hook group never blocks the projection apply.
+  // The steward guard's retirement check recognizes only the guard's own group, so a hook group never blocks the
+  // projection apply, which retires that guard first.
   expect(() => assertRetirableGuard(root)).not.toThrow();
   applyGuardRegistration(planGuardRegistration(root, { remove: 'workspace' }));
   expect(JSON.parse(readFileSync(resolve(root, settings), 'utf8')).hooks.PreToolUse).toEqual([
@@ -820,7 +821,7 @@ it("observes each owned hook group's drift read-only: missing, modified, duplica
   }
 });
 
-it('updates a group in place when its cache changes, ignores a change of tools, and removes two hooks at once (G-N5)', () => {
+it('updates a group in place when its cache changes, ignores a change of tools, and removes two hooks at once', () => {
   const root = temp(),
     first = cacheV2(),
     second = cacheV2(),
@@ -860,7 +861,7 @@ it('updates a group in place when its cache changes, ignores a change of tools, 
   expect(groups()).toEqual([unrelated, unrelated, hookGroup(join(second, 'scripts/ia.mjs'), root, row('b'))]);
 });
 
-it('with disableAllHooks on, keeps and removes owned groups but refuses to create or update one (A-F1)', () => {
+it('with disableAllHooks on, keeps and removes owned groups but refuses to create or update one', () => {
   const root = temp(),
     first = cacheV2(),
     second = cacheV2(),

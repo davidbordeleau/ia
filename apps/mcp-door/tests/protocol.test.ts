@@ -107,8 +107,7 @@ it('negotiates the pinned profile, discovers twelve tools and enforces initializ
   const listed = value.request(message(3, 'tools/list'))?.result as {
     tools: { name: string; annotations: { readOnlyHint: boolean } }[];
   };
-  // Plan amendment A3: the eight version 1 door tools, ia_read, ia_next and ia_position from protocol version 2, and
-  // ia_vocabulary.
+  // The eight version 1 door tools, ia_read, ia_next and ia_position from protocol version 2, and ia_vocabulary.
   expect(listed.tools).toHaveLength(12);
   expect(listed.tools.map((tool) => tool.name).slice(8, 11)).toEqual(['ia_read', 'ia_next', 'ia_position']);
   expect(listed.tools.at(-1)?.name).toBe('ia_vocabulary');
@@ -478,7 +477,7 @@ it('answers ia_vocabulary from the shipped catalogue with door-shaped successes 
       structuredContent: { ok: false, code: 'IA-RUNTIME-REQUEST-INVALID' },
     });
 });
-// spec-0012 DRF-04: tools/list is the table's projection, plus only the documented MCP parts.
+// tools/list is the table's projection, plus only the documented MCP parts.
 it('serves the door operations as the machine protocol table describes them', () => {
   const value = protocol();
   initialize(value);

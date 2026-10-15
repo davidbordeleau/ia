@@ -98,7 +98,7 @@ describe('public language conformance', () => {
     for (const found of [task, steward, milestone, spec, replaced, decision]) expect(found).toBeDefined();
     // The ref fields resolve through the reverse field index; none of them is an edge, so no consent row is needed.
     // The example carries no exit-evidence: its observation would live in another example, and work.ia is copied
-    // alone into fresh workspaces (WS-A05), where that reference could not resolve.
+    // alone into fresh workspaces, where that reference could not resolve.
     expect(
       baseline.graph.referencedBy
         .get(steward.identity)

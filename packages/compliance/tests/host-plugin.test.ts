@@ -65,7 +65,7 @@ it('is deterministic and carries its inputs', () => {
 it('pins the general authoring agent to review and propose, and routes one-system changes to its steward', () => {
   const author = renderClaudePlugin(input).find((file) => file.path === 'plugins/ia/agents/ia-author.md')!.text;
   const front = author.slice(0, author.indexOf('\n---\n', 4));
-  // Operator decision 2026-09-24: this agent is active in every repository, so it reads and proposes; it never edits.
+  // This agent is active in every repository, so it reads and proposes; it never edits.
   expect(front).toContain('\nmodel: inherit');
   expect(front).toContain('\ntools: Read, Glob, Grep, Bash');
   expect(front).not.toMatch(/Write|Edit/);
@@ -95,7 +95,7 @@ it('the init skill respects a prior decline instead of re-offering', () => {
   expect(init).toContain('do not offer to initialize');
 });
 
-// hooks.json must carry the literal `${CLAUDE_PLUGIN_ROOT}` placeholder (spec §8): Claude expands it, `JSON.stringify`
+// hooks.json must carry the literal `${CLAUDE_PLUGIN_ROOT}` placeholder: Claude expands it, `JSON.stringify`
 // must not, and the command must not silently pick up extra flags or a different script name.
 it('hooks.json runs exactly the plugin-relative hook script on the verified matcher', () => {
   const files = Object.fromEntries(renderClaudePlugin(input).map((file) => [file.path, file.text]));
@@ -103,7 +103,7 @@ it('hooks.json runs exactly the plugin-relative hook script on the verified matc
   // #436: the recorded Node, quoted, on macOS and Linux; on Windows the earlier `node` (host-plugin-node.test.ts covers both).
   const node = process.platform === 'win32' ? 'node' : `"${process.execPath}"`;
   expect(hooks.hooks.SessionStart[0].hooks[0].command).toBe(node + ' "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"');
-  // §2.3: the `compact` matcher stayed unverified, so only `startup|clear` is registered.
+  // The `compact` matcher stayed unverified, so only `startup|clear` is registered.
   expect(hooks.hooks.SessionStart[0].matcher).toBe('startup|clear');
 });
 

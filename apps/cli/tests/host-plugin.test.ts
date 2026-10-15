@@ -31,7 +31,7 @@ const capability = (mode: string): string =>
     '',
   ].join('\n');
 
-describe('invocation section (A1)', () => {
+describe('invocation section', () => {
   it('admits a capability invocation section', async () => {
     const root = await workspace();
     writeFileSync(join(root, '.ia/src/probe.ia'), capability('user'));
@@ -47,7 +47,7 @@ describe('invocation section (A1)', () => {
   });
 });
 
-describe('product section (A2)', () => {
+describe('product section', () => {
   const distribution = (hosts: string): string =>
     [
       '#! ia 1.0',
@@ -93,7 +93,7 @@ async function lowered(): Promise<string> {
   expect(applied.exitCode, applied.stdout).toBe(0);
   return kit;
 }
-describe('ia init --from (A7)', () => {
+describe('ia init --from', () => {
   it('plans without writing, then lowers the sample into an admitted workspace', async () => {
     const kit = await lowered();
     expect(readFileSync(join(kit, '.ia/src/systems/sample-kit/plugin/skills/sample-run/SKILL.body.md'), 'utf8')).toBe(
@@ -138,7 +138,7 @@ describe('ia init --from (A7)', () => {
   });
 });
 
-describe('ia project --product plugin (A9)', () => {
+describe('ia project --product plugin', () => {
   it('plans, then writes the plugin into an empty directory', async () => {
     const kit = await lowered();
     const out = join(scratch('host-plugin-out'), 'sample');
@@ -206,7 +206,7 @@ describe('ia project --product plugin (A9)', () => {
   });
 });
 
-describe('ia project --product plugin (A9 fix round 1)', () => {
+describe('ia project --product plugin: bytes and refusals', () => {
   const walk = (dir: string): string[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
       entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
@@ -273,7 +273,7 @@ describe('ia project --product plugin (A9 fix round 1)', () => {
   });
 });
 
-describe('ia project --product plugin --check (A10)', () => {
+describe('ia project --product plugin --check', () => {
   it('passes on the sample: content-exact against the original and a fixed point', async () => {
     const kit = await lowered();
     const result = await run([
@@ -318,7 +318,7 @@ describe('ia project --product plugin --check (A10)', () => {
   });
 });
 
-describe('ia project --product plugin --check (A10 fix round 1)', () => {
+describe('ia project --product plugin --check: reports and refusals', () => {
   const readdirRecursive = (dir: string): string[] =>
     readdirSync(dir, { recursive: true, withFileTypes: true })
       .filter((entry) => entry.isFile())
@@ -759,7 +759,7 @@ describe('final review: ia init --from', () => {
     expect(json(readFileSync(join(SAMPLE, '.claude-plugin/plugin.json'), 'utf8'))['license']).toBe('Apache-2.0');
     expect(json(readFileSync(join(kit, '.ia/release.json'), 'utf8'))['license']).toBe('UNLICENSED');
   });
-  it('admits authored trigger records beside the lowered ones without breaking the fixed point (item 17)', async () => {
+  it('admits authored trigger records beside the lowered ones without breaking the fixed point', async () => {
     const kit = await lowered();
     writeFileSync(
       join(kit, '.ia/src/systems/sample-kit/records/triggers.ia'),

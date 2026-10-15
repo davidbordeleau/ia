@@ -54,7 +54,7 @@ const legacy = (args: readonly string[]) => {
 };
 const extensions: readonly Extension[] = [
   {
-    // Not `preview`, which is a consumer verb from milestone generation-binding (plan amendment C19).
+    // Not `preview`, which is a consumer verb.
     token: 'sandbox',
     summary: 'A private namespace',
     run: async (args: readonly string[]) => {
@@ -189,7 +189,7 @@ it('routes the seven dispatch steps in order and never shadows a legacy operatio
   expect(help.exitCode).toBe(0);
   expect(help.stdout).toContain('Usage: ia');
   for (const operation of LEGACY_OPERATIONS) expect(help.stdout).toContain(operation);
-  // spec-0012 CLI-04: the one row that points at each operation's own help.
+  // The one row that points at each operation's own help.
   expect(help.stdout).toContain('ia <operation> --help');
   for (const command of COMMANDS) expect(help.stdout).toContain(command.name);
   expect(help.stdout).toContain('ia sandbox --help');
@@ -384,7 +384,7 @@ it('refuses an unavailable root as a precondition rather than as a finding', asy
     expect(discovery.stderr).toContain('IA-DB-ROOT-INVALID');
     // §6.4 wraps at 80 columns with a hanging indent, so this phrase straddles the break for some lengths of
     // the interpolated path and not others — /tmp/ia-noroot-XXXXXX splits it where the Windows temp path does not.
-    // The property here is what the message says; C14 puts layout in render.test.ts and §7, not in this file.
+    // The property here is what the message says; layout belongs in render.test.ts and §7, not in this file.
     expect(discovery.stderr.replace(/\s+/g, ' ')).toContain('or in any parent');
     const machine = JSON.parse((await run(['validate', '--json'], { cwd: empty })).stdout);
     expect(machine).toMatchObject({ version: 1, ok: false, code: 'IA-DB-ROOT-INVALID', exit: 3 });
@@ -783,8 +783,8 @@ it('spells a catalogue field type through the language renderer the vocabulary v
   expect(fieldTypeText({ type: 'text', form: 'iso-date' })).toBe('text form iso-date');
 });
 
-// spec-0012 DRF-03: the routing table and the protocol description name the same operations, in the same order. The
-// routes are the version 1 rows; a row a later version appends (`since`) is a Door and MCP operation (plan amendment A2).
+// The routing table and the protocol description name the same operations, in the same order. The routes are the
+// version 1 rows; a row a later version appends (`since`) is a Door and MCP operation.
 it('routes exactly the version 1 operations the machine protocol table describes', () => {
   expect(
     MACHINE_PROTOCOL.operations.filter((operation) => operation.since === undefined).map((operation) => operation.name),

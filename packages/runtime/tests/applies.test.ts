@@ -528,7 +528,7 @@ it("delivers the mandates that claim a location seat or whose authority.scope na
     via: { by: 'field', from: foundation, field: 'authority.scope', direction: 'in' },
   });
   // At K0 the workspace is the seat: the scoped mandate governs it, and the sample mandate, which claims docs/** and
-  // names no scope, does not; no participant is matched before milestone position-packet.
+  // names no scope, does not; a body matches no participant (R17).
   expect(bodyOf(db).mandates).toEqual([scoped]);
   expect(bodyOf(plain).mandates).toEqual([]);
   // A record seat's workspace is the one whose closure holds it.
@@ -628,7 +628,7 @@ it('filters only what loads, lists and tallies by the word: rules, applies by wo
   expect(ids(laws.loaded)).toContain(lawRule);
   expect(laws.loaded.slice(1).every((entry) => 'word' in entry && entry.word === 'law')).toBe(true);
   expect([...laws.pointers, ...laws.pointerTallies].every((entry) => entry.word === 'law')).toBe(true);
-  // Decision scope-key-caps reserves blockers outside n and restricts seeds and tallies: the blocking convention, a
+  // Blockers are reserved outside n and the word restricts seeds and tallies: the blocking convention, a
   // word member of the @system, governs the seat whatever the word, so it stays in `rules`; the rules, the cells and
   // the mandates are those of the body without the word, and the applies-by-word section lists the same rules and
   // playbooks, of every word, since each here applies to the seat or to a reserved rule.

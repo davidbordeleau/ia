@@ -69,7 +69,7 @@ it('refreshes from npm for the npm channel and records a failed source as not ch
     { ...unused, npm: () => null },
   );
   expect(readUpdateCheck(home)?.cli).toMatchObject({ latest: null, checked: false });
-  // Amendment item 4: the hook keeps nudgedOn in its own plugin data.
+  // The hook keeps nudgedOn in its own plugin data.
   expect(readFileSync(join(home, UPDATE_CHECK), 'utf8')).not.toContain('nudgedOn');
 });
 it('counts commits behind upstream for a checkout without fetching, and never asks npm', () => {

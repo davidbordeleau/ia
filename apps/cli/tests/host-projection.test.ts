@@ -1,7 +1,7 @@
 /**
- * Host registration spec §6: a consumer workspace's projection, rendered from its own admitted records. Since
- * milestone position-packet task replace-renderers it is the position packet's consumer rendering (runtime R19 and
- * R20): the target is initialized from the bundled base, so every system line comes from the base's systems.
+ * Host registration spec §6: a consumer workspace's projection, rendered from its own admitted records. It is the
+ * position packet's consumer rendering (runtime R19 and R20): the target is initialized from the bundled base, so
+ * every system line comes from the base's systems.
  */
 import { cpSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -45,7 +45,7 @@ it('renders a consumer workspace for claude as its position packet, with no agen
     expect(line).toMatch(
       /; steward `agent-system\/binding\/agent\/public-[a-z-]+-steward`; reach `ia position --seat floor\/definition\/system\/[a-z-]+`$/,
     );
-  // The participant its mandate names is the one entry under Participants (B3), and the seat names it as steward.
+  // The participant its mandate names is the one entry under Participants, and the seat names it as steward.
   expect(section(rules, 'Seat')[0]).toContain('steward `agent-system/binding/agent/demo`');
   expect(section(rules, 'Participants')).toEqual([
     '- `agent-system/binding/agent/demo`: The IDE agent operating in the demo workspace, any vendor.',
@@ -61,7 +61,7 @@ it('renders a consumer workspace for claude as its position packet, with no agen
   expect(rules).toContain('## Host note (not part of the packet)');
   expect(rules).not.toContain(root);
   expect(rules).not.toContain(root.replaceAll('\\', '/'));
-  // The receipt the render fills; the applying caller sets the rest (B12).
+  // The receipt the render fills; the applying caller sets the rest.
   expect(receipt).toMatchObject({
     host: 'claude',
     slug: 'demo',
@@ -72,20 +72,18 @@ it('renders a consumer workspace for claude as its position packet, with no agen
     mandates: ['agent-system/policy/mandate/demo-mandate'],
   });
   expect(receipt.files.map((file) => file.path)).toEqual(files.map((file) => file.path));
-  // Plan amendment B1 on a fresh init: P = M = 1, the seat, N systems, T = 3 tallies, 5 intents, 4 phases, C catalog
+  // On a fresh init: P = M = 1, the seat, N systems, T = 3 tallies, 5 intents, 4 phases, C catalog
   // rows, provenance and 3 SPEC lines.
   expect(receipt.entries).toBe(1 + 1 + 1 + systems.length + 3 + 5 + 4 + packetCatalog().length + 1 + 3);
-  // Milestone generation-binding plan amendment C3 adds `ia preview` and `ia author` (C = 9), so a fresh init renders
-  // B1's 28 + N = 39.
+  // `ia preview` and `ia author` make C = 9, so a fresh init renders 28 + N = 39.
   expect(packetCatalog()).toHaveLength(9);
   expect(receipt.entries).toBe(39);
 });
 
 it('admits the composition fixture over the bundled base, and renders its generated set beside the packet', async () => {
-  // Milestone generation-binding plan amendment C7: the fixture is this initialization's starter and descriptor, byte
-  // for byte, with an authored @agent-profile, its @agent, @voice and @capability, the @operation that capability
-  // names, an authored @playbook with cells in all four phases, and an authored @hook. Task host-consumes-generated-set:
-  // the render holds the host set generated once from those records.
+  // The fixture is this initialization's starter and descriptor, byte for byte, with an authored @agent-profile, its
+  // @agent, @voice and @capability, the @operation that capability names, an authored @playbook with cells in all
+  // four phases, and an authored @hook. The render holds the host set generated once from those records.
   const root = await initialized(),
     fixture = resolve(cli, 'tests/fixtures/composition-workspace');
   for (const path of ['.ia/src/workspace.ia', '.ia/release.json'])
@@ -133,7 +131,7 @@ it('admits the composition fixture over the bundled base, and renders its genera
     input: 'read-note-input-v1',
     output: 'read-note-output-v1',
   });
-  // Codex takes the packet and the skill; the agent and the hook are reported, never written (C12).
+  // Codex takes the packet and the skill; the agent and the hook are reported, never written.
   const codex = renderProjectionFor(root, 'codex');
   expect(codex.files.map((file) => file.path)).toEqual([
     'AGENTS.md',

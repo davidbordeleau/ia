@@ -79,7 +79,7 @@ it("answers with runtime position through the door's token, byte for byte, and w
 });
 
 it('keeps the full revision on the version 1 routes while position names the authored one', () => {
-  // Plan amendment C13: a runtime-band source moves the revision the version 1 scope and records bind and answer
+  // A runtime-band source moves the revision the version 1 scope and records bind and answer
   // (frozen: their four snapshot fields, no authored revision), and leaves the position body's authored one.
   const root = workspace(),
     lawFile = '.ia/src/systems/governance-system/records/runtime-rule.ia',
@@ -174,9 +174,8 @@ it('answers a position again byte for byte after a version 1 context call with a
   }
 });
 
-// A refusal of the key carries `next`, the one command to run (design row 27), as the lead's rule for a version 2
-// operation's refusals has it; the Door's own refusals of a position request, and a version 1 operation's, keep the
-// three keys 1.1.0's had.
+// A refusal of the key carries `next`, the one command to run, as a version 2 operation's refusal may (R12 refinement,
+// next); the Door's own refusals of a position request, and a version 1 operation's, keep the three keys 1.1.0's had.
 it('refuses a key with its next command and keeps the three keys of the refusals the Door raises itself', () => {
   const root = workspace(),
     gate = door(root),
@@ -289,8 +288,8 @@ it('refuses a key with its next command and keeps the three keys of the refusals
   });
 });
 
-// spec-0012 DRF-02 for the position row: its example reads the loop fixture, it requires no parameter, its closed sets
-// and caps are the key's, and its refusal list is proven both ways.
+// The position row of the machine protocol description: its example reads the loop fixture, it requires no parameter,
+// its closed sets and caps are the key's, and its refusal list is proven both ways.
 it('holds the position row of the machine protocol table to the Door', () => {
   const row = MACHINE_PROTOCOL.operations.find((operation) => operation.name === 'position')!;
   expect(row).toMatchObject({ since: 2, mcp: 'ia_position' });

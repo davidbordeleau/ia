@@ -95,7 +95,7 @@ it('plans a workspace without creating one and plans the selected host without w
     'descriptor:pending',
     'capture:pending',
   ]);
-  // M5.1 §7 item 4: the starter object carries the authored paths, the descriptor values and the base pin.
+  // The starter object carries the authored paths, the descriptor values and the base pin.
   const name = machine.plan.starter.id.slice('local/'.length);
   expect(machine.plan.starter.id).toMatch(/^local\/ia-cli-init-[a-z0-9-]+$/);
   expect(machine.plan.starter.paths).toEqual(['.ia/src/workspace.ia', '.ia/release.json']);
@@ -119,7 +119,7 @@ it('plans a workspace without creating one and plans the selected host without w
   // The rendered "Starter records" row shows the contents rather than the plan task that specified them.
   expect(plan.stdout.replace(/\s+/g, ' ')).toContain(`its participant @agent ${name}; @mandate ${name}-mandate`);
   expect(plan.stdout).not.toContain('@system');
-  expect(plan.stdout).not.toContain('M5.1');
+  expect(plan.stdout).not.toMatch(/\bM\d\.\d\b/);
   expect(JSON.parse((await run(['init', '--host', 'claude', '--json'], { cwd: empty })).stdout).plan.host).toEqual({
     selected: 'claude',
     status: 'planned',
@@ -231,8 +231,8 @@ it('checks formatting by default, rewrites only with --write, and refuses a path
 });
 
 it("formats this repository's participant records, authored under its root outside every system folder", async () => {
-  // Plan task self-host-participant-records put them in .ia/src/participant.ia, which the formatter refused until the
-  // authoring-system draft target took a file under an authored root the workspace declares (`.ia/src @authored`).
+  // They sit in .ia/src/participant.ia, which the formatter refused until the authoring-system draft target took a
+  // file under an authored root the workspace declares (`.ia/src @authored`).
   const participant = '.ia/src/participant.ia',
     before = readFileSync(resolve(repository, participant));
   for (const mode of [[], ['--check']]) {

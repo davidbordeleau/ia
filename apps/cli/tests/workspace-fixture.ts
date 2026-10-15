@@ -112,7 +112,7 @@ export function makeHost(options: HostOptions = {}): Host {
   };
 }
 /**
- * Design row 27's programs a next action may name: this binary, the distribution binary it ships with, and repository
+ * The programs a next action may name: this binary, the distribution binary it ships with, and repository
  * tooling. An argument with a space is JSON-quoted inside the command (`quote` in render.ts), so it is one argument here
  * too.
  */
@@ -125,8 +125,9 @@ export const nextArgv = (next: string): string[] =>
     .map((match) => (match[0].startsWith('"') ? (JSON.parse(match[0]) as string) : match[0]))
     .slice(1);
 /**
- * Why a next action breaks design row 27, or null when it keeps it: exactly one quoted command, and no option spelled
- * outside it, because an option in prose (`or pass --registry <url|dir>`) offers a second invocation.
+ * Why a next action breaks the one-command rule (consumer CLI contract §4), or null when it keeps it: exactly one
+ * quoted command, and no option spelled outside it, because an option in prose (`or pass --registry <url|dir>`)
+ * offers a second invocation.
  */
 export function nextDefect(next: string): string | null {
   const commands = commandsIn(next);
@@ -152,7 +153,7 @@ function refusalNext(result: Result): string | null {
 
 /**
  * The version 1 machine routes run as the binary runs them (`runCli`), from the invocation's cwd, so a next action naming
- * one, such as the `ia report --root <root>` a refused `@mandate`'s refusal names (lane D), runs here as it would from
+ * one, such as the `ia report --root <root>` a refused `@mandate`'s refusal names, runs here as it would from
  * a shell there: a relative `--root` is read against that cwd, and without one the route opens the cwd. stdin is never
  * read: a route given `--params -` reads an empty object.
  */
@@ -168,8 +169,8 @@ const legacyFrom =
   };
 const extensions: readonly Extension[] = [];
 /**
- * One in-process invocation. Every refusal any suite provokes is held to design row 27 here, so a next action a verb
- * computes at run time is checked wherever a test reaches it, not only where a test asserts its text.
+ * One in-process invocation. Every refusal any suite provokes is held to the one-command rule here, so a next action
+ * a verb computes at run time is checked wherever a test reaches it, not only where a test asserts its text.
  */
 export async function run(argv: readonly string[], options: HostOptions = {}): Promise<Result> {
   const host = makeHost(options),
@@ -177,6 +178,6 @@ export async function run(argv: readonly string[], options: HostOptions = {}): P
   const next = refusalNext(result),
     defect = next === null ? null : nextDefect(next);
   if (defect !== null)
-    throw new Error(`Design row 27: ia ${argv.join(' ')} refused, and its next action ${defect}: ${next}`);
+    throw new Error(`One next command: ia ${argv.join(' ')} refused, and its next action ${defect}: ${next}`);
   return result;
 }

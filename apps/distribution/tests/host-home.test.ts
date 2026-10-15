@@ -37,7 +37,7 @@ function payload() {
   );
   return { archive, pin: { release: sha256(release), archive: sha256(archive), files: 4, bytes: 0 } };
 }
-it('keeps the M5.3 per-OS directory only as the legacy location', () => {
+it('keeps the per-OS directory only as the legacy location', () => {
   expect(legacyHostHome({ XDG_DATA_HOME: '/d' }, 'linux', '/home/u')).toBe(join('/d', 'ia'));
   expect(legacyHostHome({}, 'linux', '/home/u')).toBe(join('/home/u', '.local/share', 'ia'));
   expect(legacyHostHome({}, 'darwin', '/Users/u')).toBe(join('/Users/u', 'Library/Application Support', 'ia'));

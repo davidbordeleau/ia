@@ -18,10 +18,9 @@ import {
   hookDeclaration,
 } from '../src/generate/index.js';
 
-// Milestone generation-binding task generation-playbook-skill (plan amendments C8 and C12): the authored `@playbook` of
-// apps/cli's composition fixture renders one skill per host. The fixture's `.ia/src` is laid over the conformance
-// corpus adopted at band 90, as an installed base would be, so its records are the authored ones and the corpus's own
-// playbook is an adopted one.
+// The authored `@playbook` of apps/cli's composition fixture renders one skill per host. The fixture's `.ia/src` is
+// laid over the conformance corpus adopted at band 90, as an installed base would be, so its records are the authored
+// ones and the corpus's own playbook is an adopted one.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const repository = resolve(import.meta.dirname, '../../..'),
@@ -311,8 +310,8 @@ it('renders operation and harness definitions without importing a handler or val
   ]);
 });
 
-it("renders this repository's read-captured-source operation as a definition row with its handler and I/O ids (R3 exit)", () => {
-  // The milestone's exit row: the handler and validators are catalog keys, copied as authored and never imported.
+it("renders this repository's read-captured-source operation as a definition row with its handler and I/O ids", () => {
+  // The handler and validators are catalog keys, copied as authored and never imported.
   const db = open(repository, { cache: false });
   handles.push(db);
   const within = db.resolveScope().token;
@@ -336,7 +335,7 @@ it("renders this repository's read-captured-source operation as a definition row
   ]);
 });
 
-it('selects the skills of included capabilities, and only what its own profiles and bindings name (A-R9)', () => {
+it('selects the skills of included capabilities, and only what its own profiles and bindings name', () => {
   const extra = [
     '#! ia 1.0',
     '',
@@ -426,7 +425,7 @@ it('selects the skills of included capabilities, and only what its own profiles 
     },
   });
   // With inner including outer, a cycle the composition compiler refuses, the scribe renders no agent and selects no
-  // skill (A-RC5).
+  // skill.
   const cycle = fixture({
     '.ia/src/extra.ia': extra.replace(
       '    playbooks [@playbook included-review]\n',
@@ -497,7 +496,7 @@ it('generates authored hooks only and reports tools and selections outside the e
   const authored = fixture();
   expect(generateHooks(authored.db, authored.within, 'claude')).toHaveLength(1);
   expect(generateHooks(authored.db, authored.within, 'codex')).toEqual([]);
-  // C12: Codex registers no hook and reports each authored one.
+  // Codex registers no hook and reports each authored one.
   expect(generateHookSet(authored.db, authored.within, 'codex')).toEqual({
     hooks: [],
     unsupported: [
@@ -514,7 +513,7 @@ it('generates authored hooks only and reports tools and selections outside the e
   for (const [text, why] of [
     [hooks.replace('[Write, Edit, MultiEdit]', '[Bash]'), 'hook.tools must name Write, Edit or MultiEdit'],
     [hooks.replace('"docs/**"', '"../docs/**"'), 'hook.paths must hold workspace-relative path selections'],
-    // No C1 control or bidirectional control either (G-R7).
+    // No C1 control or bidirectional control either.
     [hooks.replace('"docs/**"', '"docs/\u0085x/**"'), 'hook.paths must hold workspace-relative path selections'],
     [hooks.replace('"docs/**"', '"docs/\u202ex/**"'), 'hook.paths must hold workspace-relative path selections'],
     // A backslash is no separator in the dialect: the selection must be written with /.
@@ -554,7 +553,7 @@ it('generates authored hooks only and reports tools and selections outside the e
   ]);
 });
 
-it('reports a hook beyond the bounds a registration holds, never refusing the others (H-N2)', () => {
+it('reports a hook beyond the bounds a registration holds, never refusing the others', () => {
   const selections = (count: number) => `[${Array.from({ length: count }, (_, at) => `"notes/n${at}/**"`).join(', ')}]`;
   const hook = (name: string, paths: string) =>
     `\n@hook ${name}\n  meaning\n    says "Hook ${name}."\n    answers "Which hook is ${name}?"\n  hook\n    event PreToolUse\n    tools [Write]\n    paths ${paths}\n    message "Use the ${name} mandate."\n`;
@@ -602,8 +601,8 @@ it('reports a hook beyond the bounds a registration holds, never refusing the ot
 });
 
 it('reports a playbook whose name is no portable host name or whose text is not inert, and renders the others', () => {
-  // Review findings N5 and A-R3: com0 and lpt0 as db's input paths refuse them, a trailing or doubled hyphen, and a cell
-  // that runs a command or holds active HTML; the fixture's own playbook still renders.
+  // The device names com0 and lpt0, which db's input paths refuse too, a trailing or doubled hyphen, and a cell that
+  // runs a command or holds active HTML; the fixture's own playbook still renders.
   const extra = (name: string, text = 'Read the note.'): string =>
     `#! ia 1.0\n\n@playbook ${name}\n  meaning\n    says "Playbook ${name}."\n    answers "Which playbook is ${name}?"\n  cognition\n    orient\n      primary Attention\n      Attention means "${text}"\n`;
   for (const [name, text, reason] of [

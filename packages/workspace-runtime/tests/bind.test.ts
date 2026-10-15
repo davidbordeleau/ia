@@ -1,6 +1,5 @@
-// Task execution-binding-host-entry (plan amendments C16 and C24): an `@execution-binding` joined against the installed
-// catalog's operation rows. Only an available, shipped implementation of the binding's own operation is bound; nothing
-// is ever executed.
+// An `@execution-binding` joined against the installed catalog's operation rows. Only an available, shipped
+// implementation of the binding's own operation is bound; nothing is ever executed.
 import { resolve } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -71,7 +70,7 @@ it('reports every binding without a bound implementation as unavailable, never a
       present(available),
       `serves ${READ}, not acme/binding/operation/other`,
     ],
-    // Review finding B2-R1: a stated target that resolves to no admitted record is not "no target".
+    // A stated target that resolves to no admitted record is not "no target".
     [
       binding({ target: { reference: '@operation read-captured-sourse', identity: null } }),
       present(available),
@@ -148,7 +147,7 @@ it('reads the example entry binding from the explicit public fixture', () => {
   }
 });
 
-it('keeps a stated target that resolves to no admitted record apart from no target, so it never binds (B2-R1)', () => {
+it('keeps a stated target that resolves to no admitted record apart from no target, so it never binds', () => {
   const canonical = reader
     .records()
     .find((record) => record.identity.endsWith('/execution-binding/read-captured-source-binding'))!;

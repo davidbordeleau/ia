@@ -2,8 +2,8 @@
  * `ia read` (SPEC `read`), end to end against the repository's own records, copies of
  * the committed loop fixture and a copy of the conformance corpus whose work records name documents.
  *
- * The exit evidence of plan task ia-read-verb: `ia read agent-system/binding/agent/public-agent-system-steward` prints
- * the says text only. A read writes nothing and certifies nothing; structure stays in `ia inspect`.
+ * `ia read agent-system/binding/agent/public-agent-system-steward` prints the says text only. A read writes nothing
+ * and certifies nothing; structure stays in `ia inspect`.
  */
 import { createHash } from 'node:crypto';
 import {

@@ -3,8 +3,8 @@
  * delivery fixtures laid over the conformance corpus, a copy of the loop fixture, which authors no plan, and the
  * repository's own maintenance plan.
  *
- * The exit evidence of plan task ia-next-verb: `ia next` lists each task of a plan with a basis or evidence line, and
- * stores nothing under `.ia/`. Its `--json` view is the Door's `next` result, byte for byte.
+ * `ia next` lists each task of a plan with a basis or evidence line, and stores nothing under `.ia/`. Its `--json`
+ * view is the Door's `next` result, byte for byte.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';

@@ -2,9 +2,8 @@
  * `ia capture` (SPEC `capture`), end to end against copies of the committed loop
  * fixture. The removed `ia compile` command refuses without changing capture state.
  *
- * The exit evidence of plan task ia-capture-verb: two captures with no edit between them report 0 changed, and an edit
- * reports exactly the edited record changed and rotates the prior capture into `previous.json`, as db D08 rotates its
- * retained pair.
+ * Two captures with no edit between them report 0 changed, and an edit reports exactly the edited record changed and
+ * rotates the prior capture into `previous.json`, as db D08 rotates its retained pair.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -569,8 +568,8 @@ it('refuses a floor input that fails to parse, keeping both snapshot files, and 
   const recorded = await capture(root, 1);
   expect(recorded.admission.errors).toBeGreaterThan(0);
   expect(recorded.rotated).toBe(true);
-  // Review D2-R2: a stray line there is a record db cannot identify, possibly a @mandate, so capture, mandate-gated,
-  // fails closed at it, leaving the snapshot as it was.
+  // A stray line there is a record db cannot identify, possibly a @mandate, so capture, mandate-gated, fails closed
+  // at it, leaving the snapshot as it was.
   writeFileSync(resolve(root, PRINCIPLE), `${principle}\n@@@ not a record\n`);
   const [held, before] = [bytesAt(root, CURRENT), bytesAt(root, PREVIOUS)];
   const closed = await run(['capture', '--root', root, '--json']);
@@ -904,7 +903,7 @@ it.skipIf(process.platform !== 'win32')(
 );
 
 it('previews exactly the edited record as changed and writes nothing: both snapshot files keep their bytes and mtimes', async () => {
-  // Decision capture-preview-placement: the counts and the changed, new and removed identities, without writing.
+  // A preview reports the counts and the changed, new and removed identities, without writing.
   const root = workspace();
   await capture(root);
   // A revision-only edit, so the pair holds both files before the one edit the preview reports.

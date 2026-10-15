@@ -333,7 +333,7 @@ it('rechecks source revision after a handler and refuses a stale input snapshot'
   }
 });
 it('takes the authored revision as its base, so a source appearing at runtime placement during a run refuses nothing', () => {
-  // Plan amendment C13: runtime-band evidence moves the handle's revision, not the authored one the run rechecks.
+  // Runtime-band evidence moves the handle's revision, not the authored one the run rechecks.
   const base = temp(),
     path = '.ia/src/systems/template-system/records/runtime-evidence.ia',
     locations = {

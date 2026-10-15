@@ -59,14 +59,14 @@ it('allows the actual native steward and refuses other or fabricated actors with
   expect(existsSync(resolve(fixture, '.ia/.iadb'))).toBe(false);
 });
 it('protects every managed projection even from the owner and passes unrelated files', async () => {
-  // The position packet's committed files (milestone position-packet task replace-renderers).
+  // The position packet's committed files.
   for (const path of ['CLAUDE.md', '.agents/skills/ia-authoring/SKILL.md', '.claude/skills/ia-authoring/SKILL.md'])
     expect(await code(event(resolve(fixture, path), { agent_type: 'governance-steward' }))).toBe(
       'IA-HOOK-PROJECTION-MANAGED',
     );
   expect(await run(event(resolve(fixture, 'docs/ordinary.md')))).toEqual({});
 });
-it('protects a 1.x steward file until it is removed, and leaves any other agent file to the user (B9)', async () => {
+it('protects a 1.x steward file until it is removed, and leaves any other agent file to the user', async () => {
   const base = temp();
   mkdirSync(resolve(base, '.claude/agents'), { recursive: true });
   for (const [name, marker] of [

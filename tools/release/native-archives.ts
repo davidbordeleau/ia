@@ -1,5 +1,7 @@
 /** Reproduce the native bytes selected by the public packers, without writing a package or loading handlers. */
 import assert from 'node:assert/strict';
+import { declarationVersion } from './native-selectors.mjs';
+export { declarationVersion } from './native-selectors.mjs';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { readInputs } from '@inventarch/db';
@@ -28,13 +30,6 @@ export function nativeVersions(root: string): Record<string, string> {
     ['inventarch/language', languageVersion(root)],
     ...nativeOwners(root).map((row) => [row.id, row.version]),
   ]);
-}
-/** Only the selected declaration's version field may change; headers and other versions are untouched. */
-export function declarationVersion(text: string, from: string, to: string): string {
-  const matches = [...text.matchAll(/^  version "([^"\r\n]+)"\r?$/gm)];
-  assert.equal(matches.length, 1, 'Native declaration must have exactly one version');
-  assert.equal(matches[0]![1], from, 'Native declaration differs from selected policy');
-  return text.replace(/^(  version ")[^"\r\n]+("\r?)$/m, `$1${to}$2`);
 }
 /** Version overrides normalize identity metadata only, so a version-only edit cannot manufacture a content bump. */
 export function nativeArchives(root: string, overrides?: Readonly<Record<string, string>>): NativeArchive[] {

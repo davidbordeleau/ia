@@ -79,6 +79,11 @@ export interface Assessment {
 }
 export interface Verdict extends Assessment {
   readonly revision: string;
+  /**
+   * Where a COMP-KERNEL or COMP-FIXTURES result came from (C31): `verified` evidence bound to the graph, or the
+   * caller-asserted `evidence` map. Absent on every other verdict.
+   */
+  readonly basis?: 'verified' | 'caller-asserted';
 }
 export function verdict(assessment: Assessment, revision: string): Verdict {
   if (revision.trim() === '') throw new TypeError('A verdict requires an explicit nonempty revision');

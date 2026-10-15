@@ -30,6 +30,7 @@ import {
   runRuntimeFixtures,
 } from './runtime-fixtures.js';
 import { runEvidenceFixtures } from './evidence-fixtures.js';
+import { INVENTORY_PATH, checkInventory } from './inventory.js';
 import { runHookFixtures } from './hook-fixtures.js';
 import { EXEC_CODES } from '../systems/types.js';
 import { executionFixtureCodes, runExecutionFixtures } from '../systems/refusal-fixtures.js';
@@ -93,6 +94,23 @@ export function readFixtures(root: string): { fixtures: LanguageFixture[]; stray
     }
   }
   return { fixtures: fixtures.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)), strays: strays.sort() };
+}
+/** The package-v1 inventory gate: drift between the tree and the generated inventory fails COMP-FIXTURES. */
+function inventoryFindings(root: string): Finding[] {
+  try {
+    checkInventory(root);
+    return [];
+  } catch (error) {
+    return [
+      {
+        code: 'IA-COMP-FIXTURE-MISMATCH',
+        severity: 'error',
+        path: INVENTORY_PATH,
+        line: 1,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ];
+  }
 }
 export function checkCompliance(root: string) {
   const native = {
@@ -165,6 +183,7 @@ export function checkCompliance(root: string) {
         message: 'Unexpected fixture entry or orphan companion',
       }),
     ),
+    ...inventoryFindings(root),
   ]);
   const kernelFindings: Finding[] = [];
   try {

@@ -11,6 +11,7 @@ export interface VersionResult {
   changeset?: string;
   sha256?: string;
   files?: number;
+  nativeRegenerationRequired?: boolean;
   pending?: number;
   reason?: string;
 }

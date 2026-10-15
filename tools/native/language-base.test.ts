@@ -15,7 +15,19 @@ const checked = (overrides: Partial<Parameters<typeof languageBaseFindings>[0]> 
 
 // docs/specs/workspace-initialization-apply/README.md §2 “Base artifact” and §8 “Acceptance evidence”.
 describe('bundled language base', () => {
-  it('selects native versions independently of npm and refuses an absent or malformed version policy', () => {
+  it('packs artifact3 without changing syntax1, the archive format or the released engine contract', () => {
+    const aligned = buildLanguageBase(root, { version: '3.0.0' });
+    const verified = verifyArchive(aligned.bytes, aligned.pin.archive);
+    expect(aligned.pin.version).toBe('3.0.0');
+    expect(verified.manifest.version).toBe('3.0.0');
+    expect(verified.manifest.formatVersion).toBe(1);
+    expect(verified.manifest.language).toEqual(['1.0']);
+    expect(verified.manifest.engine).toBe('^0.1.1');
+    const sources = [...verified.files].filter(([path]) => path.endsWith('.ia'));
+    expect(sources.length).toBeGreaterThan(0);
+    for (const [, bytes] of sources) expect(Buffer.from(bytes).toString('utf8')).toMatch(/^#! ia 1\.0(?:\r?\n|$)/);
+  });
+  it('reads the derived native language selector and refuses an absent or malformed version policy', () => {
     const temporary = mkdtempSync(resolve(tmpdir(), 'ia-language-version-'));
     try {
       mkdirSync(resolve(temporary, 'examples/public-language'), { recursive: true });
@@ -33,7 +45,7 @@ describe('bundled language base', () => {
       rmSync(temporary, { recursive: true, force: true });
     }
   });
-  it('packs inventarch/language at the independently selected native version from the language-only set, deterministically', () => {
+  it('packs inventarch/language at its derived artifact version from the language-only set, deterministically', () => {
     expect(base.pin).toMatchObject({ id: BASE_ID, version });
     const verified = verifyArchive(base.bytes, base.pin.archive);
     expect(verified.manifestDigest).toBe(base.pin.manifest);

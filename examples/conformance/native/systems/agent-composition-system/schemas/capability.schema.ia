@@ -6,6 +6,7 @@
     must have meaning
     may have composition
     must have execution
+    may have invocation
     may have relationships
     closed
   fields
@@ -30,3 +31,10 @@
     may have execution.limit-depth as number
     may have execution.limit-bytes as number
     may have execution.limit-duration-ms as number
+    may have invocation.mode as id in [model, user, delegated, none]
+    may have invocation.use-when as text "When a host should offer this capability, in the user's words."
+    may have invocation.triggers as list of text "Phrases that should select this capability."
+    may have invocation.avoid-when as text "Nearby requests this capability must not take."
+    may have invocation.argument-hint as text "The argument shape a user-invoked entry point shows."
+    may have invocation.paths as list of text "Path selections that make this capability relevant."
+    may have invocation.agent as ref "The agent a delegated invocation runs as."

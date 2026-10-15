@@ -108,8 +108,8 @@
     },
     {
       "path": ".ia/src/systems/authoring-system/reference/agent-profile.md",
-      "bytes": 1580,
-      "sha256": "91c74b3fab01864f7d74daf7ace2d09e72d10234a09c5b357672f90cc8ca0a48",
+      "bytes": 1946,
+      "sha256": "1892cc6572f69e1bc1271277a4fb1319e9efdbbc26ecde5cc3b2ea8f4b5bef1c",
       "mediaType": "text/markdown",
       "encoding": "utf8"
     },
@@ -143,8 +143,8 @@
     },
     {
       "path": ".ia/src/systems/authoring-system/reference/capability.md",
-      "bytes": 1705,
-      "sha256": "c71de6238120a8151baaa0314b10af741f99c6c1ebeed355307d7e6f9dce0e42",
+      "bytes": 2377,
+      "sha256": "dd9e2627f019703566bfb1801a2ce2b9c6a22c58e837adeb3faee696b369f242",
       "mediaType": "text/markdown",
       "encoding": "utf8"
     },
@@ -206,8 +206,8 @@
     },
     {
       "path": ".ia/src/systems/authoring-system/reference/distribution.md",
-      "bytes": 820,
-      "sha256": "6fe78f2a481cd55ff5437abff359ae6d0c387871d840fc30c1192dac3bdd6831",
+      "bytes": 1249,
+      "sha256": "5c9409862de26e0cc39e35e4cd131632004697d048f4427a8c884b25c59d415d",
       "mediaType": "text/markdown",
       "encoding": "utf8"
     },

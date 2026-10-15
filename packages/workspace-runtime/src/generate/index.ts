@@ -18,3 +18,4 @@ export {
 } from './hook.js';
 export type { HookSet } from './hook.js';
 export type { GeneratedFile, GeneratedSet, GeneratedWord, UnsupportedRecord } from './format.js';
+export { renderPlugin, type PluginAsset, type PluginFile, type PluginResource } from './plugin.js';

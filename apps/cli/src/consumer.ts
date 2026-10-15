@@ -142,6 +142,8 @@ export class Refusal extends Error {
     /** §6.5 element 1 when there is no `where`: the invocation that was refused, rendered but never serialized. */
     readonly at: string | null = null,
     readonly registryIntent?: AdviceContext['registryIntent'],
+    /** A machine-readable account of the refusal, serialized under `details` by `--json`. */
+    readonly details: unknown = null,
   ) {
     super(message);
     this.name = 'Refusal';
@@ -271,6 +273,7 @@ export function renderRefusal(
               identity: refusal.where.identity ?? null,
             },
       next,
+      ...(refusal.details === null ? {} : { details: refusal.details }),
     };
     return { exitCode: refusal.exit, stdout: JSON.stringify(body) + '\n', stderr: '' };
   }
@@ -636,7 +639,16 @@ export async function runCommand(command: CommandSpec, argv: readonly string[], 
       raw = args === undefined ? gated : inertNext(gated, { command, args, host });
     const refusal =
       raw.where === null && raw.at === null
-        ? new Refusal(raw.code, raw.message, raw.exit, null, raw.next, `ia ${command.name}`, raw.registryIntent)
+        ? new Refusal(
+            raw.code,
+            raw.message,
+            raw.exit,
+            null,
+            raw.next,
+            `ia ${command.name}`,
+            raw.registryIntent,
+            raw.details,
+          )
         : raw;
     return renderRefusal(refusal, refusal.exit === 2 ? preliminary : caps, wantsJson(argv), refused);
   }

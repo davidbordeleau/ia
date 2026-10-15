@@ -1,8 +1,10 @@
 import { registryWorkspace } from './adopt.js';
+import { HostPluginError, lowerPlugin, readPlugin } from '@inventarch/workspace-runtime/internal/host-plugin';
 import { adoptedBindings } from '@inventarch/db';
 import { adoptionId, planAdoption, applyAdoption } from '@inventarch/distribution/registry';
 import type { WorkspaceRelease } from '@inventarch/distribution/registry';
 import { readBase, PIN_PATH, PACKAGE_ID, DAMAGED } from './bundled-base.js';
+import { canonical } from './plugin-sources.js';
 import type { Base, BasePin } from './bundled-base.js';
 export { readBase, PIN_PATH, baseArchivePath, PACKAGE_ID } from './bundled-base.js';
 export type { Base, BasePin } from './bundled-base.js';
@@ -75,7 +77,7 @@ import {
   statSync,
   unlinkSync,
 } from 'node:fs';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { inertCommandRoot } from '@inventarch/runtime';
 import {
   decodeReleaseDescriptor,
@@ -207,7 +209,7 @@ export interface Descriptor {
     readonly range: string;
     readonly systems: readonly string[];
   }[];
-  readonly assets: readonly never[];
+  readonly assets: Starter['assets'];
   readonly license: string;
   readonly description: string;
   readonly source: Source;
@@ -222,6 +224,8 @@ export interface Starter {
   readonly files: readonly { readonly path: string; readonly text: string }[];
   /** The records those files hold, in file order: three, or six with `--system`. */
   readonly records: readonly StarterRecord[];
+  /** The assets `--from` lowered; empty otherwise. */
+  readonly assets: readonly { readonly path: string; readonly role: 'asset' | 'documentation' | 'license' }[];
   readonly descriptor: Descriptor | null;
   readonly base: BasePin;
   readonly systems: readonly string[];
@@ -735,6 +739,7 @@ export function starterDescriptor(
   base: Base,
   provenance: Provenance,
   distribution?: string | null,
+  assets: Starter['assets'] = [],
 ): Descriptor {
   return {
     formatVersion: 1,
@@ -744,7 +749,7 @@ export function starterDescriptor(
     engine: `^${DISTRIBUTION_ENGINE_VERSION}`,
     language: ['1.0'],
     dependencies: baseDependencies(base),
-    assets: [],
+    assets,
     license: 'UNLICENSED',
     description: `The ${name} workspace.`,
     source: provenance.source,
@@ -782,6 +787,64 @@ function filesBelow(root: string, path: string): readonly string[] {
   return found;
 }
 
+/** Whether `path` is `base` or lies below it; an in-base name that only begins with `..`, such as `..x`, is below it. */
+const within = (base: string, path: string): boolean => {
+  const here = relative(base, path);
+  return here === '' || (here !== '..' && !here.startsWith(`..${sep}`) && !isAbsolute(here));
+};
+
+/**
+ * `--from`: lower the plugin; any unresolved construct refuses before anything is planned or written, with every entry
+ * in the refusal's details. A target that is the plugin directory or lies inside it is refused before the plugin is
+ * read, since lowering would write into its own source; a target that contains the plugin is legal.
+ */
+function lowerFrom(
+  from: string,
+  root: string,
+  name: string | null,
+  lower: boolean,
+): ReturnType<typeof lowerPlugin> | null {
+  const plugin = resolve(from);
+  let plan: ReturnType<typeof lowerPlugin> | null = null;
+  try {
+    // The plugin is always read, so an input error refuses at once; lowering needs a name and a target free of conflicts.
+    if (statSync(plugin, { throwIfNoEntry: false })?.isDirectory() !== true)
+      throw new HostPluginError('IA-PLUGIN-INPUT', `${from} is not a plugin directory`);
+    if (within(canonical(plugin), canonical(root)))
+      throw new Refusal(
+        'IA-PLUGIN-INPUT',
+        `${root} is the plugin directory or lies inside it; lowering never writes into its own source`,
+        1,
+        { path: plugin },
+        `Choose a target directory outside the plugin, then run "ia init <directory> --from ${quote(plugin)}".`,
+      );
+    const inventory = readPlugin(plugin);
+    if (lower && name !== null) plan = lowerPlugin(inventory, name);
+  } catch (error) {
+    if (error instanceof HostPluginError)
+      throw new Refusal(
+        error.code,
+        error.message,
+        1,
+        { path: plugin },
+        'Run "ia init --help" for what a plugin directory may hold.',
+      );
+    throw error;
+  }
+  if (plan !== null && plan.unresolved.length > 0)
+    throw new Refusal(
+      'IA-LOWER-UNRESOLVED',
+      `${plan.unresolved.length} construct(s) cannot be lowered yet: ${plan.unresolved.slice(0, 20).join('; ')}${plan.unresolved.length > 20 ? '; ...' : ''}`,
+      1,
+      { path: plugin },
+      'Nothing was written; run "ia init --help" for what a plugin directory may hold.',
+      null,
+      undefined,
+      plan.unresolved,
+    );
+  return plan;
+}
+
 export interface InitRequest {
   readonly adoption?: { readonly id: string; readonly release: WorkspaceRelease };
   readonly root: string;
@@ -789,6 +852,8 @@ export interface InitRequest {
   readonly id?: string | undefined;
   /** `--system`: also author the local `@system`, its steward and the `@distribution` rooted at it. */
   readonly system?: boolean | undefined;
+  /** `--from`: a plugin directory lowered into the new workspace as a kit. */
+  readonly from?: string | undefined;
   readonly packageRoot: string;
   readonly git: Git;
   readonly invocation?: string;
@@ -815,8 +880,29 @@ export function collectInit(request: InitRequest): InitView {
     const source = `.ia/open/${adoptionId(request.adoption.id)}/${request.adoption.release.revision}/.ia/src @open`;
     if (!sources.includes(source)) sources.push(source);
   }
+  // An initialized target keeps init's own conflict report; only a target free of conflicts is lowered.
+  const lowered =
+    request.from === undefined
+      ? null
+      : lowerFrom(request.from, root, name, identity.conflict === null && !existsSync(resolve(root, DESCRIPTOR_PATH)));
   const { files, records } =
-    name === null ? { files: [], records: [] } : starterFiles(name, base.systems, system, sources);
+    name === null
+      ? { files: [], records: [] }
+      : lowered !== null
+        ? {
+            files: [
+              { path: WORKSPACE_PATH, text: starterRecords(name, [...base.systems, name], sources) },
+              ...lowered.files.map((file) => ({ path: file.path, text: file.bytes.toString('utf8') })),
+            ],
+            records: [
+              { word: 'workspace', name, path: WORKSPACE_PATH },
+              { word: 'agent', name, path: WORKSPACE_PATH },
+              { word: 'mandate', name: `${name}-mandate`, path: WORKSPACE_PATH },
+              ...lowered.records,
+            ],
+          }
+        : starterFiles(name, base.systems, system, sources);
+  const assets = lowered?.assets ?? [];
   // M5.2 §4.3: a temporary file `createFile` left beside one of this initialization's own targets.
   const targets = new Set([...files.map((file) => file.path), IGNORE_PATH, DESCRIPTOR_PATH]);
   // `.<uuid>.tmp` is 41 characters: the dot, a 36-character UUID and `.tmp`.
@@ -935,8 +1021,11 @@ export function collectInit(request: InitRequest): InitView {
       system,
       files,
       records,
+      assets,
       descriptor:
-        id === null || name === null ? null : starterDescriptor(id, name, base, provenance, system ? null : undefined),
+        id === null || name === null
+          ? null
+          : starterDescriptor(id, name, base, provenance, system ? null : undefined, assets),
       base: base.pin,
       systems: base.systems,
       provenance,
@@ -1034,7 +1123,9 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
   createFile(
     root,
     DESCRIPTOR_PATH,
-    Buffer.from(descriptorText(starterDescriptor(id, name, base, starter.provenance, distribution ?? undefined))),
+    Buffer.from(
+      descriptorText(starterDescriptor(id, name, base, starter.provenance, distribution ?? undefined, starter.assets)),
+    ),
   );
   checkpoint('init:descriptor');
   const installed = readInstalledState({ root });
@@ -1506,7 +1597,8 @@ function invocationOf(context: Context): string {
   const parts = ['ia init', ...args.positionals.map(quote)];
   const id = args.value('id'),
     host = args.value('host');
-  for (const option of ['adopt', 'registry']) {
+  // `--from` too, as typed: without it the apply, resume and conflict commands would initialize a plain starter.
+  for (const option of ['adopt', 'registry', 'from']) {
     const value = args.value(option);
     if (value !== undefined) parts.push(`--${option}`, quote(value));
   }
@@ -1563,7 +1655,9 @@ async function initialize(context: Context, root: string, id: string | undefined
     root,
     host: selected,
     id,
-    system: args.flag('system'),
+    system: args.value('from') === undefined && args.flag('system'),
+    // Read against the invocation's directory, as the target is, so `--from .` names the directory it was typed in.
+    from: args.value('from') === undefined ? undefined : resolve(host.cwd, args.value('from')!),
     packageRoot: host.packageRoot,
     git: gitIn(existing, host.env),
     invocation: invocationOf(context),

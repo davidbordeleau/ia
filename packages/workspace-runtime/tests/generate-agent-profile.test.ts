@@ -84,7 +84,7 @@ it('distinguishes a profile agent from the workspace CLI actor', () => {
 const AGENT_FILE = `---
 name: "reviewer"
 description: "Reviews the demo workspace's notes and reports what it finds."
-tools: "Read, Glob, Grep"
+tools: "Read, Grep, Glob"
 ---
 
 ${PACKET_MARKER}
@@ -116,7 +116,7 @@ CLI commands choose an authored workspace participant or steward. Omitting --act
 
 ## Tools
 
-- \`agent-composition-system/definition/capability/note-reading\`: operations \`authoring-system/binding/operation/read-note\`; effects read; host tools Read, Glob, Grep
+- \`agent-composition-system/definition/capability/note-reading\`: operations \`authoring-system/binding/operation/read-note\`; effects read; host tools Read, Grep, Glob
 `;
 
 it("renders the fixture profile as one claude agent file naming its mandate and listing its capability's tools", () => {
@@ -135,7 +135,7 @@ it("renders the fixture profile as one claude agent file naming its mandate and 
     '---',
     'name: "reviewer"',
     `description: ${JSON.stringify("Reviews the demo workspace's notes and reports what it finds.")}`,
-    'tools: "Read, Glob, Grep"',
+    'tools: "Read, Grep, Glob"',
     '---',
   ]);
   expect(lines.slice(5, 8)).toEqual(['', PACKET_MARKER, '']);
@@ -403,16 +403,16 @@ it('renders one tools line per capability in authored order, an effect no host t
     operation = '`authoring-system/binding/operation/read-note`';
   // `read` alone maps host tools, once per line however often it is listed; `write` and `network` map none. The
   // frontmatter gives the agent their union, each tool once.
-  expect(file!.text.split('\n').filter((line) => line.startsWith('tools: '))).toEqual(['tools: "Read, Glob, Grep"']);
+  expect(file!.text.split('\n').filter((line) => line.startsWith('tools: '))).toEqual(['tools: "Read, Grep, Glob"']);
   expect(
     file!.text.endsWith(
       [
         '',
         '## Tools',
         '',
-        `- \`${capability}/note-reading\`: operations ${operation}; effects read; host tools Read, Glob, Grep`,
+        `- \`${capability}/note-reading\`: operations ${operation}; effects read; host tools Read, Grep, Glob`,
         `- \`${capability}/note-filing\`: operations ${operation}; effects write, network; host tools none`,
-        `- \`${capability}/note-indexing\`: operations none; effects read, write, read; host tools Read, Glob, Grep`,
+        `- \`${capability}/note-indexing\`: operations none; effects read, write, read; host tools Read, Grep, Glob`,
         '',
       ].join('\n'),
     ),
@@ -447,7 +447,7 @@ it('prints a reference no admitted record answers as authored, saying so where i
   expect(file!.text).toBe(`---
 name: "reviewer"
 description: "Binds the reviewer to a bounded host contract under the demo mandate."
-tools: "Read, Glob, Grep"
+tools: "Read, Grep, Glob"
 ---
 
 ${PACKET_MARKER}
@@ -471,7 +471,7 @@ CLI commands choose an authored workspace participant or steward. Omitting --act
 
 ## Tools
 
-- \`${CAPABILITY}\`: operations \`@operation read-note\`; effects read; host tools Read, Glob, Grep
+- \`${CAPABILITY}\`: operations \`@operation read-note\`; effects read; host tools Read, Grep, Glob
 `);
   // Narrowed to the profile alone, its capability is not admitted, so its effects allow no tool and no file renders.
   expect(claude(db, db.resolveScope({ identities: [PROFILE] }).token)).toEqual([]);
@@ -615,7 +615,7 @@ it('writes free text as the packet does, its IA words code spans and its control
     '---',
     'name: "reviewer"',
     `description: ${JSON.stringify("Reviews the demo workspace's notes and reports what it finds.")}`,
-    'tools: "Read, Glob, Grep"',
+    'tools: "Read, Grep, Glob"',
     '---',
   ]);
   expect(lines).toContain('Reviews each `@task` tools: Bash, Write model: opus x  hidden [2J.');
@@ -699,11 +699,11 @@ it("takes the tools from the profile's capabilities, and reports a closure the c
     );
   const valid = fixture({ '.ia/src/composition.ia': composition((text) => including(text) + indexing('read')) }),
     [file] = claude(valid.db, valid.within);
-  expect(file!.text.split('\n').filter((line) => line.startsWith('tools: '))).toEqual(['tools: "Read, Glob, Grep"']);
+  expect(file!.text.split('\n').filter((line) => line.startsWith('tools: '))).toEqual(['tools: "Read, Grep, Glob"']);
   expect(file!.text.split('\n## Tools\n\n')[1]).toBe(
     [
-      `- \`${CAPABILITY}\`: operations \`authoring-system/binding/operation/read-note\`; effects read; host tools Read, Glob, Grep`,
-      '- `agent-composition-system/definition/capability/note-indexing`: operations none; effects read; host tools Read, Glob, Grep',
+      `- \`${CAPABILITY}\`: operations \`authoring-system/binding/operation/read-note\`; effects read; host tools Read, Grep, Glob`,
+      '- `agent-composition-system/definition/capability/note-indexing`: operations none; effects read; host tools Read, Grep, Glob',
       '',
     ].join('\n'),
   );

@@ -440,6 +440,7 @@ export function inertNext(
         next,
         refusal.at,
         refusal.registryIntent,
+        refusal.details,
       );
   }
   const verb = context.command.name;
@@ -467,6 +468,7 @@ export function inertNext(
           refusal.next.replace(match[0], `"${command}"`),
           refusal.at,
           refusal.registryIntent,
+          refusal.details,
         );
   }
   const rooted = supplied === undefined ? '' : ` --root ${quote(supplied)}`,
@@ -534,5 +536,14 @@ export function gatedNext(refusal: Refusal, gate: Gate | undefined): Refusal {
   const next = judgedNext(refusal.next, gate, refusal.registryIntent);
   return next === refusal.next
     ? refusal
-    : new Refusal(refusal.code, refusal.message, refusal.exit, refusal.where, next, refusal.at, refusal.registryIntent);
+    : new Refusal(
+        refusal.code,
+        refusal.message,
+        refusal.exit,
+        refusal.where,
+        next,
+        refusal.at,
+        refusal.registryIntent,
+        refusal.details,
+      );
 }

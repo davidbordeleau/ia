@@ -2,7 +2,7 @@
   "version": 1,
   "language": "ia 1.0",
   "status": "public IA 1.0 language contract",
-  "sourceDigest": "43a7078f421f094af2ac377e9dc76847211028cb33964e3459abc5aacc947d99",
+  "sourceDigest": "5c2c9fbdf0911032d90a97a303bdbe3fb2416ca615b6babeca4baa306677026f",
   "words": [
     {
       "word": "agent",
@@ -86,6 +86,14 @@
           {
             "name": "execution",
             "required": true
+          },
+          {
+            "name": "invocation",
+            "required": false
+          },
+          {
+            "name": "presentation",
+            "required": false
           },
           {
             "name": "relationships",
@@ -186,6 +194,39 @@
           {
             "path": "execution.limit-duration-ms",
             "type": "number",
+            "required": false
+          },
+          {
+            "path": "invocation.mode",
+            "type": "id",
+            "required": false,
+            "values": [
+              "model",
+              "user",
+              "delegated",
+              "none"
+            ]
+          },
+          {
+            "path": "invocation.use-when",
+            "type": "text",
+            "required": false,
+            "description": "When a host should hand work to this profile."
+          },
+          {
+            "path": "invocation.avoid-when",
+            "type": "text",
+            "required": false,
+            "description": "Work this profile must not take."
+          },
+          {
+            "path": "presentation.color",
+            "type": "id",
+            "required": false
+          },
+          {
+            "path": "execution.effort",
+            "type": "id",
             "required": false
           }
         ],
@@ -441,6 +482,10 @@
             "required": true
           },
           {
+            "name": "invocation",
+            "required": false
+          },
+          {
             "name": "relationships",
             "required": false
           }
@@ -550,6 +595,53 @@
             "path": "execution.limit-duration-ms",
             "type": "number",
             "required": false
+          },
+          {
+            "path": "invocation.mode",
+            "type": "id",
+            "required": false,
+            "values": [
+              "model",
+              "user",
+              "delegated",
+              "none"
+            ]
+          },
+          {
+            "path": "invocation.use-when",
+            "type": "text",
+            "required": false,
+            "description": "When a host should offer this capability, in the user's words."
+          },
+          {
+            "path": "invocation.triggers",
+            "type": "list of text",
+            "required": false,
+            "description": "Phrases that should select this capability."
+          },
+          {
+            "path": "invocation.avoid-when",
+            "type": "text",
+            "required": false,
+            "description": "Nearby requests this capability must not take."
+          },
+          {
+            "path": "invocation.argument-hint",
+            "type": "text",
+            "required": false,
+            "description": "The argument shape a user-invoked entry point shows."
+          },
+          {
+            "path": "invocation.paths",
+            "type": "list of text",
+            "required": false,
+            "description": "Path selections that make this capability relevant."
+          },
+          {
+            "path": "invocation.agent",
+            "type": "ref",
+            "required": false,
+            "description": "The agent a delegated invocation runs as."
           }
         ],
         "edges": []
@@ -1231,6 +1323,10 @@
             "required": true
           },
           {
+            "name": "product",
+            "required": false
+          },
+          {
             "name": "relationships",
             "required": false
           }
@@ -1250,6 +1346,61 @@
             "path": "distribution.records",
             "type": "list of ref",
             "required": true
+          },
+          {
+            "path": "product.name",
+            "type": "id",
+            "required": false
+          },
+          {
+            "path": "product.display-name",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.version",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.description",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.author",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.license",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.keywords",
+            "type": "list of text",
+            "required": false
+          },
+          {
+            "path": "product.hosts",
+            "type": "list of id",
+            "required": false,
+            "values": [
+              "claude",
+              "codex",
+              "grok"
+            ]
+          },
+          {
+            "path": "product.short-description",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.category",
+            "type": "text",
+            "required": false
           }
         ],
         "edges": []

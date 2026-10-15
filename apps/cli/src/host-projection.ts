@@ -43,7 +43,9 @@ import type {
   UnsupportedRow,
 } from '@inventarch/runtime';
 import { ProjectionError } from '@inventarch/workspace-runtime/projections';
-import { generateHostSet } from '@inventarch/workspace-runtime/internal/generate';
+import { generateHostSet, renderPlugin } from '@inventarch/workspace-runtime/internal/generate';
+import type { PluginFile } from '@inventarch/workspace-runtime/internal/generate';
+import { readPluginSources } from './plugin-sources.js';
 import type { GuardPlan, HookPlan } from '@inventarch/distribution/guard-registration';
 import {
   applyGuardRegistration,
@@ -122,6 +124,19 @@ function generationRefusal(error: unknown, root: string): unknown {
     'Correct the record the message names, then run "ia validate".',
   );
 }
+/** The plugin product of a lowered workspace, rendered through the same admitted session as the projection. */
+export function renderPluginFor(root: string): readonly PluginFile[] {
+  const sources = readPluginSources(root);
+  const session = openSession(root);
+  try {
+    requireAdmitted(session, root);
+    const within = session.reader.resolveScope().token;
+    return renderPlugin(session.reader, within, sources.resources, sources.assets);
+  } finally {
+    session.close();
+  }
+}
+
 /**
  * §6.1: the packet over the whole workspace, through the session's own scope, rendered by `host`'s adapter for the
  * consumer target, and the host set generated from the workspace's authored records through the same scope: the

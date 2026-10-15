@@ -2,7 +2,7 @@
 
 Generated from the public contract corpus by `pnpm vocabulary:generate`. Required sections and fields are structural obligations; `id` is not an implicit enumeration. See [the language guide](README.md) for shared syntax, allowed values, relationship resolution, domain constraints and evaluator limits. The [JSON catalogue](vocabulary.json) carries the same machine-readable contract.
 
-This catalogue contains 44 words. Source digest: `43a7078f421f094af2ac377e9dc76847211028cb33964e3459abc5aacc947d99`.
+This catalogue contains 44 words. Source digest: `5c2c9fbdf0911032d90a97a303bdbe3fb2416ca615b6babeca4baa306677026f`.
 
 ## @agent
 
@@ -36,29 +36,34 @@ Facets: `agent-profile`; the first is the default.
 
 Consumer: language/schema admission; generic composition compiler and installed catalog.
 
-Required sections: meaning, composition, execution. Optional sections: relationships.
+Required sections: meaning, composition, execution. Optional sections: invocation, presentation, relationships.
 
-| Field | Type | Required |
-|---|---|---|
-| meaning.says | text | yes |
-| meaning.answers | text | yes |
-| composition.agent | ref | yes |
-| composition.capabilities | list of ref | yes |
-| composition.voice | ref | no |
-| composition.mandate | ref | no |
-| composition.delegates | list of ref | no |
-| execution.role | id | yes |
-| execution.outcomes | id | yes |
-| execution.mandate-contract | id | yes |
-| execution.model-profile | id | no |
-| execution.limit-steps | number | no |
-| execution.limit-model-calls | number | no |
-| execution.limit-operations | number | no |
-| execution.limit-tokens | number | no |
-| execution.limit-children | number | no |
-| execution.limit-depth | number | no |
-| execution.limit-bytes | number | no |
-| execution.limit-duration-ms | number | no |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| meaning.says | text | yes |  |
+| meaning.answers | text | yes |  |
+| composition.agent | ref | yes |  |
+| composition.capabilities | list of ref | yes |  |
+| composition.voice | ref | no |  |
+| composition.mandate | ref | no |  |
+| composition.delegates | list of ref | no |  |
+| execution.role | id | yes |  |
+| execution.outcomes | id | yes |  |
+| execution.mandate-contract | id | yes |  |
+| execution.model-profile | id | no |  |
+| execution.limit-steps | number | no |  |
+| execution.limit-model-calls | number | no |  |
+| execution.limit-operations | number | no |  |
+| execution.limit-tokens | number | no |  |
+| execution.limit-children | number | no |  |
+| execution.limit-depth | number | no |  |
+| execution.limit-bytes | number | no |  |
+| execution.limit-duration-ms | number | no |  |
+| invocation.mode | id in [model, user, delegated, none] | no |  |
+| invocation.use-when | text | no | When a host should hand work to this profile. |
+| invocation.avoid-when | text | no | Work this profile must not take. |
+| presentation.color | id | no |  |
+| execution.effort | id | no |  |
 
 ## @artifact-set
 
@@ -144,31 +149,38 @@ Facets: `capability`; the first is the default.
 
 Consumer: language/schema admission; generic composition compiler and installed catalog.
 
-Required sections: meaning, execution. Optional sections: composition, relationships.
+Required sections: meaning, execution. Optional sections: composition, invocation, relationships.
 
-| Field | Type | Required |
-|---|---|---|
-| meaning.says | text | yes |
-| meaning.answers | text | yes |
-| composition.operations | list of ref | no |
-| composition.playbooks | list of ref | no |
-| composition.templates | list of ref | no |
-| composition.checks | list of ref | no |
-| composition.includes | list of ref | no |
-| execution.input | id | no |
-| execution.outcomes | id | no |
-| execution.context-profile | id | no |
-| execution.procedure-profile | id | no |
-| execution.mapping-profile | id | no |
-| execution.effects | list of id | yes |
-| execution.limit-steps | number | no |
-| execution.limit-model-calls | number | no |
-| execution.limit-operations | number | no |
-| execution.limit-tokens | number | no |
-| execution.limit-children | number | no |
-| execution.limit-depth | number | no |
-| execution.limit-bytes | number | no |
-| execution.limit-duration-ms | number | no |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| meaning.says | text | yes |  |
+| meaning.answers | text | yes |  |
+| composition.operations | list of ref | no |  |
+| composition.playbooks | list of ref | no |  |
+| composition.templates | list of ref | no |  |
+| composition.checks | list of ref | no |  |
+| composition.includes | list of ref | no |  |
+| execution.input | id | no |  |
+| execution.outcomes | id | no |  |
+| execution.context-profile | id | no |  |
+| execution.procedure-profile | id | no |  |
+| execution.mapping-profile | id | no |  |
+| execution.effects | list of id | yes |  |
+| execution.limit-steps | number | no |  |
+| execution.limit-model-calls | number | no |  |
+| execution.limit-operations | number | no |  |
+| execution.limit-tokens | number | no |  |
+| execution.limit-children | number | no |  |
+| execution.limit-depth | number | no |  |
+| execution.limit-bytes | number | no |  |
+| execution.limit-duration-ms | number | no |  |
+| invocation.mode | id in [model, user, delegated, none] | no |  |
+| invocation.use-when | text | no | When a host should offer this capability, in the user's words. |
+| invocation.triggers | list of text | no | Phrases that should select this capability. |
+| invocation.avoid-when | text | no | Nearby requests this capability must not take. |
+| invocation.argument-hint | text | no | The argument shape a user-invoked entry point shows. |
+| invocation.paths | list of text | no | Path selections that make this capability relevant. |
+| invocation.agent | ref | no | The agent a delegated invocation runs as. |
 
 ## @cardinality
 
@@ -378,13 +390,23 @@ Facets: `distribution`; the first is the default.
 
 Consumer: language/schema admission; graph resolution; explicitly selected domain consumer for stronger semantics.
 
-Required sections: meaning, distribution. Optional sections: relationships.
+Required sections: meaning, distribution. Optional sections: product, relationships.
 
 | Field | Type | Required |
 |---|---|---|
 | meaning.says | text | yes |
 | meaning.answers | text | yes |
 | distribution.records | list of ref | yes |
+| product.name | id | no |
+| product.display-name | text | no |
+| product.version | text | no |
+| product.description | text | no |
+| product.author | text | no |
+| product.license | text | no |
+| product.keywords | list of text | no |
+| product.hosts | list of id in [claude, codex, grok] | no |
+| product.short-description | text | no |
+| product.category | text | no |
 
 ## @execution-binding
 

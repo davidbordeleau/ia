@@ -10,11 +10,22 @@ Default file: distribution.ia, relative to the workspace's authored root (the so
 
 Section meaning: required.
 Section distribution: required.
+Section product: optional.
 Section relationships: optional.
 
 - meaning.says: text; required.
 - meaning.answers: text; required.
 - distribution.records: list of ref; required.
+- product.name: id; optional.
+- product.display-name: text; optional.
+- product.version: text; optional.
+- product.description: text; optional.
+- product.author: text; optional.
+- product.license: text; optional.
+- product.keywords: list of text; optional.
+- product.hosts: list of id in [claude, codex, grok]; optional.
+- product.short-description: text; optional.
+- product.category: text; optional.
 
 
 A valid declaration establishes structural conformance. Execution, host authority and evidence verification require their respective explicit consumers.

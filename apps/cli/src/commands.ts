@@ -134,6 +134,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     syntax: [
       'ia init [<directory>] [--id <provider/name>] [--system] [--host claude|codex|none]',
       '        [--apply] [--json] [--yes]',
+      'ia init [<directory>] --from <plugin-directory> [--id <provider/name>] [--apply] [--json] [--yes]',
       'ia init [<directory>] --migrate [--system] [--apply] [--json] [--yes]',
       'ia init [<directory>] --decline today|forever | --forget-decline [--host claude|codex|none] [--json]',
     ],
@@ -161,6 +162,14 @@ export const COMMANDS: readonly CommandSpec[] = [
           name: 'system',
           kind: 'boolean',
           summary: 'Also author a local @system, its steward and a @distribution, so ia pack can release it',
+        }),
+        option({
+          name: 'from',
+          kind: 'value',
+          placeholder: '<plugin-directory>',
+          summary:
+            'Lower a Claude, Codex or Grok plugin into the new workspace as a kit; the kit supplies its own system',
+          conflicts: ['migrate', 'adopt', 'system', 'decline', 'forget-decline'],
         }),
         // Milestone position-packet task init-migrate-flag: the workspace's own name, and the hosts it already
         // registered, are the ones the migration keeps, so neither --id nor --host applies.
@@ -475,9 +484,43 @@ export const COMMANDS: readonly CommandSpec[] = [
       refuses: 'a file without the generated marker at a path it writes, which its plan names; --apply writes nothing',
       next: 'ia project <host>',
     },
-    syntax: ['ia project <claude|codex> [--apply] [--actor <agent>] [--json] [--yes]'],
+    syntax: [
+      'ia project <claude|codex> [--apply] [--actor <agent>] [--json] [--yes]',
+      'ia project <claude|codex> --product plugin --out <directory> [--apply] [--json] [--yes]',
+      'ia project <claude|codex> --product plugin --check [--compare <plugin-directory>] [--json]',
+    ],
     grammar: grammar(
-      [option({ name: 'apply', kind: 'boolean', summary: 'Apply the plan rather than previewing it' }), ACTOR],
+      [
+        option({ name: 'apply', kind: 'boolean', summary: 'Apply the plan rather than previewing it' }),
+        ACTOR,
+        option({
+          name: 'product',
+          kind: 'value',
+          values: ['plugin'],
+          placeholder: 'plugin',
+          summary:
+            'Render the host plugin a lowered workspace describes instead of the workspace projection; one plugin carries every host listed in product.hosts, and the host named must be claude or codex',
+        }),
+        option({
+          name: 'out',
+          kind: 'value',
+          placeholder: '<directory>',
+          summary: 'With --product plugin: the absent or empty directory to write',
+          conflicts: ['check'],
+        }),
+        option({
+          name: 'check',
+          kind: 'boolean',
+          summary: 'With --product plugin: render in memory, lower again and compare; writes nothing',
+          conflicts: ['out', 'apply'],
+        }),
+        option({
+          name: 'compare',
+          kind: 'value',
+          placeholder: '<plugin-directory>',
+          summary: 'With --product plugin --check only: also compare against the original plugin directory',
+        }),
+      ],
       positionals('host', 1, 1),
     ),
   },

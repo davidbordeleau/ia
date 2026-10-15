@@ -1,6 +1,6 @@
 {
   "name": "@inventarch/workspace-runtime",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -149,6 +149,10 @@
     "./internal/generate": {
       "types": "./dist/generate/index.d.ts",
       "default": "./dist/generate/index.js"
+    },
+    "./internal/host-plugin": {
+      "types": "./dist/host-plugin/index.d.ts",
+      "default": "./dist/host-plugin/index.js"
     },
     "./internal/index": {
       "types": "./dist/index.d.ts",
@@ -396,6 +400,10 @@
       "./internal/generate": {
         "types": "./dist/generate/index.d.ts",
         "default": "./dist/generate/index.js"
+      },
+      "./internal/host-plugin": {
+        "types": "./dist/host-plugin/index.d.ts",
+        "default": "./dist/host-plugin/index.js"
       },
       "./internal/index": {
         "types": "./dist/index.d.ts",

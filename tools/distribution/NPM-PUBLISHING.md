@@ -1,6 +1,6 @@
 # Publishing IA packages to npm
 
-The public scope is `@inventarch`. Every public npm package moves together at the single version selected in [releases/current.json](../../releases/current.json). The private workspace root is never published. The VS Code extension follows the cohort version and ships as a GitHub release asset, not an npm package. Public native systems and the bundled language archive follow the npm artifact version, joined by the compatibility manifest. Artifact 3.0.0 retains IA syntax 1.0 and the existing schema, format, engine and protocol numbers.
+The public scope is `@inventarch`. Every public npm package moves together at the single version selected in [releases/current.json](../../releases/current.json). The private workspace root is never published. The VS Code extension follows the cohort version and ships as a GitHub release asset, not an npm package. Public native systems and the bundled language archive follow the npm artifact version, joined by the compatibility manifest. Artifacts 3.x retain IA syntax 1.0 and the existing schema, format, engine and protocol numbers.
 
 ## The release flow
 

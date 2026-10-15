@@ -1902,7 +1902,7 @@ describe('HOST-01 emitted projection baseline', () => {
     },
     { name: 'a boolean argument', id: 'check', change: withArgument('boolean'), outcomes: everywhere(TYPED) },
     { name: 'an integer argument', id: 'check', change: withArgument('integer'), outcomes: everywhere(TYPED) },
-    // #444: the agent profile's capabilities declare `effects [read]`, and v1 maps read to the read, glob and grep tool ids.
+    // #444: the agent profile's capabilities declare `effects [read]`, and v1 maps read to the read, grep and glob tool ids.
     {
       name: 'an agent export without an agent profile',
       id: 'reviewer',
@@ -1913,9 +1913,9 @@ describe('HOST-01 emitted projection baseline', () => {
       name: 'glob and grep within the read effect',
       id: 'reviewer',
       tools: ['glob', 'grep'],
-      change: withAgent({ tools: ['read', 'glob', 'grep'] }),
+      change: withAgent({ tools: ['read', 'grep', 'glob'] }),
       outcomes: everywhere('compiled'),
-      emits: { claude: '\ntools: "Read, Glob, Grep"\n', codex: 'Requested tool capabilities: read, glob, grep.' },
+      emits: { claude: '\ntools: "Read, Grep, Glob"\n', codex: 'Requested tool capabilities: read, grep, glob.' },
     },
     {
       name: 'a bash tool beyond the read effect',

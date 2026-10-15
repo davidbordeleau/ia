@@ -28,6 +28,7 @@ import { confirm, Refusal, requireRoot } from './consumer.js';
 import type { HostName } from './host-projection.js';
 import { applyHostProjection, renderProjectionFor } from './host-projection.js';
 import { sessionGate } from './profile.js';
+import { runPluginProduct } from './plugin-product.js';
 import type { Conflict, Element } from './host.js';
 import {
   GUARD_RETIRE,
@@ -337,11 +338,40 @@ function rootedRefusal(context: Context, error: unknown): unknown {
   const given = context.args.value('root'),
     host = projectHost(context.args.positionals[0]);
   if (!(error instanceof Refusal) || error.next === null || given === undefined || host === null) return error;
-  return new Refusal(error.code, error.message, error.exit, error.where, rootedNext(error.next, host, given), error.at);
+  return new Refusal(
+    error.code,
+    error.message,
+    error.exit,
+    error.where,
+    rootedNext(error.next, host, given),
+    error.at,
+    undefined,
+    error.details,
+  );
+}
+
+/** `--out`, `--check` and `--compare` belong to the plugin form; without `--product plugin` each is usage (exit 2). */
+function requirePluginProduct(context: Context): void {
+  const { args } = context;
+  const stray = ['out', 'check', 'compare'].find((name) =>
+    name === 'check' ? args.flag(name) : args.value(name) !== undefined,
+  );
+  if (stray === undefined) return;
+  const given = args.value('root'),
+    named = projectHost(args.positionals[0]) ?? 'claude';
+  throw new Refusal(
+    'IA-CLI-USAGE',
+    `--${stray} belongs to the plugin form, ia project <host> --product plugin; the workspace projection takes none of --out, --check or --compare`,
+    2,
+    null,
+    `Run "ia project ${named} --product plugin --check${given === undefined ? '' : ` --root ${quote(given)}`}" to check the plugin a lowered workspace renders.`,
+  );
 }
 
 export async function runProject(context: Context): Promise<Result> {
   const { args, caps, host, json } = context;
+  if (args.value('product') === 'plugin') return runPluginProduct(context);
+  requirePluginProduct(context);
   let view: ProjectView;
   try {
     view = collectProject(context);

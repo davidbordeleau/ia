@@ -3479,6 +3479,7 @@
         "tools/distribution/release-hygiene.test.ts",
         "tools/distribution/release-refusals.test.ts",
         "tools/distribution/release-setup-auth.test.ts",
+        "tools/distribution/release-setup-metadata.test.ts",
         "tools/distribution/release-setup.test.ts",
         "tools/distribution/release-versioning.test.ts"
       ],

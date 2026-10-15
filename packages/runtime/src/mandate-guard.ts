@@ -15,26 +15,25 @@ import type { HookCode } from './steward.js';
 import { freeze } from './types.js';
 
 /**
- * The `@mandate` edit guard (milestone generation-binding, plan amendment C10; operator decision OD4): whether one file
- * edit an authored `@hook` selects may proceed, decided from admitted records only. The caller (steward-hook's
- * `--hook` mode) owns the event, the path's safety, the managed-state protection and the hook record's admission as a
- * declaration; this module only reads the reader through the scope token, as evaluateSteward does for the retired
- * steward guard.
+ * The `@mandate` edit guard: whether one file edit an authored `@hook` selects may proceed, decided from admitted
+ * records only. The caller (steward-hook's `--hook` mode) owns the event, the path's safety, the managed-state
+ * protection and the hook record's admission as a declaration; this module only reads the reader through the scope
+ * token, as evaluateSteward does for the retired steward guard.
  *
- * - A hook decides an edit only when its `hook.paths` select the file and its `hook.tools` name the event's tool (C10).
+ * - A hook decides an edit only when its `hook.paths` select the file and its `hook.tools` name the event's tool.
  *   Any other edit is allowed. A workspace protects its governing records (the `.ia/src` sources of its hooks, mandates
  *   and profiles) by selecting them in a hook, such as `paths [".ia/src/**"]`.
- * - The actor (OD4) is resolved first: an event that carries `agent_id` is a subagent, which acts as the
+ * - The actor is resolved first: an event that carries `agent_id` is a subagent, which acts as the
  *   `composition.agent` of the one authored `@agent-profile` whose name is exactly its `agent_type`; a subagent no such
  *   profile names is refused at every path the hook selects, governed or not. Any other event is the main session, a
- *   session launched with `--agent` included: it acts as the default actor (OD1) of the workspace position seats the path
- *   in.
- * - The mandates that govern a decided edit are C1's (`governingMandates`) for the path and that workspace, so a mandate
+ *   session launched with `--agent` included: it acts as the default actor (`defaultActor`: the workspace's authored
+ *   `composition.steward`, else its only participant) of the workspace position seats the path in.
+ * - The mandates that govern a decided edit are `governingMandates` for the path and that workspace, so a mandate
  *   scoped to the workspace governs every path a hook selects in it, beside those whose `authority.covers` claims the path.
  *   With none, an established actor (and the main session) is allowed: a mandate only adds restrictions.
- * - The edit is allowed when C1's profile allows the author mode (Synthesis) for that actor: a governing mandate that binds
- *   it (its participant, or one that names no participant, which binds every established actor) grants Synthesis.
- *   Otherwise it is refused with the hook's message and the profile's one next command,
+ * - The edit is allowed when `profileRefusal` allows the author mode (Synthesis) for that actor: a governing mandate
+ *   that binds it (its participant, or one that names no participant, which binds every established actor) grants
+ *   Synthesis. Otherwise it is refused with the hook's message and the profile's one next command,
  *   `ia position --seat <mandate> --shape governance`.
  *
  * Excluded words are not judged: the guard sees file bytes, not records, and `ia author` and `ia preview` enforce them.
@@ -83,7 +82,7 @@ const LIMIT = 512;
 const governance = (seat: string): string => `ia position --seat ${seat} --shape governance`;
 const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Whether the hook decides the edit: its tools name the tool and its paths select a spelling of the file (C10). */
+/** Whether the hook decides the edit: its tools name the tool and its paths select a spelling of the file. */
 export function mandateGuardSelects(request: MandateGuardRequest): boolean {
   const fold = request.fold ?? ((text: string) => text);
   if (!request.hook.tools.includes(request.tool as 'Write')) return false;
@@ -94,7 +93,11 @@ type Acting =
   | { readonly agent?: string; readonly as: string; readonly refusal?: undefined }
   | { readonly refusal: string; readonly next?: string; readonly subagent: boolean };
 
-/** OD4's actor, through the scope token `within`; `workspace` is the workspace position seats the path in, if one. */
+/**
+ * The event's actor, through the scope token `within`: a subagent (an event carrying `agent_id`) acts as the
+ * `composition.agent` of the authored `@agent-profile` named its `agent_type`, and the main session as the default
+ * actor. `workspace` is the workspace position seats the path in, if one.
+ */
 function acting(
   reader: ReadHandle,
   within: string,
@@ -164,7 +167,7 @@ export function evaluateMandateGuard(
     });
   try {
     const workspace = seatedWorkspace(reader, within, paths[0]!);
-    // C1 for the path and its workspace, over every spelling of the file; one row per mandate.
+    // The governing mandates for the path and its workspace, over every spelling of the file; one row per mandate.
     const locate = (actor?: string): readonly GoverningMandate[] => {
       const found = new Map<string, GoverningMandate>();
       for (const path of paths)
@@ -214,8 +217,8 @@ export function evaluateMandateGuard(
     });
   } catch (error) {
     if (!(error instanceof RuntimeError)) throw error;
-    // Review D-R2: by its cause. A refused record a mandate resolution reads is shown by the admission report, not a
-    // position, which cannot seat at a refused record (or would seat at an admitted one of another band sharing its
+    // By its cause: a refused record a mandate resolution reads is shown by the admission report, not a position,
+    // which cannot seat at a refused record (or would seat at an admitted one of another band sharing its
     // identity); `ia validate` and every other mandate-gated command refuse in that state. An admitted mandate whose
     // authority the resolver cannot read is shown by its governance position.
     const where = error.where,
@@ -242,11 +245,11 @@ export function inertCommandRoot(root: string): boolean {
   return /^[\p{L}\p{N}._\-/: ]+$/u.test(spelled);
 }
 /**
- * Lane D, review findings D-R1 and D-N2: the admission report command (`ia report`, the version 1 machine route no
- * mandate gates) for a workspace root, spelled so no shell reads anything in it. `root` is printed, with forward slashes
- * on win32, only when every character is inert unquoted (`INERT_ROOT`); otherwise no path is printed and `fromRoot` says
- * the command is run from the workspace root, where `ia report` opens the working directory. A root is never wrapped in
- * double quotes, where `$` and backticks stay live.
+ * The admission report command (`ia report`, the version 1 machine route no mandate gates) for a workspace root,
+ * spelled so no shell reads anything in it. `root` is printed, with forward slashes on win32, only when every character
+ * is inert unquoted (`INERT_ROOT`); otherwise no path is printed and `fromRoot` says the command is run from the
+ * workspace root, where `ia report` opens the working directory. A root is never wrapped in double quotes, where `$`
+ * and backticks stay live.
  */
 export function admissionReport(root?: string): { readonly command: string; readonly fromRoot: boolean } {
   const spelled = root === undefined ? undefined : process.platform === 'win32' ? root.replaceAll('\\', '/') : root;

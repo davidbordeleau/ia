@@ -21,7 +21,7 @@ import { freeze } from './types.js';
  * names, and whose `evidence.subject-revision` reads `current` under the handle's `readiness` (db D08). A record's own
  * `work.status` is printed as self-declared and is never a basis.
  *
- * What the scope does not read is never a basis either (design §10, IM-24). A requirement a record declares whose
+ * What the scope does not read is never a basis either. A requirement a record declares whose
  * answer this scope does not read blocks, as unknown; and no milestone is satisfied through its tasks, nor is every
  * task said to have exit evidence, while some task may go unread: on a narrowed scope, and on a whole-workspace scope
  * (db PT5, the only one that may disclose admission findings) while admission refuses a @task, or a whole file (D03).
@@ -52,7 +52,7 @@ export interface NextRefusal {
   readonly ok: false;
   readonly code: NextCode;
   readonly message: string;
-  /** Exactly one catalog command with closed arguments (design row 27). */
+  /** Exactly one catalog command with closed arguments. */
   readonly next: string;
   /** IA-RUNTIME-NEXT-AMBIGUOUS: the admitted @plan identities at band 100, in identity order. */
   readonly plans?: readonly string[];
@@ -72,7 +72,7 @@ export interface Prerequisite {
   readonly basis: string;
 }
 export type StateDimension = 'intent' | 'definition' | 'realizable' | 'realized' | 'worked';
-/** One of the five independent state lines of design §10: a value and the only basis it is read from. */
+/** One of a task's five independent state lines: a value and the only basis it is read from. */
 export interface StateLine {
   readonly dimension: StateDimension;
   readonly value: string;
@@ -83,9 +83,9 @@ export interface ExitEvidence {
   /** `evidence.evaluator` as recorded; absent when the observation records none. */
   readonly evaluator?: string;
   /**
-   * `self` when the evaluator is the identity the task's `work.owner-agent` names (decision
-   * task-owner-and-agent-description); `unknown` when the task states an owner-agent that no admitted @agent in this
-   * scope answers, or the observation records no evaluator for a task that names one; else `other`.
+   * `self` when the evaluator is the identity the task's `work.owner-agent` names; `unknown` when the task states an
+   * owner-agent that no admitted @agent in this scope answers, or the observation records no evaluator for a task that
+   * names one; else `other`.
    */
   readonly attribution: 'self' | 'other' | 'unknown';
 }
@@ -115,7 +115,7 @@ export interface DeliveryMilestone {
   /** Which of the two applies, or why neither does. */
   readonly basis: string;
 }
-/** A contradiction or finding the view reports and does not resolve, for the owner it names (IM-32). */
+/** A contradiction or finding the view reports and does not resolve, for the owner it names. */
 export interface ReviewItem {
   /**
    * `grounding`: decisions grounding one record of the plan; `currency`: accepted specs, one superseding the other;
@@ -798,9 +798,9 @@ export function deliveryView(handle: ReadHandle, within: string, seat?: string):
   const sureFirst = <T>(records: readonly T[], sure: ReadonlySet<string>, key: (record: T) => string): readonly T[] =>
     [...records].sort((a, b) => Number(!sure.has(key(a))) - Number(!sure.has(key(b))));
   /**
-   * The first live @decision grounding `identity` where `reading` reads it that has a choice and an effective revision
-   * (design §10 line 1), each conditional row the reading leaves undecided read as no row, a decision a row that holds
-   * at the bound coordinate grounds read before one only a conditional row grounds; and those undecided rows.
+   * The first live @decision grounding `identity` where `reading` reads it that has a choice and an effective revision,
+   * each conditional row the reading leaves undecided read as no row, a decision a row that holds at the bound
+   * coordinate grounds read before one only a conditional row grounds; and those undecided rows.
    */
   const acceptedBy = (
     identity: string,
@@ -875,7 +875,7 @@ export function deliveryView(handle: ReadHandle, within: string, seat?: string):
     };
   };
   /**
-   * The intent line (design §10 line 1). When the bound coordinate leaves a row it reads undecided, the line is read
+   * The intent line. When the bound coordinate leaves a row it reads undecided, the line is read
    * again at each completion of the bound coordinate on the axes those rows leave open (each absent, or set to each of
    * its values), where every row is decided: a line that reads the same at every one is the line, since no binding the
    * scope could take changes it and the conditional row is never read as satisfied, as when a decision that only may
@@ -932,7 +932,7 @@ export function deliveryView(handle: ReadHandle, within: string, seat?: string):
         basis: `${stale.observation}: its subject-revision is the digest in the previous snapshot`,
       };
     const other = observations[0];
-    // A narrowed scope may hold an observation it does not read, so absence there is unknown (IM-24).
+    // A narrowed scope may hold an observation it does not read, so absence there is unknown.
     if (other === undefined)
       return {
         dimension: 'worked',

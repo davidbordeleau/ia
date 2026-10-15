@@ -26,8 +26,8 @@ export const RESERVED_TOKEN = 'agent';
 
 export type Group = 'workspace' | 'distribution';
 /**
- * A command's catalog row without its command: its move is the one MODE_MOVES maps its mode to (design item 13), so a
- * row whose move is not its mode's fails to typecheck.
+ * A command's catalog row without its command: its move is the one MODE_MOVES maps its mode to, so a row whose move is
+ * not its mode's fails to typecheck.
  */
 export type CatalogTag = {
   readonly [M in Mode]: Omit<PacketCatalogRow, 'command' | 'mode' | 'move'> & {
@@ -82,8 +82,8 @@ const REGISTRY: OptionSpec = option({
 });
 
 /**
- * Plan amendment C19 and the continuation's lane C: the acting participant of a mandate-gated command (profile.ts), a
- * local declaration rather than authentication. Every gated command takes it; `ia position` is never gated.
+ * The acting participant of a mandate-gated command (profile.ts), a local declaration rather than authentication. Every
+ * gated command takes it; `ia position` is never gated.
  */
 const ACTOR: OptionSpec = option({
   name: 'actor',
@@ -157,7 +157,7 @@ export const COMMANDS: readonly CommandSpec[] = [
           placeholder: '<provider/name>',
           summary: 'Package id (default: local/<directory name>)',
         }),
-        // Decision local-system-at-init (plan amendment B7): a repository that will own vocabulary opts in.
+        // A repository that will own vocabulary opts in; the default starter authors no local system.
         option({
           name: 'system',
           kind: 'boolean',
@@ -171,8 +171,8 @@ export const COMMANDS: readonly CommandSpec[] = [
             'Lower a Claude, Codex or Grok plugin into the new workspace as a kit; the kit supplies its own system',
           conflicts: ['migrate', 'adopt', 'system', 'decline', 'forget-decline'],
         }),
-        // Milestone position-packet task init-migrate-flag: the workspace's own name, and the hosts it already
-        // registered, are the ones the migration keeps, so neither --id nor --host applies.
+        // The workspace's own name, and the hosts it already registered, are the ones the migration keeps, so neither
+        // --id nor --host applies.
         option({
           name: 'migrate',
           kind: 'boolean',
@@ -233,8 +233,8 @@ export const COMMANDS: readonly CommandSpec[] = [
     ),
   },
   {
-    // Milestone generation-binding plan amendments C18, C19 and C3: the read-only half of record authoring. The parser
-    // takes one value per option, so --relate and --set are mode flags followed by positionals.
+    // The read-only half of record authoring. The parser takes one value per option, so --relate and --set are mode
+    // flags followed by positionals.
     name: 'preview',
     group: 'workspace',
     summary: 'Show what one new record, field or relationship would compile to',
@@ -242,7 +242,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     catalog: {
       mode: 'validate',
       move: 'Verification',
-      // Review C-N7: the refusal its next command answers; the others are in apps/cli/SPEC.md.
+      // The refusal its next command answers; the others are in apps/cli/SPEC.md.
       refuses: 'a move or a word the governing mandates do not allow; writes nothing',
       next: 'ia position --seat <mandate> --shape governance',
     },
@@ -255,8 +255,8 @@ export const COMMANDS: readonly CommandSpec[] = [
     grammar: grammar([...EDIT_OPTIONS, ACTOR], positionals('argument', 1, Number.POSITIVE_INFINITY)),
   },
   {
-    // Milestone generation-binding plan amendments C19, C20 and C3: the writing half of record authoring. Each form is the
-    // preview form of the same target, bound to the digest that preview printed.
+    // The writing half of record authoring. Each form is the preview form of the same target, bound to the digest that
+    // preview printed.
     name: 'author',
     group: 'workspace',
     summary: 'Write one new record, field or relationship that ia preview showed',
@@ -264,7 +264,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     catalog: {
       mode: 'author',
       move: 'Synthesis',
-      // Review C-N7: the refusal its next command answers; the others are in apps/cli/SPEC.md.
+      // The refusal its next command answers; the others are in apps/cli/SPEC.md.
       refuses: 'a --digest that no longer names the target file; writes nothing',
       next: 'ia preview <the same form>',
     },
@@ -303,7 +303,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       next: 'ia init <directory>',
     },
     syntax: ['ia capture [--preview] [--actor <agent>] [--json]'],
-    // Decision capture-preview-placement: capture writes by default, so its preview is a flag (plan amendment B8).
+    // Capture writes by default, so its preview is a flag.
     grammar: grammar([
       option({ name: 'preview', kind: 'boolean', summary: 'Report what the capture would write; write nothing' }),
       ACTOR,
@@ -384,10 +384,9 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     // SPEC `position` (runtime R14 to R17): body(K) for a scope key, with its digest and host note,
-    // the consumer verb beside the frozen `ia scope` route (decision scope-verb-dispatch). It is the Door's `position`
-    // operation (MACHINE_PROTOCOL version 2) as a consumer verb, never a machine route (plan amendment A2). The key's
-    // closed sets and caps are the runtime's, which refuses a value outside them naming the call to run instead, so no
-    // option here declares them.
+    // the consumer verb beside the frozen `ia scope` route. It is the Door's `position` operation (MACHINE_PROTOCOL
+    // version 2) as a consumer verb, never a machine route. The key's closed sets and caps are the runtime's, which
+    // refuses a value outside them naming the call to run instead, so no option here declares them.
     name: 'position',
     group: 'workspace',
     summary: 'Show the position body for a scope key and its host note',
@@ -445,8 +444,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     // SPEC `next` (runtime R18): the delivery view, computed per read and never
-    // stored. It is the Door's `next` operation (MACHINE_PROTOCOL version 2) as a consumer verb, never a machine route
-    // (plan amendment A2).
+    // stored. It is the Door's `next` operation (MACHINE_PROTOCOL version 2) as a consumer verb, never a machine route.
     name: 'next',
     group: 'workspace',
     summary: "Show a plan's tasks in delivery order with verdict and basis",
@@ -786,7 +784,7 @@ export const COMMANDS: readonly CommandSpec[] = [
           summary: 'Claude only: select the lifecycle context element',
         }),
         option({ name: 'apply', kind: 'boolean', summary: 'Apply the plan rather than previewing it' }),
-        // Review C2-R7: a workspace apply is gated as an effect; a removal and the user-level plugin are not.
+        // A workspace apply is gated as an effect; a removal and the user-level plugin are not.
         { ...ACTOR, conflicts: ['user', 'remove'] },
       ],
       positionals('host', 1, 1),
@@ -813,8 +811,8 @@ export const EXTENSION_TOKEN = /^[a-z][a-z0-9-]{0,31}$/;
 
 export const commandNames: readonly string[] = COMMANDS.map((command) => command.name);
 /**
- * Plan amendment B5: the position packet's command catalog, the rows tagged `catalog`, in table order, which the CLI
- * passes to the runtime's `renderPacket` as data (B2: nothing imports this app module).
+ * The position packet's command catalog, the rows tagged `catalog`, in table order, which the CLI passes to the
+ * runtime's `renderPacket` as data, so the runtime imports nothing from this app.
  */
 export const packetCatalog = (commands: readonly CommandSpec[] = COMMANDS): readonly PacketCatalogRow[] =>
   commands.flatMap((command) =>

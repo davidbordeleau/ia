@@ -1,9 +1,9 @@
 /**
  * `ia next`: the delivery view (runtime R18).
  *
- * The runtime's `deliveryView` reads one plan: its milestones and tasks in one prerequisites-first order, each task with
- * a basis line per requirement, one verdict, its self-declared status and the five state lines of design §10, then the
- * review items and the next task. This verb prints that view, or with `--json` the view the Door's `next` operation
+ * The runtime's `deliveryView` reads one plan: its milestones and tasks in one prerequisites-first order, each task
+ * with a basis line per requirement, one verdict, its self-declared status and the five state lines R18 defines, then
+ * the review items and the next task. This verb prints that view, or with `--json` the view the Door's `next` operation
  * returns. A task's own `work.status` is printed and is never its verdict's basis.
  *
  * The view is computed per read and never stored: the workspace opens as every read verb opens it, without the db
@@ -174,7 +174,7 @@ function refusedOnTheWay(reader: Session['reader'], seat: string): string | unde
  * The command that reads a plan without a seat, chosen by the @plan records at band 100 the workspace admits, which
  * `deliveryView` counts the same way: the view of the only one; the first of several, which the view refuses to choose
  * between; with none, the validation that says why admission refused a @plan a source holds, else the preview of the
- * @plan word where the workspace registers it (plan amendment C3), else the records to author, then the view.
+ * @plan word where the workspace registers it, else the records to author, then the view.
  */
 function unseated(reader: Session['reader'], rooted: string): string {
   const plans = reader
@@ -187,7 +187,7 @@ function unseated(reader: Session['reader'], rooted: string): string {
     return `Run "ia next --seat ${quote(plans[0]!)}${rooted}" to read the first of the ${plans.length} plans the workspace authors; seat any other the same way.`;
   const refused = refusedOnly(reader).find((record) => record.identity.split('/')[2] === 'plan');
   if (refused !== undefined) return validateNext(rooted, refused.identity);
-  // Plan amendment C3: where the workspace registers the word, its preview says what a @plan holds and where it goes.
+  // Where the workspace registers the word, its preview says what a @plan holds and where it goes.
   return reader.words().includes('plan')
     ? `Run "ia preview plan${rooted}" for what a @plan holds and the file it goes to; author one, with @milestone records whose work.plan names it and @task records whose work.milestone names one of them.`
     : `Author a @plan, @milestone records whose work.plan names it and @task records whose work.milestone names one of them, then run "ia next${rooted}".`;
@@ -197,7 +197,7 @@ function unseated(reader: Session['reader'], rooted: string): string {
  * The record IA-RUNTIME-NEXT-CYCLE's own `next` seats at (runtime SPEC R18), read from the rows the refusal lists: the
  * cycle's first task in the view's order, by milestone then task, else the first milestone a row requires. Every task
  * in the cycle is named by one of its rows and every milestone a row requires closes it, so this is the runtime's seat.
- * The runtime's `next` is not forwarded: a next action this CLI names is built here, where design row 27 is checked.
+ * The runtime's `next` is not forwarded: a next action this CLI names is built here, so it names exactly one command.
  */
 function cycleSeat(rows: readonly CycleRow[], reader: Session['reader']): string {
   const milestoneOf = (task: string): string =>
@@ -219,14 +219,14 @@ function cycleSeat(rows: readonly CycleRow[], reader: Session['reader']): string
 }
 
 /**
- * Design row 27: the one command after each delivery refusal, carrying the root the invocation gave, which the runtime's
- * own `next` does not. A seat the workspace does not admit names what `ia inspect` and `ia read` name for an identity
- * they do not admit (`nearestNext`): the validation for a record admission refused, else the nearest @plan,
- * @milestone or @task as the seat, else the view without a seat (`unseated`). A record of another word names its
- * position, as the runtime does. A missing plan names what the view without a seat names, or with a seat the
- * validation for a record admission refused on its way to its plan, else the records to author, then the same view
- * again. Several plans name the view of the first, which the message lists with the others, and a cycle the sequence
- * position of the record the runtime's own `next` seats at (`cycleSeat`), whose require rows the message lists.
+ * The one command after each delivery refusal, carrying the root the invocation gave, which the runtime's own `next`
+ * does not. A seat the workspace does not admit names what `ia inspect` and `ia read` name for an identity they do not
+ * admit (`nearestNext`): the validation for a record admission refused, else the nearest @plan, @milestone or @task as
+ * the seat, else the view without a seat (`unseated`). A record of another word names its position, as the runtime
+ * does. A missing plan names what the view without a seat names, or with a seat the validation for a record admission
+ * refused on its way to its plan, else the records to author, then the same view again. Several plans name the view of
+ * the first, which the message lists with the others, and a cycle the sequence position of the record the runtime's own
+ * `next` seats at (`cycleSeat`), whose require rows the message lists.
  */
 function nextAfter(
   refusal: NextRefusal,

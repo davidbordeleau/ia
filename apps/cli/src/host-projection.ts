@@ -1,22 +1,21 @@
 /**
  * Host registration spec §6: a workspace's projection for one host, rendered from its own admitted records.
  *
- * Milestone position-packet task replace-renderers (plan amendments B9, B11 and B12): the projection is the position
- * packet (`renderPacket`, runtime R19) rendered by the host's adapter for the consumer target (`renderHost`, R20), with
- * the command catalog this CLI tags (`packetCatalog`). One render feeds `ia host`, `ia doctor`'s projection rows and the
- * install/update/remove refresh, so no two of them can disagree about what the projection should contain.
+ * The projection is the position packet (`renderPacket`, runtime R19) rendered by the host's adapter for the consumer
+ * target (`renderHost`, R20), with the command catalog this CLI tags (`packetCatalog`). One render feeds `ia host`,
+ * `ia doctor`'s projection rows and the install/update/remove refresh, so no two of them can disagree about what the
+ * projection should contain.
  *
- * Milestone generation-binding task host-consumes-generated-set (plan amendments C4, C5, C9 and C12): the render also
- * holds the host set workspace-runtime generates from the workspace's authored records, computed once
+ * The render also holds the host set workspace-runtime generates from the workspace's authored records, computed once
  * (`generateHostSet`): the agent and skill files beside the packet's, the `@hook` declarations whose groups the writer
  * registers, the operation and harness definitions, and a row for each authored record the host does not take.
  *
  * `applyHostProjection` is the only writer of projection files and hook groups. Before any file changes it retires a
- * steward-guard registration an earlier release made (B11), then registers the hook groups of the authored `@hook`
- * records (distribution's guard-registration, owned by exact match through their own state), then applies the planned
- * files through `@inventarch/distribution/projection`, which owns packet and generated files alike through the
- * projection state, deletes the owned 1.x steward files and obsolete generated files and leaves foreign ones (B9), and
- * writes the receipt beside the projection state last (B12). Ownership is the states', never the receipt's.
+ * steward-guard registration an earlier release made, then registers the hook groups of the authored `@hook` records
+ * (distribution's guard-registration, owned by exact match through their own state), then applies the planned files
+ * through `@inventarch/distribution/projection`, which owns packet and generated files alike through the projection
+ * state, deletes the owned 1.x steward files and obsolete generated files and leaves foreign ones, and writes the
+ * receipt beside the projection state last. Ownership is the states', never the receipt's.
  */
 import {
   accessSync,
@@ -89,7 +88,7 @@ import { codeOf, openSession } from './session.js';
 export type HostName = WorkspaceHost;
 export type Artifact = HostFile;
 
-/** This CLI's id@version, which the receipt records and only the applying CLI knows (design item 12). */
+/** This CLI's id@version, which the receipt records and only the applying CLI knows. */
 const CLI = `@inventarch/cli@${
   (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 }`;
@@ -141,10 +140,10 @@ export function renderPluginFor(root: string): readonly PluginFile[] {
  * §6.1: the packet over the whole workspace, through the session's own scope, rendered by `host`'s adapter for the
  * consumer target, and the host set generated from the workspace's authored records through the same scope: the
  * packet's files, then the generated agent and skill files, each carrying `PACKET_MARKER`; the `@hook` declarations
- * (`hooks`, claude only); and the receipt the render fills (B12), whose `files` list every file with its SHA-256,
- * `generated` the generated ones with their records, `definitions` the operation and harness definitions and
- * `unsupported` each authored record the host does not take. Its `hooks` rows are the applying caller's. `gate`, when given,
- * judges the session before anything is read from it (review C2-N3).
+ * (`hooks`, claude only); and the receipt the render fills, whose `files` list every file with its SHA-256, `generated`
+ * the generated ones with their records, `definitions` the operation and harness definitions and `unsupported` each
+ * authored record the host does not take. Its `hooks` rows are the applying caller's. `gate`, when given, judges the
+ * session before anything is read from it.
  */
 export function renderProjectionFor(root: string, host: HostName, gate?: SessionGate): HostOutput {
   const session = openSession(root);
@@ -183,10 +182,10 @@ export function renderProjectionFor(root: string, host: HostName, gate?: Session
 }
 
 /**
- * Where hook groups run from (plan amendment C9): the payload `ia host` materialized and verified (`verified`), the one
- * it is about to (`expected`, for a plan), or none (null), when the caller registers no host: `ia project`, the install
- * refresh and a migration then keep the groups an earlier `ia host` registration owns in step with the records, against
- * the payload that registration recorded, and register none themselves.
+ * Where hook groups run from: the payload `ia host` materialized and verified (`verified`), the one it is about to
+ * (`expected`, for a plan), or none (null), when the caller registers no host: `ia project`, the install refresh and a
+ * migration then keep the groups an earlier `ia host` registration owns in step with the records, against the payload
+ * that registration recorded, and register none themselves.
  */
 export type HookCache = { readonly verified: string } | { readonly expected: HostCacheTarget } | null;
 /** The step's plan, or null when there is nothing to register or remove, and the hooks it cannot register. */
@@ -195,14 +194,14 @@ export interface HookStep {
   readonly unregistered: readonly UnsupportedRow[];
 }
 /**
- * Why an obsolete owned group is still in the settings (review finding F1): with hooks disabled, the groups kept beside it
- * are re-planned against the payload they were registered against, and that payload is gone.
+ * Why an obsolete owned group is still in the settings: with hooks disabled, the groups kept beside it are re-planned
+ * against the payload they were registered against, and that payload is gone.
  */
 export const HOOK_KEPT =
   'Kept: no registrable hook claims this group any more, but it stays until hooks are back on or the payload it was registered against is materialized again';
 /**
- * The records a host does not take, one row per identity (review finding N3): generation's rows, then the hook step's;
- * where both report an identity (an unsupported authored hook whose group is kept), one row carries both reasons.
+ * The records a host does not take, one row per identity: generation's rows, then the hook step's; where both report an
+ * identity (an unsupported authored hook whose group is kept), one row carries both reasons.
  */
 export function notTaken(
   generated: readonly UnsupportedRow[],
@@ -220,7 +219,7 @@ export function notTaken(
 export const HOOKS_NEED_HOST =
   'Not registered: a hook group runs the guard in the host payload "ia host claude --apply" materializes; run it to register this hook';
 /**
- * The hook groups `rendered` declares, planned for `host` (claude only; Codex hooks are unsupported, C12): with no
+ * The hook groups `rendered` declares, planned for `host` (claude only; Codex hooks are unsupported): with no
  * declared hook, the removal of every owned group; else their registration against `cache`, or against the payload the
  * owned registration recorded; with neither, none, and each declared hook comes back unregistered. A removal
  * (`rendered` null) removes every owned group. Reads only.
@@ -235,16 +234,16 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
       plan: prior === null ? null : planHookRegistration(root, { remove: HOST_REGISTRATION }),
       unregistered: [],
     };
-  // Hooks turned off by disableAllHooks: no group is registered, each declared hook is reported, and every other part of
-  // the host applies as it does without hooks (review finding H-N12). Groups already owned stay as they are.
+  // Hooks turned off by disableAllHooks: no group is registered, each declared hook is reported, and every other part
+  // of the host applies as it does without hooks. Groups already owned stay as they are.
   const disabled = hooksDisabledBy(root);
   if (disabled !== null) {
-    // Review finding A-F1: a group owned for a hook still declared stays as registered, and is no unsupported row; an
+    // A group owned for a hook still declared stays as registered, and is no unsupported row; an
     // obsolete owned group is removed; a hook with no group is reported, naming the file.
     const owned = new Map((prior?.groups ?? []).map((group) => [group.hook, group.paths])),
       declared = new Set(rows.map((row) => row.identity));
     // A group changed or duplicated by hand refuses, and so does one deleted by hand whose hook is still declared, as
-    // with hooks on (H-R1); a deleted group of a hook no longer declared only loses its ownership (review finding N4).
+    // with hooks on; a deleted group of a hook no longer declared only loses its ownership.
     const drift = prior === null ? [] : observeHookRegistration(root);
     const handEditedRow = drift.find(
       (row) => row.drift === 'modified' || (row.drift === 'missing' && declared.has(row.hook)),
@@ -264,13 +263,13 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
     if (prior === null || kept.length === owned.size) return { plan: null, unregistered };
     if (kept.length === 0) return { plan: planHookRegistration(root, { remove: HOST_REGISTRATION }), unregistered };
     // The kept groups are re-planned as recorded, so nothing is written for them. That needs the payload they were
-    // registered against: the one this apply materializes when it is that payload (review finding N1, so a plan and its
-    // apply agree), else the recorded one, which must still verify. Without it nothing is planned: the obsolete groups
-    // stay, reported as kept rather than listed as registered, and a group already deleted by hand is no kept group but
-    // stays owned until such a plan runs (review finding F1), which doctor reports as a missing group.
-    // The same directory is the same payload however its path is spelled (review finding F2: an IA_HOST_HOME in another
-    // letter case), compared as the volume compares names; the kept groups are planned against the recorded spelling, so
-    // their bytes are the ones registered and the dry run and the apply agree.
+    // registered against: the one this apply materializes when it is that payload (so a plan and its apply agree), else
+    // the recorded one, which must still verify. Without it nothing is planned: the obsolete groups stay, reported as
+    // kept rather than listed as registered, and a group already deleted by hand is no kept group but stays owned until
+    // such a plan runs, which doctor reports as a missing group.
+    // The same directory is the same payload however its path is spelled (an IA_HOST_HOME in another letter case),
+    // compared as the volume compares names; the kept groups are planned against the recorded spelling, so their bytes
+    // are the ones registered and the dry run and the apply agree.
     const given = cache === null ? undefined : 'expected' in cache ? cache.expected.directory : cache.verified;
     if (cache !== null && given !== undefined && pathKey(resolve(given)) === pathKey(resolve(prior.cache)))
       return {
@@ -308,12 +307,12 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
       unregistered: rows.map((row) => ({ identity: row.identity, word: 'hook' as const, reason: HOOKS_NEED_HOST })),
     };
   if (cache === null && prior !== null) {
-    // Against the payload the registration recorded (review finding H-R4): with the same hooks and selections owned,
-    // nothing is written and that payload is not read, so its absence never blocks an unrelated apply; a change needs it,
-    // and a payload gone or changed refuses there, naming `ia host`, which materializes one and registers against it.
+    // Against the payload the registration recorded: with the same hooks and selections owned, nothing is written and
+    // that payload is not read, so its absence never blocks an unrelated apply; a change needs it, and a payload gone
+    // or changed refuses there, naming `ia host`, which materializes one and registers against it.
     const owned = new Map(prior.groups.map((group) => [group.hook, json(group.paths)]));
     if (owned.size === rows.length && rows.every((row) => owned.get(row.identity) === json(row.paths))) {
-      // Still a group deleted, changed or duplicated by hand refuses, as a registration would (H-R1, H-R3).
+      // Still a group deleted, changed or duplicated by hand refuses, as a registration would.
       const drift = observeHookRegistration(root).find((row) => row.drift !== 'foreign');
       if (drift !== undefined) throw handEdited(drift);
       return { plan: null, unregistered: [] };
@@ -340,7 +339,7 @@ export function planHooks(root: string, host: HostName, rendered: HostOutput | n
 function hookRows(root: string, declared: readonly HostHookDeclaration[]): readonly HookGroupRow[] {
   const tools = new Map(declared.map((hook) => [hook.identity, hook.tools]));
   // Only the groups of declared hooks are registered ones: an obsolete group kept while hooks are disabled is reported
-  // as kept instead (review finding F1).
+  // as kept instead.
   return (readHookRegistration(root)?.groups ?? [])
     .filter(({ hook }) => tools.has(hook))
     .map(({ hook, group }) => ({
@@ -351,16 +350,16 @@ function hookRows(root: string, declared: readonly HostHookDeclaration[]): reado
 }
 
 /**
- * B11: whether this workspace holds a steward-guard registration an earlier release made, which the projection apply
+ * Whether this workspace holds a steward-guard registration an earlier release made, which the projection apply
  * retires. Only Claude ever registered one; its ownership state is the registration, as `ia host` and `ia doctor`
  * decide it.
  */
 export const ownsGuard = (root: string, host: HostName): boolean =>
   host === 'claude' && existsSync(resolve(root, STATE.hooks));
 /**
- * B11: the removal of the steward-guard registration this workspace owns, or null when it owns none. A refusal the
- * mechanism does not locate at a file concerns the guard group in the settings file — a group changed by hand, or
- * settings that do not parse — except a pending host journal, which is the journal's.
+ * The guard retirement: the removal of the steward-guard registration this workspace owns, or null when it owns none. A
+ * refusal the mechanism does not locate at a file concerns the guard group in the settings file — a group changed by
+ * hand, or settings that do not parse — except a pending host journal, which is the journal's.
  */
 export function planRetirement(root: string, host: HostName): GuardPlan | null {
   try {
@@ -471,7 +470,7 @@ interface PendingReceipt {
   readonly guard: boolean;
   readonly receipt?: string;
   readonly removed: readonly { readonly path: string; readonly sha256: string }[];
-  /** The hook groups this apply removes, by `@hook` and last group digest; present only when there are any (H-R5). */
+  /** The hook groups this apply removes, by `@hook` and last group digest; present only when there are any. */
   readonly removedHooks?: readonly RemovedHookRow[];
 }
 /** Rows `{identity, sha256}` of removed hook groups, each identity once. */
@@ -576,7 +575,7 @@ export function projectionEvidence(
         file.path,
       );
   }
-  // A hook group an interrupted earlier apply removed stays listed with the digest it recorded then (H-R5).
+  // A hook group an interrupted earlier apply removed stays listed with the digest it recorded then.
   const removedHooks = [
     ...new Map(
       [...hookRemovals, ...(prior?.removedHooks ?? [])].map((row) => [
@@ -598,19 +597,19 @@ export function projectionEvidence(
 export interface HostProjectionApplied {
   /** `projected` after a render; after a removal `projection-removed`, or `absent` when it removed no file. */
   readonly status: 'projected' | 'projection-removed' | 'absent';
-  /** B11: `retired` when a steward-guard registration was removed before any projection file changed. */
+  /** `retired` when a steward-guard registration was removed before any projection file changed. */
   readonly guard: 'retired' | 'none';
-  /** The receipt written (B12); null after a removal, which deletes it. */
+  /** The receipt written; null after a removal, which deletes it. */
   readonly receipt: PacketReceipt | null;
 }
 
 /**
- * The one writer of projection files: B11, then the files, then B12. `rendered` is `renderProjectionFor`'s output,
- * or null to remove the owned set. Both the guard retirement and the file plan are planned before anything is written,
- * so a refusal either planner finds changes nothing; then the guard registration is removed (its group in
- * `.claude/settings.local.json` and its ownership state), and only then are the files written and the owned 1.x
- * steward files deleted. A failure past the retirement so leaves the guard retired and never the steward files
- * deleted with the guard still registered; a rerun converges. The receipt (`<host>-receipt.json` beside the
+ * The one writer of projection files: the guard retirement, then the files, then the receipt. `rendered` is
+ * `renderProjectionFor`'s output, or null to remove the owned set. Both the guard retirement and the file plan are
+ * planned before anything is written, so a refusal either planner finds changes nothing; then the guard registration is
+ * removed (its group in `.claude/settings.local.json` and its ownership state), and only then are the files written and
+ * the owned 1.x steward files deleted. A failure past the retirement so leaves the guard retired and never the steward
+ * files deleted with the guard still registered; a rerun converges. The receipt (`<host>-receipt.json` beside the
  * projection state) describes the files as an apply left them, so it is deleted, under the host lock, before any of
  * them changes: an interrupted apply leaves none, which `ia doctor` reports as unknown, never as a hand edit. It is
  * written last, under the host lock, with the legacy files deleted (`removed`), the foreign files left in place, the
@@ -640,7 +639,7 @@ export function applyHostProjection(
       unlock();
     }
   };
-  // The groups this apply removes, each with the digest the ownership state recorded for it (H-R5).
+  // The groups this apply removes, each with the digest the ownership state recorded for it.
   const recorded = new Map(
     (readHookRegistration(root)?.groups ?? []).map((row) => [row.hook, hookGroupDigest(row.group)]),
   );
@@ -659,11 +658,11 @@ export function applyHostProjection(
   const registration = retirement === null ? hooks : planHookStep(root, host, rendered, cache);
   if (registration.plan !== null) applyHookRegistration(registration.plan);
   checkpoint('hooks');
-  // The last apply's receipt goes before any projection file changes (B12).
+  // The last apply's receipt goes before any projection file changes.
   writeEvidence(STATE.receipt(host), null);
   const result = applyProjection(plan, checkpoint),
     guard = evidence.guard ? 'retired' : 'none';
-  // The groups owned now, and those removed: this apply's and an interrupted earlier one's, not registered again (H-R5).
+  // The groups owned now, and those removed: this apply's and an interrupted earlier one's, not registered again.
   const owned = host === 'claude' && rendered !== null ? hookRows(root, rendered.hooks ?? []) : [],
     registered = new Set(owned.map((row) => row.identity));
   const receipt: PacketReceipt | null =
@@ -702,9 +701,9 @@ export function applyHostProjection(
 }
 
 /**
- * The definitions as this apply left them (review finding H-R7): each harness registers only the agent and skill files
- * the receipt lists and the hook groups the workspace owns after the apply, so a hook an apply did not register (no host
- * payload known, or disabled hooks) is never listed as registered.
+ * The definitions as this apply left them: each harness registers only the agent and skill files the receipt lists and
+ * the hook groups the workspace owns after the apply, so a hook an apply did not register (no host payload known, or
+ * disabled hooks) is never listed as registered.
  */
 function appliedDefinitions(
   definitions: readonly PacketDefinition[],
@@ -753,7 +752,7 @@ export function planHookStep(root: string, host: HostName, rendered: HostOutput 
     throw error;
   }
 }
-/** An owned hook group's drift as the hook planner refuses it, with the planner's own wording (guard review G-N2). */
+/** An owned hook group's drift as the hook planner refuses it, with the planner's own wording. */
 function handEdited(drift: ReturnType<typeof observeHookRegistration>[number]): DistributionError {
   return new DistributionError(
     'IA-DIST-LOCAL-MODIFICATION',
@@ -763,11 +762,11 @@ function handEdited(drift: ReturnType<typeof observeHookRegistration>[number]): 
   );
 }
 /**
- * What the hook step of a later apply would refuse, found before anything is written (review finding H-R3): an install,
- * update or remove checks it before its first install write, and a migration before it plans. With a hook registration
- * owned, the step is planned against the workspace's current records when they render: a group deleted, changed or
- * duplicated by hand refuses with the recovery doctor names, and so does a recorded payload a change of hooks would need.
- * When the records do not render, only a changed or duplicated group is refused, since a removal refuses it too.
+ * What the hook step of a later apply would refuse, found before anything is written: an install, update or remove
+ * checks it before its first install write, and a migration before it plans. With a hook registration owned, the step
+ * is planned against the workspace's current records when they render: a group deleted, changed or duplicated by hand
+ * refuses with the recovery doctor names, and so does a recorded payload a change of hooks would need. When the records
+ * do not render, only a changed or duplicated group is refused, since a removal refuses it too.
  */
 export function preflightHooks(root: string, host: HostName, given?: HostOutput | null): void {
   if (host !== 'claude' || readHookRegistration(root) === null) return;
@@ -789,10 +788,10 @@ export function preflightHooks(root: string, host: HostName, given?: HostOutput 
     });
 }
 /**
- * What a refresh's file plan would refuse, and its hook step, found before an install, update or remove writes anything
- * (review finding F4, the H-R3 class): the files are planned against the current records, rendered once, so a generated
- * skill refused at a populated folder of the user's refuses here (any other file refusal is left to the refresh, as
- * before); then `preflightHooks` runs on the same render.
+ * What a refresh's file plan would refuse, and its hook step, found before an install, update or remove writes
+ * anything: the files are planned against the current records, rendered once, so a generated skill refused at a
+ * populated folder of the user's refuses here (any other file refusal is left to the refresh, as before); then
+ * `preflightHooks` runs on the same render.
  */
 export function preflightProjection(root: string, host: HostName): void {
   let rendered: HostOutput | null;
@@ -813,9 +812,9 @@ export function preflightProjection(root: string, host: HostName): void {
   preflightHooks(root, host, rendered);
 }
 /**
- * The owned hook group a hook-registration refusal concerns, by its drift (review finding H-R1), so the refusal names the
- * recovery `hookRepair` words: a changed or duplicated group first, else a deleted one. Undefined when no owned group
- * drifted (an unmanaged identical one), which the settings repair covers.
+ * The owned hook group a hook-registration refusal concerns, by its drift, so the refusal names the recovery
+ * `hookRepair` words: a changed or duplicated group first, else a deleted one. Undefined when no owned group drifted
+ * (an unmanaged identical one), which the settings repair covers.
  */
 function handEditedGroup(root: string): HookRefusal | undefined {
   let drift: ReturnType<typeof observeHookRegistration>;
@@ -839,9 +838,9 @@ const digests = (value: unknown): boolean =>
       HEX.test(String((row as { sha256?: unknown }).sha256)),
   );
 /**
- * B12: the receipt `applyHostProjection` wrote for `host`, or null when there is none — a 1.x registration, or one
- * whose receipt was deleted. A receipt that cannot be read, or that lacks the fields `ia doctor` checks, refuses at
- * its own path.
+ * The receipt `applyHostProjection` wrote for `host`, or null when there is none — a 1.x registration, or one whose
+ * receipt was deleted. A receipt that cannot be read, or that lacks the fields `ia doctor` checks, refuses at its own
+ * path.
  */
 export function readReceipt(root: string, host: HostName): PacketReceipt | null {
   const path = STATE.receipt(host);

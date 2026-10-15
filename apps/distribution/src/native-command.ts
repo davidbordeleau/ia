@@ -168,7 +168,7 @@ export async function runNative(argv: readonly string[]): Promise<{ result: unkn
       result: registryWithdraw({ dir: need('registry'), id: need('id'), version: need('version') }),
       exitCode: 0,
     };
-  // Host plugin distribution spec §11.1 and Amendment item 4: no workspace; `ia doctor --host` names this argv and the session hook starts it detached.
+  // Host plugin distribution spec §11: no workspace; `ia doctor --host` names this argv and the session hook starts it detached.
   if (command === 'refresh-updates') {
     const home = need('home'),
       channel = need('channel'),

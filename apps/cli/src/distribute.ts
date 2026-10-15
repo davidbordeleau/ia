@@ -29,7 +29,7 @@
  * a workspace that owns a projection for a host — its `<host>-projection.json` state exists — renders the position
  * packet of its admitted records, so a change to the installed set changes the projection. `--apply` refuses before
  * anything is acquired or written when an owned projection file was edited by hand, or when the steward guard the
- * refresh would retire (B11) cannot be removed, because the refresh would refuse either, and re-renders each
+ * refresh would retire cannot be removed, because the refresh would refuse either, and re-renders each
  * registered projection after the install commits through `applyHostProjection`, the one writer of projection files,
  * which retires such a guard before any projection file changes and writes the receipt; the plan, and so the question
  * an apply asks, names each refresh that retires one (`retire`). MCP entries do not depend on the installed set and are
@@ -159,7 +159,7 @@ export interface PlanView {
   }[];
   /**
    * The refreshed hosts that own a steward-guard registration an earlier release made, which their refresh retires
-   * before any projection file changes (B11); a plan lists the retirement.
+   * before any projection file changes; a plan lists the retirement.
    */
   readonly retire: readonly HostName[];
   /** After an apply, the refreshed hosts whose refresh retired that registration; empty before an apply. */
@@ -218,15 +218,14 @@ export function changeRows(plan: InstallationPlan, previous: DistributionLock | 
  * Every other refusal passes through with its code and class, located at the file it names when the service located
  * it (`.path`, e.g. `.ia/registries.json`), so §4.3's `where` is null only when there is genuinely no location.
  *
- * Design row 27: each remedy names one command, one of this invocation's `Reruns`, so a retry, a repaired registry
- * map or a deleted cache file is followed by a command the user can run as printed.
+ * Each remedy names one command, one of this invocation's `Reruns`, so a retry, a repaired registry map or a deleted
+ * cache file is followed by a command the user can run as printed.
  */
 export type Route = 'catalog' | 'registry';
 /**
- * The commands this invocation's remedies name (design row 27), each spelled from its parsed arguments and runnable
- * as printed. `again` is its plan, without `--apply`, which acquires and verifies once more and applies nothing; it
- * may still fill the archive cache, and `--plan-out` writes the plan file. `restore` has no preview, so its `again` is
- * the apply itself.
+ * The commands this invocation's remedies name, each spelled from its parsed arguments and runnable as printed. `again`
+ * is its plan, without `--apply`, which acquires and verifies once more and applies nothing; it may still fill the
+ * archive cache, and `--plan-out` writes the plan file. `restore` has no preview, so its `again` is the apply itself.
  */
 export interface Reruns {
   readonly again: string;
@@ -260,8 +259,8 @@ const INCOMPLETE_REGISTRY = /^Registry (.+) has no artifacts\//;
 const INCOMPLETE = (dir: string): string =>
   `That registry directory is incomplete: it lists a release whose artifact file is missing. Re-add the release with "ia-distribution registry add --registry ${quote(dir)} --archive <file>".`;
 /**
- * Registry spec §4's remedy for an unmapped provider, as `ia doctor` prints it. The exported 1.x text is unchanged
- * (decision release-bump); a refusal names `UNMAPPED_NEXT` instead, whose one command is the rerun (design row 27).
+ * Registry spec §4's remedy for an unmapped provider, as `ia doctor` prints it. The exported 1.x text is unchanged; a
+ * refusal names `UNMAPPED_NEXT` instead, whose one command is the rerun.
  */
 export const UNMAPPED =
   "Every requested and locked package's provider needs a registry. Map the provider to an HTTPS URL or a workspace directory in .ia/registries.json, or pass --registry <url|dir>.";
@@ -413,8 +412,8 @@ export interface PlanRequest {
   readonly planOut: string | undefined;
   readonly invocation: string;
   /**
-   * The commands this request's remedies name. Optional, so a 1.x request keeps its form (decision release-bump): when
-   * absent they are spelled from the request itself (`requestReruns`).
+   * The commands this request's remedies name. Optional, so a 1.x request keeps its form: when absent they are spelled
+   * from the request itself (`requestReruns`).
    */
   readonly reruns?: Reruns;
   /** Whether the invocation named `--root`; commands printed for a registered projection then carry it. */
@@ -498,13 +497,13 @@ export const registeredProjections = (root: string, operation: Operation): reado
  * A hand edit to an owned file is the refusal the refresh would raise (§6.3), so it is found here, before
  * acquisition, the saved plan or the lock is touched; the remedy is the one `ia doctor` names for it, its rerun
  * `projectionRerun`'s: `ia host <host> --apply` for a registered host, `ia project <host> --apply` for a projection
- * `ia project` wrote without a registration (task ia-project-verb).
+ * `ia project` wrote without a registration.
  * Missing, outdated and unowned files do not block: the refresh rewrites the first two and never touches the third.
  * A file the mechanism cannot read — an unreadable ownership state, an aliased or oversized managed file — would
  * refuse the refresh too, so it is refused here, located at that file, with the repair `ia host` names for it. So is
- * a steward-guard registration the refresh's retirement (B11) would refuse: an unreadable guard state, or a guard
+ * a steward-guard registration the refresh's retirement would refuse: an unreadable guard state, or a guard
  * group changed by hand; a pending host journal that refuses the retirement's plan names its own recovery. So is the
- * hook step the refresh runs (`preflightHooks`, review finding H-R3): an owned hook group deleted, changed or
+ * hook step the refresh runs (`preflightHooks`): an owned hook group deleted, changed or
  * duplicated by hand, or a recorded payload a change of hooks would need, with the repair `ia host` names.
  */
 export function requireProjectionsClean(root: string, hosts: readonly HostName[], rooted: boolean): void {
@@ -528,7 +527,7 @@ export function requireProjectionsClean(root: string, hosts: readonly HostName[]
         hostNext(projectionRepair(host, changed.path, rerun), host, root, rooted),
       );
     // The refresh's file plan and hook step on the current render: a generated skill refused at a populated folder of the
-    // user's (F4), a hook group changed by hand or a payload a change needs (H-R3) refuse here, before any install write.
+    // user's, a hook group changed by hand or a payload a change needs refuse here, before any install write.
     try {
       preflightProjection(root, host);
     } catch (error) {
@@ -539,7 +538,7 @@ export function requireProjectionsClean(root: string, hosts: readonly HostName[]
 
 /**
  * The files the refresh would render for `host`, by the current records: a generated agent among them is written, never
- * previewed as a 1.x file to remove (review finding H-N7). None when the records do not render; the refresh then refuses.
+ * previewed as a 1.x file to remove. None when the records do not render; the refresh then refuses.
  */
 function renderedPaths(root: string, host: HostName): readonly string[] {
   try {
@@ -551,12 +550,12 @@ function renderedPaths(root: string, host: HostName): readonly string[] {
 
 /**
  * Host registration spec §4: after the install committed, a registered projection is re-rendered from the records of
- * the new generation and applied through `applyHostProjection`, which retires an owned steward guard first (B11),
- * re-checks every file itself and writes the receipt (B12); the retirement comes back as `retired`. A refusal comes
- * back rather than being thrown, so every registered host is attempted before the command refuses. A file the mechanism
- * located gets `ia host`'s repair for it; a held host lock names the recovery that clears a dead holder's; a CLI
- * refusal (the workspace no longer admits) keeps its own next action; anything else names the rerun, which is
- * `projectionRerun`'s, as `ia doctor` names it.
+ * the new generation and applied through `applyHostProjection`, which retires an owned steward guard first, re-checks
+ * every file itself and writes the receipt; the retirement comes back as `retired`. A refusal comes back rather than
+ * being thrown, so every registered host is attempted before the command refuses. A file the mechanism located gets
+ * `ia host`'s repair for it; a held host lock names the recovery that clears a dead holder's; a CLI refusal (the
+ * workspace no longer admits) keeps its own next action; anything else names the rerun, which is `projectionRerun`'s,
+ * as `ia doctor` names it.
  */
 function refreshed(view: PlanView, host: HostName): Refusal | 'retired' | 'none' {
   try {
@@ -865,7 +864,7 @@ export function planEnvelope(view: PlanView): unknown {
     // `applied` is applyInstallation's return, its `host: 'pending'` literal included (§2.8).
     ...(view.applied === null ? {} : { applied: view.applied }),
     // Host registration spec §4: the registered projections an apply refreshes, those whose refresh retires the
-    // steward guard first (B11), and after an apply those whose refresh retired it.
+    // steward guard first, and after an apply those whose refresh retired it.
     ...(view.refresh.length === 0 ? {} : { refresh: view.refresh, projectionFiles: view.projectionFiles }),
     ...(view.retire.length === 0 ? {} : { retire: view.retire }),
     ...(view.retired.length === 0 ? {} : { retired: view.retired }),
@@ -967,7 +966,7 @@ const wouldWriteBlocks = (view: PlanView, caps: Capabilities): readonly (readonl
 
 /**
  * Host registration spec §4: the plan says which registered projections the apply re-renders, and which of those
- * refreshes first retire the steward guard an earlier release registered (B11), with what that leaves unguarded.
+ * refreshes first retire the steward guard an earlier release registered, with what that leaves unguarded.
  */
 const projectionsBlocks = (view: PlanView, caps: Capabilities): readonly (readonly string[])[] =>
   view.refresh.length === 0
@@ -1125,7 +1124,7 @@ function invocationOf(
   value('root');
   return parts.join(' ');
 }
-/** Design row 27: the commands this invocation's remedies name, spelled once from what the parser understood. */
+/** The commands this invocation's remedies name, spelled once from what the parser understood. */
 function rerunsOf(context: Context, operation: Operation): Reruns {
   const { args, host } = context;
   // `restore` has no preview: its rerun is the apply, confirmed, as every printed apply is.

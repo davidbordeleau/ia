@@ -27,7 +27,7 @@ const homeOf = (env: Env): string => resolveIaHome(env, homedir()).home;
  * `resolveIaHome` itself refused (a relative IA_HOME/IA_HOST_HOME), before any file could be named; `ia host`'s own
  * `homeSrcRemedy` is reused rather than duplicated for the home-looks-like-a-workspace cause, and an invalid
  * decisions file is inspected directly with `readDecisions` rather than by pattern-matching the caught message.
- * Each remedy ends in the one command that runs the refused decline again (design row 27).
+ * Each remedy ends in the one command that runs the refused decline again.
  */
 function declineRefusal(home: string | undefined, error: unknown, rerun: string): Refusal {
   const refusal = refusalOf(error);

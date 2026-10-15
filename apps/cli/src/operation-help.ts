@@ -1,7 +1,7 @@
 /**
- * `ia <operation> --help` (docs/specs/consumer-cli-contract/README.md §1.2): one operation's help, rendered
- * from the machine protocol table that the MCP door and the reference page also read, so the three cannot drift. The
- * machine route stays uncoloured whatever the environment asks for (SPEC.md C10), so the capabilities are fixed here.
+ * `ia <operation> --help` (docs/specs/consumer-cli-contract/README.md §1.2): one operation's help, rendered from the
+ * machine protocol table that the MCP door and the reference page also read, so the three cannot drift. The machine
+ * route stays uncoloured whatever the environment asks for (that contract's §3), so the capabilities are fixed here.
  */
 import { MACHINE_PROTOCOL } from '@inventarch/runtime';
 import type { ProtocolOperation } from '@inventarch/runtime';
@@ -10,9 +10,9 @@ import { atom, document, entry, fieldRows, MAX_WIDTH, sectionLabel, words } from
 
 const PLAIN: Capabilities = { color: false, ascii: true, width: MAX_WIDTH };
 /**
- * Plan amendment A2: the machine routes are the version 1 operations, described at version 1 as 1.1.0 described them.
- * An operation a later version adds (`since`) is the Door's and the MCP door's, and a consumer verb here, so it has no
- * route, help or schema on this one.
+ * The machine routes are the version 1 operations, described at version 1 as 1.1.0 described them. An operation a later
+ * version adds (`since`) is the Door's and the MCP door's, and a consumer verb here, so it has no route, help or schema
+ * on this one.
  */
 const ROUTE_VERSION = 1;
 /**
@@ -20,11 +20,11 @@ const ROUTE_VERSION = 1;
  * published renderers below may also be handed, that row's own `since`.
  */
 const versionOf = (operation: ProtocolOperation): number => operation.since ?? ROUTE_VERSION;
-/** spec-0012 CLI-05: asks for the operation's description as JSON rather than as help text. */
+/** Asks for the operation's description as JSON rather than as help text. */
 export const SCHEMA_TOKEN = '--schema';
 export const describeOperation = (name: string): ProtocolOperation | undefined =>
   MACHINE_PROTOCOL.operations.find((operation) => operation.since === undefined && operation.name === name);
-/** CLI-05: one JSON line, the same object the MCP door's input schema is derived from. */
+/** One JSON line, the same object the MCP door's input schema is derived from. */
 export const renderOperationSchema = (operation: ProtocolOperation): string =>
   JSON.stringify({ version: versionOf(operation), ...operation }) + '\n';
 type Schema = Readonly<Record<string, unknown>>;
@@ -45,7 +45,7 @@ export function typeText(schema: Schema): string {
   }
   return String(schema['type'] ?? 'value');
 }
-/** C03: the route's exit for a documented refusal, derived rather than stored (spec-0012 ERR-02). */
+/** The route's exit for a documented refusal, derived rather than stored: 2 for an invalid request, else 1. */
 export const refusalExit = (code: string): number => (code === 'IA-RUNTIME-REQUEST-INVALID' ? 2 : 1);
 export function renderOperationHelp(operation: ProtocolOperation): string {
   const params = operation.params as {

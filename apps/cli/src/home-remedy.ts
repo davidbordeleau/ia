@@ -35,7 +35,7 @@ export const hostHome = (env: Readonly<Record<string, string | undefined>>, reru
 /**
  * §3: the remedy for an IA home that itself looks like a workspace. Callers run `assertIaHomeUsable` explicitly (not
  * by pattern-matching a refusal's message), so this wording is never guessed at, and every verb words it the same,
- * ending in the one command that runs the refused invocation again (design row 27), or by default `ia doctor`.
+ * ending in the one command that runs the refused invocation again, or by default `ia doctor`.
  */
 export const homeSrcRemedy = (home: string, rerun = 'ia doctor'): string =>
   `Move ${join(home, 'src')} out of the IA home, or set IA_HOME to another absolute directory; then run "${rerun}".`;

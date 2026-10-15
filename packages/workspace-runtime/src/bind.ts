@@ -5,14 +5,13 @@ import type { CompiledValue } from '@inventarch/language';
 import { fieldsAt } from './record-fields.js';
 
 /**
- * Execution binding against the installed-implementation catalog (milestone generation-binding, original task
- * execution-binding-host-entry; plan amendments C16 and C24). An `@execution-binding` names the implementation it
+ * Execution binding against the installed-implementation catalog. An `@execution-binding` names the implementation it
  * selects (`binding.implementation`), its kind and, optionally, its target; the host's catalog says which operation
  * implementations its payload actually ships. This module joins the two and nothing else: it never loads, imports,
- * serves or executes an implementation (milestone 7 runs operations), and it reads only the records and the catalog
- * it is given. The catalog comes from the materialized host payload, read by `@inventarch/distribution`'s
- * `readInstalledImplementations`, which already checked every available operation's shipped handler bytes against
- * their pins; this package cannot import the composition system that holds the handlers (tools/dependencies/check.ts).
+ * serves or executes an implementation, and it reads only the records and the catalog it is given. The catalog comes
+ * from the materialized host payload, read by `@inventarch/distribution`'s `readInstalledImplementations`, which
+ * already checked every available operation's shipped handler bytes against their pins; this package cannot import
+ * the composition system that holds the handlers (tools/dependencies/check.ts).
  *
  * Results are distinct, and only `bound` is ever a pass:
  * - `bound`: the catalog is present, lists the implementation as available (its shipped bytes matched their pins when
@@ -20,7 +19,7 @@ import { fieldsAt } from './record-fields.js';
  *   admitted record that is the operation the implementation serves.
  * - `unavailable`: there is no catalog, it does not list the implementation, it lists it as unavailable (a
  *   metadata-only declaration or missing handler bytes), the binding is of a kind no installed catalog section
- *   provides, it states a target that resolves to no admitted record (review finding B2-R1: a typo is never a pass),
+ *   provides, it states a target that resolves to no admitted record (a typo is never a pass),
  *   or the implementation serves another operation. Nothing is wrong with the host; nothing is bound.
  * - `revoked`, an error: the catalog revokes the implementation, or the catalog failed verification (bytes or pins that
  *   no longer match), so the implementation it vouched for is not the one installed. A revoked binding must block,
@@ -29,7 +28,7 @@ import { fieldsAt } from './record-fields.js';
 
 /**
  * The catalog a binding is joined against: `present`, its operation rows as `@inventarch/db/distribution` shapes them
- * and its reader verified them against the payload (review finding B-N9: one shape for reader and binder),
+ * and its reader verified them against the payload (one shape for reader and binder),
  * `unavailable` (no catalog, or none this workspace joined) with the reason, or `damaged` (it failed verification)
  * with the reason.
  */
@@ -38,9 +37,9 @@ export type BindingCatalog =
   | { readonly status: 'unavailable'; readonly reason: string }
   | { readonly status: 'damaged'; readonly reason: string };
 /**
- * `binding.target` as a binding states it (review finding B2-R1): the reference as written and the identity of the
- * admitted record it resolves to, null when none answers it. A stated target and a resolved one are kept apart, so an
- * unresolved target is never read as no target.
+ * `binding.target` as a binding states it: the reference as written and the identity of the admitted record it
+ * resolves to, null when none answers it. A stated target and a resolved one are kept apart, so an unresolved target
+ * is never read as no target.
  */
 export interface BindingTarget {
   readonly reference: string;
@@ -70,7 +69,7 @@ export interface BindingResult {
 /** The catalog sections a binding kind joins against; only operations have installed implementations so far. */
 const OPERATION_KIND = 'operation';
 
-/** The first unconditional value `record` states at `field` (review finding B2-N11: the package's one field reader). */
+/** The first unconditional value `record` states at `field` (the package's one field reader). */
 const firstValue = (record: Node, field: string): CompiledValue | undefined => fieldsAt(record, field)[0]?.value;
 const textOf = (value: CompiledValue | undefined): string | null =>
   value !== undefined && 'text' in value && typeof value.text === 'string' ? value.text : null;

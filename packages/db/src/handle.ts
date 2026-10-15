@@ -42,8 +42,8 @@ export interface OpenOptions extends InputOptions {
   /**
    * D13: how `@check` records are admitted (`ViewOptions.checks`). `strict`, the default, keeps every existing reader's
    * admission; `structural` is for the validate path that binds checks, and `preview` drafts under it too. A handle
-   * opened `structural` or with `evidence` never reads or writes the cache, whatever `cache` says (review finding
-   * B3-N5), so `.ia/.iadb/graph.json` only ever holds a strict, evidence-free graph.
+   * opened `structural` or with `evidence` never reads or writes the cache, whatever `cache` says, so
+   * `.ia/.iadb/graph.json` only ever holds a strict, evidence-free graph.
    */
   readonly checks?: 'strict' | 'structural';
 }
@@ -327,7 +327,7 @@ export class Reader {
     return this.#state.rootView.refused;
   }
   /**
-   * Lane D, D1: every record occurrence of the root view's sources that it does not admit, at the band of its source's
+   * D15: every record occurrence of the root view's sources that it does not admit, at the band of its source's
    * placement (`UnadmittedRecord`): those `refused` names, those an identity tie drops, and those of a file refused whole
    * by a language error or a duplicate requirement id, which `refused` cannot name because no graph ever held them. Like
    * `refused` and `report` it reads the root view, whatever scope a read binds: an occurrence that is not admitted is in

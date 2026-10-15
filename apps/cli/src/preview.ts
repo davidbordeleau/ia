@@ -1,6 +1,5 @@
 /**
- * `ia preview`: the read-only half of record authoring (milestone generation-binding plan amendments C18 and C19, lane C
- * round 2), in the validate mode, whose move is Verification.
+ * `ia preview`: the read-only half of record authoring, in the validate mode, whose move is Verification.
  *
  * - `ia preview <word> <name> [field=value ...] [--at <path>]` drafts a new record (language `draftSource`) and appends it
  *   to its file: `--at`, or `<first authored root>/<word>.ia`;
@@ -165,7 +164,7 @@ export function previewRequest(args: Arguments): PreviewRequest {
   if (name === undefined) return { mode: 'word', word, ...(at === undefined ? {} : { at }) };
   if (!NAME.test(name))
     throw new UsageError(`Expected <name> to begin with a letter, then letters, digits or hyphens; got ${name}`);
-  // Plan amendment C20: a system is init's starter system, at its own path, with no field to set.
+  // A system is init's starter system, at its own path, with no field to set.
   if (word === 'system' && (rest.length > 0 || at !== undefined))
     throw new UsageError(
       `A new @system is the starter system at ${systemPath('<name>')}; it takes no field and no --at`,
@@ -282,7 +281,7 @@ function unowned(roots: Roots, path: string): string | undefined {
 }
 /** The default file for a new `@<word>` record: `<first authored root inside .ia/src>/<word>.ia`. */
 const defaultFile = (roots: Roots, word: string): string | undefined => {
-  // A root of '' is the whole repository, which holds .ia/src (review C-N5).
+  // A root of '' is the whole repository, which holds .ia/src.
   const root = roots.authored.find((candidate) => candidate === '' || contains('.ia/src', candidate));
   return root === undefined ? undefined : `${root === '' ? '.ia/src' : root}/${word}.ia`;
 };
@@ -356,11 +355,11 @@ function targetFile(
 }
 
 /**
- * Review C-R1: `path` as the volume spells it. Each component that exists is named by its directory entry, matched
- * exactly; a component another spelling answers (a case variant on a case-insensitive volume, or an 8.3 short name) is
- * replaced by the entry's own name, found by a case-insensitive match or the volume's real path. Components below the
- * first one that does not exist are kept as typed. A mandate's covers and the authored roots are spelled as the volume
- * spells them, so a path is judged only in that spelling.
+ * `path` as the volume spells it. Each component that exists is named by its directory entry, matched exactly; a
+ * component another spelling answers (a case variant on a case-insensitive volume, or an 8.3 short name) is replaced by
+ * the entry's own name, found by a case-insensitive match or the volume's real path. Components below the first one
+ * that does not exist are kept as typed. A mandate's covers and the authored roots are spelled as the volume spells
+ * them, so a path is judged only in that spelling.
  */
 function onDisk(root: string, path: string): string {
   const parts = path.split('/'),
@@ -399,7 +398,7 @@ function onDisk(root: string, path: string): string {
   }
   return spelled.join('/');
 }
-/** The typed path, refused when the volume spells an existing part of it otherwise (C-R1), naming that spelling (C-R7). */
+/** The typed path, refused when the volume spells an existing part of it otherwise, naming that spelling. */
 function spelledPath(run: Invocation, path: string): string {
   const canonical = onDisk(run.root, path);
   if (canonical === path) return path;
@@ -514,12 +513,12 @@ function ownedRecord(run: Invocation, node: Node): void {
     );
 }
 /**
- * Review C2-R6 (a lead decision, flagged for the operator): whether a `@mandate` binds the acting participant, so that
- * neither verb may create or change it, before or after the edit; moves pool across the mandates that bind an actor, so
- * a participant that could write one could lift its own restrictions. It binds when its participant resolves to the
- * actor, or when it names no participant and governs where the actor acts: its scope names the workspace, or it claims
- * paths (`covers`). One whose authority the runtime cannot read binds too, since it would refuse every gated command
- * here. Mandates are cooperative: a human, or another participant, still makes the change.
+ * Whether a `@mandate` binds the acting participant, so that neither verb may create or change it, before or after the
+ * edit; moves pool across the mandates that bind an actor, so a participant that could write one could lift its own
+ * restrictions. It binds when its participant resolves to the actor, or when it names no participant and governs where
+ * the actor acts: its scope names the workspace, or it claims paths (`covers`). One whose authority the runtime cannot
+ * read binds too, since it would refuse every gated command here. Mandates are cooperative: a human, or another
+ * participant, still makes the change.
  */
 function bindsActor(run: Invocation, node: Node, profile: Profile): boolean {
   if (node.discriminator !== 'mandate') return false;
@@ -647,9 +646,9 @@ function compiled(
       `Run "ia validate${run.rooted}" for the located findings of ${target.path}.`,
       { path: target.path },
     );
-  // Review C-R4: a finding counts when it is the edited (or new) record's, or one the base does not hold. In the target
-  // file lines move with the edit, so a finding there is matched by its code and record (its message, located finding
-  // prefix stripped, when it names none); elsewhere by its code, path, line and message.
+  // A finding counts when it is the edited (or new) record's, or one the base does not hold. In the target file lines
+  // move with the edit, so a finding there is matched by its code and record (its message, located finding prefix
+  // stripped, when it names none); elsewhere by its code, path, line and message.
   const span = record === undefined ? undefined : record.source;
   const own = (finding: Finding): boolean =>
     finding.identity === identity ||
@@ -707,7 +706,7 @@ function previewRecord(
     const field = schemaField(run, schema, word, assigned.key);
     // Each value is judged as its field's type first, so draftSource meets only values it spells.
     edited(run, word, target.path, () => encodeValue(field, assigned.value));
-    // Review C-N10: one field given twice is refused alike whether spelled `key` or `section.key`.
+    // One field given twice is refused alike whether spelled `key` or `section.key`.
     if (values[`${field.section}/${field.key}`] !== undefined)
       throw invalid(`@${word} field ${field.section}.${field.key} is given twice`, guidance(run, word));
     values[`${field.section}/${field.key}`] = assigned.value;
@@ -742,9 +741,9 @@ function previewRecord(
   };
 }
 /**
- * Plan amendment C20: a new local system is `ia init --system`'s starter system, `@system <name>` and its steward
- * `@agent <name>-steward`, in `.ia/src/systems/<name>/system.ia`, a file no source may hold yet. Its words are the floor's
- * `system` and `agent`, both judged for exclusion.
+ * A new local system is `ia init --system`'s starter system, `@system <name>` and its steward `@agent <name>-steward`,
+ * in `.ia/src/systems/<name>/system.ia`, a file no source may hold yet. Its words are the floor's `system` and `agent`,
+ * both judged for exclusion.
  */
 function previewSystem(run: Invocation, name: string, mode: EditMode): Candidate {
   const path = spelledPath(run, systemPath(name));
@@ -919,10 +918,10 @@ export function invocationOf(context: Context, root: string, editor: Editor): In
 }
 
 /**
- * A canonical workspace-relative path: what `reader.preview` and the opened-handle reader accept. db keeps its rule private,
- * so this copy is held to it by a parity test (review C-N9, tests/preview.test.ts). The CLI also refuses DEL, the C1
- * controls, the Unicode line and paragraph separators and the bidirectional controls, which db admits, so an `--at` path
- * a terminal or a line scanner could misread is never written (review C-RC4); the parity test states that difference.
+ * A canonical workspace-relative path: what `reader.preview` and the opened-handle reader accept. db keeps its rule
+ * private, so this copy is held to it by a parity test (tests/preview.test.ts). The CLI also refuses DEL, the C1
+ * controls, the Unicode line and paragraph separators and the bidirectional controls, which db admits, so an `--at`
+ * path a terminal or a line scanner could misread is never written; the parity test states that difference.
  */
 export function portable(path: string): boolean {
   return (
@@ -1029,7 +1028,7 @@ function previewWord(run: Invocation, request: Extract<PreviewRequest, { mode: '
         .map((row) => ({ system, predicate: row.predicate, targets: row.targets, sources: row.sources })),
     )
     .sort((a, b) => Number(b.system === registration.system) - Number(a.system === registration.system));
-  // Plan amendment C20: a system has a file of its own, `ia author system <name>` writes it, and it takes no field.
+  // A system has a file of its own, `ia author system <name>` writes it, and it takes no field.
   if (word === 'system')
     return {
       root: run.root,

@@ -64,10 +64,10 @@ export interface InputSnapshot {
   readonly floorOrigin: 'explicit' | 'local' | 'embedded';
   /**
    * D14: the evidence files listed when `evidence` was asked for, by path, size and modification time; never in
-   * `sources`, and none is read here (review finding B3-N10): a view reads only its own authored revision's file.
+   * `sources`, and none is read here: a view reads only its own authored revision's file.
    */
   readonly evidence?: readonly EvidenceCandidate[];
-  /** M7: bounded runner journal receipts, listed only when evidence was requested. */
+  /** Bounded runner journal receipts, listed only when evidence was requested. */
   readonly runnerEvidence?: readonly EvidenceCandidate[];
   readonly fingerprint: string;
 }
@@ -75,7 +75,7 @@ export interface InputSnapshot {
 export const EVIDENCE_DIRECTORY = '.ia/work/evidence';
 /** D14: an evidence file's name, `<authored revision>.ia`; anything else in the directory is not evidence. */
 export const EVIDENCE_FILE = /^[0-9a-f]{64}\.ia$/;
-/** M7 receipts are data, never native sources supplied by a caller. */
+/** Runner journal receipts are data, never native sources supplied by a caller. */
 export const RUNNER_EVIDENCE_DIRECTORY = '.ia/work/runner-evidence';
 export const RUNNER_EVIDENCE_FILE = /^[0-9a-f]{64}-[0-9a-f]{64}\.json$/;
 const EVIDENCE_BYTES = 4 * 1024 * 1024;

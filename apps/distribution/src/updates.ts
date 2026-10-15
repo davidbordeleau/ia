@@ -4,7 +4,7 @@ import { SUPPORTED_VERSIONS } from '@inventarch/language';
 import { readHomeFile, writeHomeFile } from './ia-home.js';
 import { findProgram, programEnv, programHome, windowsShell, windowsShellArgs } from './program.js';
 
-/** Host plugin distribution spec §11 and Amendment item 4. Public layer only: `account` is written by the private layer and kept as found; `nudgedOn` lives in the hook's plugin data, never here. */
+/** Host plugin distribution spec §11. Public layer only: `account` is written by the private layer and kept as found; `nudgedOn` lives in the hook's plugin data, never here. */
 export const UPDATE_CHECK = 'state/update-check.json';
 export const IA_CONFIG = 'config.json';
 export type UpdateChannel = 'checkout' | 'npm' | 'unknown';

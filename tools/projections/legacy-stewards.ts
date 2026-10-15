@@ -1,7 +1,7 @@
 /**
- * Exact repository steward files at the original M4 base e83a5dd72cb10b4361e0323f122cd2a532bde002
- * the restacked M4 base 48458e971810dad501b166b0d2fe219da039035f,
- * and the 1.2.0-compatible M4 base 8294c3c043c1437693100770de0b89fe3555299d.
+ * Exact repository steward files at the original 1.x base e83a5dd72cb10b4361e0323f122cd2a532bde002,
+ * the restacked base 48458e971810dad501b166b0d2fe219da039035f,
+ * and the 1.2.0-compatible base 8294c3c043c1437693100770de0b89fe3555299d.
  * Each base has separate LF and CRLF hashes; no other normalization or edit is owned.
  * Unknown historical output and personal copies stay in place for manual review.
  */

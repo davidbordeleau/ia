@@ -30,10 +30,9 @@ export const HOOK_IDENTITY_LIMIT = 512;
 export const registrableHook = (identity: unknown): identity is string =>
   typeof identity === 'string' && identity.length <= HOOK_IDENTITY_LIMIT && HOOK_IDENTITY.test(identity);
 /**
- * The bounds a registration holds (review finding H-N2): at most `HOOK_LIMIT` hooks, each with one to
- * `HOOK_SELECTION_LIMIT` selections of at most `HOOK_SELECTION_LENGTH` characters. Generation applies them, so a hook
- * beyond them is an unsupported row rather than a refusal of the whole registration; distribution's hook registration
- * holds its rows to the same ones.
+ * The bounds a registration holds: at most `HOOK_LIMIT` hooks, each with one to `HOOK_SELECTION_LIMIT` selections of
+ * at most `HOOK_SELECTION_LENGTH` characters. Generation applies them, so a hook beyond them is an unsupported row
+ * rather than a refusal of the whole registration; distribution's hook registration holds its rows to the same ones.
  */
 export const HOOK_LIMIT = 64;
 export const HOOK_SELECTION_LIMIT = 64;
@@ -102,9 +101,9 @@ export interface HookSet {
 }
 /**
  * Every authored (band 100) `@hook`, by identity: each one `hookDeclaration` accepts is registered and each one it refuses
- * is reported with its reason, so one unsupported record never blocks the others (plan amendment C9); past the first
- * `HOOK_LIMIT` accepted hooks, each is reported, since a registration holds no more (review finding H-N2). Codex
- * registers none and reports each (C12: Codex hooks are unsupported).
+ * is reported with its reason, so one unsupported record never blocks the others; past the first `HOOK_LIMIT` accepted
+ * hooks, each is reported, since a registration holds no more. Codex hooks are unsupported: codex registers none and
+ * reports each.
  */
 export function generateHookSet(reader: ReadHandle, within: string, host: PacketHost): HookSet {
   knownHost(host);

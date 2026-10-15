@@ -183,7 +183,7 @@ const freshRun = (obligation: Obligation) => obligation.evidencePolicy.kind === 
 const environmentBound = (obligation: Obligation) =>
   obligation.evidencePolicy.kind === 'fresh-run' || obligation.evidencePolicy.environmentSensitive;
 /**
- * EVAL-04 deduplication key: candidate, obligation, evaluator, policy revision and digest, the relevant environment
+ * Deduplication key (C28): candidate, obligation, evaluator, policy revision and digest, the relevant environment
  * ({id, toolchain} or toolchain only, nothing else) and, for fresh-run, the transition attempt.
  */
 export function evidenceKey(
@@ -231,7 +231,7 @@ function shape(receipt: unknown): string | undefined {
   return undefined;
 }
 /**
- * Validate one receipt against the current obligation and captured identities (C28, EVAL-03/04). `now` is an
+ * Validate one receipt against the current obligation and captured identities (C28). `now` is an
  * explicit ISO-8601 UTC instant; no clock is read. Refuses stale inputs, wrong subject/code/toolchain, forged,
  * substituted or revoked evaluators, expired reuse, fresh-run reuse from another attempt and trust that the host
  * verifier did not establish or that is below minimumTrust (D3).
@@ -349,7 +349,7 @@ function outcomeOf(
   });
 }
 /**
- * Convert a host's observation of one catalog evaluator run into a bounded result (C28, EVAL-Q07). Timeouts,
+ * Convert a host's observation of one catalog evaluator run into a bounded result (C28). Timeouts,
  * crashes, oversized output, an unreadable or non-JSON envelope, codec rejection or failure and evaluator-claimed
  * results other than passed/failed become `error` with fixed compliance-authored diagnostics; no evaluator text is
  * echoed for them. Failed diagnostics are bounded and redacted. Never throws for evaluator output; throws TypeError
@@ -449,7 +449,7 @@ export function acceptEvaluatorOutput(
   }
 }
 /**
- * Adapt a built-in compliance verdict to the result envelope (C28, spec §5): pass → passed, fail → failed,
+ * Adapt a built-in compliance verdict to the result envelope (C28): pass → passed, fail → failed,
  * not-evaluated or no verdict → not-evaluated, so unevaluated built-in outcomes are preserved. Throws TypeError for
  * a catalog obligation or a verdict for a different check.
  */
@@ -533,7 +533,7 @@ function verifyResolution(resolution: ObligationResolution, context: AdmissionCo
   }
 }
 /**
- * Pure success-transition decision (C28, spec §3). Admits only a verified resolution (D2) resolved against the same
+ * Pure success-transition decision (C28). Admits only a verified resolution (D2) resolved against the same
  * catalog and policy in which every required, applicable obligation has a valid passed receipt of at least
  * minimumTrust (D3) as its latest valid result. failed, unavailable, error, cancelled, not-evaluated and
  * evaluator-claimed not-applicable block a required obligation; resolver not-applicable with evidence does not.

@@ -43,7 +43,7 @@ export const workspaceRow = (id: string): WorkspaceRow | undefined => {
   return row && isWorkspace(row) ? row : undefined;
 };
 /**
- * The M5.3 refusal, message unchanged: a host whose row has no workspace set is not a workspace host. The CLI
+ * The original refusal, message unchanged: a host whose row has no workspace set is not a workspace host. The CLI
  * above already refuses a planned host first, with its own host-naming message (spec §4); this mechanism layer
  * keeps the historical "Expected Claude or Codex" text for whatever reaches it directly.
  */

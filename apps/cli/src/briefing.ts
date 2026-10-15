@@ -37,9 +37,9 @@ export interface Session {
   readonly context: readonly string[];
   /** The one line the user sees, or null in the §8.2 states where the user sees nothing. */
   readonly notice: string | null;
-  /** 'update' when the notice is an update nudge, which the hook shows at most once per local day (Amendment item 4). */
+  /** 'update' when the notice is an update nudge, which the hook shows at most once per local day. */
   readonly nudge: 'update' | null;
-  /** The argument vector the hook starts detached to refresh the update cache, or null when none is due (Amendment item 4). */
+  /** The argument vector the hook starts detached to refresh the update cache, or null when none is due. */
   readonly refresh: readonly string[] | null;
 }
 export interface BriefInput {

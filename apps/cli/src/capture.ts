@@ -20,9 +20,9 @@
  * (unresolved references, colliding identities, unconsented rows, a keyword two systems register) stays a finding, as it
  * does in a source the workspace authors.
  *
- * `--preview` (decision capture-preview-placement) admits and refuses as a capture does, then reports what the capture
- * would write through db D08b's `planCapture` (the counts, the rotation and the changed, new and removed identities)
- * and writes nothing, so the retained previous snapshot that readiness compares against is not spent.
+ * `--preview` admits and refuses as a capture does, then reports what the capture would write through db D08b's
+ * `planCapture` (the counts, the rotation and the changed, new and removed identities) and writes nothing, so the
+ * retained previous snapshot that readiness compares against is not spent.
  */
 import { existsSync } from 'node:fs';
 import { isAbsolute, posix, relative, resolve } from 'node:path';
@@ -243,7 +243,7 @@ function capturable(root: string, given: string | undefined, gate?: SessionGate)
 /**
  * Admits the workspace at `root` and writes its snapshot pair through db D08a, unless one of §5's two refusals answers
  * first. `given` is the `--root` the invocation typed, which the `ia validate` a refusal names carries. `gate`,
- * when given, judges the admitting session before anything is read from it (review C2-N3).
+ * when given, judges the admitting session before anything is read from it.
  */
 export function collectCapture(root: string, given?: string, gate?: SessionGate): CaptureView {
   const built = capturable(root, given, gate);

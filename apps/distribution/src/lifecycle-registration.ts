@@ -108,8 +108,8 @@ function identityMismatch(row: Record<string, unknown>, profile: LifecycleProfil
 }
 /**
  * Probe a verified emitted artifact for the binding's own profile row. A caller-supplied digest string is never accepted
- * as executable evidence. Review finding B-RC4: only the verified cache's launcher is read, so a 2.0.0 caller's value of
- * the narrower verified-cache shape still type-checks.
+ * as executable evidence. Only the verified cache's launcher is read, so a 2.0.0 caller's value of the narrower
+ * verified-cache shape still type-checks.
  */
 export function probeContextHookImplementation(
   cache: Pick<ReturnType<typeof verifyHostCache>, 'launcher'>,

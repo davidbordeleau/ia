@@ -21,7 +21,7 @@ import { freeze } from './types.js';
  * The body behind a record is the document its source locator names, when its word carries one (SOURCE_LOCATORS) and the
  * record states it; otherwise the record's own body (`bodyOf`). A fragment reads the record, never its document: the
  * text of its cells or of its requirement at the fragment. A body is text and the SHA-256 of its UTF-8 bytes, never a
- * certification: the reader neither admits the document nor judges what it says (IM-43). Structure (sections, fields,
+ * certification: the reader neither admits the document nor judges what it says. Structure (sections, fields,
  * relationships) is the inspector's and never a body.
  */
 

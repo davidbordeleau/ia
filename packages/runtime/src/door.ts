@@ -27,8 +27,7 @@ export interface DoorOptions extends OpenOptions {
   /**
    * The MACHINE_PROTOCOL version the door serves, by default the table's: an operation a later version adds (its row's
    * `since`) is refused as an unknown operation, and that refusal names only the operations served, so a door serving
-   * version 1, as the CLI's machine routes do (plan amendment A2), refuses `read`, `next` and `position` with the bytes
-   * 1.1.0's door did.
+   * version 1, as the CLI's machine routes do, refuses `read`, `next` and `position` with the bytes 1.1.0's door did.
    */
   readonly protocol?: number;
 }
@@ -309,7 +308,7 @@ export class Door {
         case 'position': {
           // MACHINE_PROTOCOL version 2: body(K) for the key the parts complete, read through a token, with its digest
           // and the host note (R12, R16). The parameters are closed and the token the Door's, as for every operation;
-          // a refusal of the key itself names the one command to run (design row 27).
+          // a refusal of the key itself names the one command to run.
           if (this.#protocol < 2) this.#unknown(operation);
           keys(params, POSITION);
           const within = this.#within(params),

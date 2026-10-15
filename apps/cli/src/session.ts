@@ -24,7 +24,7 @@ export const codeOf = (error: unknown, fallback: string): string =>
     : fallback;
 
 /**
- * Design row 27 for a workspace that does not open. `requireRoot` has already found a directory, and a directory with
+ * The next action for a workspace that does not open. `requireRoot` has already found a directory, and a directory with
  * no sources opens with the floor alone, so what reaches here is mostly a workspace whose sources the db does not read.
  * §2.5: IA-DB-SOURCE-UNAVAILABLE carries the installation state when the db raised it as an InstallationError: an
  * interrupted apply names the recovery, a missing or drifted generation the restore, any other state `ia doctor`.
@@ -59,7 +59,7 @@ function openNext(error: unknown, root: string): string {
   return serviceNext(code, { command: null, root });
 }
 
-/** How `ia validate` opens its session: checks admitted structurally (C21); no evidence is read (review finding B3-R4). */
+/** How `ia validate` opens its session: checks admitted structurally; no evidence is read. */
 export const VALIDATING = { checks: 'structural' } as const;
 export function openSession(root: string, options: Omit<SessionOptions, 'root'> = {}): Session {
   try {
@@ -84,15 +84,15 @@ export interface Editor {
 }
 /**
  * How `ia preview` and `ia author` open their editor snapshot: checks admitted structurally, as `ia validate` admits
- * them (C21), so a `@check` naming an evaluator that is not built in is a record they can draft beside and edit rather
- * than an admission error; no evidence is listed (review finding B3-N5), so a candidate never reads it.
+ * them, so a `@check` naming an evaluator that is not built in is a record they can draft beside and edit rather than
+ * an admission error; no evidence is listed, so a candidate never reads it.
  */
 export const AUTHORING = { checks: 'structural' } as const;
 /**
- * The authoring verbs' open (plan amendment C18): db's editor database, which reads the inputs twice and keeps them only
- * when both reads agree, so the source text a draft edits, the registry its schema comes from and the admission it is
- * compiled against are one state, admitted as `AUTHORING` says. It publishes no cache and writes nothing. A workspace
- * that does not open refuses as `openSession` refuses.
+ * The authoring verbs' open: db's editor database, which reads the inputs twice and keeps them only when both reads
+ * agree, so the source text a draft edits, the registry its schema comes from and the admission it is compiled against
+ * are one state, admitted as `AUTHORING` says. It publishes no cache and writes nothing. A workspace that does not open
+ * refuses as `openSession` refuses.
  */
 export function openEditor(root: string): Editor {
   let database: EditorDatabase;
@@ -108,7 +108,7 @@ export function openEditor(root: string): Editor {
 const SEAT_WORDS: readonly string[] = ['plan', 'milestone', 'task'];
 
 /**
- * Design row 27 for an identity a workspace verb finds no admitted record of, where the workspace says what answers
+ * The next action for an identity a workspace verb finds no admitted record of, where the workspace says what answers
  * it, so `ia inspect`, `ia read` and `ia next` name the same command for the same cause: a source holds it and
  * admission refused it names `ia validate`, which says why; else the nearest admitted identity, run through the same
  * verb, answers a misspelling (for `ia next`, the nearest @plan, @milestone or @task as its seat). Null when neither does.
@@ -136,7 +136,7 @@ export function nearestNext(
 }
 
 /**
- * Design row 27 for an identity `ia inspect` or `ia read` finds no admitted record of: what `nearestNext` names, else
+ * The next action for an identity `ia inspect` or `ia read` finds no admitted record of: what `nearestNext` names, else
  * the workspace overview.
  */
 export function identityNext(reader: Records, identity: string, verb: 'inspect' | 'read', rooted: string): string {

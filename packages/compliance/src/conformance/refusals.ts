@@ -108,7 +108,7 @@ export function runRefusalFixtures(
     target: null,
     span: agent.source,
   };
-  /** Lane D, D5: the sample mandate with its stated move list emptied, which admission refuses (compliance C05). */
+  /** The sample mandate with its stated move list emptied, which admission refuses (compliance C05). */
   const unmoved: CompiledRecord = {
     ...mandate,
     sections: mandate.sections.map((s) =>

@@ -19,13 +19,12 @@ import { EVIDENCE_DIRECTORY, EVIDENCE_FILE, safePath } from './inputs.js';
 import { discard, entryAt, staged, syncDirectory } from './retention.js';
 
 /**
- * D14: runtime evidence (milestone generation-binding, plan amendment C14). The validate effect records each bound check
- * whose selected verdicts passed or failed as one `@observation` in `.ia/work/evidence/<authored revision>.ia`, a source
- * at runtime placement band 0 that only a reader opened with `evidence` reads, and that never moves the authored
- * revision. An observation is named `<check name>-<12-hex authored revision>`; pass is verdict `success`, fail is
- * `refusal`, and a not-evaluated check records nothing. The validate request records nothing for a refused admission,
- * and a failing built-in verdict always refuses it, so in this release it never writes a `refusal` (review finding F1).
- * Nothing else writes this directory.
+ * D14: runtime evidence. The validate effect records each bound check whose selected verdicts passed or failed as one
+ * `@observation` in `.ia/work/evidence/<authored revision>.ia`, a source at runtime placement band 0 that only a reader
+ * opened with `evidence` reads, and that never moves the authored revision. An observation is named
+ * `<check name>-<12-hex authored revision>`; pass is verdict `success`, fail is `refusal`, and a not-evaluated check
+ * records nothing. The validate request records nothing for a refused admission, and a failing built-in verdict always
+ * refuses it, so in this release it never writes a `refusal`. Nothing else writes this directory.
  */
 /** The word an evidence record is an instance of; a workspace whose vocabulary lacks it records no evidence. */
 export const CHECK_EVIDENCE_WORD = 'observation';
@@ -60,7 +59,7 @@ const short = (revision: string): string => revision.slice(0, 12);
  * for: an observation that would be recorded again unchanged keeps the time it was first made, so validating twice at
  * one authored revision writes the same bytes. Read from this writer's own layout; anything else is ignored, and so is a
  * time the writer would not have written: not its exact stamp, observed and captured apart, or later than this clock
- * allows (review finding B4-RC1). Times are carried, not verified: nothing else attests when an observation was made.
+ * allows. Times are carried, not verified: nothing else attests when an observation was made.
  */
 function priorTimes(
   text: string | null,
@@ -166,11 +165,11 @@ export function evidenceText(input: {
 }
 
 /**
- * Review findings B4-RC1 and B4-RC2: whether `text` is exactly the evidence file `evidenceText` writes for `bindings`
- * over `records` at `authoredRevision`, its times taken from `text` itself: every observation the writer would make
- * and nothing else, with the writer's verdicts, reasons and wording, byte for byte. A reader admits only such a file,
- * and the writer keeps prior times only from one, so a planted or edited file can neither be read as evidence nor lend
- * the writer its times.
+ * Whether `text` is exactly the evidence file `evidenceText` writes for `bindings` over `records` at
+ * `authoredRevision`, its times taken from `text` itself: every observation the writer would make and nothing else,
+ * with the writer's verdicts, reasons and wording, byte for byte. A reader admits only such a file, and the writer
+ * keeps prior times only from one, so a planted or edited file can neither be read as evidence nor lend the writer its
+ * times.
  */
 export function reproducesEvidence(input: {
   readonly authoredRevision: string;
@@ -207,8 +206,8 @@ function plain(root: string): boolean {
 }
 /**
  * The bytes of the evidence file at `path`, or null when there is none, including when a link, junction, hard link or
- * entry of the wrong kind stands on the way (review finding B3-N9): nothing is read through one, and the writer refuses
- * only where it must write.
+ * entry of the wrong kind stands on the way: nothing is read through one, and the writer refuses only where it must
+ * write.
  */
 export function readEvidence(root: string, path: string): string | null {
   if (!plain(root)) return null;
@@ -234,7 +233,7 @@ export function readEvidence(root: string, path: string): string | null {
     throw error;
   }
 }
-/** The errors a win32 replacing rename returns while another handle holds the target (review finding D2-N3). */
+/** The errors a win32 replacing rename returns while another handle holds the target. */
 const HELD = new Set(['EPERM', 'EACCES', 'EBUSY']);
 /** How long the writer waits for a held target, in all; a reader holds the file for the moment one read takes. */
 const HELD_MS = 2000;
@@ -242,10 +241,10 @@ const pause = (ms: number): void => {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 };
 /**
- * Review finding D2-N3: rename the staged `temporary` over `path`, true once it is in place. On win32 a replacing rename
- * fails (EPERM, EACCES or EBUSY) while any other handle holds the target, as a concurrent validate does while it reads the
- * evidence it found, or while a concurrent writer's rename is in flight; there the writer retries, backing off from 10 to
- * 100 milliseconds, for up to two seconds. Between attempts it reads the target, and stops early only when it already
+ * Rename the staged `temporary` over `path`, true once it is in place. On win32 a replacing rename fails (EPERM,
+ * EACCES or EBUSY) while any other handle holds the target, as a concurrent validate does while it reads the evidence
+ * it found, or while a concurrent writer's rename is in flight; there the writer retries, backing off from 10 to 100
+ * milliseconds, for up to two seconds. Between attempts it reads the target, and stops early only when it already
  * holds exactly these bytes, byte for byte: then a concurrent writer of the same revision put them there and there is
  * nothing left to write, so the answer is false and the caller discards its copy. That is rare: writers that each
  * record an observation for the first time stamp their own times, so their bytes differ, and the retry then runs until
@@ -267,22 +266,22 @@ function publish(root: string, temporary: string, path: string, bytes: Buffer): 
     }
   }
 }
-/** The errors a prune skips rather than refuse for (review finding B3-R1): a file it may not or cannot remove. */
+/** The errors a prune skips rather than refuse for: a file it may not or cannot remove. */
 const SKIPPED = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOENT', 'EROFS']);
 
 /**
  * Write `text` as the evidence of `authoredRevision` (D14), or, for null, keep none for it, and prune the evidence files
- * of other authored revisions. The writer refuses only when this revision's file must be written (review finding B3-R1):
- * a link or junction on the way, or an entry of the wrong kind at a directory's or the file's path, refuses as
- * IA-DB-PATH-UNSAFE, and a file it cannot write fails with the filesystem's code, before anything is pruned. With nothing
- * to record (null, or a file that already holds exactly `text`) it never refuses, whatever stands at those paths (B3-N6).
+ * of other authored revisions. The writer refuses only when this revision's file must be written: a link or junction
+ * on the way, or an entry of the wrong kind at a directory's or the file's path, refuses as IA-DB-PATH-UNSAFE, and a
+ * file it cannot write fails with the filesystem's code, before anything is pruned. With nothing to record (null, or a
+ * file that already holds exactly `text`) it never refuses, whatever stands at those paths.
  * The bytes are staged in the evidence directory, flushed, and renamed into place, so a reader sees the whole old file or
  * the whole new one; on win32, where a rename over a file another handle holds fails, the rename waits for it a bounded
  * time, and stops once a concurrent writer of the same revision has put exactly these bytes there (`publish`). Pruning
  * is best effort and comes last: only regular files named `<64 hex>.ia`, never temporary
  * files or anything else; a file it may not remove is skipped; and with `pruneBefore` a file modified at or after that
- * time, which a validation of a newer revision may have written meanwhile, is kept (B3-N2); a current file left
- * unchanged is touched, so it counts as modified now (B4-RC3).
+ * time, which a validation of a newer revision may have written meanwhile, is kept; a current file left unchanged is
+ * touched, so it counts as modified now.
  */
 export function writeEvidence(
   root: string,
@@ -313,8 +312,8 @@ export function writeEvidence(
       discard(root, temporary);
     }
   } else if (bytes !== null) {
-    // Review finding B4-RC3: the file is current again, so a validation of an older revision that began before now, and
-    // prunes only what was modified before it began, leaves it. Best effort: an untouchable file is still current.
+    // The file is current again, so a validation of an older revision that began before now, and prunes only what was
+    // modified before it began, leaves it. Best effort: an untouchable file is still current.
     try {
       const now = new Date();
       utimesSync(safePath(root, path), now, now);

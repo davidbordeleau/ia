@@ -5,14 +5,12 @@ import { compare, stableSerialize } from './revision.js';
 import type { Claim, Graph, Node } from './types.js';
 
 /**
- * G06c: the claimant fields, each a section field whose text values are path selections (db D02b;
- * `covers` stays a field, not a predicate): `covers` in a @mandate's
- * `authority`, a @law's or @convention's `subject`, a @spec's `work` and a @check's `check` (milestone
- * generation-binding plan amendment C17), and a @hook's `hook.paths`. A field is read by its path on any winner that
- * holds it; schema admission keeps undeclared ones out. A @check's `check.scope` is never one (decision
- * check-scope-claims, plan amendment C22): it stays text, such as "every admitted native record" or `*`, that selects the
- * verdicts the check binds to, and claims no path; `check.covers` is the check's claimant field, and claiming a path
- * changes nothing about which verdicts the check selects.
+ * G06c: the claimant fields, each a section field whose text values are path selections (db D02b; `covers` stays a
+ * field, not a predicate): `covers` in a @mandate's `authority`, a @law's or @convention's `subject`, a @spec's `work`
+ * and a @check's `check`, and a @hook's `hook.paths`. A field is read by its path on any winner that holds it; schema
+ * admission keeps undeclared ones out. A @check's `check.scope` is never one: it stays text, such as "every admitted
+ * native record" or `*`, that selects the verdicts the check binds to, and claims no path; `check.covers` is the
+ * check's claimant field, and claiming a path changes nothing about which verdicts the check selects.
  */
 export const CLAIM_FIELDS: readonly string[] = Object.freeze([
   'authority.covers',

@@ -25,8 +25,8 @@ export interface Artifact {
   readonly text: string;
 }
 /**
- * `foreign` (B9, milestone position-packet): a `.claude/agents/<name>.md` file this projection does not own, unmarked or
- * outside its state. It is listed and left in place; no apply writes or deletes it (design §4, adapter rule 2).
+ * `foreign`: a `.claude/agents/<name>.md` file this projection does not own, unmarked or outside its state. It is
+ * listed and left in place; no apply writes or deletes it.
  */
 export type ProjectionAction = {
   readonly path: string;
@@ -52,10 +52,10 @@ export const PROJECTION_PATHS: Readonly<Record<Host, readonly string[]>> = Objec
   codex: ['AGENTS.md', '.agents/skills/ia-authoring/SKILL.md'],
 });
 /**
- * Milestone generation-binding (plan amendments C4, C5 and C12): the paths authored host generation writes beside the
- * packet's, owned through the same state: a claude agent `.claude/agents/<name>.md` and skill
- * `.claude/skills/<name>/SKILL.md`, and a codex skill `.agents/skills/<name>/SKILL.md` (codex takes no agent). A name is
- * a portable host name, as generation's `safeName` requires.
+ * The paths authored host generation writes beside the packet's, owned through the same state: a claude agent
+ * `.claude/agents/<name>.md` and skill `.claude/skills/<name>/SKILL.md`, and a codex skill
+ * `.agents/skills/<name>/SKILL.md` (codex takes no agent). A name is a portable host name, as generation's `safeName`
+ * requires.
  */
 export const GENERATED_PATHS: Readonly<Record<Host, RegExp>> = Object.freeze({
   claude: /^\.claude\/(?:agents\/[a-z][a-z0-9-]*\.md|skills\/[a-z][a-z0-9-]*\/SKILL\.md)$/,
@@ -65,14 +65,14 @@ export const GENERATED_PATHS: Readonly<Record<Host, RegExp>> = Object.freeze({
 export const projectionOwnable = (host: Host, path: string): boolean =>
   PROJECTION_PATHS[host].includes(path) || GENERATED_PATHS[host].test(path);
 /**
- * B9: a 1.x per-system steward file. A claude ownership state may still list one, for its removal: the planner deletes
+ * A 1.x per-system steward file. A claude ownership state may still list one, for its removal: the planner deletes
  * a listed one that is marked and unedited, unless a generated agent is written at that very path, which then replaces
  * it as an update (a profile named after a 1.x steward). A generated agent the state lists and no render writes any
  * more is removed the same way: it carries the plan's own marker.
  */
 const LEGACY_AGENT = /^\.claude\/agents\/[a-z][a-z0-9-]*\.md$/;
 /**
- * B9: the markers the 1.x renderers wrote (compliance's retired PROJECTION_MARKER and WORKSPACE_PROJECTION_MARKER),
+ * The markers the 1.x renderers wrote (compliance's retired PROJECTION_MARKER and WORKSPACE_PROJECTION_MARKER),
  * owned beside the marker a plan's artifacts carry, so an upgrade replaces their files instead of refusing them.
  */
 const LEGACY_MARKERS: readonly string[] = [
@@ -91,7 +91,7 @@ const read = (root: string, path: string): string | null => {
   return value === null ? null : utf8(value);
 };
 const hasMarker = (text: string, marker: string): boolean => text.split(/\r?\n/).includes(marker);
-/** An owned file's marker line: the plan's own marker or a legacy one (B9). */
+/** An owned file's marker line: the plan's own marker or a legacy one. */
 const marked = (text: string, marker: string): boolean =>
   [marker, ...LEGACY_MARKERS].some((owned) => hasMarker(text, owned));
 const acceptedHashes = (value: Accepted | undefined): string[] =>
@@ -103,8 +103,8 @@ function handEditMessage(path: string, existing: string, accepted: Accepted | un
   return `Managed file was edited by hand${suffix}: ${path}`;
 }
 /**
- * Every recorded path must still be portable and allowlisted, or a legacy steward file awaiting removal (B9), and every
- * hash a bare SHA-256 (or a small set of them mid-apply).
+ * Every recorded path must still be portable and allowlisted, or a legacy steward file awaiting removal, and every hash
+ * a bare SHA-256 (or a small set of them mid-apply).
  */
 function owned(root: string, host: Host): Record<string, Accepted> {
   const text = read(root, statePath(host));
@@ -166,10 +166,10 @@ function agentEntries(root: string, host: Host): string[] {
     .map((entry) => `.claude/agents/${entry.name}`);
 }
 /**
- * B9: every legacy steward path the state lists or the folder holds. A listed file that carries an owned marker and is
+ * Every legacy steward path the state lists or the folder holds. A listed file that carries an owned marker and is
  * unedited is removed, as is a listed one already gone; a listed marked file edited by hand refuses, as any owned file
- * does. A listed unmarked file, and every file the state does not list, marked or not, is foreign: listed, left in place
- * and never deleted (design §4, adapter rule 2).
+ * does. A listed unmarked file, and every file the state does not list, marked or not, is foreign: listed, left in
+ * place and never deleted.
  */
 function agentActions(
   root: string,
@@ -206,7 +206,7 @@ export function legacyProjectionActions(
   written: readonly string[] = [],
 ): ProjectionAction[] {
   const root = workspace(rootInput);
-  // `written`: the paths the caller's render writes, so a generated agent there is no legacy removal (H-N7).
+  // `written`: the paths the caller's render writes, so a generated agent there is no legacy removal.
   return agentActions(
     root,
     host,
@@ -277,14 +277,14 @@ export function planProjection(input: {
         fail('INPUT-INVALID', `Projection artifact is missing the marker line: ${artifact.path}`);
       seen.add(artifact.path);
       const existing = read(root, artifact.path);
-      // A generated skill never moves into a folder IA does not own that already holds the user's files (H-N11); a
-      // user's own SKILL.md there is one of them, so the refusal names the folder in one hop (review finding F6).
+      // A generated skill never moves into a folder IA does not own that already holds the user's files; a user's own
+      // SKILL.md there is one of them, so the refusal names the folder in one hop.
       const folder = skillFolder(host, artifact.path),
         unowned = folder !== undefined && !Object.keys(files).some((path) => path.startsWith(`${folder}/`)),
         users = existing !== null && existing !== artifact.text && !marked(existing, input.marker);
       if (unowned && (users || (existing === null && folderEntries(root, folder!).length > 0)))
         // Located at the folder and named as such (`skillFolder`), so the caller's repair names the files to move
-        // rather than the SKILL.md (review finding A-F2).
+        // rather than the SKILL.md.
         throw Object.assign(
           new DistributionError(
             'IA-DIST-LOCAL-MODIFICATION',
@@ -317,7 +317,7 @@ export function planProjection(input: {
       locate(path, () => {
         const existing = read(root, path);
         // A listed generated file without an owned marker is the user's: it is kept as foreign, never deleted on the
-        // strength of a recorded hash alone (review finding H-N10).
+        // strength of a recorded hash alone.
         if (existing !== null && GENERATED_PATHS[host].test(path) && !marked(existing, input.marker)) {
           actions.push({ path, action: 'foreign' });
           return;
@@ -372,7 +372,7 @@ export function applyProjection(
       for (const action of mutating) {
         if (action.action === 'remove') {
           replace(root, action.path, null);
-          // The folder a removed generated skill emptied goes too, never recursively (review findings H-N6, H-N11).
+          // The folder a removed generated skill emptied goes too, never recursively.
           const folder = skillFolder(host, action.path);
           if (folder !== undefined && folderEntries(root, folder).length === 0)
             try {
@@ -417,7 +417,7 @@ export function observeProjection(input: {
     locate(path, () => {
       if (legacyAgent(host, path) && linkedAgents(root, host)) return;
       const existing = read(root, path);
-      // B9: a listed legacy steward file already gone, or unmarked (foreign), is no drift; the next apply drops it.
+      // A listed legacy steward file already gone, or unmarked (foreign), is no drift; the next apply drops it.
       if (legacyAgent(host, path) && (existing === null || !marked(existing, input.marker))) return;
       if (existing === null) drift.push({ path, drift: 'missing' });
       else if (!accepts(value, sha256(existing))) drift.push({ path, drift: 'changed' });

@@ -376,7 +376,7 @@ export function catalogEntry(
   return catalog.entries.find((e) => e.id === id && e.implementationVersion === implementationVersion);
 }
 /**
- * Associate trusted host implementations with supported entries, keyed `${id}@${implementationDigest}` (EVAL-02).
+ * Associate trusted host implementations with supported entries, keyed `${id}@${implementationDigest}` (C26).
  * Any key naming an unknown, substituted, unavailable or revoked implementation refuses the whole binding. The host
  * must bind before it invokes anything; binding invokes nothing, and admission separately checks every receipt's
  * evaluator id, version and digest against the catalog (C28), so an unbound or substituted run cannot pass.

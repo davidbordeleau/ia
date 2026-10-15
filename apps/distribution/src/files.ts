@@ -175,10 +175,9 @@ export function replace(root: string, path: string, content: Buffer | null, mode
 }
 /**
  * A complete, fsynced temporary sibling of `target` holding `content`, which `replace` renames and `createFile` links
- * into place. A step that fails removes it again, so a failed write leaves no temporary file (milestone 6 review
- * C2-N14). Neither publisher locks the target: a writer that saves it between a caller's last read and the rename is
- * replaced, which a caller narrows by reading the file through an opened handle just before (as `ia author` does) but
- * cannot close.
+ * into place. A step that fails removes it again, so a failed write leaves no temporary file. Neither publisher locks
+ * the target: a writer that saves it between a caller's last read and the rename is replaced, which a caller narrows
+ * by reading the file through an opened handle just before (as `ia author` does) but cannot close.
  */
 function drafted(target: string, content: Buffer, mode: number): string {
   const temp = `${target}.${randomUUID()}.tmp`,

@@ -6,11 +6,11 @@
  * the runtime's defaults for the others (`normalizeScopeKey`). This verb prints the key used and the capture's
  * freshness, then the body's sections and its two widening keys as `ia position` commands, or with `--json` what the
  * Door's `position` operation returns. It is that operation as a consumer verb beside the frozen `ia scope` route,
- * never a machine route (plan amendment A2), and its key is read from closed flags only, so no request text reaches it.
+ * never a machine route, and its key is read from closed flags only, so no request text reaches it.
  *
  * The workspace opens as every read verb opens it, without the db cache, and the position is read through the
  * whole-workspace scope, whose body also names the admission findings on loaded records (db PT5). Nothing is written:
- * a position needs no capture (plan amendment A9), whose state is only the note's freshness.
+ * a position needs no capture, whose state is only the note's freshness.
  */
 import {
   COORDINATE_DOMAINS,
@@ -270,13 +270,13 @@ export function renderPosition(output: PositionOutput, caps: Capabilities, roote
 }
 
 /**
- * Design row 27: the one command after a refusal of the key or of its seat, with the root the invocation gave, which
- * the runtime's own `next` (R14, R15) does not carry. The runtime's `next` names the part it corrects, and this verb
- * names that correction as a command it runs (design §11: the same call with the printed closed set): a shape or phase
- * outside its closed set, or a depth or budget past its cap, is this call again with the closed set or the cap in its
- * place; a word the closure does not register is the vocabulary; a seat of another form, one the workspace does not
- * admit, a path outside it and a seat at runtime placement are the position without it, K0, unless that seat is the one
- * K0 takes, which names the overview of what the workspace admits.
+ * The one command after a refusal of the key or of its seat, with the root the invocation gave, which the runtime's own
+ * `next` (R14, R15) does not carry. The runtime's `next` names the part it corrects, and this verb names that
+ * correction as a command it runs (the same call with the printed closed set): a shape or phase outside its closed set,
+ * or a depth or budget past its cap, is this call again with the closed set or the cap in its place; a word the closure
+ * does not register is the vocabulary; a seat of another form, one the workspace does not admit, a path outside it and
+ * a seat at runtime placement are the position without it, K0, unless that seat is the one K0 takes, which names the
+ * overview of what the workspace admits.
  */
 function positionNext(error: RuntimeError, context: Pick<Context, 'command' | 'args'>, rooted: string): string {
   const [, , part] = (error.next ?? '').split(' ');

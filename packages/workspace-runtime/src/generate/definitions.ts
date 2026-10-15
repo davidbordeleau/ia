@@ -16,11 +16,11 @@ import { generatePlaybookSkills } from './playbook.js';
 import { generateHookSet } from './hook.js';
 
 /**
- * Everything a host generates from the workspace's authored records, computed once (milestone generation-binding task
- * host-consumes-generated-set): the agent and skill files, the hook declarations it registers, a row for each authored
- * record it does not render or register, and the operation and harness definitions, whose harness registration sets
- * select only from these files and hooks. The projection writer applies exactly this set, and its receipt lists each
- * harness's registrations as that apply left them (a hook it registered no group for is not listed; review finding H-R7).
+ * Everything a host generates from the workspace's authored records, computed once: the agent and skill files, the
+ * hook declarations it registers, a row for each authored record it does not render or register, and the operation and
+ * harness definitions, whose harness registration sets select only from these files and hooks. The projection writer
+ * applies exactly this set, and its receipt lists each harness's registrations as that apply left them (a hook it
+ * registered no group for is not listed).
  */
 export interface HostSet {
   /** The generated agent files, then the skills, each group by identity. */
@@ -45,8 +45,8 @@ export function generateHostSet(reader: ReadHandle, within: string, host: Packet
 }
 
 /**
- * Definitions of authored `@operation` and `@harness` records (milestone generation-binding, task
- * generation-operation-harness; plan amendment C11), for the receipt's `definitions` section: `generateHostSet`'s.
+ * Definitions of authored `@operation` and `@harness` records, for the receipt's `definitions` section:
+ * `generateHostSet`'s.
  */
 export function generateDefinitions(reader: ReadHandle, within: string, host: PacketHost): readonly PacketDefinition[] {
   return generateHostSet(reader, within, host).definitions;
@@ -54,12 +54,12 @@ export function generateDefinitions(reader: ReadHandle, within: string, host: Pa
 
 /**
  * An operation's `execution.handler`, `input` and `output` are catalog keys an installed implementation answers, copied
- * as authored: nothing here imports, resolves, serves or executes them (milestone 7 owns execution). A harness lists the
- * registration set its profiles and bindings select among `files` and `hooks`: the agent files rendered for its
- * profiles, the skills rendered for the playbooks their capabilities and every capability those include name, and the
- * registered hooks its bindings target. A record that renders or registers nothing for the host (an unsupported one, or
- * any agent or hook for codex) selects nothing, so hook or agent support never fails the definitions. Only authored
- * (band 100) records are defined.
+ * as authored: nothing here imports, resolves, serves or executes them. A harness lists the registration set its
+ * profiles and bindings select among `files` and `hooks`: the agent files rendered for its profiles, the skills
+ * rendered for the playbooks their capabilities and every capability those include name, and the registered hooks its
+ * bindings target. A record that renders or registers nothing for the host (an unsupported one, or any agent or hook
+ * for codex) selects nothing, so hook or agent support never fails the definitions. Only authored (band 100) records
+ * are defined.
  */
 function definitionsOf(
   reader: ReadHandle,
@@ -105,7 +105,7 @@ function definitionsOf(
     for (const id of profiles) {
       const profile = nodes.get(id);
       if (profile === undefined) continue;
-      // A closure the composition compiler refuses selects nothing (review finding A-RC5).
+      // A closure the composition compiler refuses selects nothing.
       const roots = valuesAt(profile, 'composition.capabilities');
       if (closureRefusal(roots, target) !== undefined) continue;
       for (const capability of capabilityClosure(roots, target))

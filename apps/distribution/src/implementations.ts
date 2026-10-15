@@ -18,24 +18,23 @@ import { asWorkspaceHost } from './hosts.js';
 import { bytes, contained, fail, json, locate, object, replace, sha256, utf8, workspace } from './files.js';
 
 /**
- * Plan amendments C16 and C24 (milestone generation-binding; design item 9): the installed-implementation catalog a v2
- * host payload carries at its root. The payload builder (tools/distribution/host-payload.mjs) generates it and lists it
- * in the payload inventory, because `verifyHostCache` refuses any file the inventory does not list. It describes
- * implementations no host app may import, so this module reads data only: it never imports, loads or runs a handler.
- * Its value's shape, operation rows included, is `@inventarch/db/distribution`'s (`checkInstalledImplementations`),
- * which binders read too (review finding B-N9).
+ * The installed-implementation catalog a v2 host payload carries at its root. The payload builder
+ * (tools/distribution/host-payload.mjs) generates it and lists it in the payload inventory, because `verifyHostCache`
+ * refuses any file the inventory does not list. It describes implementations no host app may import, so this module
+ * reads data only: it never imports, loads or runs a handler. Its value's shape, operation rows included, is
+ * `@inventarch/db/distribution`'s (`checkInstalledImplementations`), which binders read too.
  *
  * Nothing is read from a payload that fails `verifyHostCache`: every file under the payload directory must be one the
  * inventory lists, with its bytes, and no entry may be a link or junction, so a module planted inside the payload
  * directory, beside or above the handler's packages, refuses the whole catalog. Only the payload directory is verified,
- * and the closure check follows literal import specifiers only (review finding B2-N10). An unlisted empty directory is
- * not refused (B-RC1): it holds no module, though one where Node's resolution expects a file can keep a handler from
- * loading, which denies service but never substitutes code. An operation is then `available` only when
- * the payload ships its handler: the handler module and the manifest of every package its closure names are in the
- * verified inventory, and the catalog's handler digest is the SHA-256 the inventory pins for the module. What binds is
- * that module digest together with the verified inventory, which pins every other byte of the closure (review finding
- * B-N5). A declaration whose bytes are not shipped is `unavailable`, never available; a payload that fails verification,
- * or a handler digest that disagrees with its inventory, is a refusal.
+ * and the closure check follows literal import specifiers only. An unlisted empty directory is not refused: it holds no
+ * module, though one where Node's resolution expects a file can keep a handler from loading, which denies service but
+ * never substitutes code. An operation is then `available` only when the payload ships its handler: the handler module
+ * and the manifest of every package its closure names are in the verified inventory, and the catalog's handler digest
+ * is the SHA-256 the inventory pins for the module. What binds is that module digest together with the verified
+ * inventory, which pins every other byte of the closure. A declaration whose bytes are not shipped is `unavailable`,
+ * never available; a payload that fails verification, or a handler digest that disagrees with its inventory, is a
+ * refusal.
  */
 export const INSTALLED_IMPLEMENTATIONS = 'implementations.json';
 export { INSTALLED_IMPLEMENTATIONS_FORMAT } from '@inventarch/db/distribution';
@@ -48,7 +47,7 @@ export type {
 } from '@inventarch/db/distribution';
 /** The implementation id a consumer's join names for the catalog itself. */
 export const INSTALLED_IMPLEMENTATIONS_ID = 'installed-implementations';
-/** Design item 9: the join receipts each consumer records under its own name, beside the host state files. */
+/** The join receipts each consumer records under its own name, beside the host state files. */
 export const JOINS = '.ia/distributions/hosts/joins.json';
 export const JOINS_FORMAT = 'ia.host-joins.v1';
 
@@ -112,7 +111,7 @@ interface Listed {
   readonly sha256: string;
 }
 /**
- * C24: `operation` as this payload ships it, against the inventory of a payload `verifyHostCache` has verified, so
+ * `operation` as this payload ships it, against the inventory of a payload `verifyHostCache` has verified, so
  * every listed file is present with the bytes the inventory pins and nothing else is there. A handler module or closure
  * package the inventory does not list makes the operation unavailable; a handler digest that disagrees with the
  * inventory is IA-DIST-INTEGRITY-MISMATCH.
@@ -136,7 +135,7 @@ function shipped(operation: AvailableOperation, inventory: ReadonlyMap<string, L
  * code (release.json hashing to `release`, inventory.json to the digest release.json names, every listed file to its
  * pin). A release.json that does not hash to `release` refuses as IA-DIST-INTEGRITY-MISMATCH before it is parsed. `given`
  * shares the verification of one report when `hostVerifier` made it; any other value is ignored and the payload is
- * verified afresh (review finding B2-N6). The catalog is the file that verified inventory lists, read again and compared with its pin. Each
+ * verified afresh. The catalog is the file that verified inventory lists, read again and compared with its pin. Each
  * available operation is checked against the verified inventory (`shipped`). A v1 payload, or a v2 payload whose
  * inventory lists no catalog (one built before the catalog existed), is `unavailable`, not an integrity failure. A
  * missing payload file or release.json is IA-DIST-ARTIFACT-UNAVAILABLE; unexpected or changed bytes are
@@ -148,15 +147,15 @@ export function readInstalledImplementations(
   release: string,
   given?: HostVerifier,
 ): InstalledCatalog {
-  // Review finding B2-N6: only a verifier `hostVerifier` made is shared; anything else is replaced by a fresh one.
+  // Only a verifier `hostVerifier` made is shared; anything else is replaced by a fresh one.
   const verify = verifierOf(given);
   if (!HEX.test(release)) fail('INPUT-INVALID', 'Invalid host release pin');
-  // Review finding B2-N2: a release.json that does not hash to the pin is changed bytes, whether or not it still parses.
+  // A release.json that does not hash to the pin is changed bytes, whether or not it still parses.
   const root = workspace(directory),
     pinned = bytes(root, 'release.json');
   if (pinned !== null && sha256(pinned) !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
-  // B-R1: never read a catalog from a payload that fails verification; an uninventoried module could be loaded in place
-  // of a shipped one, inside a closure package or outside every one.
+  // Never read a catalog from a payload that fails verification; an uninventoried module could be loaded in place of a
+  // shipped one, inside a closure package or outside every one.
   const verified = verify(root);
   if (verified.release !== release) fail('INTEGRITY-MISMATCH', 'Host release differs from its pin');
   if (verified.format === 1)
@@ -226,8 +225,8 @@ function writeJoin(root: string, consumer: WorkspaceHost, row: ImplementationJoi
   replace(root, JOINS, joins.length === 0 ? null : Buffer.from(json({ format: JOINS_FORMAT, joins })));
 }
 /**
- * Run `work` under the host lock, as every host write runs. Review finding B-N4: the lock is taken first and a pending
- * host journal is checked under it, as `applyHost` does, so no journal can appear between the check and the write.
+ * Run `work` under the host lock, as every host write runs. The lock is taken first and a pending host journal is
+ * checked under it, as `applyHost` does, so no journal can appear between the check and the write.
  */
 function locked<T>(root: string, work: () => T): T {
   const unlock = acquireHostRegistrationLock(root);
@@ -240,7 +239,7 @@ function locked<T>(root: string, work: () => T): T {
 }
 
 /**
- * Record `host`'s join (design item 9) from its committed registration, under the host lock: the catalog of the payload
+ * Record `host`'s join from its committed registration, under the host lock: the catalog of the payload
  * that `<host>-workspace.json` names, read and checked by `readInstalledImplementations` at that state's own cache and
  * release, at `consumerRevision`. The row is derived from the registration as written, never from what a caller
  * expected to register, so it cannot name a catalog the registration does not use. With no registration, or a payload
@@ -291,8 +290,7 @@ export function leaveHost(rootInput: string, hostInput: string): boolean {
 }
 
 /**
- * Where a workspace's execution bindings find their catalog (task execution-binding-host-entry, plan amendment C24): the
- * catalog one of its hosts joined, or why there is none.
+ * Where a workspace's execution bindings find their catalog: the catalog one of its hosts joined, or why there is none.
  */
 export type JoinedCatalog =
   | {
@@ -322,8 +320,8 @@ const failure = (error: unknown): { readonly code: string; readonly text: string
   return { code, text: message.startsWith(code) ? message : `${code}: ${message}` };
 };
 /**
- * Review finding B2-R2: what a validating installation trusts, the IA home it materializes payloads in and the payload
- * release it pins. A join binds only through a registration of exactly that payload, `<home>/hosts/<release>`; nothing a
+ * What a validating installation trusts: the IA home it materializes payloads in and the payload release it pins. A
+ * join binds only through a registration of exactly that payload, `<home>/hosts/<release>`; nothing a
  * workspace names outside it is ever opened. Null when the running installation pins no payload, and then nothing binds.
  */
 export interface HostTrust {
@@ -360,13 +358,13 @@ const DAMAGE = new Set(['IA-DIST-INTEGRITY-MISMATCH', 'IA-DIST-PATH-UNSAFE', 'IA
  * `ia host <host>` registers the installation's own payload. The payload is then read once, verified as
  * `readInstalledImplementations` verifies it, and the first trusted join, in consumer order, whose catalog digest it
  * carries is the source. A payload that fails verification with changed or unlisted files, a link or exceeded limits is
- * `damaged`, which binders report as revoked, whichever trusted join names it (review finding B2-N1: every trusted join
- * names the same payload, so the order of joins cannot decide it). With no trust, no receipt, or no trusted join that
+ * `damaged`, which binders report as revoked, whichever trusted join names it (every trusted join names the same
+ * payload, so the order of joins cannot decide it). With no trust, no receipt, or no trusted join that
  * holds (an `ia project`-only workspace, a host registered by another release, a drifted join, a payload without a
  * catalog or not materialized), the catalog is `unavailable`, with the reasons, so nothing binds. Reads only: nothing is
  * written, imported or executed.
  */
-/** The one payload a trust opens, `<home>/hosts/<release>`, whether it is materialized, and its spellings (B2-R2). */
+/** The one payload a trust opens, `<home>/hosts/<release>`, whether it is materialized, and its spellings. */
 export interface TrustedPayload {
   readonly release: string;
   readonly home: string;
@@ -393,7 +391,7 @@ export function trustedPayload(trust: HostTrust): TrustedPayload {
 /**
  * Why host `host`'s registration (`state`) and its join (at `joined`, or null for no join) do not bind through
  * `trusted`, or null when they do: registered or joined for another release, the payload not materialized, or a
- * registration naming another directory or another spelling of it (review finding B2-RC1). Compares spellings only:
+ * registration naming another directory or another spelling of it. Compares spellings only:
  * the registration's own path is never opened.
  */
 export function registrationUntrusted(

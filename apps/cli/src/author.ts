@@ -1,6 +1,5 @@
 /**
- * `ia author`: the writing half of record authoring (milestone generation-binding plan amendments C19 and C20, lane C
- * round 3), in the author mode, whose move is Synthesis.
+ * `ia author`: the writing half of record authoring, in the author mode, whose move is Synthesis.
  *
  * Every form of `ia preview` that changes a non-administrative record has an author form with `--digest <sha256>`,
  * the target file's sha256 the preview printed: `ia author <word> <name> [<field>=<value>...] [--at <path>]`,
@@ -94,7 +93,7 @@ function attributionOf(run: Invocation, profile: Profile): string {
 
 /**
  * A failed write's refusal code: the distribution's own (IA-DIST-*) or another IA code as raised, and IA-CLI-FAILED for
- * anything else, a volume's raw errno (EPERM, EACCES, EROFS) included, which is no refusal code (review C2-N15).
+ * anything else, a volume's raw errno (EPERM, EACCES, EROFS) included, which is no refusal code.
  */
 const distribution = (error: unknown): { readonly code: string; readonly message: string } => ({
   code:
@@ -266,8 +265,8 @@ export function runAuthor(context: Context): Result {
     const candidate = candidateOf(run, request, 'author'),
       { target } = candidate,
       preview = candidate.view;
-    // Review C2-R4: the profile is judged first (candidateOf), so a missing or malformed digest is refused only for an
-    // actor the author mode allows, and the preview it names is judged by that profile (gatedNext) before it is printed.
+    // The profile is judged first (candidateOf), so a missing or malformed digest is refused only for an actor the
+    // author mode allows, and the preview it names is judged by that profile (gatedNext) before it is printed.
     if (digest !== undefined && !DIGEST.test(digest))
       throw new Refusal(
         'IA-CLI-USAGE',
@@ -296,7 +295,7 @@ export function runAuthor(context: Context): Result {
       const errors = preview.findings.filter((finding) => finding.severity === 'error'),
         first = errors[0]!,
         at = `${first.path}:${first.line}`;
-      // Review C2-N12: a located finding's message already opens with its location, which is stated once.
+      // A located finding's message already opens with its location, which is stated once.
       const message = first.message.startsWith(`${at}: `) ? first.message.slice(at.length + 2) : first.message;
       throw new Refusal(
         'IA-CLI-EDIT-UNCLEAN',
@@ -338,7 +337,7 @@ export function runAuthor(context: Context): Result {
       records: preview.records,
       findings: preview.findings,
       profile: preview.profile,
-      // Review C2-N11: the next command is judged by the profile that allowed the author, as a refusal's would be.
+      // The next command is judged by the profile that allowed the author, as a refusal's would be.
       next: judgedNext(
         `Run "ia validate${run.rooted}" to confirm the workspace admits what was written.`,
         context.gate,

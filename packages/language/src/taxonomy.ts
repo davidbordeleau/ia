@@ -76,7 +76,7 @@ export type Cardinality = (typeof CARDINALITIES)[number];
 /** A schema field type: a value type, or `list of` one. */
 export type FieldType = ValueType | `list of ${ValueType}`;
 /**
- * The closed table of text forms a schema may require with `as text form <form>` (W0-L5). Language-owned, not a
+ * The closed table of text forms a schema may require with `as text form <form>` (L19a). Language-owned, not a
  * kernel value type: adding a form changes this table and the compliance predicate for it, never the kernel.
  */
 export const TEXT_FORMS = ['iso-date'] as const;
@@ -109,7 +109,7 @@ export function isQualifiedName(x: string): boolean {
   const slots = x.split('/');
   return slots.length === 4 && slots.every((slot) => /^[a-z][a-z0-9-]*$/.test(slot)) && isKind(slots[1]!);
 }
-/** The `iso-date` text form (W0-L5): `YYYY-MM-DD` and a real calendar date. */
+/** The `iso-date` text form (L19a): `YYYY-MM-DD` and a real calendar date. */
 export function isIsoDate(text: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   if (match === null) return false;

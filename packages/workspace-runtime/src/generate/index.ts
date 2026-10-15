@@ -1,5 +1,4 @@
-// Host generators over authored records (milestone generation-binding). The CLI's projection writer applies
-// generateHostSet's set (task host-consumes-generated-set).
+// Host generators over authored records. The CLI's projection writer applies generateHostSet's set.
 export { generateAgentProfiles } from './agent-profile.js';
 export { generatePlaybookSkills } from './playbook.js';
 export { generateDefinitions, generateHostSet } from './definitions.js';

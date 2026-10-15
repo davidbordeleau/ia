@@ -205,9 +205,9 @@ export function vocabularyOutputs(root: string, read?: (path: string) => string)
  */
 export const SHIPPED_CATALOGUE = 'apps/cli/assets/vocabulary.json';
 /**
- * The MCP door's `ia_vocabulary` tool serves the same catalogue (apps/mcp-door/SPEC.md M04c). The door imports
- * only @inventarch/runtime (M01) and does not depend on @inventarch/cli, so its package ships its own byte-identical copy under
- * this drift gate instead of reading another package's files.
+ * The MCP door's `ia_vocabulary` tool serves the same catalogue. The door imports only @inventarch/runtime and does
+ * not depend on @inventarch/cli, so its package ships its own byte-identical copy under this drift gate instead of
+ * reading another package's files.
  */
 export const DOOR_CATALOGUE = 'apps/mcp-door/assets/vocabulary.json';
 if (isEntry(process.argv[1], import.meta.url)) {

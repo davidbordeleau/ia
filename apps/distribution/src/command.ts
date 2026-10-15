@@ -79,11 +79,10 @@ export function run(argv: readonly string[]): { exitCode: number; result: unknow
   if (command === 'remove-projection') return { exitCode: 0, result: removeProjection(need('out'), need('id')) };
   if (command === 'validate') {
     // The validate request `ia validate --json` makes too, through the same services: the finding set of a structural
-    // admission (inert declarations included), the execution bindings (C24) and check bindings (C15, C22) it reports,
-    // and the evidence it records (C14, C23; `recordValidation`, the only writer of evidence), from a session that reads
-    // no evidence (review finding B3-R4). Both bind through this
-    // module's own installation (`installationTrust`, review finding B2-R2). A revoked binding or check is an error,
-    // so it fails the run as a refusal does.
+    // admission (inert declarations included), the execution bindings and check bindings it reports, and the evidence
+    // it records (`recordValidation`, the only writer of evidence), from a session that reads no evidence. Both bind
+    // through this module's own installation (`installationTrust`). A revoked binding or check is an error, so it
+    // fails the run as a refusal does.
     const validating = openWorkspaceSession({ root, checks: 'structural' });
     try {
       const trust = installationTrust(),

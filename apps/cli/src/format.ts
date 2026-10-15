@@ -1,8 +1,8 @@
 /**
  * `ia format`: docs/specs/consumer-cli-contract/README.md §2.3.
  *
- * `--check` is the default and writes nothing; `--write` is the new in-place mode `decisions.md:65` requires be
- * specified rather than inherited, and it is never implied. Every rewrite goes through the replace-by-rename
+ * `--check` is the default and writes nothing; `--write` is the in-place mode, which is always stated rather than
+ * inherited, and it is never implied. Every rewrite goes through the replace-by-rename
  * primitive, so a file is whole or untouched; there is no cross-file atomicity and none is claimed. The two
  * phases below are what keeps a refusal from leaving a mixture: nothing is written until every selected file has
  * a verified draft, and the formatter's own staleness recheck runs inside each of those drafts.
@@ -238,7 +238,7 @@ export function renderFormat(view: FormatView, caps: Capabilities): string {
 
 export function runFormat(context: Context): Result {
   const { args, caps, json } = context;
-  // Design row 27: the refused path's rerun keeps every other argument, the root and the mode included.
+  // The refused path's rerun keeps every other argument, the root and the mode included.
   const retry = (supplied: string): string =>
     respell(context, { positionals: args.positionals.map((path) => (path === supplied ? '<path>' : path)) });
   const view = collectFormat(requireRoot(context), args.positionals, args.flag('write'), retry);

@@ -22,7 +22,7 @@ The target is a directory, optionally named by a provider/package id. Host regis
 
 ## 3 Bundled language
 
-The CLI carries `assets/base.json` and exactly the digest-named archive it pins. [language-base.ts](../../../tools/native/language-base.ts) selects floor, public system contracts and schemas, and the language distribution root from [the public manifest](../../../examples/public-language/manifest.json). Example work records are excluded. The native language version comes from [versions.json](../../../examples/public-language/versions.json), independently of the coordinated npm version and syntax `1.0`.
+The CLI carries `assets/base.json` and exactly the digest-named archive it pins. [language-base.ts](../../../tools/native/language-base.ts) selects floor, public system contracts and schemas, and the language distribution root from [the public manifest](../../../examples/public-language/manifest.json). Example work records are excluded. The native language artifact version in [versions.json](../../../examples/public-language/versions.json) follows the coordinated npm target. Artifact `3.0.0` still uses syntax `1.0`; syntax, format and engine requirements are unchanged.
 
 ## 4 Authored starter
 

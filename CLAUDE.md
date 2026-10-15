@@ -87,4 +87,4 @@
 - state intent to the CLI as shape + optional phase + optional seat + optional word; the CLI never receives free text
 - when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation
 
-ia-generated 072d5d27f915ebf53d443d3d551539d0a44cf7d297c8e21c5cad3e6ddda5215d 8eb9576945bd97d649e3db9f24758e869bca91bb0cff087ed3c73f7b0f3a8720 ia-claude
+ia-generated 24ae6c25ad0ec73fb0de575c871424929607035c885347e057d4abb622930bc2 0290510cf13a201ac0b60feeeb5653548c518b4c1d0143ab996ca7518b0305c1 ia-claude

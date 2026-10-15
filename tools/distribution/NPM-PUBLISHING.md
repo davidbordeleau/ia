@@ -116,19 +116,103 @@ Creating a new name also requires the owner to explicitly confirm each full pack
 
 For a confirmed new name, setup stages `0.0.0-bootstrap.0` under the `bootstrap` tag with public access using [staged publishing](https://docs.npmjs.com/staged-publishing/), then inspects the resulting state before configuring missing trust. It retains and reports the exact package, version and stage ID. An existing pending bootstrap stage for that exact package and version is reused, including after an interrupted run; multiple candidates or uncertain identity/status block setup. The confirmed status must be `staged`; a stage still `validating` is retained, and setup stops for a later read. Setup never approves or rejects a stage and never automatically cleans one up. Retaining the stage avoids destructive setup cleanup; it is not evidence that stage retention fixes inconsistent npm registry visibility.
 
-Keep the stage identity with the release record until the normal workflow publishes and verifies a real cohort version, including its archive integrity, `latest` tag and provenance. Only after that verification may an owner separately authorize manual cleanup of the exact retained bootstrap stage, after checking its current identity and status. Never approve a bootstrap payload or publish dummy contents as a real version. Never overwrite a published version, repurpose an existing tag, or use a 404 as proof of name ownership. Final verification requires an npm provenance attestation on every published package, which only the workflow's OIDC publication adds, and none of the 1.0.0 versions carries one.
-
-The six names new in 1.1.0 are `compliance-system`, `governance-system`, `hook-authoring-system`, `learning-system`, `work-system` and `workspace-system`, all in the `@inventarch` scope.
+Keep the stage identity with the release record until the normal workflow publishes and verifies a real cohort version, including its archive integrity, `latest` tag and provenance. Only after that verification may an owner separately authorize manual cleanup of the exact retained bootstrap stage, after checking its current identity and status. Never approve a bootstrap payload or publish dummy contents as a real version. Never overwrite a published version, repurpose an existing tag, or use a 404 as proof of name ownership. Final verification requires an npm provenance attestation on every published package, which only the workflow's OIDC publication adds.
 
 **GitHub.** `--apply` restricts the `npm` environment to main and makes the code owner, or `--reviewer <login>`, its required reviewer. Approving that environment is the publication checkpoint; the prepare job's summary shows the changeset digest and archive integrity being approved. It also allows Actions to create pull requests, so the release workflow can open `release/next`. It makes the default workflow token read-only, since every workflow declares its own permissions, and it creates any ruleset in `.github/rulesets/` that is missing. The tag ruleset must keep allowing tag creation, because the release job creates `v<version>`.
 
 Pull requests and pushes made with the workflow token start no other workflows. The release workflow therefore dispatches Public quality on `release/next`, and the publish workflow dispatches the release workflow after tagging.
 
+## Owner-confirmed new-name bootstrap and trust
+
+On 2026-10-15, the owner separately confirmed `@inventarch/runner` as a new name and completed the following route using Node **22.22.2**, pinned npm **12.2.0**, and the existing npm login. Initial inspection returned non-public access (`HTTP 200`, `public:false`) and both public and authenticated metadata returned 404. Those responses alone established neither existence nor availability. Setup correctly refused bootstrap even with `--bootstrap-name`; the manual staging action followed a separate owner decision, not a relaxation of that guard.
+
+The owner staged `@inventarch/runner@0.0.0-bootstrap.0`, retained stage **`9a05fb46-e503-4814-b0fc-744512700ca5`** unapproved, verified public metadata, and configured the intended GitHub trust with interactive 2FA. At **2026-10-15 06:59:52 UTC**, `pnpm npm:setup --skip-github` reported all **23** packages ready. npm itself created the public **`0.0.0-stage`** placeholder; the staged bootstrap payload remained unpublished. This is documented npm behavior for staging a new name. [npm staged publishing](https://docs.npmjs.com/staged-publishing/)
+
+That result records package and trust configuration readiness at that time. It does not prove a cohort release was published, GitHub settings were checked by the `--skip-github` run, or OIDC publication and provenance verification succeeded. Runner is already bootstrapped; do not repeat its creation commands as a routine setup step.
+
+### Owner actions: PowerShell recipe
+
+Run the blocks separately in the same interactive terminal, beginning at the repository root. For a future package, the owner supplies its exact new `PackageName` and absolute paths for the `Node22` executable and the `Npm122` **npm-cli.js** already resolved by setup. The recorded runner setup above is complete; these blocks are not instructions to bootstrap runner again. Reuse the existing authorized login. These commands do not install npm, create credentials or change npm configuration. Stop if those prerequisites are missing.
+
+First, verify the selected tools and inspect current state without writes:
+
+```powershell
+param(
+    [Parameter(Mandatory)][string]$Node22,
+    [Parameter(Mandatory)][string]$Npm122,
+    [Parameter(Mandatory)][string]$PackageName
+)
+$ErrorActionPreference = 'Stop'
+if ($PackageName -notmatch '^@inventarch/[a-z0-9][a-z0-9._-]*$') { throw 'Supply the exact owner-confirmed new package name.' }
+$Node22 = (Resolve-Path -LiteralPath $Node22).ProviderPath
+$Npm122 = (Resolve-Path -LiteralPath $Npm122).ProviderPath
+if ((& $Node22 --version) -ne 'v22.22.2') { throw 'Select Node 22.22.2.' }
+if ((& $Node22 $Npm122 --version) -ne '12.2.0') { throw 'Select pinned npm 12.2.0.' }
+pnpm npm:setup --skip-github --node $Node22 --npm-cli $Npm122
+```
+
+Review the inspection before continuing; incomplete readiness deliberately returns a nonzero exit code. For trust-read `EOTP`, use the existing `--interactive-auth` recovery instructions. A 404 or non-public result never authorizes the next block. Only an owner who separately confirms the exact name is new and authorizes its creation may stage it. If an exact bootstrap stage already exists, retain and inspect it instead of creating another.
+
+The following creates a minimal payload for that bootstrap route in a fresh temporary directory containing only a manifest and README, with no scripts or dependencies:
+
+```powershell
+$BootstrapDir = Join-Path ([IO.Path]::GetTempPath()) ('ia-npm-owner-' + [guid]::NewGuid().ToString('N'))
+$null = New-Item -ItemType Directory -Path $BootstrapDir
+$Utf8 = [Text.UTF8Encoding]::new($false)
+$Manifest = [ordered]@{
+    name = $PackageName
+    version = '0.0.0-bootstrap.0'
+    description = 'Creates the package name so its trusted publisher can be configured. Never approved or installed.'
+    license = 'Apache-2.0'
+    repository = [ordered]@{ type = 'git'; url = 'git+https://github.com/inventarch/ia.git' }
+}
+[IO.File]::WriteAllText((Join-Path $BootstrapDir 'package.json'), ($Manifest | ConvertTo-Json -Depth 3), $Utf8)
+[IO.File]::WriteAllText((Join-Path $BootstrapDir 'README.md'), "# $PackageName`n`nNever approve this setup placeholder.`n", $Utf8)
+& $Node22 $Npm122 stage publish $BootstrapDir --access public --tag bootstrap --ignore-scripts --json --registry https://registry.npmjs.org
+if ($LASTEXITCODE -ne 0) { throw 'Staging did not confirm success. Inspect stages before any retry.' }
+```
+
+Retain the returned exact package, version and stage ID. Inspect current stages with the pinned CLI and manually require exactly one record matching that stage ID, `$PackageName`, version `0.0.0-bootstrap.0` and status `staged`. Stop on a missing or multiple match; retain a `validating` or uncertain stage and investigate before further writes. Do not approve or reject the bootstrap stage. Check public metadata independently:
+
+```powershell
+& $Node22 $Npm122 stage list $PackageName --json --registry https://registry.npmjs.org
+if ($LASTEXITCODE -ne 0) { throw 'Stage inspection failed.' }
+$PublicUri = 'https://registry.npmjs.org/' + [Uri]::EscapeDataString($PackageName)
+$Public = Invoke-RestMethod -Method Get -Uri $PublicUri -TimeoutSec 30
+if ($Public.name -ne $PackageName) { throw 'Unexpected public package identity.' }
+$PublicVersions = @($Public.versions.PSObject.Properties.Name)
+if ($PublicVersions -notcontains '0.0.0-stage') { throw 'Expected registry-created placeholder is absent; investigate.' }
+[pscustomobject]@{ Name = $Public.name; Versions = $PublicVersions }
+```
+
+After fresh inspection confirms public existence and no matching trust, the separately authorized owner creates only the intended trust. A different or unreadable configuration requires owner investigation. Run without pipes or redirection so npm can complete its confirmation and 2FA challenge; never put an OTP in command arguments or logs:
+
+```powershell
+& $Node22 $Npm122 trust github $PackageName --file npm-publish.yml --repo inventarch/ia --environment npm --allow-publish --registry https://registry.npmjs.org
+if ($LASTEXITCODE -ne 0) { throw 'Trust creation did not confirm success. Reinspect before any retry.' }
+pnpm npm:setup --skip-github --node $Node22 --npm-cli $Npm122
+if ($LASTEXITCODE -ne 0) { throw 'Fresh setup inspection is not ready; stop before release.' }
+```
+
+Require a successful fresh setup result before proceeding to the normal release workflow. Keep the retained stage under the existing retention/cleanup policy. Trust inspection and its 2FA challenge authenticate an owner read; they are not a test of GitHub OIDC publication. [npm 12.2.0 trust-list implementation](https://github.com/npm/cli/blob/v12.2.0/lib/commands/trust/list.js)
+
+### Trust validation and expiry
+
+A new trusted-publisher configuration must complete its first successful publish within **two days of creation**. That publish validates the configuration and binds the repository's immutable identity. Otherwise, the configuration expires; an owner must delete the expired configuration, create a replacement and complete its first publish within the new window. Setup does not perform that lifecycle repair. [npm trusted-publisher expiry](https://docs.npmjs.com/trusted-publishers/#trusted-publisher-configuration-expiry)
+
+Configured does not mean validated. The pinned CLI formats selected trust identity and permission fields and omits validation/expiry fields, so setup's `configured` result cannot establish runner's expiry deadline or OIDC readiness. The exact runner expiry is unverified; do not calculate it from the later setup-read timestamp. [npm 12.2.0 trust response formatter](https://github.com/npm/cli/blob/v12.2.0/lib/trust-cmd.js) and [GitHub trust-field mapping](https://github.com/npm/cli/blob/v12.2.0/lib/commands/trust/github.js)
+
+npm supports multiple trust configurations, but this repository's current setup parser accepts one configuration object and blocks ambiguous or multiple output. Treat that as a tooling limitation, not permission to delete other configurations or weaken inspection. [npm configuration management](https://docs.npmjs.com/trusted-publishers/#managing-trusted-publisher-configurations)
+
+### Existing CI and proposed automation
+
+The [publish workflow](../../.github/workflows/npm-publish.yml) already pins Node 22.22.2 and npm 12.2.0, prepares and checks exact archives, reads public registry readiness before approval, and publishes through OIDC in the protected `npm` environment. Its publish job receives `id-token: write`; registry verification checks the same release artifacts. Keep the existing publication and provenance gates.
+
+A future improvement is a credential-free pull-request report for newly introduced package names: show public metadata/readiness, identify names needing owner setup, and generate the exact owner commands for review. This is a proposal, not an implemented workflow. An anonymous 404 would remain an inconclusive observation. Initial name creation and trust configuration remain owner actions; OIDC cannot bootstrap a nonexistent name before its package trust exists. Do not add a long-lived npm token or automatic stage cleanup to solve that dependency. Authenticated trust reads can require an owner 2FA challenge and are not an OIDC readiness check.
+
 ## Publication and recovery
 
 When setup or the publisher reports a name as not publicly ready, begin with `pnpm npm:setup` without `--apply`. For trust-read `EOTP`, an owner can use `pnpm npm:setup --interactive-auth --skip-github` in a terminal as described above. This selects the pinned npm 12.2.0 even when the shell's npm lacks the `trust` command. Any additional read-only access, stage or trust diagnostics must also use that pinned CLI and the existing authorized login. Retain the reported package/version/stage identity and sanitized status results. Stop if further diagnosis requires a new login, credential or permission change; do not change account settings as part of inspection.
-
-For `@inventarch/runner`, the non-public visibility result and anonymous public 404 do not settle current existence. Fresh randomly chosen scoped and unscoped control names also returned HTTP 200 with `public:false`; their metadata lookups were not completed, so those observations do not independently prove the controls absent. Inspect exact authenticated metadata and current stages/trust before asserting existence or choosing recovery. If positive existence evidence confirms a non-public package, visibility repair needs separate owner authorization; inconsistent or inaccessible state may require npm support. Unconfirmed existence is not permission to create a package. Successful historical staging, trust creation or rejection does not prove current public readiness, and the evidence does not establish that rejecting the bootstrap caused the registry inconsistency. Reinspect after any separately authorized recovery and proceed through the normal release workflow only when readiness checks pass. Do not approve dummy stages, publish placeholders, repeat setup writes blindly or weaken the publisher's missing-name check to recover.
 
 The publish job receives OIDC only after approval. It performs no workspace install or build, and it publishes the same-run archives with public access, provenance and ignored scripts. A dispatcher may pass `reviewed_changeset_sha256`; when given, publication refuses any other changeset. A manual dispatch with `publish=false` is a dry run of main's head.
 

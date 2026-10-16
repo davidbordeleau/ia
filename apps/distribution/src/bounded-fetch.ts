@@ -37,12 +37,21 @@ export async function fetchBounded(request: BoundedFetch): Promise<Buffer | null
 }
 async function transfer(request: BoundedFetch): Promise<Buffer | null> {
   const { url, limit, label, oversize, optional = false, signal } = request;
-  // A URL is requested only in the shape `new URL` writes for an `https:` URL without userinfo, query or fragment:
-  // `https://`, a host as URL serialization writes it (a lowercase ASCII name or IPv4 address, or a bracketed IPv6
-  // address), an optional decimal port, then a path of the characters serialization leaves in a path, `%` included. A
-  // bare `?`, `#` or `?#` at the end passes, because `URL.search` and `URL.hash` read that empty query or fragment as
-  // none, as the archive and lock checks do. The pattern uses explicit character classes only, and the URL it tests is
-  // the one fetched.
+  // A URL is requested only in the shape `new URL` writes for an `https:` URL without userinfo, query or fragment.
+  // The pattern below, part by part:
+  //   ^https:\/\/                                 the scheme, then `//`;
+  //   (?:[a-z0-9!"$&'()*+,;=_`{}~.-]+             a host of lowercase ASCII letters, digits and !"$&'()*+,-.;=_`{}~,
+  //     |\[[0-9a-f:]+\])                          which covers names and IPv4 addresses, or an IPv6 address in
+  //                                               brackets, of lowercase hex digits and `:`;
+  //   (?::[0-9]{1,5})?                            an optional decimal port;
+  //   \/[a-zA-Z0-9!$%&'()*+,;=:@\[\]^_|~.\/-]*     a path that starts with `/`, of ASCII letters, digits, `%` and
+  //                                               !$&'()*+,-./:;=@[]^_|~;
+  //   \??#?$                                      then at most a bare `?`, then at most a bare `#`.
+  // It checks that shape, not the canonical form: an IPv4 number form such as `127.1`, an explicit `:443` or a dot
+  // segment passes and is requested as fetch parses it. A bare `?`, `#` or `?#` passes because `URL.search` and
+  // `URL.hash` read that empty query or fragment as none, as the archive and lock checks do. The pattern uses explicit
+  // character classes only and tests the very URL that is fetched, and the `return` ends the refusing branch, so
+  // CodeQL sees that `fetch` is reached only after the test passes: keep the literal inline and keep the `return`.
   if (
     !/^https:\/\/(?:[a-z0-9!"$&'()*+,;=_`{}~.-]+|\[[0-9a-f:]+\])(?::[0-9]{1,5})?\/[a-zA-Z0-9!$%&'()*+,;=:@\[\]^_|~.\/-]*\??#?$/.test(
       url,

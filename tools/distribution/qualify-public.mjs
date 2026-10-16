@@ -33,8 +33,8 @@ for (const operation of ['validate-ia', 'format-ia']) {
 const base = resolve(root, 'packages/workspace-runtime/dist');
 const { openLocalAuthoringView } = await import(pathToFileURL(resolve(base, 'authoring-manifest.js')).href);
 const { resolveAuthoring, closeAuthoringView } = await import(pathToFileURL(resolve(base, 'authoring.js')).href);
-// The repository projection is the runtime's position packet, rendered by its claude adapter (milestone position-packet
-// task replace-renderers), with the command catalog the CLI tags.
+// The repository projection is the runtime's position packet, rendered by its claude adapter, with the command catalog
+// the CLI tags.
 const { renderPacket } = await import(pathToFileURL(resolve(root, 'packages/runtime/dist/packet.js')).href);
 const { PACKET_MARKER, renderHost } = await import(
   pathToFileURL(resolve(root, 'packages/runtime/dist/packet-host.js')).href

@@ -459,7 +459,7 @@ export function collectInstallationGarbage(
         for (const path of candidate.paths)
           if (sha256(bytes(root, path, DISTRIBUTION_LIMITS.compressed)!) !== candidate.hashes.get(path))
             fail('LOCAL-MODIFICATION', 'Garbage collection target changed');
-      // The Finder and AppleDouble files the readers skipped go with the directory they sit in, or it would outlive its archive (#323).
+      // The Finder and AppleDouble files the readers skipped go with the directory they sit in, or it would outlive its archive (crowncodes/ia#323).
       for (const candidate of candidates) {
         for (const path of candidate.paths) replace(root, path, null);
         for (const dir of candidate.dirs) {

@@ -306,7 +306,7 @@ it("reads any absolute Node as the registration's own, whatever it is called, an
   recordAs('node');
   expect(observeHosts(root, release(cache))[0]).toMatchObject({ status: 'stale', reasons: ['state-invalid'] });
 });
-it('reports a guard group in a form this release no longer writes as guard-form, and re-applying rewrites it (#323)', () => {
+it('reports a guard group in a form this release no longer writes as guard-form, and re-applying rewrites it (crowncodes/ia#323)', () => {
   const root = temp(),
     cache = cacheV2(),
     launcher = join(cache, 'scripts/ia.mjs');

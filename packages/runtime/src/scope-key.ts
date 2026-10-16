@@ -9,19 +9,19 @@ import { RuntimeError } from './errors.js';
 import { freeze } from './types.js';
 
 /**
- * The scope key K = (S, H, P, d, n, w) (position-and-projection §1, design item 10; decision scope-key-caps).
+ * The scope key K = (S, H, P, d, n, w) (SPEC R14).
  *
  * A key names where a reader sits (the seat), what it intends (the shape), the phase it works in, how many rows a body
  * may hop (depth) and how many entries it may load (budget), optionally restricted to one word. This module holds the
  * caps, the defaults and K0, completes a partial key, validates a key against a scoped read, resolves its seat and
  * derives its coordinate. `positionBody` (src/position.ts, R15) assembles the body a resolved key gives, and `position`
  * (R16) adds its digest and host note, which the Door's `position` operation (MACHINE_PROTOCOL version 2) serves; no
- * version 1 Door route reads a key. Each key refusal names the one command to run as its `next` (design row 27).
+ * version 1 Door route reads a key. Each key refusal names the one command to run as its `next`.
  */
 
-/** Decision scope-key-caps: depth in 0..2 hops, budget in 0..64 entries. */
+/** The caps: depth in 0..2 hops, budget in 0..64 entries. */
 export const SCOPE_KEY_CAPS = Object.freeze({ depth: 2, budget: 64 } as const);
-/** Design §1 and open decision 6: the depth and budget of a key that names any part; K0 alone takes 0 and 0. */
+/** The depth and budget of a key that names any part; K0 alone takes 0 and 0. */
 const DEFAULTS = { depth: 1, budget: 16 } as const;
 
 export interface ScopeKey {
@@ -81,9 +81,9 @@ export interface ResolvedScopeKey {
 const PARTS = ['seat', 'shape', 'phase', 'depth', 'budget', 'word'] as const;
 type Part = (typeof PARTS)[number];
 /**
- * Design row 27 and §11: the one command each key refusal names, its closed set printed or its cap given. A key that is
- * no key and a seat the scope does not hold name the position without one, K0, which every scope can compute, and a
- * word the closure does not register names the vocabulary.
+ * The one command each key refusal names, its closed set printed or its cap given. A key that is no key and a seat the
+ * scope does not hold name the position without one, K0, which every scope can compute, and a word the closure does
+ * not register names the vocabulary.
  */
 const NEXT = {
   key: 'ia position',
@@ -150,7 +150,7 @@ function formed(supplied: unknown): ScopeKey {
   });
 }
 /**
- * R14: complete a partial key with the defaults of design §1, so every host applies the same ones. A partial naming
+ * R14: complete a partial key with its defaults, so every host applies the same ones. A partial naming
  * no part is K0. Otherwise `shape` defaults to context, `phase` to the anchor phase of the shape's primitive
  * (PRIMITIVE_ANCHORS[SHAPE_ROWS[shape].primitive]), `depth` to 1 and `budget` to 16, and a seat or word stays absent
  * unless named; a part whose value is `undefined` is not named. The result is checked as resolveScopeKey checks a

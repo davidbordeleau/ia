@@ -128,8 +128,8 @@ describe('corpus revision', () => {
   });
 });
 describe('authored revision', () => {
-  // Decision evidence-placement and plan amendment C13: the revision without runtime-placed sources, a derived
-  // revision-only input such as db's .ia/.db-inputs.json kept.
+  // G01a: the revision without runtime-placed sources, a derived revision-only input such as db's
+  // .ia/.db-inputs.json kept.
   const metadata = { languageVersion: LANGUAGE_VERSION, kernelDigest: KERNEL_DIGEST };
   const runtime = {
     placement: { kind: 'runtime' as const, band: 0 as const, reach: '' },

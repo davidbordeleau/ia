@@ -12,7 +12,7 @@ export interface HostPayloadPin {
   files: number;
   bytes: number;
 }
-/** A first-party installed operation implementation whose handler bytes the payload ships (C24). */
+/** A first-party installed operation implementation whose handler bytes the payload ships. */
 export interface PayloadImplementation {
   id: string;
   package: string;
@@ -41,7 +41,7 @@ export declare function moduleClosure(
   files: ReadonlyMap<string, Buffer>,
   start: string,
 ): { reached: string[]; packages: string[]; missing: string[] };
-/** C24: one catalog row for a located implementation; it imports the declaration module when the handler ships. */
+/** One catalog row for a located implementation; it imports the declaration module when the handler ships. */
 export declare function operationRow(
   implementation: LocatedImplementation,
   files: ReadonlyMap<string, Buffer>,

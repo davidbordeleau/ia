@@ -1,6 +1,6 @@
-// Plan amendments C16 and C24 (milestone generation-binding): the installed-implementation catalog a host payload
-// carries, read only through its release pins and the handler bytes the payload actually ships, and the per-consumer
-// join receipts a host registration records from its committed state.
+// The installed-implementation catalog a host payload carries, read only through its release pins and the handler
+// bytes the payload actually ships, and the per-consumer join receipts a host registration records from its committed
+// state.
 import {
   cpSync,
   existsSync,
@@ -195,7 +195,7 @@ it('reports a declaration whose handler bytes are not shipped as unavailable, ne
   }
 });
 
-it('refuses a payload with any file its inventory does not list, inside a closure package or outside every one (B-R1)', () => {
+it('refuses a payload with any file its inventory does not list, inside a closure package or outside every one', () => {
   // A module planted where Node's resolution prefers it to the shipped dependency: in the handler package's own
   // node_modules, or in a node_modules beside the scope directories, outside every closure package.
   for (const directory of [
@@ -374,7 +374,7 @@ it('carries a catalog-declared revocation distinctly from an implementation that
 
 /**
  * `payload()` materialized where an installation keeps it, `<home>/hosts/<release>`, with the trust that installation
- * holds (review finding B2-R2): its IA home and the release it pins.
+ * holds: its IA home and the release it pins.
  */
 function installed(options: Parameters<typeof payload>[0] = {}, home = temp()) {
   const built = payload(options),
@@ -385,9 +385,9 @@ function installed(options: Parameters<typeof payload>[0] = {}, home = temp()) {
 }
 const RERUN = 'run "ia host claude --apply"';
 /**
- * Review finding B2-RC2: the result of `run` and every synchronous filesystem call made meanwhile whose path names
- * `directory` (case and separators folded). Each watched export of node:fs is wrapped, `.native` included, and the
- * wrappers reach every named import through `syncBuiltinESMExports`; an empty list means `directory` was never touched.
+ * The result of `run` and every synchronous filesystem call made meanwhile whose path names `directory` (case and
+ * separators folded). Each watched export of node:fs is wrapped, `.native` included, and the wrappers reach every named
+ * import through `syncBuiltinESMExports`; an empty list means `directory` was never touched.
  */
 function watched<T>(
   directory: string,
@@ -500,7 +500,7 @@ it('reports a joined payload whose handler bytes no longer match their pins as d
   });
 });
 
-it('binds only through the payload this installation pins in its own IA home, and opens no other (B2-R2, B2-RC2)', () => {
+it('binds only through the payload this installation pins in its own IA home, and opens no other', () => {
   const genuine = installed();
   // A self-consistent forged payload (another catalog, every pin recomputed) outside the IA home, registered and joined
   // at its own release: never trusted, and no filesystem call ever names it.
@@ -559,7 +559,7 @@ it('binds only through the payload this installation pins in its own IA home, an
 });
 
 it.skipIf(process.platform !== 'win32')(
-  'compares a network path a registration names to the pinned payload and never opens it (B2-RC2)',
+  'compares a network path a registration names to the pinned payload and never opens it',
   (context) => {
     // The genuine payload through a network path (the same directory on this machine): a path the workspace names is
     // compared, never opened. Only where the administrative share answers.
@@ -580,7 +580,7 @@ it.skipIf(process.platform !== 'win32')(
   },
 );
 
-it('reports the trusted payload damaged whichever host joined it, in either consumer order (B2-N1)', () => {
+it('reports the trusted payload damaged whichever host joined it, in either consumer order', () => {
   for (const [trusted, other] of [
     ['claude', 'codex'],
     ['codex', 'claude'],
@@ -603,7 +603,7 @@ it('reports the trusted payload damaged whichever host joined it, in either cons
   }
 });
 
-it('reports a release.json that no longer hashes to its pin as damaged, parseable or not, naming the code once (B2-N2)', () => {
+it('reports a release.json that no longer hashes to its pin as damaged, parseable or not, naming the code once', () => {
   for (const change of [() => '{broken', (text: string) => `${text}\n`]) {
     const root = temp(),
       genuine = installed(),
@@ -624,7 +624,7 @@ it('reports a release.json that no longer hashes to its pin as damaged, parseabl
   }
 });
 
-it('records no join while another holder has the host lock, and checks for a pending journal under it (B-N4)', () => {
+it('records no join while another holder has the host lock, and checks for a pending journal under it', () => {
   const root = temp(),
     { root: cache, release } = payload();
   registered(root, 'claude', cache, release);
@@ -646,8 +646,8 @@ it('records no join while another holder has the host lock, and checks for a pen
     held();
   }
   expect(readFileSync(resolve(root, JOINS), 'utf8')).toBe(before);
-  // Review finding B-RC3: the journal is checked under the lock, so one that appears as the lock is taken still
-  // refuses, and no receipt is written. Checked before the lock, as the code before B-N4 did, it would be missed.
+  // The journal is checked under the lock, so one that appears as the lock is taken still refuses, and no receipt is
+  // written. Checked before the lock, as earlier code did, it would be missed.
   rmSync(resolve(root, JOINS));
   vi.mocked(acquireHostRegistrationLock).mockImplementationOnce((locked) => {
     put(locked, '.ia/distributions/hosts/pending.json', '{}');
@@ -657,7 +657,7 @@ it('records no join while another holder has the host lock, and checks for a pen
   expect(existsSync(resolve(root, JOINS))).toBe(false);
 });
 
-it('verifies a payload once for every read of one report that shares a verifier (B-N7)', () => {
+it('verifies a payload once for every read of one report that shares a verifier', () => {
   const root = temp(),
     { root: cache, release } = payload();
   registered(root, 'claude', cache, release);
@@ -708,7 +708,7 @@ const snapshot = (root: string) =>
       return `${entry} ${stat.mtimeMs} ${stat.isFile() ? sha256(readFileSync(resolve(root, entry))) : 'directory'}`;
     });
 
-it('binds checks through the joined catalog, so a payload without one leaves catalog checks unavailable (C15)', () => {
+it('binds checks through the joined catalog, so a payload without one leaves catalog checks unavailable', () => {
   const root = checked(),
     old = installed({ catalog: false });
   const checks = (trust: { home: string; release: string } | null) => {
@@ -765,7 +765,7 @@ it('binds checks through the joined catalog, so a payload without one leaves cat
   expect(checks(null).catalog).toMatchObject({ status: 'unavailable' });
 });
 
-it('reads only in validation, bindings and checks; recordValidation is the one writer of evidence (C23)', () => {
+it('reads only in validation, bindings and checks; recordValidation is the one writer of evidence', () => {
   const root = checked();
   put(
     root,
@@ -799,7 +799,7 @@ it('reads only in validation, bindings and checks; recordValidation is the one w
   }
 });
 
-it('never lets a caller stand in for verification: a verifier hostVerifier did not make is ignored (B2-N6)', () => {
+it('never lets a caller stand in for verification: a verifier hostVerifier did not make is ignored', () => {
   const root = temp(),
     { root: cache, release } = payload();
   registered(root, 'claude', cache, release);
@@ -821,7 +821,7 @@ const PROBE_BINDING = `#! ia 1.0
     kind operation
     implementation read-v1
 `;
-it('binds a deleted handler as unavailable and a catalog-declared revocation as revoked, through the session (B2-N4)', () => {
+it('binds a deleted handler as unavailable and a catalog-declared revocation as revoked, through the session', () => {
   const root = checked();
   put(root, '.ia/src/systems/agent-composition-system/records/probe-read-binding.ia', PROBE_BINDING);
   const bindings = (trust: { home: string; release: string }) => {
@@ -859,7 +859,7 @@ it('binds a deleted handler as unavailable and a catalog-declared revocation as 
   ]);
 });
 
-it('takes a session open time before it reads any input, so it never prunes what another run touched since (B4-RC3, F3)', () => {
+it('takes a session open time before it reads any input, so it never prunes what another run touched since', () => {
   const root = checked(),
     clock = Date.now.bind(Date);
   let readsBefore = -1;

@@ -11,9 +11,8 @@ import type { ResolvedScopeKey, ResolvedSeat, ScopeKey } from './scope-key.js';
 import { freeze } from './types.js';
 
 /**
- * The position body: body(K), position-and-projection §1, §6 (bound, order keys, quantification) and §7 (traversal),
- * design item 10; decision scope-key-caps. `position` returns it with its digest and the host note (design §1 and item
- * 11, R16).
+ * The position body: body(K), with its bound, order keys, quantification and traversal (SPEC R15 and R17). `position`
+ * returns it with its digest and the host note (R16).
  *
  * One scope key, resolved through one scope token, gives one body: the seat, the composition one level from it at cost
  * 0, the seeds the shape's kind or lane focus picks from it, the records reached by hops along the shape's predicate
@@ -24,14 +23,13 @@ import { freeze } from './types.js';
  * It is a pure function of the key and the admitted records the token reads, and only a whole-workspace token (db PT5)
  * also reads the admission findings it alone may disclose: no root path, token, time, request text or capture state
  * enters it, and nothing is written. Record bodies are never in it, only the cells delivered; `ia read` fetches a body
- * on demand. A record at runtime placement (band 0) is never entered, listed, tallied or reached through (design §4,
- * excluded; decision evidence-placement: runtime-band evidence is admitted below authored and must not move what agents
- * are given), and the body's revision is the authored revision (db `Snapshot.authoredRevision`; plan amendment C13),
- * which no runtime-band source moves. The database's seat and root decisions and admission's findings still read every
- * placement (R15, R16).
+ * on demand. A record at runtime placement (band 0) is never entered, listed, tallied or reached through (runtime-band
+ * evidence is admitted below authored and must not move what agents are given), and the body's revision is the
+ * authored revision (db `Snapshot.authoredRevision`), which no runtime-band source moves. The database's seat and root
+ * decisions and admission's findings still read every placement (R15, R16).
  */
 
-/** One way an entry was first reached: a row, a field reference, or one of the composition classes of design §7. */
+/** One way an entry was first reached: a row, a field reference, or one of the composition classes (R15). */
 export type PositionVia =
   /** One directed-view edge row read from `from`'s side, as the record that states it spelled it (G06b). */
   | {
@@ -52,11 +50,11 @@ export type PositionVia =
   /** The record a location seat is declared at, and the rule that declares it (db D02b). */
   | { readonly by: 'declared-at'; readonly rule: 'system' | 'root' | 'repository' }
   /**
-   * A field match of design row 18, not a row: the entry's `subject.subject-word` names the word, or its
+   * A field match, not a row: the entry's `subject.subject-word` names the word, or its
    * `subject.subject-kind` the kind, of a record. It costs no hop and claims no relation or consent (R17).
    */
   | { readonly by: 'subject'; readonly label: 'field match, not a row'; readonly matches: readonly SubjectMatch[] };
-/** One subject field a rule or playbook states that the word or kind of a record answers (design row 18, R17). */
+/** One subject field a rule or playbook states that the word or kind of a record answers (R17). */
 export interface SubjectMatch {
   readonly field: 'subject.subject-word' | 'subject.subject-kind';
   /** The word or kind the field states. */
@@ -67,7 +65,7 @@ export interface SubjectMatch {
    */
   readonly record: string;
 }
-/** The pointer 9-tuple of design §7: (id, word, kind, lane, owner system, steward, band, hop, reaching row/field). */
+/** The pointer 9-tuple: (id, word, kind, lane, owner system, steward, band, hop, reaching row/field). */
 export interface PositionRecord {
   readonly identity: string;
   readonly word: string;
@@ -109,18 +107,18 @@ export interface PointerTally {
   readonly count: number;
 }
 /**
- * An applies-by-word entry (design row 18, plan amendment A4): a @law, @convention, @principle or @playbook whose
+ * An applies-by-word entry (R17): a @law, @convention, @principle or @playbook whose
  * subject names the word or kind of a loaded record or of a blocking candidate reserved in `rules`. It is a field
  * match, listed whether or not the record is also loaded or a pointer, and carries the key that seats at it.
  */
 export interface AppliesByWord extends PositionRecord {
   readonly via: Extract<PositionVia, { readonly by: 'subject' }>;
-  /** (x, H, P, 1, 16, no word): the re-seat key of design §7 at this entry. */
+  /** (x, H, P, 1, 16, no word): the re-seat key at this entry. */
   readonly reseat: ScopeKey;
 }
 /**
- * A playbook's cell at (P, primitive(H)) (design row 19): the text of its cells at that address, as `ia read
- * <address>` reads it, or, when it has none there, the nearest phase whose cells include that primitive's.
+ * A playbook's cell at (P, primitive(H)): the text of its cells at that address, as `ia read <address>` reads it, or,
+ * when it has none there, the nearest phase whose cells include that primitive's.
  */
 export type PositionCell =
   | {
@@ -191,8 +189,8 @@ export interface PositionBody {
   readonly format: 'ia.position-body.v1';
   /**
    * The authored revision of the view the scope reads (db `Snapshot.authoredRevision`): its graph revision without the
-   * sources at runtime placement, so a runtime-band source leaves it unchanged. The format keeps its name; before plan
-   * amendment C13 this was the view's graph revision.
+   * sources at runtime placement, so a runtime-band source leaves it unchanged. The format keeps its name; earlier,
+   * this was the view's graph revision.
    */
   readonly revision: string;
   readonly key: ScopeKey;
@@ -229,8 +227,8 @@ export interface PositionBody {
 /** The host note's freshness: the capture `ia capture` last wrote against the authored revision the handle reads. */
 export type Freshness = 'current' | 'stale' | 'no-capture';
 /**
- * The host note (design §1): host state printed beside the body, never digested and never claimed identical across
- * hosts or working trees. Installed state is not reported before receipts exist (milestone position-packet).
+ * The host note: host state printed beside the body, never digested and never claimed identical across hosts or
+ * working trees. Installed state is not reported.
  */
 export interface HostNote {
   /** The authored revision of the handle's root view (db `authoredRevision`), which a capture is compared with. */
@@ -247,7 +245,7 @@ export interface HostNote {
   /** The key used: the partial key completed by normalizeScopeKey, a location as the caller spelled it. */
   readonly key: ScopeKey;
 }
-/** The two outputs of a position (design §1), always printed together and never merged. */
+/** The two outputs of a position, always printed together and never merged. */
 export interface PositionOutput {
   readonly body: PositionBody;
   /** Graph's codec digest of `body`, its canonical JSON text's SHA-256. */
@@ -255,13 +253,13 @@ export interface PositionOutput {
   readonly hostNote: HostNote;
 }
 
-/** p, the listed pointer lines before the tallies (design §1: a rendering constant, not a key part). */
+/** p, the listed pointer lines before the tallies (a rendering constant, not a key part). */
 const LISTED = 48;
-/** c, the playbook cells a body delivers (design §1: a rendering constant, not a key part). */
+/** c, the playbook cells a body delivers (a rendering constant, not a key part). */
 const CELLS = 4;
-/** The depth and budget of a re-seat key (design §7). */
+/** The depth and budget of a re-seat key. */
 const RESEAT = { depth: 1, budget: 16 } as const;
-/** The words whose subject fields apply them by word (design row 18, plan amendment A4). */
+/** The words whose subject fields apply them by word (R17). */
 const SUBJECT_WORDS: readonly string[] = ['law', 'convention', 'principle', 'playbook'];
 const FIELD_MATCH = 'field match, not a row';
 const PRIMING: readonly string[] = SHAPE_ROWS.governance.priming;
@@ -340,7 +338,7 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
     values = coordinate.values,
     seatId = seat.identity,
     word = key.word;
-  // Each seat refusal names the one command to run (design row 27), as a key refusal does (R14): the position without
+  // Each seat refusal names the one command to run, as a key refusal does (R14): the position without
   // that seat, K0, unless the seat at runtime placement is the one K0 takes, the repository's own @workspace, whether
   // the key names it or not, which K0 refuses alike; then the overview of what the workspace admits.
   if (seatId !== undefined && !nodes.has(seatId)) {
@@ -355,8 +353,8 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
         : 'ia position',
     );
   }
-  // A row with a condition is a row of the body only where its condition holds at the key's coordinate (decision
-  // conditional-relations-in-delivery), read as graph traversal reads it for the same coordinate: graph `conditionHolds`
+  // A row with a condition is a row of the body only where its condition holds at the key's coordinate (R15), read as
+  // graph traversal reads it for the same coordinate: graph `conditionHolds`
   // over the coordinate scopeCoordinate builds, the condition's subject being the record that states the row, the
   // author graph G06 keeps as an edge's condition subject. A row that does not hold is never followed, primes nothing
   // and names no pointer or frontier record, so nothing is reached through it. A conditional row stated by a record the
@@ -377,7 +375,7 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
     return rows;
   };
   /**
-   * The word filter (decision scope-key-caps: w restricts seeds and tallies): with w set, only records of w are
+   * The word filter (w restricts seeds and tallies): with w set, only records of w are
    * composition, seeds, loaded, pointers, pointer tallies or frontier. The blocking rules reserved outside the budget,
    * the applies-by-word section, its cells and the mandates are never filtered, so no rule that governs the loaded
    * records is hidden by the word.
@@ -406,9 +404,9 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
   // workspace whose declared root holds the seat record's membership root (a location's: the record it is declared at),
   // the first whose closure holds that record. A floor or adopted record, an installed one included, is in every
   // closure, so it is seated in the repository's workspace with the records the repository authors, even when the
-  // installed or adopted @workspace that ships it declares the root it sits in (plan T2's fallback: the floor, the
-  // adopted records and the repository's own roots). When neither closure holds the record, no workspace holds the
-  // seat: the seat is never outside its own closure (design §1).
+  // installed or adopted @workspace that ships it declares the root it sits in (the fallback: the floor, the adopted
+  // records and the repository's own roots). When neither closure holds the record, no workspace holds the seat: the
+  // seat is never outside its own closure.
   const repository = (): string | undefined => {
     const at = handle.resolveSeat('', read).seat;
     return at !== undefined && nodes.get(at)?.discriminator === 'workspace' ? at : undefined;
@@ -504,7 +502,7 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
   const ruleReach = (identity: string): Reach =>
     unfiltered.reached.get(identity) ?? matched.get(identity) ?? { hop: 0, via: unfiltered.c0.get(identity)! };
 
-  // Applies by word (design row 18, plan amendment A4, R17): the @law, @convention, @principle and @playbook records of
+  // Applies by word (R17): the @law, @convention, @principle and @playbook records of
   // the closure whose `subject.subject-word` is the word, or `subject.subject-kind` the kind, of a record, of any word
   // whatever w is. A field match, not a row: it costs no hop and claims no relation or consent.
   const subjects: readonly Subject[] = records.flatMap((node) => {
@@ -535,7 +533,7 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
     return node.kind === 'governance' && effectiveSeverity(node.dimensions, values) === 'blocking';
   };
 
-  // The order keys of design §6, total: governance (prime, band ↓, hop, sev, id), every other shape (band ↓, hop,
+  // The order keys, total: governance (prime, band ↓, hop, sev, id), every other shape (band ↓, hop,
   // lane, id). prime is the least priming index of a row incident to the record, sev its severity's rank.
   const sorted = (identities: Iterable<string>, hopOf: (identity: string) => number, governance: boolean) =>
     [...identities]
@@ -640,7 +638,7 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
     .filter((entry) => entry.matches.length > 0)
     .sort((a, b) => byBand(a.identity, b.identity));
 
-  // The cells at (P, primitive(H)) of the first c playbooks that apply by word (design row 19): the text `ia read`
+  // The cells at (P, primitive(H)) of the first c playbooks that apply by word: the text `ia read`
   // reads at the address, every cell there in source order, conditions unevaluated; else the nearest phase with a cell
   // of that primitive, by distance in the cycle orient, plan, act, learn, a tie going to the phase that order lists
   // first.
@@ -675,7 +673,7 @@ export function positionBody(handle: ReadHandle, within: string, resolved: Resol
     .slice(0, CELLS)
     .map((entry) => cellOf(entry.identity));
 
-  // The mandates (plan amendment A8; a body matches no participant, which the position packet selects over body(K0)'s
+  // The mandates (a body matches no participant, which the position packet selects over body(K0)'s
   // mandates, R19): those of the closure that claim a location seat or whose `authority.scope` names the seat's
   // workspace, each once, a mandate that does both keeping its claim, all ranked by band ↓ then identity.
   const governing = new Map<string, PositionVia>();

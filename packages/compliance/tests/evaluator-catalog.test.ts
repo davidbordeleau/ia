@@ -90,7 +90,7 @@ function catalogOf(entries: readonly unknown[] = [typing, coverage, lint, legacy
 const codesOf = (result: { assessment: { findings: readonly { code: string }[] } }) =>
   result.assessment.findings.map((f) => f.code);
 
-describe('evaluator catalog v1 construction (EVAL-01, EVAL-Q02)', () => {
+describe('evaluator catalog v1 construction (C25)', () => {
   it('builds a frozen, deterministic, order-independent catalog', () => {
     const a = catalogOf(),
       b = catalogOf([legacy, lint, coverage, typing]);
@@ -191,7 +191,7 @@ describe('evaluator catalog v1 construction (EVAL-01, EVAL-Q02)', () => {
   });
 });
 
-describe('check.runs with and without a catalog (EVAL-Q01, EVAL-Q02)', () => {
+describe('check.runs with and without a catalog (C26)', () => {
   const graphOptions = {
     sources: inputs,
     languageVersion: LANGUAGE_VERSION,
@@ -283,7 +283,7 @@ describe('check.runs with and without a catalog (EVAL-Q01, EVAL-Q02)', () => {
       ).findings.map((f) => f.code),
     ).toEqual(['IA-COMP-EVALUATOR-REVOKED']);
   });
-  it('binds host callbacks only by exact id and implementation digest (EVAL-02)', () => {
+  it('binds host callbacks only by exact id and implementation digest (C26)', () => {
     const catalog = catalogOf(),
       run = () => 'typing',
       other = () => 'other';
@@ -369,7 +369,7 @@ const baseInput = (): Mutable<ObligationInput> => ({
   ]),
 });
 
-describe('obligation resolution (OBL-01..OBL-03)', () => {
+describe('obligation resolution (C27)', () => {
   it('produces immutable, sorted, deterministic obligations from explicit inputs', () => {
     const result = resolveObligations(baseInput());
     expect(result.status).toBe('resolved');
@@ -479,7 +479,7 @@ describe('obligation resolution (OBL-01..OBL-03)', () => {
     duplicate.occurrences = [...duplicate.occurrences, duplicate.occurrences[0]!];
     expect(resolveObligations(duplicate).obligations).toHaveLength(4);
   });
-  it('keeps root-adopted obligations required despite package metadata, with a WEAKENED warning (EVAL-02, EVAL-Q03 producer side)', () => {
+  it('keeps root-adopted obligations required despite package metadata, with a WEAKENED warning (C27)', () => {
     const attempt = {
       ...baseInput(),
       packageMetadata: [
@@ -544,7 +544,7 @@ describe('obligation resolution (OBL-01..OBL-03)', () => {
   });
 });
 
-describe('receipts and transition admission (EVAL-03, EVAL-04, EVAL-Q07, EVAL-Q08)', () => {
+describe('receipts and transition admission (C28)', () => {
   const resolution = resolveObligations(baseInput());
   const compiler = resolution.obligations.find((o) => o.requirement === 'compiler-run')!;
   const files = resolution.obligations.find((o) => o.requirement === 'included-files')!;
@@ -650,7 +650,7 @@ describe('receipts and transition admission (EVAL-03, EVAL-04, EVAL-Q07, EVAL-Q0
     });
     expect(decision.assessment.findings.map((f) => f.code)).toContain('IA-COMP-EVALUATOR-UNAVAILABLE');
   });
-  it('rejects stale input, wrong subject, wrong code, wrong toolchain, forged and revoked evaluators (EVAL-04)', () => {
+  it('rejects stale input, wrong subject, wrong code, wrong toolchain, forged and revoked evaluators (C28)', () => {
     const expectation = { ...context, obligation: compiler };
     const cases: readonly [Partial<EvidenceReceipt>, string][] = [
       [{ digests: { ...context.digests, candidate: hex('9') } }, 'IA-COMP-RECEIPT-STALE'],
@@ -714,7 +714,7 @@ describe('receipts and transition admission (EVAL-03, EVAL-04, EVAL-Q07, EVAL-Q0
       ).admitted,
     ).toBe(false);
   });
-  it('permits reuse only under a matching reusable policy and always requires this attempt for fresh-run (EVAL-Q08)', () => {
+  it('permits reuse only under a matching reusable policy and always requires this attempt for fresh-run (C28)', () => {
     const reused = receipt(compiler, { attemptId: 'attempt-1' });
     expect(validateReceipt(reused, { ...context, obligation: compiler }, now).valid).toBe(true);
     expect(
@@ -751,7 +751,7 @@ describe('receipts and transition admission (EVAL-03, EVAL-04, EVAL-Q07, EVAL-Q0
     expect(evidenceKey(files, context)).not.toBe(evidenceKey(files, { ...context, attemptId: 'attempt-9' }));
     expect(validateReceipt(receipt(compiler), { ...context, obligation: compiler }, now).key).toBe(key);
   });
-  it('turns timeouts, crashes, oversized or invalid output into bounded, secret-free error results (EVAL-Q07)', () => {
+  it('turns timeouts, crashes, oversized or invalid output into bounded, secret-free error results (C28)', () => {
     const secret = 'sk-live-0123456789';
     const oversized = acceptEvaluatorOutput(catalog, compiler, {
       kind: 'completed',
@@ -856,7 +856,7 @@ describe('receipts and transition admission (EVAL-03, EVAL-04, EVAL-Q07, EVAL-Q0
   });
 });
 
-describe('LK-04 repair: facilitator decisions D1-D6 and review must-fixes', () => {
+describe('evaluator catalog rules D1-D6 and the redaction and directive fixes', () => {
   const graph = load(records, registry, {
     sources: inputs,
     languageVersion: LANGUAGE_VERSION,
@@ -1159,7 +1159,7 @@ describe('LK-04 repair: facilitator decisions D1-D6 and review must-fixes', () =
       'not-evaluated',
     );
   });
-  it('D6 / OBL-02: strict-typing-v1 maps to three required catalog obligations that presence never satisfies', () => {
+  it('D6: strict-typing-v1 maps to three required catalog obligations that presence never satisfies', () => {
     expect(EVALUATION_PROFILES['strict-typing-v1']).toEqual([
       'configuration',
       'included-file-coverage',
@@ -1211,7 +1211,7 @@ describe('LK-04 repair: facilitator decisions D1-D6 and review must-fixes', () =
     expect(admitTransition(profile, two, context, now).admitted).toBe(false);
     expect(admitTransition(profile, passing(profile), context, now).admitted).toBe(true);
   });
-  it('M2: redacts credential assignments by pattern, quoted JSON keys and quoted api keys, normalising control characters first', () => {
+  it('redacts credential assignments by pattern, quoted JSON keys and quoted api keys, normalising control characters first', () => {
     const compiler = resolution.obligations.find((o) => o.requirement === 'compiler-run')!;
     const lines = [
       'GITHUB_TOKEN=ghp_abc123',
@@ -1298,7 +1298,7 @@ describe('LK-04 repair: facilitator decisions D1-D6 and review must-fixes', () =
       expect(JSON.stringify(chained.diagnostics), secret).not.toContain(secret);
     expect(chained.diagnostics[1]).toContain('mode: fast');
   });
-  it('M3: package directives use a closed action set and valid references; malformed occurrences refuse', () => {
+  it('package directives use a closed action set and valid references; malformed occurrences refuse', () => {
     for (const directive of [
       {
         occurrence: 'pkg/contract/signature/extras',

@@ -41,7 +41,7 @@ it('pins added/removed/changed emitted runtime assets but excludes nonexecuted d
   unlinkSync(join(root, 'main.js'));
   expect(() => contextHookImplementationDigest(root)).toThrow(/partial|mixed/);
 });
-it('leaves out the AppleDouble files the packaged launcher skips, and still counts any other dotfile (#323)', async () => {
+it('leaves out the AppleDouble files the packaged launcher skips, and still counts any other dotfile (crowncodes/ia#323)', async () => {
   const root = fixture(),
     original = contextHookImplementationDigest(root);
   for (const name of ['._context.js', '._main.js', '._package.json'])

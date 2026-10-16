@@ -160,7 +160,7 @@ export function draftValue(field: DraftField, text: string): string {
     refuse('value', 'Form fields must be single-line; use the source draft for multiline prose or structure');
   if (field.type === 'text') return quotedText(text);
   const parsed = parse(PROBE(text), 'value.ia');
-  // Review C-RC2: an opener left open would join the rows after it (another value's closer, a comment) into this one.
+  // An opener left open would join the rows after it (another value's closer, a comment) into this one.
   if (parsed.diagnostics.some((diagnostic) => OPEN.includes(diagnostic.code)))
     refuse('value', `${path(field)} would open a string, prose or list it does not close: ${JSON.stringify(text)}`);
   if (parsed.ast.records[0]?.head.some((row) => row.when !== undefined))

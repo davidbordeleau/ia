@@ -7,8 +7,8 @@ import { assess } from '../../packages/compliance/src/types.js';
 
 /**
  * One observed refusal per steward-hook code. The legacy guard's rows run the loop fixture; the `@mandate` guard's
- * (`--hook`, milestone generation-binding plan amendment C10) run the conformance corpus with apps/cli's composition
- * fixture laid over it, copied to a temporary workspace that is removed afterwards.
+ * (`--hook`) run the conformance corpus with apps/cli's composition fixture laid over it, copied to a temporary
+ * workspace that is removed afterwards.
  */
 export function runHookFixtures(root: string): readonly FixtureResult[] {
   const fixture = resolve(root, 'packages/compliance/fixtures/loop');
@@ -68,7 +68,7 @@ export function runHookFixtures(root: string): readonly FixtureResult[] {
         ['--root', subagent, '--hook', hook],
       ],
       // A governing mandate that states an empty move list fails admission (compliance C05), and a @mandate that fails
-      // admission fails every selected edit closed (lane D).
+      // admission fails every selected edit closed.
       ['IA-HOOK-MANDATE-UNAVAILABLE', docs(malformed), ['--root', malformed, '--hook', hook]],
     ];
     return rows.map(([expected, input, args]) => {

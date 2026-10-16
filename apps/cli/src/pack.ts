@@ -9,9 +9,9 @@
  * name is its own digest, so re-packing unchanged sources on the same zlib build targets a path that already exists — refused by
  * default with a next action naming --force, exactly as §2.4 refuses a compiled artifact.
  *
- * A release descriptor may name no `@distribution` (plan amendment B7): a default `ia init` authors none, because an
- * application repository releases nothing. Such a descriptor has nothing to pack, so it is refused before the packer
- * reads anything else, naming the word's schema.
+ * A release descriptor may name no `@distribution`: a default `ia init` authors none, because an application
+ * repository releases nothing. Such a descriptor has nothing to pack, so it is refused before the packer reads anything
+ * else, naming the word's schema.
  */
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
@@ -151,9 +151,9 @@ export function collectPack(
 }
 
 /**
- * Plan amendment B7: a release descriptor, as db decodes it, that names no `distribution` has nothing to release. A file
- * that cannot be read or is no release descriptor is left to the packer, whose own refusal names it, so only this one
- * case is the CLI's to classify. Decoding is pure, so the refusal still comes before the packer reads anything else.
+ * A release descriptor, as db decodes it, that names no `distribution` has nothing to release. A file that cannot be
+ * read or is no release descriptor is left to the packer, whose own refusal names it, so only this one case is the
+ * CLI's to classify. Decoding is pure, so the refusal still comes before the packer reads anything else.
  */
 function requireDistribution(root: string, descriptor: string): void {
   let decoded: ReleaseDescriptor;

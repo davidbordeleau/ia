@@ -102,11 +102,11 @@ export interface SchemaField {
   readonly type: FieldType;
   readonly must: boolean;
   readonly description?: string;
-  /** `as id in [a, b]`: the closed set every value, or every list item, must belong to (W0-L1). Only an `id` type carries it. */
+  /** `as id in [a, b]`: the closed set every value, or every list item, must belong to (L19a). Only an `id` type carries it. */
   readonly values?: readonly string[];
-  /** `as ref to <word>`: the discriminator every reference must carry (W0-L2). Only a `ref` type carries it; the target's existence is a compliance concern. */
+  /** `as ref to <word>`: the discriminator every reference must carry (L19a). Only a `ref` type carries it; the target's existence is a compliance concern. */
   readonly target?: string;
-  /** `as text form <form>`: the closed text form every value must match (W0-L5). Only a `text` type carries it. */
+  /** `as text form <form>`: the closed text form every value must match (L19a). Only a `text` type carries it. */
   readonly form?: TextForm;
   readonly span: Span;
 }

@@ -6,7 +6,7 @@
  *
  * §11's `updates` row reads only the cache in the IA home; it never asks npm or git, and never refreshes. When a refresh
  * is due it returns the `ia-distribution refresh-updates` argument vector as a fact, and the session hook starts it
- * detached (Amendment item 4), so doctor stays read-only. §11.2's `compatibility` row is local: the workspace's
+ * detached, so doctor stays read-only. §11.2's `compatibility` row is local: the workspace's
  * `.ia/release.json` language versions against the versions this ia's parser reads.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -43,7 +43,7 @@ export interface UserFacts {
   readonly frameworkSource: boolean;
   /** §11.1: what the cache says is newer, or null when checks are off or nothing usable is cached; `latest` is null unless newer. */
   readonly updates: { readonly latest: string | null; readonly behind: number | null } | null;
-  /** Amendment item 4: the refresh argument vector when one is due, else null. Doctor never runs it. */
+  /** The refresh argument vector when one is due, else null. Doctor never runs it. */
   readonly refresh: readonly string[] | null;
 }
 const row = (
@@ -362,7 +362,7 @@ export function userRows(input: {
           ),
     );
   }
-  // The same directory on disk, however either path is spelled (#315).
+  // The same directory on disk, however either path is spelled (crowncodes/ia#315).
   const frameworkSource = channel.kind === 'checkout' && input.root !== undefined && sameFile(input.root, channel.root);
   const updates = disabled || cached === null ? null : { latest: newer, behind };
   return { checks, facts: { channel, home, plugin, decision, frameworkSource, updates, refresh } };

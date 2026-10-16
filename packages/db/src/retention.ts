@@ -32,7 +32,7 @@ export interface Retained {
 }
 /** D08: a record's current membership digest against the previous snapshot's. */
 export type Staleness = 'unchanged' | 'changed' | 'new' | 'removed';
-/** D08 (position-and-projection row 20): the retained snapshot whose digest for a record equals an observed one. */
+/** D08: the retained snapshot whose digest for a record equals an observed one. */
 export type Readiness = 'current' | 'previous' | 'unknown';
 
 const HEX = /^[0-9a-f]{64}$/;

@@ -293,6 +293,6 @@ export function readInstalledGeneration(root: string, candidate?: ActivationPoin
 /**
  * Files a platform writes into any directory it opens, which never belong to a payload: Finder's `.DS_Store`, and the
  * AppleDouble `._<name>` files macOS writes beside files on volumes without extended attributes (exFAT, SMB). A strict
- * inventory skips one only when it is not pinned; a pinned file of such a name is verified like any other (#323).
+ * inventory skips one only when it is not pinned; a pinned file of such a name is verified like any other (crowncodes/ia#323).
  */
 export const platformDebris = (name: string): boolean => name === '.DS_Store' || name.startsWith('._');

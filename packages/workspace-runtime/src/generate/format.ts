@@ -17,10 +17,9 @@ import { inert } from '../projection-host.js';
 import { frozen } from '../resource-format.js';
 
 /**
- * What the host generators share (milestone generation-binding): the generated file and the unsupported row they
- * return, the per-record rendering that reports a record instead of failing the others, the host and name checks, the
- * authored records they render, the capability closure, and the field readers and text helpers their bodies are written
- * with.
+ * What the host generators share: the generated file and the unsupported row they return, the per-record rendering
+ * that reports a record instead of failing the others, the host and name checks, the authored records they render, the
+ * capability closure, and the field readers and text helpers their bodies are written with.
  */
 
 /** The words a generator renders records of: runtime's unions, stated once there. */
@@ -71,9 +70,9 @@ export const authoredOf = (records: readonly Node[], word: GeneratedWord): reado
     .sort((a, b) => (a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0));
 /**
  * Render each record with `render`, in order. A record `render` or its text refuses with an IA-PROJECTION-* error is
- * not rendered and becomes an unsupported row naming the record and the reason, and the others still render (review
- * findings A-R3 and A-R6). Every rendered text must be inert prose (projection-host's `inert`: no executable dynamic
- * context, no active HTML), as the prose projector requires of the same records. Any other error still fails.
+ * not rendered and becomes an unsupported row naming the record and the reason, and the others still render. Every
+ * rendered text must be inert prose (projection-host's `inert`: no executable dynamic context, no active HTML), as the
+ * prose projector requires of the same records. Any other error still fails.
  */
 export function perRecord(
   word: UnsupportedRecord['word'],
@@ -113,9 +112,9 @@ export function capabilityClosure(
   return [...reached.values()];
 }
 /**
- * Why the composition compiler refuses a profile's capability closure, or undefined when it does not (review finding
- * A-RC5): an inclusion cycle, or an included capability whose effects its includer does not declare (the compiler holds
- * each capability to its own `execution.effects` as a ceiling over what it includes).
+ * Why the composition compiler refuses a profile's capability closure, or undefined when it does not: an inclusion
+ * cycle, or an included capability whose effects its includer does not declare (the compiler holds each capability to
+ * its own `execution.effects` as a ceiling over what it includes).
  */
 export function closureRefusal(
   roots: readonly CompiledValue[],
@@ -160,9 +159,9 @@ const CONTROLS = new RegExp(
   'g',
 );
 /**
- * Authored text as a generated file may hold it (review finding N2): every C0 or C1 control but tab and the line breaks
- * `inline` folds, the Unicode line and paragraph separators, and the bidirectional controls become a space, so no value
- * can start a YAML or Markdown line, drive a terminal or reorder what a reader sees.
+ * Authored text as a generated file may hold it: every C0 or C1 control but tab and the line breaks `inline` folds, the
+ * Unicode line and paragraph separators, and the bidirectional controls become a space, so no value can start a YAML or
+ * Markdown line, drive a terminal or reorder what a reader sees.
  */
 const plain = (text: string): string => text.replace(CONTROLS, ' ');
 /** `text` on one line, as the packet writes an entry (runtime's `inline`), its controls made spaces. */
@@ -172,7 +171,7 @@ export const code = (text: string): string => packetCode(plain(text));
 /**
  * An authored value must itself be inert prose (projection-host's `inert`: no executable dynamic context such as
  * `!\`cmd\``, no active HTML, no unbalanced code span or fence), so a record is reported for what its own text holds
- * rather than for what rendering made of it (review finding A-RC2). IA-PROJECTION-FEATURE-UNAVAILABLE otherwise.
+ * rather than for what rendering made of it. IA-PROJECTION-FEATURE-UNAVAILABLE otherwise.
  */
 function authored(text: string): string {
   inert(text);
@@ -180,10 +179,9 @@ function authored(text: string): string {
 }
 /**
  * Authored free text for a Markdown body: on one line, each bare IA word token a code span as the packet writes it
- * (runtime's `prose`, review finding N1); a `!` that a code span the rendering opened would follow is written `&#33;`,
- * so no rendered span reads as dynamic context (A-RC2); every `<!--` is written `&lt;!--`, so no authored value opens an
- * HTML comment that hides what follows or reads as a marker line (N3, N4); and a leading `<` is written `&lt;`, so no
- * value opens an HTML block (A-RC3).
+ * (runtime's `prose`); a `!` that a code span the rendering opened would follow is written `&#33;`, so no rendered span
+ * reads as dynamic context; every `<!--` is written `&lt;!--`, so no authored value opens an HTML comment that hides
+ * what follows or reads as a marker line; and a leading `<` is written `&lt;`, so no value opens an HTML block.
  */
 export const prose = (text: string): string =>
   packetProse(plain(authored(text)))

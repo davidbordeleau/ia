@@ -1,12 +1,12 @@
 /**
- * `ia read`: position-and-projection §5's body reader, design row 23.
+ * `ia read`: the body reader (SPEC `read`; runtime, body reader).
  *
  * The one verb that returns a body rather than structure. The runtime's `readBody` resolves the locator against the
  * admitted workspace and returns the body behind it: a cell's or requirement's text for a fragment, else the document a
  * record's source locator names (`work.source`, `reference.document`, `template.resource`), or the section under a
  * markdown heading when the locator carries an anchor, else the record's own `meaning.says`. This verb supplies the
  * workspace file reader the capture already uses, so a link, a missing or irregular file and an unsafe path refuse as
- * they do there, and prints the body with its digest. A read certifies nothing (IM-43), and sections, fields and
+ * they do there, and prints the body with its digest. A read certifies nothing, and sections, fields and
  * relationships stay in `ia inspect`.
  *
  * The workspace opens as every read verb opens it, without the db cache, so a read writes nothing. The document of an
@@ -25,7 +25,7 @@ import { requireProfile } from './profile.js';
 import { identityNext, openSession } from './session.js';
 import type { Session } from './session.js';
 
-/** The line every human read prints beside the digest (IM-43). */
+/** The line every human read prints beside the digest, since a read certifies nothing. */
 export const NOT_CERTIFIED = 'body not certified by this read';
 
 export function readEnvelope(body: ReadBody): unknown {
@@ -72,7 +72,7 @@ export function renderRead(body: ReadBody, caps: Capabilities): string {
 }
 
 /**
- * Design row 27: the one command after each read refusal. A source whose records admission refused, the identity's
+ * The one command after each read refusal. A source whose records admission refused, the identity's
  * own included, names the validation that says why; a line of a source whose admitted records span other lines names
  * the inspection that lists them; an identity no source holds names what `ia inspect` names for it (`identityNext`)
  * when the open workspace `reader` is supplied; anything else the overview. A missing fragment or an unreachable

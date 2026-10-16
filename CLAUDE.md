@@ -62,10 +62,10 @@
 
 | phase | primitives | what --phase changes |
 | --- | --- | --- |
-| orient | Memory, Attention | --phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery) |
-| plan | Inference | --phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery) |
-| act | Decision, Escalation | --phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery) |
-| learn | Learning | --phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery) |
+| orient | Memory, Attention | --phase selects the playbook cell delivered and decides which conditional relation rows apply |
+| plan | Inference | --phase selects the playbook cell delivered and decides which conditional relation rows apply |
+| act | Decision, Escalation | --phase selects the playbook cell delivered and decides which conditional relation rows apply |
+| learn | Learning | --phase selects the playbook cell delivered and decides which conditional relation rows apply |
 
 ## Commands
 
@@ -87,4 +87,4 @@
 - state intent to the CLI as shape + optional phase + optional seat + optional word; the CLI never receives free text
 - when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation
 
-ia-generated b394e7ea973af8f5bbcd429e6aa44c8868c0d96b283addad708fce0f6f444b1a 8c6e72528ba0b2b340502b691391d6eb9894093a8d015d3de429f55ba103d918 ia-claude
+ia-generated b394e7ea973af8f5bbcd429e6aa44c8868c0d96b283addad708fce0f6f444b1a ec72725d8847c2bba3eebd2552338a22ca147856e0783386dbff2700dde45c5a ia-claude

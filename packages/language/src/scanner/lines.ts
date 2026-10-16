@@ -259,7 +259,7 @@ export function logicalLines(source: string, path: string): LinesResult {
       continue;
     }
 
-    // A line that ends inside a string never opens a list; Task 4's tokenizer refuses the string.
+    // A line that ends inside a string never opens a list; the tokenizer refuses the string.
     if (!w.endsInString && w.bracketDelta > 0) {
       if (trailingComment !== undefined) trivia.push({ kind: 'comment', line: lineNo, text: trailingComment });
       span = { kind: 'list', line: lineNo, depth, parts: [text], balance: w.bracketDelta, dropped: false };

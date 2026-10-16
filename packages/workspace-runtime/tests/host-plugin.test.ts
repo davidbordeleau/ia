@@ -13,7 +13,7 @@ import { pluginManifest } from '../src/host-plugin/manifest.js';
 
 const b = (text: string): Buffer => Buffer.from(text, 'utf8');
 
-describe('frontmatter (A4)', () => {
+describe('frontmatter', () => {
   it('reads plain, double-quoted, boolean and list values and keeps the body bytes', () => {
     const source =
       '---\nname: audit\ndescription: "Use when: a game feels flat"\ndisable-model-invocation: true\ntools: [Read, Grep]\n---\n\nBody line\n';
@@ -107,7 +107,7 @@ const copy = (): string => {
   return target;
 };
 
-describe('plugin inventory (A5)', () => {
+describe('plugin inventory', () => {
   it('classifies manifests, skills with their owned files, agents and other files', () => {
     const inventory = readPlugin(SAMPLE);
     expect(Object.keys(inventory.manifests).sort()).toEqual(['claude', 'codex', 'grok']);
@@ -153,7 +153,7 @@ describe('plugin inventory (A5)', () => {
   });
 });
 
-describe('lowering (A6)', () => {
+describe('lowering', () => {
   it('lowers the sample into records, byte-exact resources and assets, with no unresolved entry', () => {
     const plan = lowerPlugin(readPlugin(SAMPLE), 'sample-kit');
     expect(plan.unresolved).toEqual([]);
@@ -265,7 +265,7 @@ describe('lowering (A6)', () => {
   });
 });
 
-describe('compare (A10)', () => {
+describe('compare', () => {
   const entries = readEntries(SAMPLE);
   const as = (path: string, text: string) => ({
     path,

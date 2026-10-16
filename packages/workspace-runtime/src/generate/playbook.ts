@@ -9,21 +9,18 @@ import { authoredOf, code, inline, knownHost, perRecord, prose, safeName, sectio
 import type { GeneratedSet } from './format.js';
 
 /**
- * Generation of host skills from authored `@playbook` records (milestone generation-binding, task
- * generation-playbook-skill; plan amendments C6, C8 and C12). Each band-100 playbook in the scope renders one skill,
+ * Generation of host skills from authored `@playbook` records. Each band-100 playbook in the scope renders one skill,
  * `.claude/skills/<playbook name>/SKILL.md` for claude and `.agents/skills/<playbook name>/SKILL.md` for codex, with the
  * same text for both: YAML frontmatter naming the playbook and describing it by its `meaning.says`, the packet's marker
  * on its own line, then one section per phase in the cycle order (orient, plan, act, learn) holding the playbook's
  * unconditional and conditional cells, the primary primitive's first. A phase with no cell is left out. A playbook
  * whose name is not a portable host name, that is named as the packet's own `ia-authoring` skill, or whose text is not
  * inert prose is not rendered, and is reported as an unsupported row naming it and the reason; the others still render.
- * A playbook below band 100, an installed or adopted base, renders nothing (C8, operator decision OD3: public and
- * adopted playbooks stay cells that `ia position` delivers), and a workspace that authors public systems, as this
- * repository does, renders their playbooks. The bytes are a function of the playbook's record alone: no absolute path,
- * time or scope token is written.
+ * A playbook below band 100, an installed or adopted base, renders nothing (public and adopted playbooks stay cells
+ * that `ia position` delivers), and a workspace that authors public systems, as this repository does, renders their
+ * playbooks. The bytes are a function of the playbook's record alone: no absolute path, time or scope token is written.
  *
- * Nothing applies these files yet: milestone generation-binding task host-consumes-generated-set hands them to the one
- * projection writer.
+ * Nothing here applies these files: `generateHostSet` hands them to the one projection writer.
  */
 
 /**

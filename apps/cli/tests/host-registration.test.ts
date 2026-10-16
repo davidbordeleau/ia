@@ -44,8 +44,8 @@ import {
 import { afterAll, expect, it, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 180_000 });
-// Every case materializes a host payload of some 1,400 files in its own IA home (it carries the installed read handler
-// since milestone generation-binding), so removing them all can outlast the default 10 s hook timeout on Windows.
+// Every case materializes a host payload of some 1,400 files in its own IA home (it carries the installed read
+// handler), so removing them all can outlast the default 10 s hook timeout on Windows.
 afterAll(cleanup, 120_000);
 
 /**
@@ -87,7 +87,7 @@ it('plans without writing, then registers a server that answers initialize', asy
   const { root, env } = await initialized();
   const planned = JSON.parse((await host(root, env, 'claude')).stdout);
   expect(planned).toMatchObject({ version: 1, command: 'host', root, host: 'claude', apply: false });
-  // Milestone position-packet (B11): ia host registers no steward guard, so the plan has no hooks element.
+  // ia host registers no steward guard, so the plan has no hooks element.
   expect(planned.plan.elements.map((row: { id: string }) => row.id)).toEqual(['mcp', 'context', 'projection']);
   expect(planned.plan.elements.map((row: { action: string }) => row.action)).toEqual(['create', 'none', 'create']);
   expect(planned.plan.elements.map((row: { capability: string }) => row.capability)).toEqual([
@@ -120,14 +120,14 @@ it('plans without writing, then registers a server that answers initialize', asy
     observed: false,
   });
   expect(existsSync(resolve(env.IA_HOST_HOME, 'hosts', envelope.plan.release, 'scripts/ia.mjs'))).toBe(true);
-  // The position packet's consumer files, and no per-system agent: the stewards are pointer lines (design §4).
+  // The position packet's consumer files, and no per-system agent: the stewards are pointer lines.
   expect(read(root, '.claude/rules/ia-workspace.md').split('\n')).toContain(PACKET_MARKER);
   expect(read(root, '.claude/rules/ia-workspace.md')).toContain('# IA position packet: demo');
   expect(existsSync(resolve(root, '.claude/agents'))).toBe(false);
-  // No guard is registered (B11), so the settings file is not written at all.
+  // No guard is registered, so the settings file is not written at all.
   expect(existsSync(resolve(root, '.claude/settings.local.json'))).toBe(false);
   expect(existsSync(resolve(root, GUARD_STATE))).toBe(false);
-  // B12: the receipt beside the projection state names each file it wrote with the digest of its bytes.
+  // The receipt beside the projection state names each file it wrote with the digest of its bytes.
   const receipt = JSON.parse(read(root, RECEIPT)),
     version = (JSON.parse(readFileSync(resolve(cli, 'package.json'), 'utf8')) as { version: string }).version;
   expect(receipt).toMatchObject({
@@ -204,8 +204,7 @@ it('prints the machine-local sentence and never claims an observation', async ()
   expect(applied.exitCode, applied.stderr).toBe(0);
   expect(applied.stdout).toContain('written; not observed answering');
   expect(applied.stdout.replace(/\s+/g, ' ')).toContain(MACHINE_LOCAL.claude);
-  // The guard's scope (milestone generation-binding, C9 and C10; B11's retirement kept) is disclosed wherever Claude is
-  // registered, and only there.
+  // The guard's scope is disclosed wherever Claude is registered, and only there.
   expect(GUARD_SCOPE).toBe(
     'ia host registers one guard group per authored @hook, which refuses an edit its paths and tools select unless the acting agent holds a governing @mandate granting Synthesis there; it registers no per-system steward guard, and applying the projection retires one an earlier release registered.',
   );
@@ -246,7 +245,7 @@ it('preserves unrelated settings and CLAUDE.md byte for byte, then removes exact
   const release = JSON.parse(applied.stdout).plan.release;
   expect(read(root, '.mcp.json')).toContain('"other": {\r\n      "command": "x"\r\n    }');
   expect(read(root, '.mcp.json')).toContain('ia-workspace');
-  // No guard group joins the user's own (B11): the settings file is not touched.
+  // No guard group joins the user's own: the settings file is not touched.
   expect(read(root, '.claude/settings.local.json')).toBe(settings);
   expect(read(root, 'CLAUDE.md')).toBe('mine\r\n');
 
@@ -268,7 +267,7 @@ it('preserves unrelated settings and CLAUDE.md byte for byte, then removes exact
   expect(read(root, 'CLAUDE.md')).toBe('mine\r\n');
   for (const path of ['.claude/rules/ia-workspace.md', '.claude/skills/ia-authoring/SKILL.md'])
     expect(existsSync(resolve(root, path)), path).toBe(false);
-  // The removal deletes the receipt too (B12), so the hosts area holds nothing but the lock file.
+  // The removal deletes the receipt too, so the hosts area holds nothing but the lock file.
   expect(readdirSync(resolve(root, '.ia/distributions/hosts')).filter((name) => name !== 'lock.json')).toEqual([]);
   // §8: removal never touches the lock or the materialized payload.
   expect(readFileSync(resolve(root, '.ia/distributions.lock.json')).equals(lock)).toBe(true);
@@ -585,9 +584,9 @@ it('refuses an uninitialized root', async () => {
 });
 
 /**
- * Milestone position-packet's upgrade path (plan amendments B9, B11 and B12): a workspace a 1.x `ia host claude --apply`
- * registered — the steward guard's group in .claude/settings.local.json and its ownership state, and a projection state
- * listing demo-steward.md with that marked file — upgrades in place through `ia host claude --apply`.
+ * The upgrade path: a workspace a 1.x `ia host claude --apply` registered — the steward guard's group in
+ * .claude/settings.local.json and its ownership state, and a projection state listing demo-steward.md with that marked
+ * file — upgrades in place through `ia host claude --apply`.
  */
 const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
 it('upgrades a registered 1.x workspace: retires the guard, deletes the steward file, keeps a foreign one, writes the receipt', async () => {
@@ -678,7 +677,7 @@ it('plans an update for a projection whose files are current when its receipt is
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   const projection = async () => element(JSON.parse((await host(root, env, 'claude')).stdout), 'projection');
   expect(await projection()).toMatchObject({ action: 'unchanged', guard: 'none' });
-  // Every apply writes the receipt (B12), so a missing one is a change though no file is.
+  // Every apply writes the receipt, so a missing one is a change though no file is.
   rmSync(resolve(root, RECEIPT));
   const missing = await projection();
   expect(missing).toMatchObject({ action: 'update', guard: 'none' });
@@ -686,7 +685,7 @@ it('plans an update for a projection whose files are current when its receipt is
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   expect(JSON.parse(read(root, RECEIPT))).toMatchObject({ guard: 'none' });
   expect(await projection()).toMatchObject({ action: 'unchanged' });
-  // A retirement is a change (B11): a guard registration over current files plans an update, and the apply retires it.
+  // A retirement is a change: a guard registration over current files plans an update, and the apply retires it.
   legacyGuard(root, env);
   expect(await projection()).toMatchObject({ action: 'update', guard: 'retire' });
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);

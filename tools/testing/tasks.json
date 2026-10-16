@@ -1124,7 +1124,7 @@
       ],
       "skips": [
         {
-          "case": "tests/preview.test.ts > path spelling (review C-R1, C-R7) matches covers as the edit guard does where pathKey folds case: a missing covered directory, a covers in another case, never a longer name (review C-RC1)",
+          "case": "tests/preview.test.ts > path spelling matches covers as the edit guard does where pathKey folds case: a missing covered directory, a covers in another case, never a longer name",
           "reason": "db pathKey folds case only on Windows and macOS, as the edit guard keys paths; on Linux each case is its own path, so there is no folding to observe.",
           "platforms": [
             "linux"
@@ -1341,7 +1341,7 @@
           "when": "file-symlink-unavailable"
         },
         {
-          "case": "tests/implementations.test.ts > compares a network path a registration names to the pinned payload and never opens it (B2-RC2)",
+          "case": "tests/implementations.test.ts > compares a network path a registration names to the pinned payload and never opens it",
           "reason": "Only Windows spells a local directory as a network path (the \\\\localhost administrative share); POSIX has no such second spelling to compare.",
           "platforms": [
             "linux",
@@ -1632,7 +1632,7 @@
           ]
         },
         {
-          "case": "tests/host-plugin.test.ts > hook: an ia.exe starts directly, even under a path that cmd.exe would expand (#474)",
+          "case": "tests/host-plugin.test.ts > hook: an ia.exe starts directly, even under a path that cmd.exe would expand (crowncodes/ia#474)",
           "reason": "Starts a real ia.exe, a link to or copy of this node.exe, from a directory whose name holds %OS%, which only cmd.exe would expand; the emulated Windows cases check on Linux and macOS that a .com or .exe starts directly and that only a .bat or .cmd path is passed over for a %.",
           "platforms": [
             "linux",
@@ -1640,7 +1640,7 @@
           ]
         },
         {
-          "case": "tests/host-plugin.test.ts > hook: with no qualified PATH entry doctor can still start a System32 program by name (#474)",
+          "case": "tests/host-plugin.test.ts > hook: with no qualified PATH entry doctor can still start a System32 program by name (crowncodes/ia#474)",
           "reason": "Starts hostname.exe by name from the System32 directory under SystemRoot, which exists only on Windows; the platform-independent child PATH case checks the System32 fallback and the POSIX /usr/bin:/bin one on Linux and macOS.",
           "platforms": [
             "linux",
@@ -1648,8 +1648,8 @@
           ]
         },
         {
-          "case": "tests/host-plugin-node.test.ts > a node planted in the project or behind a relative PATH entry never starts the hook, and sh runs the recorded Node as written (#436)",
-          "reason": "On Windows the plugin hook keeps the earlier node command, which looks node up on PATH (host plugin distribution design §6.1); the injected-platform Windows rendering case checks that command byte for byte on every platform.",
+          "case": "tests/host-plugin-node.test.ts > a node planted in the project or behind a relative PATH entry never starts the hook, and sh runs the recorded Node as written (crowncodes/ia#436)",
+          "reason": "On Windows the plugin hook keeps the earlier node command, which looks node up on PATH (host plugin distribution spec §6.1); the injected-platform Windows rendering case checks that command byte for byte on every platform.",
           "platforms": [
             "windows"
           ]

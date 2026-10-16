@@ -122,15 +122,15 @@ export interface Context {
 }
 
 /**
- * §4: a refusal carries the service's own code unchanged, its exit class, and where it happened. Design row 27
- * (position-and-projection §12): it also names its next action, which quotes exactly one command carrying every value
+ * §4: a refusal carries the service's own code unchanged, its exit class, and where it happened. It also names its
+ * next action, which quotes exactly one command carrying every value
  * this invocation supplied that the command needs. A manual step the CLI cannot take for the user (delete or move a
  * named file, set a variable) may come first; an explanation may follow. It spells no other command or option.
  *
- * The published constructor keeps its 1.x form (decision release-bump): `where` and `next` default to null, and a
- * refusal without a next action of its own is given `serviceNext`'s when it is rendered, so `--json` `next` is always
- * a string. Every construction site in this CLI still names its next action explicitly; tests/refusal-next.test.ts
- * fails a site that omits it or passes null.
+ * The published constructor keeps its 1.x form: `where` and `next` default to null, and a refusal without a next action
+ * of its own is given `serviceNext`'s when it is rendered, so `--json` `next` is always a string. Every construction
+ * site in this CLI still names its next action explicitly; tests/refusal-next.test.ts fails a site that omits it or
+ * passes null.
  */
 export class Refusal extends Error {
   constructor(
@@ -152,8 +152,8 @@ export class Refusal extends Error {
 
 /**
  * §5's first signal, raised by a verb that had already written when it observed the signal. The JSON result stays
- * §5's fixed object plus `next`; the one stderr line gains the rerun that finishes the work, which M5.2 §5 requires
- * `ia init` to name once it has written anything.
+ * §5's fixed object plus `next`; the one stderr line gains the rerun that finishes the work, which `ia init` must
+ * name once it has written anything.
  */
 export class Interrupted extends Error {
   constructor(readonly next: string) {
@@ -199,11 +199,11 @@ function suggestionRoots(cwd: string, supplied: string | undefined, inspect: boo
 /** Code areas whose refusals concern authored records, so their findings are what `ia validate` reports. */
 const RECORD_AREAS: ReadonlySet<string> = new Set(['COMP', 'GRAPH', 'LANG']);
 /**
- * Design row 27 for a service refusal that reaches the shell with no next action of its own: usage names the verb's
+ * The next action for a service refusal that reaches the shell with no next action of its own: usage names the verb's
  * own help; a record finding (`IA-COMP-*`, `IA-GRAPH-*`, `IA-LANG-*`) names `ia validate`; every other code, an
- * unrecognized failure included, names `ia doctor`, which observes the runtime, workspace, installation and host
- * state such a refusal comes from. Both carry `--root` when the refused invocation gave it. A verb that knows a more
- * exact repair names it at the refusal instead.
+ * unrecognized failure included, names `ia doctor`, which observes the runtime, workspace, installation and host state
+ * such a refusal comes from. Both carry `--root` when the refused invocation gave it. A verb that knows a more exact
+ * repair names it at the refusal instead.
  */
 export function serviceNext(code: string, refused: Refused): string {
   if (code === 'IA-CLI-USAGE')
@@ -235,9 +235,9 @@ export function refusalOf(error: unknown, refused?: Refused): Refusal {
 }
 
 /**
- * §4.3 and §6.5. Human mode renders the block on stderr; `--json` emits the one object on stdout. Design row 27 holds
- * at this boundary: a refusal built without a next action (the 1.x constructor form) is given `serviceNext`'s, spelled
- * for `refused` when the caller names the refused invocation.
+ * §4.3 and §6.5. Human mode renders the block on stderr; `--json` emits the one object on stdout. Every refusal names
+ * one next command, at this boundary too: a refusal built without a next action (the 1.x constructor form) is given
+ * `serviceNext`'s, spelled for `refused` when the caller names the refused invocation.
  */
 export function renderRefusal(
   refusal: Refusal,
@@ -277,14 +277,14 @@ export function renderRefusal(
     };
     return { exitCode: refusal.exit, stdout: JSON.stringify(body) + '\n', stderr: '' };
   }
-  // Review C-N2: a refusal repeats caller and authored text (a path, an identity, a value), so its controls are escaped.
+  // A refusal repeats caller and authored text (a path, an identity, a value), so its controls are escaped.
   const block = errorBlock(
     {
       location: location === null ? null : terminalText(location),
       ...(refusal.where?.identity === undefined ? {} : { identity: terminalText(refusal.where.identity) }),
       code: refusal.code,
       message: terminalText(refusal.message),
-      // Design row 27: the command it names stays on one line, so it is copied and run as printed.
+      // The command it names stays on one line, so it is copied and run as printed.
       next: remedyWords(terminalText(next)),
     },
     { depth: 0 },
@@ -334,10 +334,10 @@ const groupBlock = (group: Group, label: string, caps: Capabilities): readonly s
 ];
 
 /**
- * §1.2 step 1 and §7.1. The nine legacy operations are listed verbatim under their own heading, together with
- * their own usage line, because the consumer help is the only place a reader learns that the machine protocol
- * exists and is unchanged. One row points at each operation's own help (spec-0012 CLI-04). Private namespaces are
- * supplied by the caller so that a tree without them prints a help text that does not mention them.
+ * §1.2 step 1 and §7.1. The nine legacy operations are listed verbatim under their own heading, together with their own
+ * usage line, because the consumer help is the only place a reader learns that the machine protocol exists and is
+ * unchanged. One row points at each operation's own help. Private namespaces are supplied by the caller so that a tree
+ * without them prints a help text that does not mention them.
  */
 export function renderHelp(host: Host, caps: Capabilities, namespaces: readonly Namespace[]): string {
   const common = OPTION_ORDER.map((name) => COMMON_OPTIONS.find((row) => row.name === name)!);
@@ -408,7 +408,7 @@ export function renderCommandHelp(command: CommandSpec, caps: Capabilities): str
 export function discoverRoot(start: string, iaHome?: string): string | undefined {
   let current = resolve(start);
   for (;;) {
-    // The IA home by device and inode, so a home spelled in another case or normalization is still recognized (#315).
+    // The IA home by device and inode, so a home spelled in another case or normalization is still recognized (crowncodes/ia#315).
     if (existsSync(resolve(current, '.ia/src')) && (iaHome === undefined || !sameFile(resolve(current, '.ia'), iaHome)))
       return current;
     const parent = dirname(current);
@@ -428,11 +428,11 @@ export function iaHomeOf(
   }
 }
 /**
- * Design row 27: the refused invocation spelled again from what the parser understood, so a next action that reruns it
- * carries every argument this invocation supplied that the rerun needs: its positionals, then the verb's own options in
- * grammar order, `--root` last, each value quoted. As the install, host and init reruns are, it is the verb's plan: an
- * optional `--apply` is left out, and `ia restore`'s required one is kept with `--yes`, confirmed as every printed apply
- * is. The other common flags only shape the output, so none is spelled. `changes` replaces the positionals or one option's
+ * The refused invocation spelled again from what the parser understood, so a next action that reruns it carries every
+ * argument this invocation supplied that the rerun needs: its positionals, then the verb's own options in grammar
+ * order, `--root` last, each value quoted. As the install, host and init reruns are, it is the verb's plan: an optional
+ * `--apply` is left out, and `ia restore`'s required one is kept with `--yes`, confirmed as every printed apply is. The
+ * other common flags only shape the output, so none is spelled. `changes` replaces the positionals or one option's
  * values with the argument the remedy asks the user to correct.
  */
 export function respell(
@@ -486,7 +486,7 @@ export function requireRoot(context: Context): string {
       );
     // The root the user chose opens at its real path, as `ia host` resolves it, so a root reached through links (macOS
     // /tmp, a linked checkout) works; every path below it is still checked link by link. The JS `realpathSync`, not
-    // `.native`: it keeps each name's case as typed, which the steward guard now folds (`unaliased`, #315). An 8.3
+    // `.native`: it keeps each name's case as typed, which the steward guard now folds (`unaliased`, crowncodes/ia#315). An 8.3
     // short name or a subst drive that the JS form keeps is still an alias to the guard.
     return realpathSync(path);
   }
@@ -610,8 +610,8 @@ export async function runCommand(command: CommandSpec, argv: readonly string[], 
       args !== undefined && !(error instanceof UsageError) && !(error instanceof Refusal && error.exit === 2),
     );
     if (host.signal?.aborted) {
-      // Design row 27: an interruption names one next command too — the rerun a verb that had written supplies, or
-      // else this invocation rebuilt from the parsed values, so root option spellings cannot bypass its remedy.
+      // An interruption names one next command too — the rerun a verb that had written supplies, or else this
+      // invocation rebuilt from the parsed values, so root option spellings cannot bypass its remedy.
       const next = safeRootAdvice(
         error instanceof Interrupted
           ? error.next
@@ -693,7 +693,7 @@ export async function dispatch(
   const token = argv[0];
   const caps = resolveCapabilities(host.stdout, {});
   // §1.2 step 1, which supersedes main.ts:11's usage-exit: no arguments is a request for help, not a syntax
-  // error. decisions.md:60 freezes the nine named routes, and a bare invocation is not one of them.
+  // error. The nine named routes are fixed, and a bare invocation is not one of them.
   if (token === undefined || (argv.length === 1 && HELP_TOKENS.has(token)))
     return { exitCode: 0, stdout: renderHelp(host, caps, extensions), stderr: '' };
   if (argv.length === 1 && token === '--version') return { exitCode: 0, stdout: host.version + '\n', stderr: '' };
@@ -741,8 +741,8 @@ export async function dispatch(
     ...LEGACY_OPERATIONS,
     ...extensions.map((entry) => entry.token).filter((candidate) => !CORE_TOKENS.has(candidate)),
   ];
-  // Design row 27: one command, the nearest token with the rest of the invocation as typed; any other near token is
-  // named, not offered as a second command. A machine route admits only its two options, so only those are kept.
+  // One command, the nearest token with the rest of the invocation as typed; any other near token is named, not offered
+  // as a second command. A machine route admits only its two options, so only those are kept.
   const [nearest, ...also] = nearestTokens(token, admitted);
   const others = also.length === 0 ? '' : ` Also near: ${also.join(', ')}.`;
   const rest =

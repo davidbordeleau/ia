@@ -89,7 +89,7 @@ it('executes every native case with actual success/refusal and owner attribution
       ),
     }).toEqual({ case: o.identity, findings: [] });
   // The runner compares result codes only, so a work-system refusal could pass for another reason (an empty-diagnostic
-  // refusal, #398 review). Require each one to refuse with exactly the diagnostic its scenario.expected names.
+  // refusal, crowncodes/ia#398 review). Require each one to refuse with exactly the diagnostic its scenario.expected names.
   const refused = result.observations.filter(
     (o) => !o.result.ok && o.identity.startsWith('compliance-system/definition/scenario/work-'),
   );
@@ -333,7 +333,7 @@ it('rechecks source revision after a handler and refuses a stale input snapshot'
   }
 });
 it('takes the authored revision as its base, so a source appearing at runtime placement during a run refuses nothing', () => {
-  // Plan amendment C13: runtime-band evidence moves the handle's revision, not the authored one the run rechecks.
+  // Runtime-band evidence moves the handle's revision, not the authored one the run rechecks.
   const base = temp(),
     path = '.ia/src/systems/template-system/records/runtime-evidence.ia',
     locations = {

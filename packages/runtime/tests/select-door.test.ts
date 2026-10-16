@@ -246,7 +246,7 @@ const propertiesOf = (name: string): Record<string, unknown> =>
       properties: Record<string, unknown>;
     }
   ).properties;
-// spec-0012 DRF-01: the description names exactly what the Door admits; the Door, not the table, is the authority.
+// The machine protocol description names exactly what the Door admits; the Door, not the table, is the authority.
 it('describes exactly the operations and parameters the Door admits', () => {
   const door = new Door(workspace(), { cache: false, allowReport: true });
   try {
@@ -283,8 +283,8 @@ it('describes exactly the operations and parameters the Door admits', () => {
   } finally {
     door.close();
   }
-  // A door serving version 1, as the CLI's machine routes do (plan amendment A2), names exactly the version 1 rows, and
-  // refuses a later version's operation before reading its parameters, with the bytes of 1.1.0's unknown operation.
+  // A door serving version 1, as the CLI's machine routes do, names exactly the version 1 rows, and refuses a later
+  // version's operation before reading its parameters, with the bytes of 1.1.0's unknown operation.
   const routes = new Door(workspace(), { cache: false, allowReport: true, protocol: 1 });
   try {
     const unknown = routes.request({ operation: 'unlisted' });
@@ -310,8 +310,8 @@ it('describes exactly the operations and parameters the Door admits', () => {
 }, 30_000);
 
 /**
- * spec-0012 VER-01: the parameter digest each description version carries, over the operations that version describes:
- * version 1's nine, frozen, and every later version's over its own rows and the rows before it.
+ * The parameter digest each description version carries, over the operations that version describes: version 1's
+ * nine, frozen, and every later version's over its own rows and the rows before it.
  */
 const PARAMS_DIGESTS: Readonly<Record<number, string>> = {
   1: 'b92e71f8d59eadd34034974eb77cdc868ccd33b34a6c3c73fe2b2999707f7206',
@@ -349,9 +349,9 @@ it("bumps the protocol description version whenever an operation's parameters ch
   expect(Math.max(...Object.keys(PARAMS_DIGESTS).map(Number))).toBe(MACHINE_PROTOCOL.version);
 });
 
-// The operator's additive constraint (plan amendment A2): a later version appends rows, so the nine version 1 rows keep
-// the bytes 1.1.0 exported. The golden holds the rows as tag v1.1.0 exports them: it was written from a build whose
-// src/machine-protocol.ts was the tag's, unchanged, and whose dist/machine-protocol.js was the published 1.1.0 file's.
+// Versions are additive: a later version appends rows, so the nine version 1 rows keep the bytes 1.1.0 exported. The
+// golden holds the rows as tag v1.1.0 exports them: it was written from a build whose src/machine-protocol.ts was the
+// tag's, unchanged, and whose dist/machine-protocol.js was the published 1.1.0 file's.
 it('keeps the nine version 1 rows byte-identical to 1.1.0 and marks each later row with its version', () => {
   const golden = readFileSync(resolve(import.meta.dirname, 'golden/machine-protocol-v1.json'), 'utf8'),
     rows = MACHINE_PROTOCOL.operations;

@@ -10,9 +10,8 @@ import { normalizeScopeKey, positionBody, readBody, resolveScopeKey } from '../s
 import type { PositionBody, ScopeKey } from '../src/index.js';
 import { database, declare, law, lawId, lawPath, methodPath, playbook, put, workspace } from './workspace.js';
 
-// R17 (position-and-projection §6 and §7, rows 18 and 19; plan amendments A4 and A8; decision scope-key-caps): the
-// rules and playbooks that apply by word to body(K)'s loaded set, their cells at (P, primitive(H)), the blocking rules
-// reserved by word whatever the budget truncates, and the mandates that govern the seat.
+// R17: the rules and playbooks that apply by word to body(K)'s loaded set, their cells at (P, primitive(H)), the
+// blocking rules reserved by word whatever the budget truncates, and the mandates that govern the seat.
 const foundation = 'workspace-system/definition/workspace/foundation-workspace',
   governanceSystem = 'floor/definition/system/governance-system',
   check = 'compliance-system/check/gate/instance-schema-check',
@@ -127,9 +126,8 @@ it("delivers the fixture playbook's plan cell at phase plan, as ia read reads it
   expect(bodyOf(db, { shape: 'context', phase: 'plan' }).cells).toEqual([
     { playbook: procedure, address: `${procedure}#plan/Attention`, text: 'Sample fixture statement 10.' },
   ]);
-  // Here the phase changes only the cell delivered and the keys it is spelled in (design §6, routing): no conditional
-  // row bears on this body. A row whose condition holds at one phase only moves the loaded set (decision
-  // conditional-relations-in-delivery; tests/position.test.ts).
+  // Here the phase changes only the cell delivered and the keys it is spelled in: no conditional row bears on this
+  // body. A row whose condition holds at one phase only moves the loaded set (R15; tests/position.test.ts).
   const orient = bodyOf(db, { shape: 'governance', phase: 'orient' });
   expect(orient.cells).toEqual([
     { playbook: procedure, address: `${procedure}#orient/Inference`, text: 'Sample fixture statement 5.' },
@@ -530,7 +528,7 @@ it("delivers the mandates that claim a location seat or whose authority.scope na
     via: { by: 'field', from: foundation, field: 'authority.scope', direction: 'in' },
   });
   // At K0 the workspace is the seat: the scoped mandate governs it, and the sample mandate, which claims docs/** and
-  // names no scope, does not; no participant is matched before milestone position-packet.
+  // names no scope, does not; a body matches no participant (R17).
   expect(bodyOf(db).mandates).toEqual([scoped]);
   expect(bodyOf(plain).mandates).toEqual([]);
   // A record seat's workspace is the one whose closure holds it.
@@ -630,7 +628,7 @@ it('filters only what loads, lists and tallies by the word: rules, applies by wo
   expect(ids(laws.loaded)).toContain(lawRule);
   expect(laws.loaded.slice(1).every((entry) => 'word' in entry && entry.word === 'law')).toBe(true);
   expect([...laws.pointers, ...laws.pointerTallies].every((entry) => entry.word === 'law')).toBe(true);
-  // Decision scope-key-caps reserves blockers outside n and restricts seeds and tallies: the blocking convention, a
+  // Blockers are reserved outside n and the word restricts seeds and tallies: the blocking convention, a
   // word member of the @system, governs the seat whatever the word, so it stays in `rules`; the rules, the cells and
   // the mandates are those of the body without the word, and the applies-by-word section lists the same rules and
   // playbooks, of every word, since each here applies to the seat or to a reserved rule.

@@ -10,7 +10,7 @@ import { bodyOf, statedText } from './render.js';
 import { freeze } from './types.js';
 
 /**
- * Locators and the body reader: position-and-projection §5's `ia read` and design row 23.
+ * Locators and the body reader behind `ia read` (SPEC, body reader).
  *
  * A locator names one admitted record, or one part of it, in one of four forms:
  * - `<identity>`: the record, by its canonical `system/kind/facet/name` identity;
@@ -21,16 +21,15 @@ import { freeze } from './types.js';
  * The body behind a record is the document its source locator names, when its word carries one (SOURCE_LOCATORS) and the
  * record states it; otherwise the record's own body (`bodyOf`). A fragment reads the record, never its document: the
  * text of its cells or of its requirement at the fragment. A body is text and the SHA-256 of its UTF-8 bytes, never a
- * certification: the reader neither admits the document nor judges what it says (IM-43). Structure (sections, fields,
+ * certification: the reader neither admits the document nor judges what it says. Structure (sections, fields,
  * relationships) is the inspector's and never a body.
  */
 
 /**
  * The field whose text names each word's document body, as its schema declares it: `work.source` on every work word
- * that states one, @spec, @plan, @milestone, @task and @decision (position-and-projection rows 2d and 23, widened by
- * decision work-source-locator: all five schemas declare the one field, and a plan's records name their sections of
- * its document with it), `reference.document` on @authoring-guide (row 2h) and `template.resource`, a @template's
- * input. A record that states none reads its own body.
+ * that states one, @spec, @plan, @milestone, @task and @decision (all five schemas declare the one field, and a plan's
+ * records name their sections of its document with it), `reference.document` on @authoring-guide and
+ * `template.resource`, a @template's input. A record that states none reads its own body.
  */
 export const SOURCE_LOCATORS: Readonly<Record<string, string>> = Object.freeze({
   'authoring-guide': 'reference.document',

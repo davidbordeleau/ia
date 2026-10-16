@@ -109,7 +109,7 @@ it('does not apply when cancellation arrives with a confirmation answer', async 
     },
     [],
   );
-  // Design row 27: the interruption names the invocation to run again, as it was typed.
+  // The one next command: the interruption names the invocation to run again, as it was typed.
   expect(result).toEqual({
     exitCode: 130,
     stdout: '',
@@ -141,7 +141,7 @@ it('packs a reviewable archive, prints its integrity values and refuses to repla
   const again = await run(['pack', '--root', root, '--descriptor', '.ia/work/descriptor.json']);
   expect(again.exitCode).toBe(3);
   expect(again.stderr).toContain('IA-DIST-LOCAL-MODIFICATION');
-  // Design row 27: the one command is this pack again with --force, every argument it was given included.
+  // The one next command is this pack again with --force, every argument it was given included.
   expect(again.stderr.replace(/\s+/g, ' ')).toContain(
     `Run "ia pack --descriptor .ia/work/descriptor.json --force --root ${quote(root)}" to overwrite it.`,
   );
@@ -466,7 +466,7 @@ it('refuses without a confirmation and without an existing installation', async 
 });
 
 it('keeps the 1.x collectPlan request form of @inventarch/cli/internal/distribute, its remedies spelled from the request', async () => {
-  // Decision release-bump: a request without `reruns` (the 1.x PlanRequest) refuses with the service's code, not a
+  // A request without `reruns` (the 1.x PlanRequest) refuses with the service's code, not a
   // TypeError, and its next action is spelled from the request's own fields.
   const { root } = await catalogued();
   const request = {
@@ -525,7 +525,7 @@ it('separates an unreachable artifact from a refusal by exit class', async () =>
     (await run(['install', `${ID}@^0.1.0`, '--root', root, '--catalog', '.ia/work/catalog.json', '--json'])).stdout,
   );
   expect(machine).toMatchObject({ version: 1, ok: false, code: 'IA-DIST-ARTIFACT-UNAVAILABLE', exit: 4 });
-  // The catalog route's remedy is the retry of this invocation, the catalog it resolves from included (design row 27).
+  // The catalog route's remedy is the retry of this invocation, the catalog it resolves from included.
   expect(machine.next).toBe(
     `Retry "ia install ${ID}@^0.1.0 --catalog .ia/work/catalog.json --root ${quote(root)}" when the host is reachable.`,
   );
@@ -606,7 +606,7 @@ it('doctor never creates the IA home', async () => {
     expect(result.exitCode, argv.join(' ')).toBe(0);
     expect(existsSync(resolve(home, '..')), argv.join(' ')).toBe(false);
   }
-  // A due refresh is only named (Amendment item 4): the vector is returned, never run, so the home is still absent.
+  // A due refresh is only named: the vector is returned, never run, so the home is still absent.
   const report = JSON.parse(
     (
       await run(['doctor', '--host', 'claude', '--json'], {

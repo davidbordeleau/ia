@@ -13,7 +13,7 @@ export interface HostPin {
   readonly files: number;
   readonly bytes: number;
 }
-/** Spec §3.3 step 3: a failed verification of an existing payload must name the directory it refuses. */
+/** A failed verification of an existing payload must name the directory it refuses. */
 function verifyNaming(target: string): ReturnType<typeof verifyHostCache> {
   try {
     return verifyHostCache(target);
@@ -23,7 +23,10 @@ function verifyNaming(target: string): ReturnType<typeof verifyHostCache> {
     throw error;
   }
 }
-/** M5.3 §3.3's per-OS data directory, kept only so `doctor` can recognize registrations pinned there (host plugin distribution spec §3). */
+/**
+ * The per-OS data directory that was the legacy host home, kept only so `doctor` can recognize registrations pinned
+ * there (host plugin distribution spec §3).
+ */
 export function legacyHostHome(
   env: Readonly<Record<string, string | undefined>>,
   platform: string,
@@ -34,10 +37,16 @@ export function legacyHostHome(
   return join(env['XDG_DATA_HOME'] || join(home, '.local/share'), 'ia');
 }
 export const hostPayloadPath = (home: string, release: string): string => join(home, 'hosts', release);
-/** Spec §3.3 step 1: where a package carries its embedded payload, relative to its own root (tools/distribution/host-payload.mjs writes both). */
+/**
+ * Where a package carries its embedded payload, relative to its own root (tools/distribution/host-payload.mjs writes
+ * both).
+ */
 const HOST_PIN_PATH = 'assets/host.json';
 const hostArchivePath = (archive: string): string => `assets/host/${archive}.tgz`;
-/** Spec §3.3 step 1: read and shape-check the pin, and require the archive; its digest is checked by `materializeHostPayload`. A missing or malformed asset is ARTIFACT-UNAVAILABLE. */
+/**
+ * Read and shape-check the pin, and require the archive; its digest is checked by `materializeHostPayload`. A missing
+ * or malformed asset is ARTIFACT-UNAVAILABLE.
+ */
 export function readHostPin(packageRoot: string): {
   readonly pin: HostPin;
   readonly pinPath: string;
@@ -71,16 +80,16 @@ export function readHostPin(packageRoot: string): {
   return { pin, pinPath, archivePath, archive: () => readFileSync(archivePath) };
 }
 /**
- * Spec §3.3: the consumer root MUST NOT be inside the host home, and a home inside the workspace would put per-user payload
- * bytes in it; both refuse. Nesting is judged on disk, so another spelling a case- or normalization-folding volume opens as
- * the same directory nests too (#315).
+ * Host plugin distribution spec §3: the consumer root MUST NOT be inside the host home, and a home inside the
+ * workspace would put per-user payload bytes in it; both refuse. Nesting is judged on disk, so another spelling a
+ * case- or normalization-folding volume opens as the same directory nests too (crowncodes/ia#315).
  */
 export function assertHomeOutsideWorkspace(home: string, root: string): void {
   if (!isAbsolute(home) || !isAbsolute(root)) fail('INPUT-INVALID', 'Host home and workspace root must be absolute');
   if (within(home, root)) fail('PATH-UNSAFE', `Consumer workspace cannot be inside the host home ${home}`);
   if (within(root, home)) fail('PATH-UNSAFE', `Host home cannot be inside the consumer workspace: ${home}`);
 }
-/** Spec §3.3 steps 3-4: verify-or-reuse, never overwrite; stage beside the target and rename into place. */
+/** Verify-or-reuse, never overwrite; stage beside the target and rename into place. */
 export function materializeHostPayload(input: {
   readonly home: string;
   readonly archive: Buffer;

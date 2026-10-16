@@ -358,7 +358,7 @@ it('excludes package artifacts without weakening authored alias refusal', () => 
   );
   expect(() => readInputs(root)).toThrow(expect.objectContaining({ code: 'IA-DB-PATH-UNSAFE' }));
 });
-it('compares paths by what the volume opens, not by how they are spelled (#315)', () => {
+it('compares paths by what the volume opens, not by how they are spelled (crowncodes/ia#315)', () => {
   // APFS folds case and Unicode normalization, NTFS folds case: there the other spellings open the same directory.
   const root = workspace(),
     dir = resolve(root, 'Caf\u00e9 Dir'),
@@ -408,7 +408,7 @@ it('compares paths by what the volume opens, not by how they are spelled (#315)'
   expect(pathKey('Docs/Caf\u00e9.md')).toBe(folds ? 'docs/caf\u00e9.md' : 'Docs/Caf\u00e9.md');
   expect(pathKey('cafe\u0301')).toBe(process.platform === 'darwin' ? 'caf\u00e9' : 'cafe\u0301');
 });
-it('folds names as APFS compares them, refuses a spelling the kernel walks through a link, and never throws for identity (#323)', () => {
+it('folds names as APFS compares them, refuses a spelling the kernel walks through a link, and never throws for identity (crowncodes/ia#323)', () => {
   // APFS folds full Unicode case, so each pair is one name there; the darwin key agrees, and names it keeps apart stay apart.
   for (const [a, b] of [
     ['cla\u00df', 'CLASS'],
@@ -446,7 +446,7 @@ it('folds names as APFS compares them, refuses a spelling the kernel walks throu
     expect(sameFile(loop, resolve(root, 'class'))).toBe(false);
   }
 });
-it('reads a systems folder spelled in another case as the systems folder where the volume folds case (#315)', () => {
+it('reads a systems folder spelled in another case as the systems folder where the volume folds case (crowncodes/ia#315)', () => {
   const root = workspace();
   put(root, '.ia/src/Systems/demo-system/records/a.ia', '#! ia 1.0\n');
   const paths = readInputs(root)

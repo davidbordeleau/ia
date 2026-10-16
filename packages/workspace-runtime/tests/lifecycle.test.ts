@@ -626,7 +626,7 @@ describe('selected claude-code@2.1.285 bootstrap (HOST-03)', () => {
         openCurrentView: async () => ({ ...request(), close: () => {} }),
       }),
     ).rejects.toMatchObject({ code: 'IA-LIFECYCLE-STALE', message: 'Current lifecycle binding pins differ' });
-    // #447 review (reviewer-reported): this case opens six cache-disabled views and ran past vitest's 5 s default on a slow
+    // crowncodes/ia#447 review (reviewer-reported): this case opens six cache-disabled views and ran past vitest's 5 s default on a slow
     // Windows host, so it takes the 120 s bound the HOST-04 cases in apps/steward-hook/tests/context.test.ts use.
   }, 120_000);
 });

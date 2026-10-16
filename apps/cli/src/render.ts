@@ -136,9 +136,9 @@ export function words(text: string, role: Role | null = null, gap = 1): readonly
 /** A command quoted in prose: a program this CLI names and its arguments, one with a space JSON-quoted (`quote`). */
 const QUOTED_COMMAND = /"(?:ia|ia-distribution|pnpm)(?: (?:"(?:[^"\\]|\\.)*"|[^\s"]+))*"/g;
 /**
- * §6.4 for prose that quotes a command, such as a refusal's next action (design row 27): the words wrap as `words`
- * splits them, and each quoted command, with the punctuation touching it, is one `atom`, so a line break never falls
- * inside the command and it stays copy-pasteable, overrunning the width when it must.
+ * §6.4 for prose that quotes a command, such as a refusal's next action: the words wrap as `words` splits them, and
+ * each quoted command, with the punctuation touching it, is one `atom`, so a line break never falls inside the command
+ * and it stays copy-pasteable, overrunning the width when it must.
  */
 export function remedyWords(text: string, role: Role | null = null, gap = 1): readonly Token[] {
   const tokens: Token[] = [];

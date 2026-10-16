@@ -7,13 +7,13 @@ import type { RuntimeCode, RuntimeWhere } from './errors.js';
 import { freeze } from './types.js';
 
 /**
- * Mandate authority as closed moves (position-and-projection design, items 2c and 13).
+ * Mandate authority as closed moves (SPEC, mandate authority and R21).
  *
  * A `@mandate` may declare an `authority` section: the participant it binds, the moves it allows (closed to the five
  * kernel moves), the workspaces it scopes, and the words and path selections it excludes or covers. This module
  * publishes the CLI mode -> move table and the pure refusal check that the authoring verbs will consume, and resolves
  * the authored mandates that govern an actor at a workspace or path, the actor a command acts as when none is named and
- * the refusal profile those mandates give a mode (plan amendment C1). The CLI's profile module and the generated
+ * the refusal profile those mandates give a mode. The CLI's profile module and the generated
  * mandate guard consume these checks for their gated commands and host events. A mandate adds closed restrictions
  * only; it never grants host permissions, and a mandate without
  * `authority.moves` restricts no move.
@@ -23,7 +23,7 @@ import { freeze } from './types.js';
 export const MOVES = KERNEL_MOVES;
 export type Move = (typeof MOVES)[number];
 
-/** One kernel move per CLI mode (design item 13). */
+/** One kernel move per CLI mode. */
 export const MODE_MOVES = Object.freeze({
   read: 'Observation',
   validate: 'Verification',
@@ -156,9 +156,10 @@ export function mandateAuthorityOf(record: CompiledRecord): MandateAuthority {
       ? move
       : invalid(`${record.identity}: authority.moves names ${move}, not a kernel move`, sourceOf(record)),
   );
-  // Presence is judged by the key: a declared but empty list names no move, which the design's one-or-more refuses
-  // rather than reading as a lockout of every mode or as an absent restriction. Admission refuses such a list since lane
-  // D (compliance C05), so a record a reader admitted never reaches this; it stays as defence in depth.
+  // Presence is judged by the key: a declared but empty list names no move, and a declared list must name one or more,
+  // so it is refused rather than read as a lockout of every mode or as an absent restriction. Admission refuses such a
+  // list since 2026-10-12 (compliance C05), so a record a reader admitted never reaches this; it stays as defence in
+  // depth.
   const hasMoves = states(record, 'authority', 'moves');
   if (hasMoves && moves.length === 0)
     invalid(`${record.identity}: authority.moves must name at least one kernel move`, sourceOf(record));
@@ -206,15 +207,15 @@ export function mandateRefusal(
 }
 
 /**
- * Mandate resolution (plan amendment C1; operator decision OD1): one answer to "which `@mandate` governs this actor
- * here" for the CLI's refusal profile and the edit guard. Every read goes through the scope token `within` and none
- * needs a clean scope: a workspace with admission errors resolves the records admission admitted, except that an
- * authored `@mandate` that failed admission fails every resolver closed (`refusedMandates`; lane D, operator ruling
- * 2026-10-12). Only authored mandates (band 100) govern, only those of the workspace's closure as position reads it
- * (plan amendment A8), and a record at runtime placement is never read.
+ * Mandate resolution: one answer to "which `@mandate` governs this actor here", and to which actor a mandate-gated
+ * command acts as when none is named, for the CLI's refusal profile and the edit guard. Every read goes through the
+ * scope token `within` and none needs a clean scope: a workspace with admission errors resolves the records admission
+ * admitted, except that an authored `@mandate` that failed admission fails every resolver closed (`refusedMandates`,
+ * since 2026-10-12). Only authored mandates (band 100) govern, only those of the workspace's closure as position reads
+ * it, and a record at runtime placement is never read.
  */
 
-/** Lane D, D1: one authored `@mandate` that failed admission, and the admission finding that refused it. */
+/** One authored `@mandate` that failed admission, and the admission finding that refused it. */
 export interface RefusedMandate {
   /**
    * Its canonical identity, when db compiled the record or spec 3.1 names its parsed header; absent for a header only
@@ -229,28 +230,28 @@ export interface RefusedMandate {
   readonly message: string;
   /**
    * Present when db cannot tell what the line declares (an error line of a file refused whole that no identified record
-   * accounts for; review D2-R2): it may be a mandate, so it counts as one.
+   * accounts for): it may be a mandate, so it counts as one.
    */
   readonly unidentified?: true;
 }
 /**
- * Lane D, D1: every `@mandate` of the workspace's own authored sources (band 100) that failed admission, frozen, by path
- * then line, each with its own admission finding as db records it (db `unadmitted`): (a) one admission refused,
+ * Every `@mandate` of the workspace's own authored sources (band 100) that failed admission, frozen, by path then
+ * line, each with its own admission finding as db records it (db `unadmitted`): (a) one admission refused,
  * `refused` naming it; (b) both occurrences of a mandate identity that ties at band 100; (c) one a file refused whole
  * declares, by a language error or a duplicate requirement id, as db's own parse of the file reads its headers, or as
  * its captured text shows a header the parse could not read, or a `@mandate` token on a line no parsed record spans and
  * the language scanner does not read as a whole-line comment (db D15), so the attribution `ia author` writes is none
  * outside the damaged files D15 names (a bare CR anywhere, the comment inside `"""` prose, a byte-order mark before it
  * on line 1 with no pragma); and
- * (d) review D2-R2: every record db cannot identify (db D15 lists it with no word, by the rules and limits D15 states),
- * which may be a mandate, so it counts as one, marked `unidentified`, except at a line db also lists a mandate at, which
- * is counted once, as that mandate (review D2 recheck F3). A record is a mandate when its word is `mandate` or its
+ * (d) every record db cannot identify (db D15 lists it with no word, by the rules and limits D15 states), which may be
+ * a mandate, so it counts as one, marked `unidentified`, except at a line db also lists a mandate at, which is counted
+ * once, as that mandate. A record is a mandate when its word is `mandate` or its
  * identity's facet is, or when db names no word. The band is the one db reads from the source's placement, as capture
  * membership and governingMandates read it, so a mandate refused inside an installed base (band 90) never counts: it
  * never governs.
  *
  * It reads db's root view, not a scope: a record admission refused belongs to no scope, and its scope, covers and
- * participant cannot be trusted, so what it fails closed (D2) it fails closed workspace-wide.
+ * participant cannot be trusted, so what it fails closed it fails closed workspace-wide.
  */
 export function refusedMandates(reader: ReadHandle): readonly RefusedMandate[] {
   const authored = reader.unadmitted.filter((entry) => entry.band === 100),
@@ -275,7 +276,7 @@ export function refusedMandates(reader: ReadHandle): readonly RefusedMandate[] {
   );
 }
 /**
- * Lane D, D9: one admitted authored record a `@mandate` resolution reads whose typed reference names an authored record
+ * One admitted authored record a `@mandate` resolution reads whose typed reference names an authored record
  * that failed admission: a `@mandate` whose `authority.participant` names a refused `@agent` (whom it binds) or whose
  * `authority.scope` names a refused `@workspace` (where it governs), or a `@workspace` whose `composition.steward`
  * names a refused `@agent` (the default actor every mandate there judges).
@@ -295,7 +296,7 @@ export interface RefusedDependency {
   readonly code: string;
   readonly message: string;
 }
-/** The references D9 follows: the holder's word, the field, and the word the field's references name. */
+/** The references refusedDependencies follows: the holder's word, the field, and the word its references name. */
 const DEPENDENCIES = [
   { holder: 'mandate', section: 'authority', key: 'participant', word: 'agent' },
   { holder: 'mandate', section: 'authority', key: 'scope', word: 'workspace' },
@@ -315,12 +316,12 @@ function referenced(record: CompiledRecord, section: string, key: string, word: 
     );
 }
 /**
- * Lane D, D9: every admitted authored (band 100) record whose resolution a refused authored record would change, frozen,
- * by dependent identity, field, path and line: a `@mandate` whose `authority.participant` or `authority.scope`, or a
+ * Every admitted authored (band 100) record whose resolution a refused authored record would change, frozen, by
+ * dependent identity, field, path and line: a `@mandate` whose `authority.participant` or `authority.scope`, or a
  * `@workspace` whose `composition.steward`, names, as authored, an authored `@agent` or `@workspace` that failed
  * admission (db `unadmitted`, band 100), matched by word and name, lowercased, so a tie, a schema refusal and a file
  * refused whole all count. Admission drops the refused record, so that reference resolves to nothing, or to a record of
- * another band, and the mandate silently binds no one, governs nowhere, or judges another default actor; the D8 probes
+ * another band, and the mandate silently binds no one, governs nowhere, or judges another default actor; probes
  * showed each lifting a restriction. A reference no authored record answers at all, or one to a record refused in an
  * installed base (band 90), is no dependency: it keeps today's reading. Neither is a refused `@agent` or `@workspace` no
  * admitted mandate or workspace names. Like refusedMandates it reads db's root view, not a scope.
@@ -357,7 +358,7 @@ export function refusedDependencies(reader: ReadHandle): readonly RefusedDepende
   );
 }
 /**
- * Review D-R2: whether `error` is the refusal `requireMandatesAdmitted` raises, an authored record a mandate resolution
+ * Whether `error` is the refusal `requireMandatesAdmitted` raises, an authored record a mandate resolution
  * reads having failed admission, so a caller names the admission report and a hand edit, not a governance position
  * (which, for a refused record that shares its identity with an admitted one of another band, would show that one).
  */
@@ -365,12 +366,12 @@ export function isAdmissionRefusal(error: unknown): error is RuntimeError & { re
   return error instanceof RuntimeError && error.admission === 'refused';
 }
 /**
- * Lane D, D2 and D9: IA-RUNTIME-REQUEST-INVALID, marked `admission: 'refused'` (`isAdmissionRefusal`), when any
- * authored `@mandate` failed admission, or any record a mandate resolution depends on did (`refusedDependencies`). The
- * decision reads db's root view, whatever `within` binds; what the error discloses does not (review D-N4, db PT5): through
- * a whole-workspace token (`isCompleteScope`) it names the first refused mandate db identifies, else the first record
- * db cannot identify (`unidentified`, review D2-R2), else the first dependency, the refused
- * record located on the error as `where`, with its admission code and message; through a narrowed token it names no
+ * IA-RUNTIME-REQUEST-INVALID, marked `admission: 'refused'` (`isAdmissionRefusal`), when any authored `@mandate`
+ * failed admission, or any record a mandate resolution depends on did (`refusedDependencies`). The decision reads db's
+ * root view, whatever `within` binds; what the error discloses does not (db PT5): through a whole-workspace token
+ * (`isCompleteScope`) it names the first refused mandate db identifies, else the first record db cannot identify
+ * (`unidentified`), else the first dependency, the refused record located on the error as `where`, with its admission
+ * code and message; through a narrowed token it names no
  * path, record or finding and carries no `where`. Every public resolver that reads a handle (governingMandates,
  * seatedWorkspace and defaultActor) calls it first, after reading its token, so the CLI's profile and the edit guard fail
  * closed rather than read a workspace whose restrictions a broken record may have lifted. An unknown or stale token keeps
@@ -398,8 +399,8 @@ export function requireMandatesAdmitted(reader: ReadHandle, within: string): voi
     ...(entry.identity === undefined ? {} : { identity: entry.identity }),
   });
   if (refused.length > 0) {
-    // Review D2-R2: a mandate db identifies is named first, a record it cannot identify only when there is none; the
-    // rest are counted by kind.
+    // A mandate db identifies is named first, a record it cannot identify only when there is none; the rest are
+    // counted by kind.
     const identified = refused.filter((entry) => entry.unidentified !== true),
       first = identified[0] ?? (refused[0] as RefusedMandate),
       unknown = first.unidentified === true,
@@ -480,9 +481,9 @@ export interface GoverningMandate {
   /** `authority.excluded-words`. */
   readonly excludedWords?: readonly string[];
 }
-/** OD1: the actor a mandate-gated command acts as when none is named. */
+/** The default actor: the actor a mandate-gated command acts as when none is named. */
 export interface DefaultActor {
-  /** The `@agent` identity; absent when OD1 names none. */
+  /** The `@agent` identity; absent when none is named. */
   readonly actor?: string;
   /**
    * What named it: the workspace's `composition.steward`, an authored `@agent`, or the one participant the workspace's
@@ -491,12 +492,12 @@ export interface DefaultActor {
   readonly by?: 'steward' | 'participant';
   /**
    * The authored `@agent` records an authored mandate of the workspace's closure scoped to it names as participant, by
-   * identity: the participants the position packet lists when K0 seats at the workspace (B3).
+   * identity: the participants the position packet lists when K0 seats at the workspace.
    */
   readonly participants: readonly string[];
   /**
    * The `@agent` identities a command may be told to act as at the workspace, sorted: the participants and, when it is
-   * an authored `@agent`, the workspace's `composition.steward`, which may be no participant (review C2-R1).
+   * an authored `@agent`, the workspace's `composition.steward`, which may be no participant.
    */
   readonly actors: readonly string[];
   /** Present exactly when `actor` is absent: why none is named, and the choice that would name one. */
@@ -531,12 +532,12 @@ export interface ProfileVerdict {
 const UNGOVERNED =
   'no authored @mandate governs here, so no move or word is restricted (a mandate only adds restrictions)';
 const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-/** Design §11's one next command for a mandate refusal, `ia scope` read as `ia position` (decision scope-verb-dispatch). */
+/** The one next command for a mandate refusal: the governance position of the mandate. */
 const governance = (seat: string): string => `ia position --seat ${seat} --shape governance`;
 
 /**
  * The records the scope token admits, runtime placement left out, and the reads of them that go through it; first,
- * IA-RUNTIME-REQUEST-INVALID when an authored `@mandate` failed admission (`failClosed`, lane D).
+ * IA-RUNTIME-REQUEST-INVALID when an authored `@mandate` failed admission (`failClosed`, runtime R23).
  */
 function admitted(reader: ReadHandle, within: string) {
   if (typeof within !== 'string' || within.length === 0) invalid('Runtime reads require an explicit scope token');
@@ -607,8 +608,8 @@ function admitted(reader: ReadHandle, within: string) {
 }
 
 /**
- * C1: the authored `@mandate` records that govern through the scope token `within`, by identity (each of band 100, so
- * in C1's band-then-identity order). Only the closure of `workspace` is read, or without it that of the workspace
+ * The authored `@mandate` records that govern through the scope token `within`, by identity (each of band 100, so
+ * in band-then-identity order). Only the closure of `workspace` is read, or without it that of the workspace
  * position seats `path` in, or with neither the repository's own `@workspace`'s: another workspace's mandate never
  * governs here. Only that closure is position's: for a path alone, the mandates that govern are those that claim it,
  * not every mandate scoped to the seated workspace that position's location-seat governance also lists. With `workspace` or `path`, a mandate governs when its
@@ -680,9 +681,9 @@ export function governingMandates(
 }
 
 /**
- * The workspace position seats a workspace-relative `path` in (C1's closure for a path): the workspace whose declared root
- * holds the seat's records, else the repository's own `@workspace`; undefined when no admitted `@workspace` holds it.
- * Reads through the scope token `within`, as `governingMandates` does.
+ * The workspace position seats a workspace-relative `path` in (the closure read for a path): the workspace whose
+ * declared root holds the seat's records, else the repository's own `@workspace`; undefined when no admitted
+ * `@workspace` holds it. Reads through the scope token `within`, as `governingMandates` does.
  */
 export function seatedWorkspace(reader: ReadHandle, within: string, path: string): string | undefined {
   const { read, workspaceOf } = admitted(reader, within);
@@ -690,13 +691,13 @@ export function seatedWorkspace(reader: ReadHandle, within: string, path: string
 }
 
 /**
- * OD1: the actor a mandate-gated command acts as at `workspace` when none is named. It is the `@agent` the workspace's
- * `composition.steward` resolves to (ia init names its participant there), when that is an authored (band 100) record;
- * failing that, the workspace's one participant, an authored `@agent` that an authored mandate of its closure scoped to
- * it names. An installed steward names no actor, as if none were stated (review C2-R1). With several participants there
- * is none, and the refusal names the choice; with none, there is no actor and no refusal, and the reason says whether
- * the workspace states no steward, one that resolves to no admitted `@agent`, or one that is no authored `@agent`. A
- * `workspace` that is not an admitted `@workspace` of the scope is IA-RUNTIME-REQUEST-INVALID.
+ * The default actor: the actor a mandate-gated command acts as at `workspace` when none is named. It is the `@agent`
+ * the workspace's `composition.steward` resolves to (ia init names its participant there), when that is an authored
+ * (band 100) record; failing that, the workspace's one participant, an authored `@agent` that an authored mandate of
+ * its closure scoped to it names. An installed steward names no actor, as if none were stated. With several
+ * participants there is none, and the refusal names the choice; with none, there is no actor and no refusal, and the
+ * reason says whether the workspace states no steward, one that resolves to no admitted `@agent`, or one that is no
+ * authored `@agent`. A `workspace` that is not an admitted `@workspace` of the scope is IA-RUNTIME-REQUEST-INVALID.
  */
 export function defaultActor(reader: ReadHandle, within: string, workspace: string): DefaultActor {
   const { nodes, targets, admit, closure } = admitted(reader, within);
@@ -740,14 +741,14 @@ export function defaultActor(reader: ReadHandle, within: string, workspace: stri
 }
 
 /**
- * C1: the refusal profile the governing `mandates` give `mode` and its target `words`. A mandate whose `binds` is false
+ * The refusal profile the governing `mandates` give `mode` and its target `words`. A mandate whose `binds` is false
  * governs for another participant and is left out; when every one is, no mandate here binds the actor, and the mode is
  * IA-RUNTIME-MANDATE-ACTOR, naming whom each binds. The rest are never pooled across participants: when they name more
  * than one, as they may without an actor, the mode is IA-RUNTIME-MANDATE-ACTOR too, naming each. A named participant
  * without an established binding (`binds` absent) also refuses every mode, even when it is the only one. Then the move is
  * judged: the mode is allowed when any mandate grants its move, by listing it or by declaring no moves, else
  * IA-RUNTIME-MANDATE-MOVE. Then, only when words are given, a word any mandate excludes is IA-RUNTIME-MANDATE-WORD.
- * Each refusal's `next` is the governance position of the first mandate it names (design §11), a read, which a command
+ * Each refusal's `next` is the governance position of the first mandate it names, a read, which a command
  * gated on this profile must leave ungated so that the refusal can be followed (an actor no mandate binds is refused
  * every mode, read included). With no governing mandate nothing is restricted and the verdict holds a notice instead.
  * An unknown mode, or a declared empty move list on any mandate, is IA-RUNTIME-REQUEST-INVALID.
@@ -768,7 +769,7 @@ export function profileRefusal(
   const judged = all.map((authority) => mandateRefusal(authority, mode));
   const whom = (authority: ProfileMandate): string =>
     authority.participant === undefined ? authority.identity : `${authority.identity} binds ${authority.participant}`;
-  // A mandate that binds another participant grants and excludes nothing for the actor (plan amendment C10).
+  // A mandate that binds another participant grants and excludes nothing for the actor.
   const binding = all.flatMap((authority, index) =>
     authority.binds === false ? [] : [{ authority, refusal: judged[index] }],
   );
@@ -778,7 +779,7 @@ export function profileRefusal(
       `no mandate that governs here binds the acting @agent: ${all.map(whom).join('; ')}`,
       all[0]!.identity,
     );
-  // Nor are two participants' mandates ever pooled: without an actor to say whom each binds, the choice is open (OD1).
+  // Nor are two participants' mandates ever pooled: without an actor to say whom each binds, the choice is open.
   const named = binding.flatMap(({ authority }) => (authority.participant === undefined ? [] : [authority]));
   const participants = new Set(named.map((authority) => authority.participant));
   if (participants.size > 1)

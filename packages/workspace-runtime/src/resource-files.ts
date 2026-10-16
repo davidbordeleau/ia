@@ -17,7 +17,7 @@ export function canonicalPackageRoot(root: string): string {
     current = resolve(current, segment);
     if (lstatSync(current).isSymbolicLink()) invalid('Aliased resource package root');
   }
-  // Another case or normalization of the same names is not an alias (#315); the loop above has refused every link.
+  // Another case or normalization of the same names is not an alias (crowncodes/ia#315); the loop above has refused every link.
   if (!lstatSync(path).isDirectory() || !unaliased(path, realpathSync.native(path)))
     invalid('Aliased or unavailable resource package root');
   return path;

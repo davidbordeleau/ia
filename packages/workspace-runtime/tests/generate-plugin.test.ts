@@ -76,7 +76,7 @@ const RECORDS = [
   '',
 ].join('\n');
 
-it('renders the manifests and a user-invoked skill with its inline body (A8)', () => {
+it('renders the manifests and a user-invoked skill with its inline body', () => {
   const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS });
   const files = renderPlugin(
     db,
@@ -173,7 +173,7 @@ const AGENT_RECORDS = [
   '',
 ].join('\n');
 
-it('renders an agent-profile with its tools and inline body, with no marker line (A8)', () => {
+it('renders an agent-profile with its tools and inline body, with no marker line', () => {
   const { db, within } = fixture({ '.ia/src/probe.ia': `${RECORDS}\n${AGENT_RECORDS}` });
   const files = renderPlugin(
     db,
@@ -195,7 +195,7 @@ it('renders an agent-profile with its tools and inline body, with no marker line
     '---\nname: probe-agent\ndescription: Probes one target.\ntools: Read, Grep, Glob\n---\n\nYou probe.\n',
   );
 });
-it('writes an installed reference and an asset at their output paths with their bytes (A8)', () => {
+it('writes an installed reference and an asset at their output paths with their bytes', () => {
   const { db, within } = fixture({ '.ia/src/probe.ia': RECORDS });
   const files = renderPlugin(
     db,

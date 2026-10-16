@@ -87,10 +87,9 @@ export function runRuntimeFixtures(root: string): readonly FixtureResult[] {
 }
 
 /**
- * The mandate resolver (plan amendment C1) over a copy of the conformance corpus that adds two participants whose
- * mandates scope the foundation workspace, which states no composition.steward: `defaultActor` names neither, and the
- * profile of the first one's governing mandate refuses a move it does not list and a word it excludes; codes come only
- * from execution.
+ * The mandate resolver over a copy of the conformance corpus that adds two participants whose mandates scope the
+ * foundation workspace, which states no composition.steward: `defaultActor` names neither, and the profile of the first
+ * one's governing mandate refuses a move it does not list and a word it excludes; codes come only from execution.
  */
 export function runActorFixtures(root: string): readonly FixtureResult[] {
   const workspace = mkdtempSync(resolve(tmpdir(), 'ia-actor-fixture-')),

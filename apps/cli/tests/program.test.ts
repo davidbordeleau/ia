@@ -1,6 +1,6 @@
 /**
- * #436: the lookup by which a hand-run `ia` command finds the programs it starts (src/program.ts). Only qualified PATH
- * entries count, the rule the session hook applies to `ia` (host plugin distribution design §8.1, LKI-41). The Windows
+ * crowncodes/ia#436: the lookup by which a hand-run `ia` command finds the programs it starts (src/program.ts). Only qualified PATH
+ * entries count, the rule the session hook applies to `ia` (host plugin distribution spec §8). The Windows
  * rules run on every platform here, with Windows path semantics and an in-memory file system, so Linux CI checks them too.
  */
 import { chmodSync, constants, writeFileSync } from 'node:fs';

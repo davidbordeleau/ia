@@ -1,30 +1,75 @@
 # @inventarch/db
 
-Filesystem composition of language, graph and compliance. [SPEC.md](SPEC.md) owns admitted views, revisions, read scopes and the disposable cache.
+[![npm](https://img.shields.io/npm/v/@inventarch/db?label=npm)](https://www.npmjs.com/package/@inventarch/db) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-Use `open(workspacePath)` to discover `.ia/src`, then `resolveScope({root, phase})` and pass its `token` as `within` to `snapshot`, `records`, `get`, `referencedBy`, `directedView`, `resolveSeat`, `words`, `roots`, `resolve`, `search` and `traverse`. Runtime consumers must use tokens. Unscoped methods and independent scope issuance are privileged host inspection. A child scope intersects physical occurrences; changing its effective registry refuses. Identity allowlists only narrow. `report` and `refused` expose root-view admission evidence to the privileged host. A snapshot's `membership` gives each of its records one `{identity, root, band, digest}` row: the source root it was captured under (the longest root that a `@workspace` admitted at the workspace root declares in `sources`, else its system folder), its band and its per-record digest (SPEC D02a). Every scope gives an occurrence the same row. `directedView(identity)` lists the identity's declared edge rows, the derived inverses of its counterparts' declarations (read from its side in the kernel spelling, such as `governed-by` at the target, with the record that declared them) and its typed field references both ways, rows whose counterpart is outside the scope pruned (SPEC D09, graph G06b). `resolveSeat(path)` resolves a workspace-relative path to the seat it is declared at, `by` naming the rule: the `@system` of the system folder holding it (`system`), else the `@workspace` declaring the longest `sources` root containing it (`root`), else, for a path in no `.ia` tree, the repository's own `@workspace` (`repository`); with no seat, `unknown` reads `undeclared`, or `outside` for a path that is absolute or escapes the workspace. Its `claimants` are the records whose `covers` (a `@check`'s `check.covers` included) or `hook.paths` selections select the path (a `@check`'s textual `check.scope` claims nothing), band descending then identity, each with the matching fields and selections (SPEC D02b, graph G06c). A scope prunes the seat and the claimants like a search. `words()` lists the words the view's registry registers for its admitted systems, the floor's two included, sorted: the closed set a runtime scope key's word must belong to (SPEC D09a). A child scope never changes it, so every scope of a view reads the same words; a scope issued for another root reads that root's view, whose registry may admit other systems. The registry itself stays private. `roots()` lists the roots the `@workspace` records declare in `sources` as `{root, placement, workspace}`, longest first, so a reader can tell a workspace's capture members from the rest; a scope that does not admit the declaring workspace prunes its roots, never re-rooting a row (SPEC D02c).
+> `@inventarch/db` reads an IA workspace from disk. It discovers the workspace's `.ia/src` sources, installed distributions and adopted mounts, admits them through `@inventarch/language`, `@inventarch/graph` and `@inventarch/compliance`, and serves the admitted records through scoped read handles. [`@inventarch/runtime`](../runtime/README.md), the `ia` CLI and the other IA apps read workspaces through it.
 
-`refresh()` rebuilds and verifies stable inputs before replacing the state. A failed refresh preserves the previous view. A source change stales existing scopes even if those bytes are subsequently restored. `close()` refuses future reads. Cached root graphs are always verified against a fresh build; corrupt or forged payloads are replaced, equal bytes are not rewritten, and unavailable cache storage leaves in-memory reads usable with a warning. Set `cache:false` for a fully read-only open.
+## ⚡ Quick start
 
-`authoredRevision` on a handle, and on each snapshot, is the revision without the sources at runtime placement (graph `authoredRevisionOf`, the derived `.ia/.db-inputs.json` input kept), so a runtime-band source such as the evidence an `ia validate` writes moves `revision` and leaves it (one that adds no system folder and declares no `@system` or `@schema`, which the kept input and the registry name), while an authored edit moves both; it equals `revision` while no source sits at runtime placement (SPEC D05a). Scopes, `revision` read bindings (`IA-DB-STALE`), previews and the cache keep `revision`; retention and the capture pair key on the authored revision.
+```sh
+npm install @inventarch/db
+```
 
-A handle also retains the previous admitted root snapshot: the most recent one whose authored revision differs from the current one, so opening or refreshing at an unchanged authored revision keeps it (SPEC D08). `previousRevision` and `previousAuthoredRevision` name it. `staleness(identity)` compares the identity's current membership digest with the previous one's and answers `unchanged`, `changed`, `new` (every current identity while no previous snapshot is retained) or `removed`; `readiness(identity, digest)` answers `current`, `previous` or `unknown` for a digest observed earlier, such as an `@observation`'s `subject-revision`. Both take the same `within`, `root`, `phase` and `revision` bindings as `get`, answer about the record `get` returns, and refuse an identity outside the scope with `IA-DB-OUT-OF-SCOPE`. Only root snapshots are retained: when a narrower root or phase reads an occurrence other than the root one, `staleness` is undefined and `readiness` answers only `current` or `unknown`. The pair persists between processes as the capture pair `ia capture` writes through `writeCapture(root, text)`: `.ia/work/snapshot/current.json` and `previous.json`, `ia-snapshot-1` documents (SPEC D08a). Every disk handle, whatever its cache setting, seeds its previous snapshot from that pair the first time it is asked, never on open or refresh, and never writes it; `capturedRevision` and `capturedAuthoredRevision` name the revision and the authored revision of the capture at `current.json`, which a capture written before the authored revision names by its `revision`; a capture whose records not at runtime placement are the fresh ones, by identity, band and digest, is trusted at the fresh authored revision whatever its runtime-band rows and roots, while a runtime-band record that changes which of them are admitted leaves it untrusted until the next capture. A file that is no capture, or one behind a link, is ignored and every read stays usable. A refresh rotates the pair in memory without reading the capture pair, so a handle that lived through an edit reports it whether or not it was captured, and `capturedRevision` is read again when next asked. `writeCapture` counts the records against the prior capture by digest, rotates the prior `current.json` into `previous.json` on an authored revision change, writes nothing until its checks pass (a link, a `.ia/work` or snapshot directory that is not a directory, a snapshot path that is not a regular file) and leaves the pair it found when a write fails. `planCapture(root, text)` makes the same checks and reads and returns what `writeCapture` would (its counts and rotation) with the changed, added and removed identities, each list sorted; it creates and writes nothing, which is how `ia capture --preview` reports a capture without spending the retained previous snapshot.
+Read the workspace from the [root README quick start](../../README.md#-quick-start) without writing to it:
 
-`inertDeclarations(options)` names the declarations the capture reads that declare nothing, each with its record, field, value, path, line and reason: a `composition.sources` entry that names no root, and a path selection the dialect reads as none (SPEC D02b). They are not admission findings.
+```js
+import { open } from '@inventarch/db';
 
-An adopted mount bound in `.ia/workspace.json` has its sources labelled `.ia/adopted/<id>/<revision>/…`, under which no file exists; `adoptedBindings(root)` returns each binding `{id, path, revision, tree}` with that label as `tree`, so a host reads the mount's other files from `path`. `sourceTree(path)` names the tree a source path belongs to: '' for the workspace's own `.ia/src`, else the directory above its `.ia/src`, or the label of an adopted mount (SPEC D02a).
+const workspace = open('path/to/your-project', { cache: false });
+try {
+  const { token } = workspace.resolveScope();
+  const decision = workspace.get('work-system/definition/decision/api-response-format', { within: token });
+  console.log(decision.band, decision.source.path);
+  console.log(workspace.resolveSeat('.ia/src/decision.ia', { within: token }));
+} finally {
+  workspace.close();
+}
+```
 
-`readWorkspaceBytes(root, path, limit)` reads one workspace file's exact bytes for a host, such as the document a record names: a path that escapes the workspace, is not portable by the rule the distribution workspace file reader applies, or passes a link or junction, a hard-linked or nonregular file and a file of more than `limit` bytes refuse, as package source capture refuses them, and every refusal names the file by its canonical path alone (SPEC D01a). The runtime Door's `read` reads documents through it.
+```text
+100 .ia/src/decision.ia
+{
+  path: '.ia/src/decision.ia',
+  seat: 'workspace-system/definition/workspace/my-project',
+  by: 'root',
+  claimants: []
+}
+```
 
-The package writes no authored source. An explicit `floor` wins; otherwise an existing local floor directory is authoritative as a whole, and an absent local directory uses the language's generated source embed. Higher systems are never implicit. Paths escaping the workspace, source aliases and invalid UTF-8 refuse by name. Per-source `locations` supply explicit placement/provenance overrides. No source writer, and no retention beyond the current and previous root snapshots, is implemented.
+`open` admits the workspace once. `resolveScope` issues an opaque token, and every read that passes it as `within` stays inside that scope. Band 100 marks a record the workspace authors. `cache: false` makes the open fully read-only; without it, the handle keeps a disposable graph cache at `.ia/.iadb/graph.json`.
 
-`preview([{path,text}])` validates an in-memory draft against the current source snapshot through the same admission pipeline. It returns base/candidate revisions, admitted records and full refusal/report evidence without mutating files, caches, scopes or the handle. It is a privileged authoring-host API; callers must check current source freshness before using its result. Floor edits and malformed/aliased draft paths refuse.
-# Editor snapshots
+## 🧭 What it does
 
-Installed native distributions are discovered through `.ia/distributions/active.json` and the matching portable lock. Every fresh snapshot verifies selected manifests, complete file inventories, generation bytes and compatibility before ordinary admission. Sources retain their physical store paths and adopted placement; the generated installation workspace records direct distribution use. Missing/corrupt/drifted state and pending recovery refuse instead of silently dropping content. Database reads perform no installation write or network access. The public `@inventarch/db/distribution` entrypoint owns shared strict decoders and candidate-generation verification for the installer.
+| Export | Use it for |
+| --- | --- |
+| `open(root, options)` | Discover and admit a workspace and return a `Handle`. `checks: 'structural'` admits `@check` records the way `ia validate`, `ia preview` and `ia author` do. |
+| `resolveScope(request)` | Issue a scope token for a root, a phase or a list of identities. A child scope only narrows. |
+| `get`, `records`, `snapshot`, `search`, `traverse`, `resolve`, `referencedBy`, `directedView` | Read admitted records and their relationships through a token. |
+| `resolveSeat`, `roots`, `words` | Find the seat a path is declared at and the records that claim it, the declared source roots, and the registered words. |
+| `report`, `refused`, `unadmitted` | Admission findings and the records admission left out, for privileged host inspection. |
+| `revision`, `authoredRevision`, `staleness`, `readiness`, `refresh()` | Track change. The authored revision leaves out runtime-placed sources such as `ia validate` evidence; `staleness` and `readiness` compare a record with the previous retained snapshot. |
+| `preview(changes)` | Admit in-memory drafts against the current sources without writing anything. |
+| `planCapture`, `writeCapture` | Plan or write the capture pair under `.ia/work/snapshot/` that `ia capture` maintains. |
+| `bindChecks`, `writeEvidence`, `readEvidence` | Bind each `@check` to an evaluator and keep the `@observation` evidence `ia validate` records under `.ia/work/evidence/`. |
+| `writeRunnerEvidence` | Record a verified runner journal under `.ia/work/runner-evidence/`. |
+| `readWorkspaceBytes(root, path, limit)` | Read one workspace file's exact bytes, refusing links, escaping paths and files over the limit. |
+| `@inventarch/db/editor` | `EditorDatabase` and `EditorSnapshot`: cache-free readers with unsaved overlay buffers. |
+| `@inventarch/db/distribution` | Strict decoders and canonical bytes for release descriptors, manifests, locks, generation membership, activation pointers and the installed-implementation catalog. |
+| `@inventarch/db/descriptors` | Pure, bounded compilers for `domain-model`, `storage-binding` and `app-composition` descriptor resources; see [their contract](src/descriptors/SPEC.md). |
 
-Activation identity and its monotonic counter participate in view/source revisions, including editor overlays and draft previews. Rollback therefore cannot revive prior scopes. The host-only `candidateInstallation` option selects a verified staged pointer for admission; explicit `null` captures authored/bound sources without an installation. Editor metadata reports installed sources and generated installation state as read-only. Matching authored system declarations may override installed authority only under the locked provider/version contract and ordinary whole-tree admission.
+The `./internal/*` subpaths serve specific toolchain consumers and are not a stable contract.
 
-`@inventarch/db/editor` provides `EditorDatabase` and immutable `EditorSnapshot` readers. Overlay buffers (including explicit deletion) reuse normal discovery, registry, graph and admission rules without writing source/cache files. Reads preserve the existing location/phase/scope restrictions. Editor readers retain no previous snapshot: `previousRevision` is undefined, `staleness` reads `new` for every current identity and `readiness` never answers `previous`. Captures expose saved/dirty/source-origin/version metadata; embedded sources remain read-only. Failed refresh retains the last reader; hosts must surface unavailability and refuse stale actions. See the colocated spec and editor tests.
+## ⚖️ What it does not do
 
-`@inventarch/db/descriptors` compiles OS09 domain, storage and app descriptor resources against a host-built trusted registry without I/O or code execution; see [its SPEC](src/descriptors/SPEC.md).
+- **It never writes authored source.** Its only writes are the disposable cache, which `cache: false` turns off, and the capture pair and evidence files, each only when you call its writer.
+- **It makes no network request and no installation write.** Reads verify installed distributions and refuse missing, corrupt or drifted state. Acquiring and installing archives belongs to the application, such as the `ia` CLI.
+- **Admission is not evaluation.** Opening a workspace runs no conformance suite or prose case. `bindChecks` runs no evaluator that is not built in: such a check stays `not-evaluated`, which is never a pass.
+- **A scope narrows reads; it does not decide who reads.** Unscoped reads and issuing independent scopes are privileged host inspection, and the host that holds the handle decides what it discloses.
+- **Evidence is not attestation.** A runner journal's hash chain establishes internal integrity, not an external observer, authorized execution or real-world effects.
+
+## 📚 Learn more
+
+- [SPEC.md](SPEC.md): the database contract for revisions, scopes, retention, capture and evidence.
+- [LANGUAGE.md](LANGUAGE.md): the public vocabulary this release carries.
+- The [root README](../../README.md) and the [architecture reference](../../docs/reference/architecture/README.md).
+- Related packages: [`@inventarch/language`](../language/README.md), [`@inventarch/graph`](../graph/README.md), [`@inventarch/compliance`](../compliance/README.md) and [`@inventarch/runtime`](../runtime/README.md).

@@ -35,7 +35,7 @@ const tree = (directory, directoryTimes = true) =>
     .sort(([a], [b]) => a.localeCompare(b));
 
 /**
- * Position-and-projection §3, against what one `ia init <workspace> --apply --json` printed and left: exactly three
+ * The CLI contract's `init` row, against what one `ia init <workspace> --apply --json` printed and left: exactly three
  * authored records in `.ia/src/workspace.ia` (a `@workspace`, its participant `@agent` and that `@mandate`), no
  * local system or distribution, the ignore file and the capture effect's snapshot, and no project effect without
  * `--host`.

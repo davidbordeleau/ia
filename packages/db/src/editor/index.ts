@@ -17,8 +17,8 @@ export type { InputOptions } from '../inputs.js';
  * What an editor database reads (`InputOptions`) and how it admits (`ViewOptions`). D13 `checks`: `strict`, the
  * default for every caller that does not ask, admits a `@check` only when its runner is built in, as every released
  * reader has it; `structural` admits one naming any single evaluator, for the authoring paths that judge a candidate as
- * `ia validate` admits the workspace (plan amendment C21). The snapshot, its `preview` drafts, its candidates and every
- * update or refresh admit alike. Evidence is listed only when `evidence` asks for it, which the authoring paths never do.
+ * `ia validate` admits the workspace. The snapshot, its `preview` drafts, its candidates and every update or refresh
+ * admit alike. Evidence is listed only when `evidence` asks for it, which the authoring paths never do.
  */
 export interface EditorOptions extends InputOptions {
   readonly checks?: 'strict' | 'structural';

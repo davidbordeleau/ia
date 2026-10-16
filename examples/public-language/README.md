@@ -1,20 +1,42 @@
 # Public language examples
 
-These small examples demonstrate representation and generic compilation. They contain an original label-reading procedure, not a curated agent or design method.
+[![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](../../LICENSE)
+
+> Small, original records that show the public vocabulary at work: agent composition, quality, architecture, evidence, the language root and project work. They demonstrate representation and generic compilation. They are not a curated agent team, design method or quality standard.
 
 | File | Demonstrates |
-|---|---|
-| [composition.ia](records/composition.ia) | Agent, capability, user-authored method, profile, workspace, harness and entry binding |
-| [quality.ia](records/quality.ia) | Adopted newline requirement, named check and declared scenario |
-| [architecture.ia](records/architecture.ia) | Interface/storage boundaries, a dependency edge and adopted constraint |
-| [evidence.ia](records/evidence.ia) | Evidence attribution with explicitly unavailable bytes |
-| [language.ia](records/language.ia) | Workspace and distribution root composing the eleven public systems |
-| [work.ia](records/work.ia) | A plan, its milestone, one task and the open decision it waits on; a made decision grounding a spec that partially supersedes another |
+| --- | --- |
+| [composition.ia](records/composition.ia) | An agent, a user-authored playbook that reads a label, a capability, an agent profile, a workspace, an entry execution binding, a harness that composes them, and a distribution root |
+| [quality.ia](records/quality.ia) | A workspace adopting a versioned newline requirement, a check that enforces it, and a success case and a failure case |
+| [architecture.ia](records/architecture.ia) | Interface and storage boundaries, a `uses` dependency edge, an adopted boundary constraint and its success and failure cases |
+| [evidence.ia](records/evidence.ia) | Two observations: one whose evidence bytes are explicitly unavailable, and one typed as a check result about one record at one revision |
+| [language.ia](records/language.ia) | The workspace and distribution root that compose the eleven public systems |
+| [work.ia](records/work.ia) | A plan, its milestone, two ordered tasks and the open decision the first one waits on; a made decision grounding a spec that partially supersedes another |
 
-A default `ia init` writes no system: its three records sit in `.ia/src/workspace.ia`, and a record authored beside them under `.ia/src`, outside every system folder, is owned by its word's system, so a new workspace can author `@plan`, `@milestone`, `@task` and `@decision` records without editing anything. The local system that `ia init --system` writes requires `agent-system`, `work-system` and `workspace-system`, so its folder can hold them too. A system may use only words owned by systems it directly requires; a system of your own that does not list `- work-system` in `requires` refuses each such record with `IA-COMP-DISCRIMINATOR-FOREIGN`.
+## Try one in your workspace
 
-Run `pnpm public-language:check` to compile the manifest-selected corpus. Run `pnpm exec vitest run --config vitest.tools.config.mts tools/native/public-language.test.ts` for positive and negative conformance cases, including real toy quality and architecture evaluations. No model or marketplace service is called.
+Each file is admitted when copied into the `.ia/src/` of a workspace that `ia init` created. Copy `records/work.ia` to `.ia/src/work-example.ia`, then run:
 
-The [manifest](manifest.json) lists all inputs: the public kernel, canonical schemas, neutral system declarations and these examples. The declarations retain existing vocabulary identities, with neutral stewards and public-only requirements. The loader does not discover other authored records. The [language guide](../../docs/reference/language/README.md) explains authoring, evaluation limits and extension.
+```sh
+ia validate
+ia next --seat work-system/definition/plan/example-plan
+```
 
-This corpus verifies that the public language can be compiled from explicitly selected inputs. The CLI bundles a language-only archive generated from the same manifest, excluding the illustrative records other than its language distribution root. `ia init <directory> --host none --apply --yes` installs that archive and creates a consumer workspace. See the [repository quickstart](../../README.md) for installing the CLI, writing a first record and checking it. Package installation and platform qualification are separate checks from this corpus's structural and execution examples.
+`ia next` reports `example-task` blocked because `example-decision` has no choice yet, and `example-reference-review` blocked behind `example-task`. Validation also shows what the other examples leave unproven: the quality and architecture requirements stay `not-evaluated` without an evaluator, and the composition example's `example-entry` binding is `unavailable` because no installed catalog lists an entry implementation.
+
+- Copy `evidence.ia` together with `quality.ia`: its observations cite the quality contract, and on their own they report `IA-GRAPH-TARGET-MISSING`.
+- Leave `language.ia` out of your workspace. It declares a second `@workspace` over `.ia/src`, so `ia position` without `--seat` could no longer pick your workspace as the default seat.
+
+## How this repository checks them
+
+- [manifest.json](manifest.json) lists every input: the kernel floor, the canonical schemas, the neutral system declarations in `contracts/` and these records. The loader discovers nothing else. The declarations keep each word's identity, schema and consent, with neutral stewards and public-only requirements.
+- `pnpm public-language:check` compiles that corpus and the example harness. No model, account or marketplace service is called.
+- `pnpm exec vitest run --config vitest.tools.config.mts tools/native/public-language.test.ts` runs the positive and negative conformance cases. Missing fields, dangling relationships, a missing profile, a recursive capability and an unavailable host implementation are refused. Toy evaluators observe the newline requirement pass and fail on real bytes and the boundary requirement fail when the `uses` edge is removed, and a missing or throwing evaluator stays `not-evaluated`.
+- `fixtures/` holds fixture-only release selectors for tests, apart from the public language base.
+- [versions.json](versions.json) selects the version of the language base the CLI bundles. That archive is generated from the same manifest and keeps only the vocabulary and the language distribution root; `ia init` installs it in every new workspace.
+
+## What the examples do not establish
+
+Admission checks structure. The observation's fields show the shape of evidence: schema conformance does not verify timestamps, content digests, provenance, retention transitions or that external evidence exists, and the placeholder digest is not an attestation. Declared cases and observations never manufacture execution evidence, and the toy requirements endorse no architecture or quality method.
+
+See the [examples contract](SPEC.md), the [language guide](../../docs/reference/language/README.md), the [quick start](../../README.md#-quick-start) and the [architecture reference](../../docs/reference/architecture/README.md).

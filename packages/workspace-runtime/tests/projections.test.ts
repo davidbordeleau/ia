@@ -357,7 +357,7 @@ const resign = (value: ProjectionDescriptor): ProjectionDescriptor => {
   const { digest: _digest, ...body } = value;
   return { ...body, digest: metadataDigest(body) };
 };
-/** The Claude disclosure (#444): agent host tools are bounded by native effects, and they stay host metadata. */
+/** The Claude disclosure (crowncodes/ia#444): agent host tools are bounded by native effects, and they stay host metadata. */
 const CLAUDE_AGENT_PRESENTATION = {
   feature: 'agent-presentation',
   level: 'guidance',
@@ -786,7 +786,7 @@ it('omits optional inline material within the budget while keeping its verified 
 });
 
 it('offers optional inline blocks to the budget in declared order, not resource path order', () => {
-  // Review of #524: order 1 is references/review-guide.md and order 2 is references/examples/note.md, which sorts
+  // Review of crowncodes/ia#524: order 1 is references/review-guide.md and order 2 is references/examples/note.md, which sorts
   // first by path. With room for one block, the first declared use must survive, as resolveResourcesWith admits it.
   const f = setup(),
     [first, second] = ['First declared optional guide.', 'Second declared optional note.'];
@@ -1574,7 +1574,7 @@ describe('HOST-01 emitted projection baseline', () => {
         command = entry(result, 'command');
       const guide = f.resources.files.find((r) => r.key.path === 'references/review-guide.md')!;
       for (const { text } of [agent, skill, command]) {
-        // Contract (#445): method, convention and the inlined guide are prose in every export, and native activation stays text,
+        // Contract (crowncodes/ia#445): method, convention and the inlined guide are prose in every export, and native activation stays text,
         // never a host trigger. Runtime context selection evaluates activation (SPEC.md, PT2); no prose profile derives triggers from it.
         for (const value of [
           '## @playbook fictional-review-method',
@@ -1766,7 +1766,7 @@ describe('HOST-01 emitted projection baseline', () => {
     RESTRICTED = unavailable('Empty tool sets and delegated-agent restrictions are not qualified by this profile');
   const TYPED = unavailable('Typed argument mapping is unavailable in the host catalog'),
     TRIGGER = unavailable('This profile supports prompt-literal guidance only');
-  // The fixed messages of the host-tool effect ceiling (#444) in NativeClosure.export (src/projections.ts).
+  // The fixed messages of the host-tool effect ceiling (crowncodes/ia#444) in NativeClosure.export (src/projections.ts).
   const sourceUnavailable = (message: string): Refusal => ({ code: 'IA-PROJECTION-SOURCE-UNAVAILABLE', message });
   const NO_PROFILE = sourceUnavailable('Host tools need native capability effects from an agent profile'),
     EXCEEDS = sourceUnavailable('Host tools exceed the native capability effects');
@@ -1844,7 +1844,7 @@ describe('HOST-01 emitted projection baseline', () => {
       change: withRequirement('resources', 'live-host'),
       outcomes: everywhere(EVIDENCE),
     },
-    // #443: an agent export is a host-native agent file in both Claude products and the Codex workspace; the Codex plugin adapts roles to explicit skills.
+    // crowncodes/ia#443: an agent export is a host-native agent file in both Claude products and the Codex workspace; the Codex plugin adapts roles to explicit skills.
     {
       name: 'a native-agents requirement',
       id: 'reviewer',
@@ -1902,7 +1902,7 @@ describe('HOST-01 emitted projection baseline', () => {
     },
     { name: 'a boolean argument', id: 'check', change: withArgument('boolean'), outcomes: everywhere(TYPED) },
     { name: 'an integer argument', id: 'check', change: withArgument('integer'), outcomes: everywhere(TYPED) },
-    // #444: the agent profile's capabilities declare `effects [read]`, and v1 maps read to the read, grep and glob tool ids.
+    // crowncodes/ia#444: the agent profile's capabilities declare `effects [read]`, and v1 maps read to the read, grep and glob tool ids.
     {
       name: 'an agent export without an agent profile',
       id: 'reviewer',

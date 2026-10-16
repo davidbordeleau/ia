@@ -132,7 +132,7 @@ async function offered(): Promise<{
     run(['install', '--requests', REQUESTS, '--catalog', CATALOG, '--root', root, ...extra], { env });
   return { root, env, install };
 }
-/** The packet digest of the receipt the last projection apply wrote (B12). */
+/** The packet digest of the receipt the last projection apply wrote. */
 const packetDigest = (root: string): string => JSON.parse(read(root, RECEIPT)).packetDigest;
 const lockedIds = (root: string): string[] =>
   JSON.parse(read(root, LOCK)).packages.map((pkg: { id: string }) => pkg.id);
@@ -201,16 +201,16 @@ it('names registered projections in the plan only when one is registered, and re
 });
 
 /**
- * Milestone position-packet's upgrade path through the install refresh (B9, B11, B12): a workspace a 1.x `ia host
- * claude --apply` registered, its guard group and state, its projection state listing demo-steward.md and that
- * marked file. The refresh goes through the same writer as `ia host`, so it retires the guard before any file.
+ * The upgrade path through the install refresh: a workspace a 1.x `ia host claude --apply` registered, its guard
+ * group and state, its projection state listing demo-steward.md and that marked file. The refresh goes through the
+ * same writer as `ia host`, so it retires the guard before any file.
  */
 it('retires a 1.x steward guard and deletes its steward file when an install refreshes the projection', async () => {
   const { root, env, install } = await offered();
   legacyRegistration(root, env);
   put(root, '.claude/agents/x.md', 'my own agent\n');
   expect(guardGroups(root)).toBe(1);
-  // The plan names the refresh and the retirement it starts with (B11), and writes nothing.
+  // The plan names the refresh and the retirement it starts with, and writes nothing.
   expect(JSON.parse((await install('--json')).stdout)).toMatchObject({ refresh: ['claude'], retire: ['claude'] });
   expect(flat((await install()).stdout)).toContain(
     'Registered host projections (claude) are refreshed after apply; the refresh first retires the steward guard registered in .claude/settings.local.json (claude).',
@@ -260,7 +260,7 @@ it('retires the guard before the refresh changes any projection file: a failing 
   }
   expect(failed.exitCode, failed.stdout).toBe(3);
   // The fixture owns no MCP registration, so the rerun is the projection's own apply, as doctor names it
-  // (`projectionRerun`, task ia-project-verb).
+  // (`projectionRerun`).
   expect(JSON.parse(failed.stdout)).toMatchObject({
     message: 'file write failed',
     next: rootedNext('The installation is applied. Run "ia project claude --apply" to finish.', 'claude', root),
@@ -473,7 +473,7 @@ it('refuses at class 3 naming the applied install when its projection refresh is
 });
 
 /**
- * Task ia-project-verb: a projection `ia project` wrote has no host registration, so an install, update or remove names
+ * A projection `ia project` wrote has no host registration, so an install, update or remove names
  * the repair doctor names for it, `ia project <host> --apply`, which re-applies the projection and registers nothing;
  * `ia host <host> --apply` would also register an MCP server.
  */

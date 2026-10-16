@@ -1,9 +1,9 @@
 /**
- * `ia read` (position-and-projection §5, design row 23), end to end against the repository's own records, copies of
+ * `ia read` (SPEC `read`), end to end against the repository's own records, copies of
  * the committed loop fixture and a copy of the conformance corpus whose work records name documents.
  *
- * The exit evidence of plan task ia-read-verb: `ia read agent-system/binding/agent/public-agent-system-steward` prints
- * the says text only. A read writes nothing and certifies nothing; structure stays in `ia inspect`.
+ * `ia read agent-system/binding/agent/public-agent-system-steward` prints the says text only. A read writes nothing
+ * and certifies nothing; structure stays in `ia inspect`.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -143,7 +143,7 @@ it('prints the says text only for the plan exit-evidence identity, with its dige
   expect(header).toBe(`Read  ${STEWARD}`);
   expect(facts).toContain('record');
   expect(human.stdout).toContain(`sha256 ${sha256(says).slice(0, 12)}`);
-  // The design's wording (position-and-projection §5, IM-43), not only whatever the constant holds.
+  // The contract's wording (runtime SPEC, body reader), not only whatever the constant holds.
   expect(NOT_CERTIFIED).toBe('body not certified by this read');
   expect(human.stdout).toContain('body not certified by this read');
   for (const structure of ['Who owns the agent and mandate words', 'meaning', 'governance', 'applies'])

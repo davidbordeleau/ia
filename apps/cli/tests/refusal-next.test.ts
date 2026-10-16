@@ -1,5 +1,5 @@
 /**
- * Design row 27 (position-and-projection §12): every refusal names one next command. The codes are enumerated from
+ * Every refusal names one next command (consumer CLI contract). The codes are enumerated from
  * their sources — every IA code the CLI and the services it calls spell, and every distribution `fail()` code — and
  * the construction sites from the CLI source itself, each next action resolved through the type checker, so a refusal
  * added later without a runnable next command fails here rather than reaching a user. `--json` carries the command in
@@ -435,7 +435,7 @@ it('gives a service refusal of every code one next command, in --json and in hum
 });
 
 it('keeps the 1.x Refusal and refusalOf forms of @inventarch/cli/internal/consumer, with next filled where rendered', () => {
-  // Decision release-bump: published internal/* signatures keep their old forms through defaults.
+  // Published internal/* signatures keep their old forms through defaults.
   const caps = resolveCapabilities({ env: {}, isTTY: false }, {});
   const old = new Refusal('IA-ACME-HELD', 'Something held', 3);
   expect(old.where).toBeNull();
@@ -667,7 +667,7 @@ interface Scan {
   readonly texts: number;
   /** The parameters a site passed through, each checked at the calls that supply it. */
   readonly parameters: number;
-  /** `<file>:<line>: <why>` for each next action that breaks design row 27 or that the checker cannot resolve. */
+  /** `<file>:<line>: <why>` per next action that breaks the one-command rule or that the checker cannot resolve. */
   readonly defects: readonly string[];
 }
 /**
@@ -698,7 +698,7 @@ function scanSites(paths: readonly string[]): Scan {
       check(expression.right, at, nullable);
       return;
     }
-    // The published constructor defaults `next` to null (decision release-bump), so the checker no longer refuses a
+    // The published constructor defaults `next` to null, so the checker no longer refuses a
     // site that names none; this scan does, for an omitted argument (below) and for null in any branch.
     if (expression.kind === ts.SyntaxKind.NullKeyword) {
       if (!nullable) defects.push(`${at}: a null next action`);
@@ -1046,7 +1046,7 @@ function invocations(): readonly {
       argv: ['host', 'claude', '--root', refused],
       command: `ia validate --root ${quote(realpathSync(refused))}`,
     },
-    // `ia project` (task ia-project-verb), with the root as given: an unknown host names the Claude plan, a missing
+    // `ia project`, with the root as given: an unknown host names the Claude plan, a missing
     // root the rerun, an uninitialized one its init, and a workspace that does not admit the validation.
     {
       code: 'IA-CLI-USAGE',
@@ -1102,7 +1102,7 @@ function invocations(): readonly {
       argv: ['capture', '--root', snapshotLinked],
       command: `ia capture --root ${quote(snapshotLinked)}`,
     },
-    // Position-and-projection §11: a root with no @workspace names `ia init`, a floor that fails to parse `ia validate`.
+    // SPEC `capture`: a root with no @workspace names `ia init`, a floor that fails to parse `ia validate`.
     {
       code: 'IA-DB-ROOT-INVALID',
       argv: ['capture', '--root', empty],

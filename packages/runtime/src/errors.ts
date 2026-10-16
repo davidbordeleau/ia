@@ -23,7 +23,7 @@ export interface RuntimeWhere {
   readonly identity?: string;
 }
 export class RuntimeError extends Error {
-  /** The one command to run after the refusal (design row 27), when the code refusing names one; else absent. */
+  /** The one command to run after the refusal, when the code refusing names one; else absent. */
   declare readonly next?: string;
   /**
    * Where the refusal is located, frozen, when it concerns one source record (a `@mandate` whose authority cannot be
@@ -31,8 +31,8 @@ export class RuntimeError extends Error {
    */
   declare readonly where?: RuntimeWhere;
   /**
-   * Present on the refusal a mandate resolver raises while an authored record it reads failed admission (lane D, runtime
-   * R23): the cause a caller branches on (review D-R2), never read from `where` or the message.
+   * Present on the refusal a mandate resolver raises while an authored record it reads failed admission (runtime R23):
+   * the cause a caller branches on, never read from `where` or the message.
    */
   declare readonly admission?: 'refused';
   constructor(

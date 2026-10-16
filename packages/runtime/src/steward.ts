@@ -2,11 +2,10 @@ import type { CompiledRecord } from '@inventarch/language';
 import { systemMember } from '@inventarch/db';
 
 /**
- * The edit guard's refusal codes. The last three are the `@mandate` guard's (milestone generation-binding, plan amendment
- * C10): the authored `@hook` a registration names is not one admitted declaration (DECLARATION-UNAVAILABLE), the records
- * or the mandates that govern the edited path cannot be read (MANDATE-UNAVAILABLE), or the acting `@agent` holds no
- * governing mandate that grants Synthesis there (NOT-MANDATED). IDENTITY-UNAVAILABLE also says the guard could not tell
- * which `@agent` acts.
+ * The edit guard's refusal codes. The last three are the `@mandate` guard's (R22): the authored `@hook` a registration
+ * names is not one admitted declaration (DECLARATION-UNAVAILABLE), the records or the mandates that govern the edited
+ * path cannot be read (MANDATE-UNAVAILABLE), or the acting `@agent` holds no governing mandate that grants Synthesis
+ * there (NOT-MANDATED). IDENTITY-UNAVAILABLE also says the guard could not tell which `@agent` acts.
  */
 export const HOOK_CODES = [
   'IA-HOOK-INPUT-INVALID',

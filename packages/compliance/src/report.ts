@@ -37,9 +37,8 @@ export interface ReportOptions {
   /** Trusted evaluator catalog (C26). Absent: built-in-only COMP-CHECK, unchanged. */
   readonly catalog?: EvaluatorCatalog;
   /**
-   * Which COMP-CHECK a check record gets (plan amendments C15 and C21): `strict`, the default, is validateCheck with
-   * `catalog`; `structural` is validateCheckStructure, for the admitted graph of a structural admission, whose checks
-   * are bound separately.
+   * Which COMP-CHECK a check record gets (C30): `strict`, the default, is validateCheck with `catalog`; `structural` is
+   * validateCheckStructure, for the admitted graph of a structural admission, whose checks are bound separately.
    */
   readonly checks?: 'strict' | 'structural';
 }

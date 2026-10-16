@@ -1,7 +1,7 @@
 import { isId, isIsoDate, isNumberText, isQualifiedName } from '@inventarch/language';
 import type { CompiledValue, FieldType, TextForm, ValueType } from '@inventarch/language';
 
-/** Whether a schema field type is `list of T`: the one family a key may carry more than once (D3). */
+/** Whether a schema field type is `list of T`: the one family a key may carry more than once (C04). */
 export function isListType(type: FieldType): boolean {
   return type.startsWith('list of ');
 }
@@ -28,7 +28,7 @@ function matchesScalar(value: CompiledValue, type: ValueType): boolean {
   }
 }
 
-/** Text-form predicates (W0-L5) over already type-checked text. `iso-date` is `YYYY-MM-DD` and a real calendar date. */
+/** Text-form predicates (C05) over already type-checked text. `iso-date` is `YYYY-MM-DD` and a real calendar date. */
 export function matchesForm(text: string, form: TextForm): boolean {
   switch (form) {
     case 'iso-date':

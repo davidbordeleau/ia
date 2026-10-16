@@ -1,8 +1,7 @@
 /**
- * `ia preview` (milestone generation-binding plan amendments C18, C19 and C3; continuation lane C): the read-only half of
- * record authoring, on an `ia init` workspace with the CLI composition fixture laid over it and a small plan authored.
- * Every form, refused ones included, leaves the whole workspace directory byte for byte as it was, and every refusal's
- * next command runs in the state that caused it.
+ * `ia preview`: the read-only half of record authoring, on an `ia init` workspace with the CLI composition fixture
+ * laid over it and a small plan authored. Every form, refused ones included, leaves the whole workspace directory
+ * byte for byte as it was, and every refusal's next command runs in the state that caused it.
  */
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -87,7 +86,7 @@ function tree(root: string): Readonly<Record<string, string>> {
   return entries;
 }
 /** One preview, with the workspace directory checked unchanged by it whatever it returned. */
-/** The IA homes every command here runs with (review C-N6), so a write to either is seen. */
+/** The IA homes every command here runs with, so a write to either is seen. */
 const HOMES = { IA_HOST_HOME: scratch('preview-host-home'), IA_CONFIG_HOME: scratch('preview-config-home') };
 const trees = (root: string) => ({
   root: tree(root),
@@ -263,7 +262,7 @@ describe('the four forms', () => {
   });
 });
 
-describe('what counts against a candidate (review C-R4)', () => {
+describe('what counts against a candidate', () => {
   /** An error already in the workspace, at `path`: a milestone missing its required exit, which admission refuses. */
   const BROKEN =
     '\n@milestone m4\n  meaning\n    says "No exit."\n  work\n    title "Fourth"\n    status open\n    plan @plan p1\n';
@@ -289,7 +288,7 @@ describe('what counts against a candidate (review C-R4)', () => {
       );
     }
   });
-  it('matches an identity-less error the edit moves down the file against the base (review C2-R5)', async () => {
+  it('matches an identity-less error the edit moves down the file against the base', async () => {
     // A graph finding with no identity (an unknown severity) below the edited record: the edit shifts its line.
     const root = workspace((at) =>
       rewrite(
@@ -388,7 +387,7 @@ describe('refusals', () => {
   });
 });
 
-describe('path spelling (review C-R1, C-R7)', () => {
+describe('path spelling', () => {
   const FIELDS = ['meaning.says=x', 'work.title=x', 'work.status=open', 'work.milestone=@milestone m1'];
   /** A directory `.ia/src/restricted/` and a mandate whose covers claims it, excluding @task there. */
   const fenced = () =>
@@ -419,7 +418,7 @@ describe('path spelling (review C-R1, C-R7)', () => {
       expect(body(await run([...next, '--json']))).toMatchObject({ code: 'IA-RUNTIME-MANDATE-WORD' });
     }
   });
-  it('matches covers as the edit guard does where pathKey folds case: a missing covered directory, a covers in another case, never a longer name (review C-RC1)', async ({
+  it('matches covers as the edit guard does where pathKey folds case: a missing covered directory, a covers in another case, never a longer name', async ({
     skip,
   }) => {
     const FENCE = (name: string, covers: string) =>
@@ -548,7 +547,7 @@ describe('the mandate profile', () => {
     expect(body(chosen)).toMatchObject({ profile: { actor: participant, by: 'steward' } });
   });
   it('refuses an open actor choice, and --actor resolves it without lifting moves or excluded words', async () => {
-    // Two participants and no steward: OD1 names no default actor.
+    // Two participants and no steward: there is no default actor.
     const root = workspace((at) => {
       rewrite(at, '.ia/src/workspace.ia', (text) => text.replace('    steward @agent demo\n', ''));
       writeFileSync(
@@ -596,7 +595,7 @@ describe('the mandate profile', () => {
       expect(refusal['message'], actor).toContain(
         `is not an authored participant of ${demo}; its participants are ${participant}`,
       );
-      // The workspace's default actor (its steward) may run it, so the next command drops --actor (review C-N1).
+      // The workspace's default actor (its steward) may run it, so the next command drops --actor.
       expect(nextArgv(refusal['next'] as string)).toEqual(commandRoots(['preview', 'task', '--root', root]));
     }
   });
@@ -631,7 +630,7 @@ describe('the mandate profile', () => {
       commandRoots(['position', '--seat', mandate('unreadable-mandate'), '--shape', 'governance', '--root', root]),
     );
   });
-  it('refuses at a mandate admission refused, a stated empty move list among them, naming the admission report (lane D)', async () => {
+  it('refuses at a mandate admission refused, a stated empty move list among them, naming the admission report', async () => {
     const root = workspace((at) =>
       writeFileSync(
         resolve(at, '.ia/src/empty.ia'),
@@ -695,12 +694,12 @@ describe('the catalog row', () => {
   });
 });
 
-describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
+describe('next commands', () => {
   const MANDATE = (name: string, authority: readonly string[]) =>
     `\n@mandate ${name}\n  meaning\n    says "Fixture mandate ${name}."\n    answers "What may its participant do?"\n  governance\n    requires "Claim no host permission or execution from this mandate."\n  authority\n${authority.map((line) => `    ${line}\n`).join('')}`;
   const AGENT = (name: string) =>
     `\n@agent ${name}\n  meaning\n    says "Fixture participant ${name}."\n    answers "Who is ${name}?"\n  governance\n    applies []\n`;
-  /** Two participants and no steward: OD1 names no default actor. */
+  /** Two participants and no steward: there is no default actor. */
   const ambiguous = (opsMoves = 'Observation, Verification') =>
     workspace((at) => {
       rewrite(at, '.ia/src/workspace.ia', (text) => text.replace('    steward @agent demo\n', ''));
@@ -773,7 +772,7 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
       profile: { actor: participant, by: 'participant' },
     });
   });
-  it('exempts only the real --root value and quotes a bare #, @ or ~ token (review C2-R8)', async () => {
+  it('exempts only the real --root value and quotes a bare #, @ or ~ token', async () => {
     const { inertNext } = await import('../src/profile.js');
     const { Refusal } = await import('../src/consumer.js');
     const { parseArguments } = await import('../src/args.js');
@@ -790,14 +789,14 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
     // A value with a space is quoted, but `$()` stays live in double quotes, so it is never repeated.
     expect(nextArgv(nextOf('ia preview task "a $(id)" --root C:/ws'))).toEqual(commandRoots(FALLBACK));
     // A bare token opening a comment, a PowerShell splat or a tilde expansion is repeated quoted, and so is one holding a
-    // comma (a PowerShell array) or a tilde anywhere (review C3-N1).
+    // comma (a PowerShell array) or a tilde anywhere.
     for (const token of ['#x', '@milestone', 'a,b', 'work.peers=x,y', 'x~y', 'k=~/x']) {
       const next = nextOf(`ia preview task ${token} --root C:/ws`);
       expect(next, token).toBe(`Run "ia preview task ${JSON.stringify(token)} --root C:/ws" again.`);
       expect(nextArgv(next)).toEqual(commandRoots(['preview', 'task', token, '--root', 'C:/ws']));
     }
-    // A token that opens with `~` is never repeated: pwsh expands it even double-quoted through an npm-style .ps1 shim
-    // (review F4), so the next falls back to the word's preview.
+    // A token that opens with `~` is never repeated: pwsh expands it even double-quoted through an npm-style .ps1
+    // shim, so the next falls back to the word's preview.
     expect(nextArgv(nextOf('ia preview task ~/x --root C:/ws'))).toEqual(commandRoots(FALLBACK));
     expect(nextArgv(nextOf('ia preview task m-1 --actor ~x --root C:/ws'))).toEqual(commandRoots(FALLBACK));
     // The invocation's own --root value is repeated as every command repeats it.
@@ -822,7 +821,7 @@ describe('next commands (review C-R2, C-R5, C-R6, C-N1, C-N2, C-N4)', () => {
   });
 });
 
-describe('the portable path rule (review C-N9)', () => {
+describe('the portable path rule', () => {
   it("refuses exactly the paths db's opened-handle reader refuses as unsafe", async () => {
     const root = workspace();
     const { portable } = await import('../src/preview.js');
@@ -853,7 +852,7 @@ describe('the portable path rule (review C-N9)', () => {
       }
       expect(portable(path), path).toBe(!unsafe);
     }
-    // Review C-RC4, a deliberate difference: the CLI also refuses DEL, a C1 control, the line and paragraph separators
+    // A deliberate difference: the CLI also refuses DEL, a C1 control, the line and paragraph separators
     // and the bidirectional controls, which db's reader admits.
     for (const code of [0x7f, 0x85, 0x9b, 0x2028, 0x2029, 0x202e, 0x2066]) {
       const path = `.ia/src/x${String.fromCharCode(code)}y.ia`;
@@ -867,7 +866,7 @@ describe('the portable path rule (review C-N9)', () => {
       expect(portable(path), `cli: U+${code.toString(16)}`).toBe(false);
     }
   });
-  it('refuses an --at path holding a control db admits, naming a path that runs (review C-RC4)', async () => {
+  it('refuses an --at path holding a control db admits, naming a path that runs', async () => {
     const root = workspace();
     const path = `.ia/src/x${String.fromCharCode(0x202e)}y.ia`;
     await refused(root, ['task', 't9', '--at', path], 'IA-DB-PATH-UNSAFE');

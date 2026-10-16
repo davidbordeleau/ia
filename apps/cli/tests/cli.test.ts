@@ -11,8 +11,8 @@ import { describeOperation, renderOperationHelp, renderOperationSchema } from '.
 const root = resolve(import.meta.dirname, '../../..'),
   fixture = resolve(root, 'packages/compliance/fixtures/loop');
 /**
- * Plan amendment A2: the machine routes are the version 1 rows, described at version 1. A row a later protocol version
- * appends (`since`) is a Door and MCP operation, held to the Door by packages/runtime/tests/door-read.test.ts and
+ * The machine routes are the version 1 rows, described at version 1. A row a later protocol version appends (`since`)
+ * is a Door and MCP operation, held to the Door by packages/runtime/tests/door-read.test.ts and
  * packages/runtime/tests/next.test.ts.
  */
 const ROUTES = MACHINE_PROTOCOL.operations.filter((operation) => operation.since === undefined);
@@ -132,7 +132,7 @@ it('answers a manifest with two faulty bindings with the first one, as 1.1 did, 
     rmSync(workspace, { recursive: true, force: true });
   }
 });
-// Plan amendment A2: runCli, which `@inventarch/cli/internal/main` and the host launcher's `door` mode call without the
+// runCli, which `@inventarch/cli/internal/main` and the host launcher's `door` mode call without the
 // consumer dispatch, serves the version 1 operations only. A later version's operation is the unknown operation 1.1.0
 // refused, byte for byte, after the workspace opens and the parameters parse as they did, and it has no help or schema.
 it('refuses a later protocol version operation on the machine route exactly as 1.1.0 refused it', () => {
@@ -217,7 +217,7 @@ const requested = (
   'coordinate-incomplete': { ...base, coordinate: { phase: base.coordinate.phase } },
   'IA-GRAPH-COORDINATE-VALUE-UNKNOWN': { ...base, coordinate: { ...base.coordinate, phase: 'unlisted' } },
 });
-/** Parameters that produce each documented refusal on the loop fixture; spec-0012 ERR-03 makes this set the proof. */
+/** Parameters that produce each documented refusal on the loop fixture: this set proves the documented refusals. */
 const TRIGGERS: Readonly<Record<string, Readonly<Record<string, Record<string, unknown>>>>> = {
   scope: bound({}),
   context: {
@@ -246,7 +246,7 @@ const TRIGGERS: Readonly<Record<string, Readonly<Record<string, Record<string, u
   },
   report: { 'IA-RUNTIME-REQUEST-INVALID': { unlisted: 1 } },
 };
-// spec-0012 DRF-02: every example returns ok: true, every required parameter is required, and the refusal list is proven both ways.
+// Every example returns ok: true, every required parameter is required, and the refusal list is proven both ways.
 it('holds the machine protocol table to the loop fixture', () => {
   const door = new Door(fixture, { cache: false, allowReport: true });
   try {
@@ -292,7 +292,7 @@ it('holds the machine protocol table to the loop fixture', () => {
   }
   expect(existsSync(resolve(fixture, '.ia/.iadb'))).toBe(false);
 });
-// spec-0012 CLI-01..03: help answers plainly, at exit 0, in any option position, and never opens the workspace.
+// Help answers plainly, at exit 0, in any option position, and never opens the workspace.
 it('answers operation help on the machine route without opening a workspace', async () => {
   const colourful = { ...process.env, FORCE_COLOR: '1', TERM: 'xterm-256color' };
   const help = (args: readonly string[]) =>
@@ -328,7 +328,7 @@ it('answers operation help on the machine route without opening a workspace', as
   expect(value.status).toBe(2);
   expect(JSON.parse(value.stdout).code).toBe('IA-CLI-USAGE');
 });
-// spec-0012 CLI-05: the operation's description as one JSON line, the object the MCP schema also comes from.
+// The operation's description as one JSON line, the object the MCP schema also comes from.
 it('prints one operation description as one JSON line for --schema', async () => {
   for (const operation of ROUTES) {
     const got = await run([operation.name, '--schema']);
@@ -350,7 +350,7 @@ it('prints one operation description as one JSON line for --schema', async () =>
     expect(renderOperationHelp(operation), operation.name).toContain(`Machine protocol v${operation.since}: `);
   }
 });
-// spec-0012 CLI-01: help is decided before `--params -` would read stdin, so a stdin that throws is never touched.
+// Help is decided before `--params -` would read stdin, so a stdin that throws is never touched.
 it('answers operation help without reading stdin', () => {
   let reads = 0;
   const unread = (): string => {
@@ -365,7 +365,7 @@ it('answers operation help without reading stdin', () => {
   expect(runCli(['get', '--params', '-'], unread)).toMatchObject({ exitCode: 2 });
   expect(reads).toBe(1);
 });
-// spec-0012 CLI-05: when help and schema tokens are both given, the first one in an option position decides.
+// When help and schema tokens are both given, the first one in an option position decides.
 it('lets the first help or schema token decide', () => {
   expect(JSON.parse(runCli(['get', '--schema', 'x', '--help']).stdout)).toMatchObject({
     version: 1,

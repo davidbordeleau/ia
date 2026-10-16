@@ -1,5 +1,5 @@
 /**
- * #436: `ia` commands a user runs by hand from a directory the repository controls never start a program planted there.
+ * crowncodes/ia#436: `ia` commands a user runs by hand from a directory the repository controls never start a program planted there.
  * Each case runs the built CLI (`apps/cli/dist/main.js`, so `pnpm --filter @inventarch/cli build` first) from such a directory,
  * with a PATH whose first entries are relative or empty, so they name that directory, and checks that the plants never
  * ran while the program on a qualified entry did. `ia host claude --user --apply` also records the Node running it, by
@@ -81,7 +81,7 @@ const git = async (args: readonly string[], cwd: string): Promise<string> => {
   return result.stdout.trim();
 };
 
-it('ia doctor run by hand in a repository never starts a git planted there; the qualified git reads the channel (#436)', async () => {
+it('ia doctor run by hand in a repository never starts a git planted there; the qualified git reads the channel (crowncodes/ia#436)', async () => {
   const project = scratch('lookup-doctor');
   const markers = [plant(project, 'git'), plant(resolve(project, 'bin'), 'git')];
   plantExe(project, 'git');
@@ -94,7 +94,7 @@ it('ia doctor run by hand in a repository never starts a git planted there; the 
   expect(channel.detail, result.stderr).toContain(` at ${head.slice(0, 12)}`);
 });
 
-it('ia init run by hand never starts a git planted in the target repository; the qualified git reads its provenance (#436)', async () => {
+it('ia init run by hand never starts a git planted in the target repository; the qualified git reads its provenance (crowncodes/ia#436)', async () => {
   const target = resolve(scratch('lookup-init'), 'demo');
   mkdirSync(target);
   await git(['init', '-q'], target);
@@ -128,7 +128,7 @@ it('ia init run by hand never starts a git planted in the target repository; the
   expect(plan.starter.descriptor.source).toMatchObject({ repository: 'https://example.com/demo.git', commit: head });
 });
 
-it('ia host claude --user never starts a claude planted in the working directory; the qualified one runs from the home directory (#436)', async () => {
+it('ia host claude --user never starts a claude planted in the working directory; the qualified one runs from the home directory (crowncodes/ia#436)', async () => {
   const project = scratch('lookup-claude'),
     bin = scratch('lookup-claude-bin'),
     log = resolve(bin, 'claude.log');
@@ -151,7 +151,7 @@ it('ia host claude --user never starts a claude planted in the working directory
   expect(windows ? cwd!.toLowerCase() : cwd).toBe(windows ? homedir().toLowerCase() : realpathSync(homedir()));
 });
 
-it('ia host claude --user --apply records the Node running it, by absolute path, for the plugin hook on macOS and Linux (#436)', async () => {
+it('ia host claude --user --apply records the Node running it, by absolute path, for the plugin hook on macOS and Linux (crowncodes/ia#436)', async () => {
   const project = scratch('lookup-record');
   const env = cliEnv(['bin', ''], { IA_CLAUDE: FAKE_CLAUDE, IA_CLAUDE_LOG: resolve(project, 'claude.log') });
   // A version-manager shim (asdf, nodenv, Volta) starts the real Node, whose own path is what gets recorded: the shim,
@@ -168,7 +168,8 @@ it('ia host claude --user --apply records the Node running it, by absolute path,
   const hooks = JSON.parse(
     readFileSync(resolve(env['IA_HOME']!, 'claude/marketplace/plugins/ia/hooks/hooks.json'), 'utf8'),
   );
-  // Shell form: the Node quoted on macOS and Linux; on Windows the earlier `node` by name (host plugin distribution design §6.1).
+  // Shell form: the Node quoted on macOS and Linux; on Windows the earlier `node` by name (host plugin distribution
+  // spec §6.1).
   const command = windows ? 'node' : `"${nodeCommand(process.execPath)}"`;
   expect(hooks.hooks.SessionStart).toStrictEqual([
     {

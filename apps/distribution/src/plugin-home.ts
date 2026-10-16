@@ -138,7 +138,7 @@ function releaseLock(path: string): void {
 /**
  * Validates every path once (portability, duplicates, prefix collisions) before anything is created; returns the portable
  * form in the same order. Folded on every platform: the set is installed wherever the plugin is, macOS and Windows volumes
- * both open `a` and `A` as one file (#315), and APFS also opens `ß` and `ss` as one (`caseFold`, #323).
+ * both open `a` and `A` as one file (crowncodes/ia#315), and APFS also opens `ß` and `ss` as one (`caseFold`, crowncodes/ia#323).
  */
 function assertPortableFileSet(files: readonly PluginFile[]): readonly string[] {
   const entries = files.map((file) => {

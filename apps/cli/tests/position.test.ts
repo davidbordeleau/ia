@@ -1,12 +1,11 @@
 /**
- * `ia position` (position-and-projection §1, §6 and §7, design item 10; decisions scope-key-caps and
- * scope-verb-dispatch), end to end against copies of the conformance corpus and of the runtime's delivery fixture laid
+ * `ia position` (runtime SPEC R14 to R17), end to end against copies of the conformance corpus and of the runtime's delivery fixture laid
  * over it, whose workspace declares its sources.
  *
- * The exit evidence of plan task ia-position-verb: `ia position --shape governance --phase act --word law` loads the seat
- * plus only `@law` records and its tallies count only `@law`; `ia position --json` on the conformance corpus is the
- * Door's position byte for byte; `ia position` writes nothing; and `ia scope`, `ia scope --root <dir>` and
- * `ia scope --params '{}'` are the frozen route, which issues a token over the same revision.
+ * `ia position --shape governance --phase act --word law` loads the seat plus only `@law` records and its tallies
+ * count only `@law`; `ia position --json` on the conformance corpus is the Door's position byte for byte;
+ * `ia position` writes nothing; and `ia scope`, `ia scope --root <dir>` and `ia scope --params '{}'` are the frozen
+ * route, which issues a token over the same revision.
  */
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -137,7 +136,7 @@ it("prints the Door's position as one --json value, for K0 and for each flag", a
     expect(Object.keys(machine), label).toEqual(['version', 'ok', 'body', 'digest', 'hostNote']);
     expect(JSON.stringify(machine), label).toBe(JSON.stringify({ version: 1, ok: true, ...(served.result as object) }));
   }
-  // No flag is K0, read over the live admitted revision whatever the capture (plan amendment A9).
+  // No flag is K0, read over the live admitted revision whatever the capture.
   const k0 = await positioned(root);
   expect(k0.body.key).toEqual(K0);
   expect(k0.hostNote).toEqual({ revision: k0.body.revision, freshness: 'no-capture', key: K0 });
@@ -184,8 +183,8 @@ it('loads the seat plus only @law records under --word law, tallies only @law an
   expect(body.pointerTallies).toEqual([{ system: 'governance-system', word: 'law', steward: STEWARD, count: 6 }]);
   expect(body.frontier).toEqual([]);
   expect(body.counts).toMatchObject({ loaded: 17, pointers: 54, truncatedLoaded: 54, truncatedPointers: 6 });
-  // The word restricts what loads and what is listed and tallied, never the blocking rules reserved outside the budget
-  // (decision scope-key-caps): the convention blocks whatever the word, as it does without one.
+  // The word restricts what loads and what is listed and tallied, never the blocking rules reserved outside the budget:
+  // the convention blocks whatever the word, as it does without one.
   const { body: whole } = await positioned(root, ['--shape', 'governance', '--phase', 'act']);
   expect(body.rules.map((entry) => entry.identity)).toEqual([
     LAW,
@@ -284,7 +283,7 @@ it('writes nothing, needs no capture, and moves only the note when a capture is 
   const freshness = async () => flat((await run(['position', ...flags, '--root', root])).stdout);
   expect(await freshness()).toContain('freshness current: the capture is at this authored revision digest');
   // An edit after the capture moves the body's revision, and the note names the captured one, truncated as digests are,
-  // and the capture that brings it to this revision (design §5: a stale capture is a notice until `ia capture`).
+  // and the capture that brings it to this revision (a stale capture is a notice until `ia capture`).
   writeFileSync(resolve(root, RECORDS, 'late-law.ia'), rule('law', 'late-law', 'advisory'));
   const stale = await positioned(root, flags);
   expect(stale.body.revision).not.toBe(first.body.revision);

@@ -110,7 +110,10 @@ export function validateGraphSchema(record: Node, graph: Graph): Assessment {
   }
   return assess('COMP-SCHEMA', record.identity, findings, unavailable);
 }
-/** The `ref to` lookup of a graph (W0-L2): one per graph, built on first use over its admitted nodes and kept for the graph's lifetime. */
+/**
+ * The `ref to` lookup of a graph (C04a): one per graph, built on first use over its admitted nodes and kept for the
+ * graph's lifetime.
+ */
 export function graphLookup(graph: Graph): ReferenceLookup {
   let lookup = graphLookups.get(graph);
   if (lookup === undefined) {
@@ -273,11 +276,11 @@ export function validateCheck(node: Node, catalog?: EvaluatorCatalog): Assessmen
   ]);
 }
 /**
- * COMP-CHECK as structural admission reads it (milestone generation-binding, plan amendments C15 and C21): the
- * declaration's own shape only. A check naming both fields with different values is IA-COMP-CHECK-CONFLICT and one naming
- * no evaluator IA-COMP-CHECK-UNKNOWN, as validateCheck has them; any named evaluator passes, because whether a built-in or
- * an installed implementation serves it is decided when the check is bound against a host's catalog, not by admission.
- * validateCheck stays the strict admission every existing reader of the admitted graph uses.
+ * COMP-CHECK as structural admission reads it (C30): the declaration's own shape only. A check naming both fields with
+ * different values is IA-COMP-CHECK-CONFLICT and one naming no evaluator IA-COMP-CHECK-UNKNOWN, as validateCheck has
+ * them; any named evaluator passes, because whether a built-in or an installed implementation serves it is decided when
+ * the check is bound against a host's catalog, not by admission. validateCheck stays the strict admission every
+ * existing reader of the admitted graph uses.
  */
 export function validateCheckStructure(node: Node): Assessment {
   const implementation = textField(node, 'check', 'implementation'),

@@ -17,12 +17,12 @@ import {
 import type { ScopeKey, Shape } from '../src/index.js';
 import { database, lawId, lawPath, methodId, put, workspace } from './workspace.js';
 
-// R14 (position-and-projection §1, design item 10; decision scope-key-caps): the scope key, its caps, defaults and K0,
+// R14: the scope key, its caps, defaults and K0,
 // its seat and the coordinate it derives, kept apart from the frozen version 1 context and select requests.
 const foundation = 'workspace-system/definition/workspace/foundation-workspace',
   governanceSystem = 'floor/definition/system/governance-system',
   sampleMandate = 'agent-system/policy/mandate/sample-mandate';
-/** A key refusal, and, when `next` is given, the one command it names (design row 27). */
+/** A key refusal, and, when `next` is given, the one command it names. */
 const invalid = (message: string, next?: string) =>
   expect.objectContaining({
     code: 'IA-RUNTIME-REQUEST-INVALID',
@@ -34,14 +34,14 @@ const partial = (part: Readonly<Record<string, unknown>>) => part as Partial<Sco
 const outside = (path: string) =>
   invalid(`Scope key seat path '${path}' must be inside the workspace: workspace-relative, or absolute under its root`);
 
-it('publishes the caps and K0 of decision scope-key-caps', () => {
+it('publishes the scope key caps and K0', () => {
   expect(SCOPE_KEY_CAPS).toEqual({ depth: 2, budget: 64 });
   // K0 = (workspace seat, context, orient, 0, 0, no word): no seat or word is named.
   expect(K0).toEqual({ shape: 'context', phase: 'orient', depth: 0, budget: 0 });
   expect(Object.isFrozen(K0) && Object.isFrozen(SCOPE_KEY_CAPS)).toBe(true);
 });
 
-it('completes a partial key with the defaults of design §1, an empty one being K0', () => {
+it('completes a partial key with its defaults, an empty one being K0', () => {
   for (const empty of [undefined, {}, partial({ seat: undefined, shape: undefined, word: undefined })])
     expect(normalizeScopeKey(empty)).toBe(K0);
   // Naming any part takes depth 1 and budget 16, and the phase is the anchor of the shape's primitive.
@@ -353,7 +353,7 @@ it('resolves a seat named by identity or by path, keeping the database resolutio
   expect(docs.seat).toEqual({ kind: 'location', path: 'docs/guide.md' });
   expect(docs.resolution).toMatchObject({ path: 'docs/guide.md', seat: foundation, by: 'repository' });
   expect(docs.resolution!.claimants.map((claimant) => claimant.identity)).toEqual([sampleMandate]);
-  // A path no seat declares is not refused: the unknown is named and the claimants kept (design row 17).
+  // A path no seat declares is not refused: the unknown is named and the claimants kept.
   expect(resolveScopeKey(db, within, { ...K0, seat: { path: '.ia/work/notes.md' } })).toMatchObject({
     key: { seat: { path: '.ia/work/notes.md' } },
     seat: { kind: 'location', path: '.ia/work/notes.md', unknown: 'undeclared' },

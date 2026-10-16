@@ -189,7 +189,10 @@ function guardInvocation(value: unknown): string | null | undefined {
   }
   return undefined;
 }
-/** Whether a group is the retired steward guard's: it runs the guard and names no `@hook` (B11 retires exactly these). */
+/**
+ * Whether a group is the retired steward guard's: it runs the guard and names no `@hook`. The projection apply retires
+ * exactly these.
+ */
 const referencesGuard = (value: unknown): boolean => guardInvocation(value) === null;
 /** Refuse an unowned guard before retiring the agents it depends on. Never alter unrelated hooks. */
 export function assertRetirableGuard(root: string): void {
@@ -246,7 +249,7 @@ interface SettingsRead<T> {
 /**
  * The settings file whose `disableAllHooks: true` turns Claude Code's hooks off for this workspace, as registration
  * reads it (`.claude/settings.local.json` first, then `.claude/settings.json` when the local file does not set it), or
- * null when hooks are on or a file cannot be read, which the plan itself then refuses (review finding H-N12).
+ * null when hooks are on or a file cannot be read, which the plan itself then refuses.
  */
 export function hooksDisabledBy(rootInput: string): string | null {
   const root = workspace(rootInput);
@@ -264,9 +267,9 @@ export function hooksDisabledBy(rootInput: string): string | null {
 }
 /**
  * The preamble the retired steward guard's plan (removal, and the 1.x registration its fixtures still make) and the hook
- * groups' plan share (guard review finding G-N9): a Claude-compatible cache outside the root, the settings and the
- * ownership state read once, a removal refused when nothing is owned, hooks explicitly disabled refused when the plan
- * would register a group, and a bounded PreToolUse array.
+ * groups' plan share: a Claude-compatible cache outside the root, the settings and the ownership state read once, a
+ * removal refused when nothing is owned, hooks explicitly disabled refused when the plan would register a group, and a
+ * bounded PreToolUse array.
  */
 function readSettings<T>(
   root: string,
@@ -305,7 +308,7 @@ function readSettings<T>(
   return { id, before, prior, rows, projectText, disabled };
 }
 /**
- * The journaled publication both registrations share (G-N9), under the host lock the caller holds: the journal first
+ * The journaled publication both registrations share, under the host lock the caller holds: the journal first
  * (`guard-pending.json`, which every host write waits on), the settings, then the ownership state (the commit), then
  * the journal cleared; a concurrent change of either file, the project settings or the cache refuses.
  */
@@ -421,19 +424,19 @@ export function applyGuardRegistration(
 }
 
 /*
- * Hook groups (milestone generation-binding, plan amendments C9 and C10). Each authored `@hook` becomes exactly one
- * PreToolUse group in `.claude/settings.local.json`, which runs the launcher's guard mode for that hook,
- * `guard --root <root> --hook <identity>`, through the derivation the retired steward guard's group used. A JSON entry
- * cannot carry a marker line, so the groups are owned as that group was: by exact match against the group an ownership
- * state records (`claude-hooks-<id>.json`, beside the guard's state), published under the host lock through the same
- * journal (`guard-pending.json`, which every host write already waits on) and recovered by the same `recover-guard`.
- * Every other group, key and byte of the file is kept. `@hook` gains no field: the record's `hook.paths` decide what the
- * guard selects when it runs, and only its identity and tools reach the registration.
+ * Hook groups. Each authored `@hook` becomes exactly one PreToolUse group in `.claude/settings.local.json`, which runs
+ * the launcher's guard mode for that hook, `guard --root <root> --hook <identity>`, through the derivation the retired
+ * steward guard's group used. A JSON entry cannot carry a marker line, so the groups are owned as that group was: by
+ * exact match against the group an ownership state records (`claude-hooks-<id>.json`, beside the guard's state),
+ * published under the host lock through the same journal (`guard-pending.json`, which every host write already waits
+ * on) and recovered by the same `recover-guard`. Every other group, key and byte of the file is kept. `@hook` gains no
+ * field: the record's `hook.paths` decide what the guard selects when it runs, and only its identity and tools reach
+ * the registration.
  */
 /** The edit tools a hook group can match, in matcher order. */
 export const HOOK_TOOLS = ['Write', 'Edit', 'MultiEdit'] as const;
 export type HookTool = (typeof HOOK_TOOLS)[number];
-// The bounds hook generation applies, so a hook beyond them is reported there, never refused here (H-N2).
+// The bounds hook generation applies, so a hook beyond them is reported there, never refused here.
 const MAX_HOOKS = HOOK_LIMIT;
 /** The ownership state of a registration's hook groups. */
 export const hookStatePath = (id: string): string => `${area}/claude-hooks-${identity(id)}.json`;
@@ -443,7 +446,7 @@ export interface HookRow {
   readonly tools: readonly HookTool[];
   /**
    * The hook's path selections as registered. The guard decides from the record; it reads these only when the record can
-   * no longer be read, to refuse no more than the last registered selection (guard review finding G-N4).
+   * no longer be read, to refuse no more than the last registered selection.
    */
   readonly paths: readonly string[];
 }
@@ -534,7 +537,7 @@ function hookRows(value: unknown): HookRow[] {
 /**
  * The group a `@hook` registers: the guard runs with this root and that identity for every edit tool (`Write|Edit|MultiEdit`,
  * as the retired steward guard's group did), so the managed-state protection decides every edit; the hook's own tools
- * apply only to its paths, which the guard reads from the record (guard review finding G-R2).
+ * apply only to its paths, which the guard reads from the record.
  */
 export function hookGroup(
   launcher: string,
@@ -663,7 +666,7 @@ function planHooksWith(
   removeId: unknown,
 ): HookPlan {
   // With hooks turned off, a plan that only keeps or removes owned groups proceeds; one that would write a group refuses
-  // below (review finding A-F1).
+  // below.
   const { id, before, prior, rows, projectText, disabled } = readSettings(
     root,
     cache,
@@ -682,8 +685,8 @@ function planHooksWith(
     const at = rows.flatMap((row, index) => (json(row) === json(group) ? [index] : []));
     const named = rows.some((row) => guardInvocation(row) === hook),
       gone = at.length === 0 && !named;
-    // Guard review finding G-N2: each refusal names the way out. A group deleted by hand is restored only through the
-    // removal, which drops its ownership, and a new registration.
+    // Each refusal names the way out. A group deleted by hand is restored only through the removal, which drops its
+    // ownership, and a new registration.
     if (gone && wanted.has(hook))
       fail(
         'LOCAL-MODIFICATION',
@@ -879,7 +882,7 @@ export function recoverGuardRegistration(rootInput: string): { status: 'guard-re
  * and any failure to run the guard at all exits 2, naming the remedy on stderr, which Claude Code shows with the block.
  * Claude Code lets a tool call through when a hook command cannot start or fails any other way, and blocks only on exit 2 or
  * a deny (code.claude.com/docs/en/hooks); the guard's own decisions exit 0 and pass through unchanged. win32 has no
- * `/bin/sh` and keeps the direct form, which still fails open (#323).
+ * `/bin/sh` and keeps the direct form, which still fails open (crowncodes/ia#323).
  */
 export const FAIL_CLOSED =
   '"$0" "$@" || { echo "IA steward guard could not run: run ia doctor, then ia host claude --apply" >&2; exit 2; }';

@@ -10,10 +10,9 @@ import type { Node } from '@inventarch/graph';
 import type { CompiledField } from '@inventarch/language';
 
 /**
- * D13: binding each `@check` at validate (milestone generation-binding, plan amendments C15 and C22). A check names its
- * evaluator (`check.implementation`, else `check.runs`; compliance `checkRunner`) and selects what it covers with the
- * text `check.scope`. Binding decides which implementation serves the evaluator and reads the verdicts it produced; it
- * runs nothing and writes nothing.
+ * D13: binding each `@check` at validate. A check names its evaluator (`check.implementation`, else `check.runs`;
+ * compliance `checkRunner`) and selects what it covers with the text `check.scope`. Binding decides which
+ * implementation serves the evaluator and reads the verdicts it produced; it runs nothing and writes nothing.
  *
  * - A built-in evaluator (compliance CHECK_IDS) is always bound: built-ins are implicit, whatever the host carries. Its
  *   result is the aggregate of that evaluator's verdicts in the admission report that `check.scope` selects: every one
@@ -82,8 +81,9 @@ function inertCodecs(
 }
 const RANK: Readonly<Record<CheckOutcome, number>> = { pass: 0, 'not-evaluated': 1, fail: 2 };
 /**
- * C22: the evaluator's verdicts `scope` selects, and their aggregate: fail, then not-evaluated, then pass. A verdict about a
- * record in `excluded` (the runtime evidence) is never selected, so a check's result does not depend on its own evidence.
+ * The evaluator's verdicts `scope` selects (D13), and their aggregate: fail, then not-evaluated, then pass. A verdict
+ * about a record in `excluded` (the runtime evidence) is never selected, so a check's result does not depend on its
+ * own evidence.
  */
 export function checkVerdicts(
   verdicts: readonly Verdict[],
@@ -117,8 +117,8 @@ export function bindChecks(
     | undefined;
   // Records at runtime placement are evidence, not what a check covers.
   const runtime = new Set(records.filter((record) => record.band === 0).map((record) => record.identity));
-  // Review finding B3-N1: COMP-CHECK passes a check naming an evaluator that is not built in only under structural
-  // admission, while every strict reader fails it at the same revision; its verdict there is not-evaluated, never a pass.
+  // COMP-CHECK passes a check naming an evaluator that is not built in only under structural admission, while every
+  // strict reader fails it at the same revision; its verdict there is not-evaluated, never a pass.
   const structural = new Set(
     records
       .filter((record) => record.discriminator === 'check' && record.band !== 0)

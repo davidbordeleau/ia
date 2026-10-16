@@ -283,8 +283,8 @@ describe('native system closure', () => {
   });
 });
 
-// Plan task self-host-participant-records (amendment B6): this repository's participant pair is authored in a file
-// outside every system folder that the bundled base does not pack, so it admits here and ships to no consumer.
+// This repository's participant pair is authored in a file outside every system folder that the bundled base does not
+// pack, so it admits here and ships to no consumer.
 describe("this repository's participant pair", () => {
   const participantFile = '.ia/src/participant.ia',
     participant = 'agent-system/binding/agent/language-participant',

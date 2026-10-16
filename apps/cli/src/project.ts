@@ -1,25 +1,23 @@
 /**
- * `ia project`: position-and-projection §5's project effect (design items 11 and 12; plan amendments B1, B5, B8, B11
- * and B12; decision cli-commands-as-operations), milestone position-packet task ia-project-verb.
+ * `ia project`: the project effect (SPEC `project`; runtime R19 and R20).
  *
  * The workspace projection alone: the position packet of the workspace's admitted records (runtime R19), rendered by
  * the host's adapter for the consumer target (R20) through `renderProjectionFor`, the render `ia host`, `ia doctor` and
- * the install refresh read. It plans by default, as `ia host` and `ia install` do (B8), and the plan writes nothing: it
- * is `ia host`'s projection element (`projectionElement`), the steward-guard retirement and the file plan an apply
- * would make, beside the packet's entry count and digest. `--apply` re-plans through the same element
- * (`replanProjection`) and writes through `applyHostProjection`, the one writer of projection files, which retires a
- * steward guard an earlier release registered before any file changes (B11), deletes the owned 1.x steward files,
- * leaves foreign ones and writes the receipt (B12). It writes the generated agents and skills of the workspace's
- * authored records with the packet (milestone generation-binding), and keeps the hook groups an `ia host` registration
- * owns in step with the authored `@hook` records, against the payload that registration recorded; it registers no MCP
- * server and no hook group of its own, so a hook with no registration to join is reported as not taken. `ia host`'s
- * projection element is this same plan and apply. The packet reads the live admitted revision, so no capture is
- * required (B8). A plan with a conflict is a successful report naming the file, as `ia host`'s is (§4); only `--apply`
- * refuses it, before anything is asked or written, naming the plan to run once the file is out of the way. The `ia
- * project`, `ia validate` and `ia init` commands a next action names carry the root as the invocation typed it; the
- * `ia recover` command a pending host journal or a held host lock names carries the resolved root, because
- * its distribution mechanism takes only an absolute root, and a workspace whose sources cannot be opened names the resolved
- * root, as for every workspace verb (`openSession`).
+ * the install refresh read. It plans by default, as `ia host` and `ia install` do, and the plan writes nothing: it is
+ * `ia host`'s projection element (`projectionElement`), the steward-guard retirement and the file plan an apply would
+ * make, beside the packet's entry count and digest. `--apply` re-plans through the same element (`replanProjection`)
+ * and writes through `applyHostProjection`, the one writer of projection files, which retires a steward guard an
+ * earlier release registered before any file changes, deletes the owned 1.x steward files, leaves foreign ones and
+ * writes the receipt. It writes the generated agents and skills of the workspace's authored records with the packet,
+ * and keeps the hook groups an `ia host` registration owns in step with the authored `@hook` records, against the
+ * payload that registration recorded; it registers no MCP server and no hook group of its own, so a hook with no
+ * registration to join is reported as not taken. `ia host`'s projection element is this same plan and apply. The packet
+ * reads the live admitted revision, so no capture is required. A plan with a conflict is a successful report naming the
+ * file, as `ia host`'s is (§4); only `--apply` refuses it, before anything is asked or written, naming the plan to run
+ * once the file is out of the way. The `ia project`, `ia validate` and `ia init` commands a next action names carry the
+ * root as the invocation typed it; the `ia recover` command a pending host journal or a held host lock names carries
+ * the resolved root, because its distribution mechanism takes only an absolute root, and a workspace whose sources
+ * cannot be opened names the resolved root, as for every workspace verb (`openSession`).
  */
 import { workspaceRow } from '@inventarch/distribution/hosts';
 import type { HostOutput, PacketReceipt } from '@inventarch/runtime';
@@ -80,18 +78,18 @@ export interface ProjectView {
   readonly given: string | undefined;
   /** This plan rebuilt from the parsed arguments, `--root` as typed: the command every repair runs next. */
   readonly invocation: string;
-  /** B1's entry count of the packet the plan renders, and its digest. */
+  /** The entry count of the packet the plan renders, and its digest. */
   readonly entries: number;
   readonly packetDigest: string;
   /** `ia host`'s projection element for that rendering: its file plan, its guard step, or the conflict it found. */
   readonly projection: Element;
-  /** That rendering, made on the session the mandate gate judged; the apply writes exactly it (review C3-N2). */
+  /** That rendering, made on the session the mandate gate judged; the apply writes exactly it. */
   readonly rendered: HostOutput;
 }
 
-/** Design row 27: the repair a conflict needs, worded as `ia host` words it, then this plan, which shows the file. */
+/** The repair a conflict needs, worded as `ia host` words it, then this plan, which shows the file. */
 const conflictNext = (view: ProjectView, conflict: Conflict): string => {
-  // A hook refusal's repair names `ia host` (H-R1, H-R4); with `--root` given it carries it as typed, as the plan does.
+  // A hook refusal's repair names `ia host`; with `--root` given it carries it as typed, as the plan does.
   if (conflict.hook !== undefined)
     return view.given === undefined
       ? hookRepair(conflict.hook)
@@ -148,9 +146,9 @@ function applyFailure(error: unknown, view: ProjectView): Refusal {
   return projectionFailure(error, view.root, view.host, `${view.invocation} --apply`);
 }
 /**
- * The apply: the rendering the plan made on its gated session (review C3-N2), re-planned through `ia host`'s projection
- * element against the files as they are now, so a file that changed since the plan refuses before anything is written,
- * then `applyHostProjection`, which returns the receipt it wrote.
+ * The apply: the rendering the plan made on its gated session, re-planned through `ia host`'s projection element
+ * against the files as they are now, so a file that changed since the plan refuses before anything is written, then
+ * `applyHostProjection`, which returns the receipt it wrote.
  */
 export function applyProject(view: ProjectView): PacketReceipt {
   const { rendered } = view;
@@ -193,7 +191,7 @@ const headerBlock = (
   ...headerLine(label, value, [{ text: `packet ${truncateDigest(digest, caps.ascii)}`, column: 35 }], caps),
   ...headerLine('Root', view.root, [], caps),
 ];
-/** The packet, the B11 step and any conflict, then the file plan in `ia host`'s words, then the guard's note. */
+/** The packet, the retirement and any conflict, then the file plan in `ia host`'s words, then the guard's note. */
 function planBlocks(view: ProjectView, caps: Capabilities): readonly (readonly string[])[] {
   const { conflict, files, guard, hooks, unsupported } = view.projection;
   const fields: Field[] = [
@@ -256,9 +254,8 @@ const renderProjectSummary = (view: ProjectView, caps: Capabilities): string =>
   });
 
 /**
- * An apply's report, read from the receipt it wrote (B12): the files with their digests, the legacy files deleted, the
- * foreign files left in place and the guard's retirement. It says what was written, never that the host read it
- * (design §4, adapter rule 3).
+ * An apply's report, read from the receipt it wrote: the files with their digests, the legacy files deleted, the
+ * foreign files left in place and the guard's retirement. It says what was written, never that the host read it.
  */
 export function renderProjectApplied(
   view: ProjectView,

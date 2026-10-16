@@ -417,7 +417,7 @@ it.each(['pending', 'config', 'state', 'complete'])(
     expect(existsSync(resolve(root, '.ia/distributions/hosts/lock.json'))).toBe(false);
   },
 );
-it('skips the unpinned Finder and AppleDouble files a Mac writes into a host cache, and verifies a pinned one like any other (#323)', () => {
+it('skips the unpinned Finder and AppleDouble files a Mac writes into a host cache, and verifies a pinned one like any other (crowncodes/ia#323)', () => {
   const artifact = cache('claude');
   put(artifact, '.DS_Store', 'Finder');
   put(artifact, 'scripts/._ia.mjs', 'AppleDouble');
@@ -446,7 +446,7 @@ it('skips the unpinned Finder and AppleDouble files a Mac writes into a host cac
   put(pinned, '._pinned', 'PINNED\n');
   expect(() => verifyHostCache(pinned)).toThrow(/Host payload changed/);
 });
-it('still refuses any other dotfile, and a link or special file named like a Mac file (#323)', async () => {
+it('still refuses any other dotfile, and a link or special file named like a Mac file (crowncodes/ia#323)', async () => {
   const dotfile = cache('claude');
   put(dotfile, '.npmrc', 'registry=https://example.invalid\n');
   expect(() => verifyHostCache(dotfile)).toThrow(/Unexpected host payload/);

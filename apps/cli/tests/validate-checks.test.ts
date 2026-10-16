@@ -1,9 +1,8 @@
 /**
- * Milestone generation-binding task check-runner-join-validate (plan amendments C14, C15, C21, C22 and C23): `ia
- * validate` binds every `@check`, reports a Checks section, and records the bound checks that passed or failed as runtime
- * evidence, the one write it makes. A not-evaluated check is never a pass and records nothing; the authored revision,
- * the position packet and the host projection never move for it; and no other command writes or prunes evidence.
- * tests/equivalence.test.ts holds the two validation binaries to one result and one evidence file.
+ * `ia validate` binds every `@check`, reports a Checks section, and records the bound checks that passed or failed as
+ * runtime evidence, the one write it makes. A not-evaluated check is never a pass and records nothing; the authored
+ * revision, the position packet and the host projection never move for it; and no other command writes or prunes
+ * evidence. tests/equivalence.test.ts holds the two validation binaries to one result and one evidence file.
  */
 import { spawn } from 'node:child_process';
 import {
@@ -217,7 +216,7 @@ it('leaves the authored revision, the position packet and the host projection un
   });
 });
 
-it('never creates or prunes evidence from doctor, capture --preview or a refused effect (C23)', async () => {
+it('never creates or prunes evidence from doctor, capture --preview or a refused effect', async () => {
   const { root, env } = await initialized();
   put(root, '.ia/src/checks.ia', BUILT_IN);
   expect((await json(root, env)).envelope.evidence.written).toBe(true);
@@ -386,7 +385,7 @@ it('keeps one whole evidence file when several validates run at once', async () 
   }
 });
 
-it('binds and reports from the authored view alone, so planted evidence changes nothing validate says (B3-R4, B3-N4)', async () => {
+it('binds and reports from the authored view alone, so planted evidence changes nothing validate says', async () => {
   const { root, env } = await initialized();
   put(
     root,
@@ -429,7 +428,7 @@ it('binds and reports from the authored view alone, so planted evidence changes 
   expect(after.envelope.evidence.observations).toEqual(before.envelope.evidence.observations);
 });
 
-it('prunes best effort, so a file it may not remove never refuses validate, and records nothing when refused (B3-R1, B3-N11)', async () => {
+it('prunes best effort, so a file it may not remove never refuses validate, and records nothing when refused', async () => {
   const { root, env } = await initialized();
   const stalePath = `${EVIDENCE}/${'3'.repeat(64)}.ia`,
     stale = resolve(root, stalePath);
@@ -466,13 +465,13 @@ it('prunes best effort, so a file it may not remove never refuses validate, and 
   expect(human.text).toContain('No evidence recorded: admission was refused, so nothing is recorded or pruned.');
 });
 
-it('keeps prior times only from a file the writer itself would write (B4-RC2)', async () => {
+it('keeps prior times only from a file the writer itself would write', async () => {
   const { root, env } = await initialized();
   put(root, '.ia/src/checks.ia', BUILT_IN);
   const first = await json(root, env),
     path = resolve(root, first.envelope.evidence.path),
     genuine = readFileSync(path, 'utf8');
-  // Review finding F3: times in the writer's exact stamp, observed and captured together and long past, which the
+  // Times in the writer's exact stamp, observed and captured together and long past, which the
   // writer would keep from a file it wrote; beside a forged reason, this file is not one it wrote.
   const planted = genuine
     .replace(/(observed|captured)-at "[^"]+"/g, '$1-at "2001-01-01T00:00:00.000Z"')

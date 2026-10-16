@@ -25,8 +25,8 @@ export function runCli(
   try {
     const operation = args[0];
     if (operation === undefined || operation.startsWith('-')) return usage(USAGE.trim());
-    // spec-0012 CLI-01 and CLI-05: help or the schema asked in an option position answers before any option is checked, so
-    // it opens no workspace and reads no stdin. Each argument vector this changes was an IA-CLI-USAGE refusal at exit 2 before.
+    // Help or the schema asked in an option position answers before any option is checked, so it opens no workspace and
+    // reads no stdin. Each argument vector this changes was an IA-CLI-USAGE refusal at exit 2 before.
     const described = describeOperation(operation);
     const asked =
       described === undefined
@@ -55,8 +55,8 @@ export function runCli(
     } catch {
       return usage('--params must contain valid JSON');
     }
-    // Plan amendment A2: the machine routes are the version 1 operations, so the door serves version 1 and refuses a later
-    // version's operation, such as `read`, as the unknown operation 1.1.0 refused, byte for byte.
+    // The machine routes are the version 1 operations, so the door serves version 1 and refuses a later version's
+    // operation, such as `read`, as the unknown operation 1.1.0 refused, byte for byte.
     door = new Door(root, { cache: false, allowReport: true, protocol: 1 });
     const response: DoorResponse = door.request({ operation, params });
     const reportFailed =

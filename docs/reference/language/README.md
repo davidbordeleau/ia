@@ -1,37 +1,197 @@
 # Authoring the IA language
 
-IA represents named records, typed fields, relationships, requirements and contextual procedure cells. Start with the [vocabulary catalogue](vocabulary.md) or its [machine-readable equivalent](vocabulary.json). Each entry identifies its owner, lowering, facets, schema, fields and relationships. A field table carries a field's description where its schema gives one, and the canonical schema links show the full declarations. The [original examples](../../../examples/public-language/README.md) show agents, composition, quality and architecture using these contracts.
+[![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](../../../LICENSE) [![Vocabulary](https://img.shields.io/badge/vocabulary-44%20words-blue)](vocabulary.md)
+
+> This guide explains how to write `.ia` records: syntax and identity, fields and allowed values, relationships, defining vocabulary of your own, and reading what `ia validate` reports. The [vocabulary catalogue](vocabulary.md) lists every public word with its owner, schema, fields and permitted relationships; [vocabulary.json](vocabulary.json) carries the same data for tools.
+
+Ask the CLI about a word before you write one:
+
+```sh
+ia vocabulary decision --schema
+ia preview decision
+```
+
+The first prints the word's sections, fields, allowed values and relationships. The second adds the file a new record goes to and the consent rows that let it relate to other records. Write records by hand and run `ia validate`, or preview one with `ia preview` and write it with `ia author --digest`, as the [quick start](../../../README.md#3-author-your-first-record) shows.
 
 ## Syntax and identity
 
-A native file starts with `#! ia 1.0`. A record starts with `@word name`; indentation groups sections and fields. Use quoted strings for prose, bare identifiers for `id`, numeric and boolean literals for those types, and bracketed comma-separated lists for `list of T`. References use `@word name`; a requirement fragment appends `#REQ-NAME`. Triple-quoted strings carry multiline prose. Do not insert a Markdown fence into a native file.
+```ia
+#! ia 1.0
 
-The four identity slots are `system/kind/facet/name`. The registration supplies system and kind. The default facet is the first registered facet; a `facet` head field must select one of that word's registered facets. Names are lowercased for identity while retaining authored spelling. Two declarations of one identity at the same authority band collide. The graph applies its authority rules across bands; a spelling change alone is not a new identity. File location and authority metadata are loader inputs, not author-controlled grants.
+# A line that starts with a hash is a comment.
+@decision storage-engine
+  meaning
+    says """
+      Choose a storage engine for the event log.
+      Prose may span several lines.
+      """
+  work
+    title "Storage engine"
+    status open
+    due "2026-11-01"
+  decision
+    question "Which storage engine do we use?"
+    options ["SQLite", "PostgreSQL"]
+```
 
-The catalogue's types are the schema's exact accepted value types. `id` accepts identifiers; it is not an enumeration or a promise that an implementation exists, unless the schema spells `id in [a, b]`, which closes the set to those ids (the bracketed set takes the row's value slot, so such a row carries no description). `ref` accepts a record reference; it does not itself specify the required discriminator unless the schema spells `ref to <word>`, which requires that word and warns when the target is not in the corpus. `text form iso-date` requires a `YYYY-MM-DD` calendar date. The catalogue's Type column shows each narrowing as the schema spells it. Domain consumers narrow anything further. Required sections and required fields are separate obligations. `must have` means exactly one for non-list types and `may have` at most one: only a `list of T` key may be written more than once, and a second occurrence of any other declared key is refused (`IA-COMP-FIELD-DUPLICATE`). Closed schemas reject undeclared sections (`IA-COMP-SECTION-UNKNOWN`) and, inside a declared section, undeclared ordinary fields (`IA-COMP-FIELD-UNKNOWN`); shared head, cognition, activation and relationship grammar still applies and is not checked as fields, nor are the carriers the compiler consumes (governance variant clauses such as `requires`, contract `REQ-*` clauses, the `governance.severity` dimension) or the bodies of `@schema` and `@system` records, which are the dialect itself. See the [language specification](../../../packages/language/SPEC.md) for grammar and the [graph specification](../../../packages/graph/SPEC.md) for identity resolution and authority.
+- The first line is the pragma `#! ia 1.0`. A file without it is refused with `IA-LANG-PRAGMA-MISSING`.
+- `@decision storage-engine` starts a record: the word, then a name that starts with an ASCII letter. The word selects the record's schema and its owning system.
+- Indent two spaces per level. A tab is refused with `IA-LANG-INDENT-TAB`.
+- Sections such as `meaning` and `work` hold fields. Head fields, such as a contract's `version`, come before the first section.
 
-## Relationships and extension
+Every value has one of the kernel's six value types, or is a list of one:
 
-Use the kernel's predicate spellings and inverses from the catalogue. A record's `relationships` section is its relations list in either spelling: the active predicate, its inverse or the present phrase state the same relation from the record's side, the authored spelling is retained on compiled edges and graph assertions, and a schema `edges` rule accepts any of those spellings and carries its direction. Relationship edges, reference fields and requirement fragments must resolve in the supplied corpus. Consent is declared by systems and enforced by graph/compliance consumers; a typed reference alone does not grant cross-system consent. Schema edge cardinalities impose the documented multiplicity. A `requires @contract` relationship adopts its requirements. A case that `implements` a requirement and a check that `enforces` it describe coverage, not a passing execution.
+| Type | Write it as | Example |
+| --- | --- | --- |
+| `text` | A quoted string, or triple quotes for prose over several lines | `title "Storage engine"` |
+| `id` | A bare identifier: a letter, then letters, digits and hyphens | `status open` |
+| `number` | A decimal number | `limit-model-calls 1` |
+| `flag` | `true` or `false` unquoted, or the bare field key | |
+| `ref` | `@word name`, plus `#REQ-NAME` to name one requirement of a contract | `@contract storage-rules#REQ-STORAGE-BACKUP` |
+| `qname` | A canonical four-slot identity | `work-system/definition/decision/storage-engine` |
+| `list of T` | Items of type T, comma-separated in brackets | `options ["SQLite", "PostgreSQL"]` |
 
-An extension declares a unique `@system`, its direct required systems, vocabulary entries, lowering to kernel kinds/categories/facets (optionally with the artifact set, primitive and move its records carry), schema enrollment, consent and a local agent steward. A consent row side may name `any-adopter`, the words of every system that requires the declaring system, so an adopting workspace's own words can relate to that system's records without being named in its contract; `any-adopter` is reserved and cannot be registered as a word. Each new word has a schema and one owner. Its steward's governance must cover the registered words. Extension words use the existing kernel; introducing another discriminator does not extend the closed taxonomy. Do not register the same public word under a private owner. Prefer existing words where they represent the intended concept. See the system and schema entries for their structural fields and the language specification for their declaration grammar.
+Every record has a four-slot identity, `system/kind/facet/name`. The word's registration supplies the system and kind. The facet is the word's first registered facet unless a `facet` head field selects another; each public word registers one. The name is lowercased for identity and keeps its authored spelling for display, so `@decision Storage-Engine` is `work-system/definition/decision/storage-engine`. Two records with one identity at the same authority band both fail with `IA-GRAPH-IDENTITY-TIE`. Moving a record to another file does not change its identity.
+
+Keep your records under `.ia/src/`. A record outside every system folder is owned by its word's system. A record inside a system folder may use only the words of systems that folder's `@system` lists in `requires`; any other word is refused with `IA-COMP-DISCRIMINATOR-FOREIGN`.
+
+## Fields and allowed values
+
+Each word's schema states which sections and fields a record needs:
+
+- `must have` means exactly once and `may have` at most once. Only a `list of T` field may be written more than once.
+- Every public schema except `@system` is closed: it refuses a section or field it does not declare.
+- A field type may carry one narrowing. `id in [open, made]` admits only those ids, `ref to plan` requires a reference to a `@plan`, and `text form iso-date` requires a `YYYY-MM-DD` date.
+- Relationship rows and contract `REQ-*` clauses follow shared language rules, not schema field rows.
+
+| Finding | Severity | Cause |
+| --- | --- | --- |
+| `IA-COMP-FIELD-MISSING` | error | A required field is absent |
+| `IA-COMP-FIELD-DUPLICATE` | error | A field that is not a list is written twice |
+| `IA-COMP-SECTION-UNKNOWN`, `IA-COMP-FIELD-UNKNOWN` | error | The closed schema declares no such section or field |
+| `IA-COMP-FIELD-VALUE` | error | A value outside an `id in [...]` set |
+| `IA-COMP-FIELD-FORM` | error | A value that does not match its text form, such as a date not written `YYYY-MM-DD` |
+| `IA-COMP-FIELD-REF-TARGET` | error | A reference to another word than a `ref to <word>` field requires |
+| `IA-COMP-FIELD-REF-MISSING` | warning | A typed reference that no admitted record declares |
+
+## Relationships
+
+A `relationships` section holds one row per relation: a predicate spelling, then a reference. The kernel defines eighteen predicates (`cite`, `constrain`, `consume`, `enforce`, `forbid`, `govern`, `grant-access-to`, `ground`, `implement`, `land`, `produce`, `record-lineage-from`, `require`, `route`, `run-before`, `supersede`, `trigger` and `use`), and each has an inverse and a present phrase:
+
+```ia
+  relationships
+    supersedes @decision api-response-format
+```
+
+`supersede` and `supersedes` both state that this record supersedes the target. The inverse, `superseded-by`, states the same relation from the other side: the target supersedes this record. The authored spelling is kept. `ia inspect` shows an edge on the record that states it, and `ia inspect --edges both` also shows it on the other record as a derived inverse.
+
+- **Consent.** Both systems must consent to a relation, through the `edges` rows of their `@system` records. A relation either side does not consent to is refused with `IA-GRAPH-EDGE-UNCONSENTED`. `ia preview <word>` lists the rows that apply.
+- **Resolution.** A target that no admitted record declares is a warning, `IA-GRAPH-TARGET-MISSING`, and the edge stays unresolved. A `#REQ-NAME` fragment that the contract does not declare is an error, `IA-COMP-FRAGMENT-MISSING`.
+- **Cardinality.** A schema's `edges` rules state how many of a relation a record may or must hold, such as `may supersede decision one`.
+- **Adoption and coverage.** A `requires @contract` relation adopts the contract's requirements. A `@case` that `implements` a requirement and a `@check` that `enforces` it declare coverage, not a passing run.
+
+## Defining vocabulary
+
+A system registers words, gives each a schema and names a steward accountable for them. `ia init . --id local/my-project --system --host none --apply --yes` writes `.ia/src/systems/my-project/system.ia`, holding an `@system` and its steward `@agent`, and a release `@distribution` in `records/distribution.ia` beside it. To add a `@risk` word, add a `discriminators` entry and consent rows to `system.ia`, and extend the steward's `governance.applies`:
+
+```ia
+#! ia 1.0
+
+@system my-project
+  provider "local"
+  version "0.1.0"
+  describes "The authored records of the my-project workspace."
+  steward @agent my-project-steward
+  requires
+    - agent-system
+    - work-system
+    - workspace-system
+  discriminators
+    risk lowers to definition
+      category state
+      facets [risk]
+      schema @schema risk
+  edges
+    cite * using *
+
+@agent my-project-steward
+  meaning
+    says "Owns the my-project system and its records."
+    answers "Who owns this system?"
+  governance
+    applies [risk]
+```
+
+Then declare its schema in `.ia/src/systems/my-project/schemas/risk.schema.ia`:
+
+```ia
+#! ia 1.0
+
+@schema risk
+  lowers to definition
+  sections
+    must have meaning
+    must have risk
+    may have relationships
+    closed
+  fields
+    must have meaning.says as text
+    must have risk.likelihood as id in [low, medium, high]
+    may have risk.mitigation as text
+```
+
+`ia preview risk` now prints the new word's schema, its default file `.ia/src/risk.ia` and its consent row, and `ia preview risk vendor-lock-in "meaning.says=The storage API ties us to one vendor." "risk.likelihood=medium"` previews a record of it. `ia author` with the same arguments and `--digest` writes it as `my-project/definition/risk/vendor-lock-in`. `ia pack --descriptor .ia/release.json` builds a digest-named archive of the system folder under `.ia/work/dist/`; records outside the folder stay in the workspace.
+
+- **Lowering.** `lowers to` names a kernel kind, and `category`, `facets` and `schema` are required. An entry may add `artifact-set`, `primitive` and `move` rows, each a closed kernel value. A new word extends the vocabulary, never the closed kernel.
+- **One owner per word.** The steward's `governance.applies` must cover every word the system registers (`IA-COMP-STEWARD-MISSING`), and a word whose schema no visible file declares is refused with `IA-LANG-SCHEMA-MISSING`. Prefer an existing word when it represents the concept.
+- **Consent rows.** Each `edges` row reads `<predicate> <target words> using <source words>`. A side may be `*`, or `any-adopter` for the words of every system that requires this one. A system with no rows admits no relation.
+- **Owner edits.** `ia author` refuses to write `@system` and `@schema` records (`IA-CLI-EDIT-AUTHORITY`), as it refuses the other administrative words `workspace`, `agent`, `mandate`, `agent-profile` and `hook`. Edit them in source and run `ia validate`.
+
+The [language package contract](../../../packages/language/SPEC.md) defines the declaration grammar, and each `@system` and `@schema` entry in the catalogue lists their structural fields.
 
 ## Composition and execution
 
-An `agent` names a participant; a `mandate` represents bounded authority. A `capability` groups methods and operations; an `agent-profile` selects agent, capabilities, delegates and contracts; a `harness` binds those profiles within a workspace. An `execution-binding` has an entry or operation target. The generic compiler checks target kinds, cycles, required inputs, limits, effects and installed contracts. Limits must be valid bounded counts; conflicting input/outcome obligations or unavailable implementations refuse compilation. `voice` changes communication attributes, not authority.
+| Word | What it declares |
+| --- | --- |
+| `@agent` | A participant. It grants no host permission. |
+| `@mandate` | The participant's bounded authority: the moves it allows, the workspaces it scopes, the words it excludes and the paths it covers. |
+| `@capability` | Operations, procedures, templates, checks and included capabilities, with execution bounds, and optionally how a host invokes it (`invocation`: by the model, by the user, delegated or not at all). |
+| `@agent-profile` | An agent with its capabilities and an optional mandate, voice and delegates, and optionally its invocation and presentation. |
+| `@harness` | Profiles and execution bindings composed in a workspace under a host contract. |
+| `@execution-binding` | A native target connected to a host-installed entry or operation. |
+| `@voice` | Communication attributes, separate from authority and procedure. |
 
-Operation implementation, validator, model, context, entry and evaluator identifiers refer to host-installed descriptors. Native text cannot install code or grant effects. The example catalog supplies these descriptors explicitly. Compiling a harness does not invoke a model. Playbook cells use kernel phase/primitive coordinates; the context consumer selects applicable cells within its budget instead of executing prose. Templates describe rendering, hooks describe event bindings, and runs describe execution state; their declaration does not render, install a hook or start a run. Consult the [composition contract](../../../.ia/src/systems/agent-composition-system/SPEC.md) for the current generic compiler's additional execution constraints.
+Declaring these records installs and runs nothing. `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the installed implementation catalog a host has joined. `compileHarness` from `@inventarch/agent-composition-system` compiles a harness without calling a model, and refuses a missing profile, a recursive capability or an unavailable host implementation. A `@playbook` holds procedure cells at kernel phase and primitive coordinates; `ia position` delivers the cells that apply within its budget and executes none. A `@template` describes rendering, a `@hook` describes an event binding that a host adapter registers, and a `@run` describes execution state without starting it. A `@distribution` with a `product` section describes a host plugin: `ia init --from` writes these records when it lowers a plugin, and `ia project --product plugin` renders them back. The [composition contract](../../../.ia/src/systems/agent-composition-system/SPEC.md) covers the compiler.
 
 ## Quality, architecture and evidence
 
-A quality rule uses a versioned `contract` requirement. A `workspace` adopts it, a `check` names an implementation, and a `case` describes a scenario. A caller supplies an evaluator that observes the requested bytes or graph. The newline example is deliberately a toy requirement, not a prescribed quality standard.
+- A `@contract` has a `version` head field and states `REQ-*` clauses in sections such as `outputs` or `invariants`. It needs a `governs` relationship to the record it governs (`IA-LANG-CONTRACT-UNBOUND`).
+- A record adopts the contract with `requires @contract <name>`.
+- A `@check` names its evaluator in `check.runs`, selects verdicts with `check.scope` (`*` selects every verdict its evaluator reports) and `enforces` a requirement.
+- A `@case` declares a scenario, names its evaluator and `implements` a requirement. Every requirement needs an unconditional implementing case (`IA-COMP-COVERAGE-MISSING`), and its cases must include a success and a failure or refusal (`IA-COMP-COVERAGE-KIND`).
+- An `@observation` records evidence: origin, actor, locator, revision and availability, and optionally the subject, evaluator, move and a `success`, `refusal` or `inconclusive` verdict. Field typing does not verify a digest, a timestamp or a retention transition.
 
-Architecture uses workspace identities for boundaries, relationship edges for dependencies, and adopted contract requirements for constraints. The example interface declares a `uses` relationship to storage. Its evaluator checks the actual resolved edge. This representation neither endorses that architecture nor supplies an architecture review method. These domains need no new words to represent the demonstrated requirements.
-
-An `observation` carries origin, actor, location/revision, availability, interpretation and retention fields; it may also type its evidence with the subject reference and the subject's revision, the snapshot revision, the evaluator, the kernel move, a `success`, `refusal` or `inconclusive` verdict, and the check implementation and host that produced it. An `improvement` carries proposed change and review/publication metadata. Field typing cannot attest a digest, validate a timestamp, recover missing bytes or authorize a retention transition. The example observation explicitly has unavailable evidence; its placeholder digest is not an attestation. Stronger workflow validation belongs to an explicitly selected consumer.
+Architecture uses the same words: workspaces for boundaries, relationship edges such as `uses` for dependencies, and adopted contract requirements for constraints. The [quality](../../../examples/public-language/records/quality.ia), [architecture](../../../examples/public-language/records/architecture.ia) and [evidence](../../../examples/public-language/records/evidence.ia) examples show each pattern; they are toy requirements, not a prescribed standard.
 
 ## Reading validation results
 
-Parser diagnostics mean the source cannot be read as the language. Registry/schema diagnostics mean declarations or fields violate their structural contracts. Graph diagnostics and dangling references mean closure or relationship resolution is incomplete. Composition diagnostics mean an executable harness cannot be formed with the supplied catalog. Use diagnostic code, source path, line and field together to locate the obligation; fix the source or provide the missing dependency, then rerun validation.
+`ia validate` prints one status line, the errors and warnings, then the checks, bindings and evidence when the workspace has any, and ends with the next command to run. **Admitted** with **0 errors** exits 0; **Refused** means at least one error and exits 1. Warnings never refuse. Each finding names its code, source path and line, and the record identity when there is one; `--json` returns them as `findings` beside `status`, `reportOutcome` and `counts`.
 
-Executable conformance has three outcomes: `pass` means the selected evaluator observed satisfaction; `fail` means it observed a violation; `not-evaluated` means no supported observation was obtained. Missing or throwing evaluators produce `not-evaluated`. Structural admission never promotes that outcome to pass. `pnpm public-language:check` establishes schema/reference closure and harness compilation; the conformance tests separately exercise real toy evaluators with passing, failing and unavailable inputs.
+The code's prefix names the layer that raised it:
+
+| Prefix | Layer | Codes you may see |
+| --- | --- | --- |
+| `IA-LANG-` | Reading the source and registering vocabulary | `IA-LANG-PRAGMA-MISSING`, `IA-LANG-INDENT-TAB`, `IA-LANG-STRING-UNTERMINATED`, `IA-LANG-DISCRIMINATOR-UNREGISTERED`, `IA-LANG-SCHEMA-MISSING` |
+| `IA-GRAPH-` | Identity and relationship resolution | `IA-GRAPH-IDENTITY-TIE`, `IA-GRAPH-EDGE-UNCONSENTED`, `IA-GRAPH-TARGET-MISSING` (warning) |
+| `IA-COMP-` | Schemas, ownership, coverage and checks | `IA-COMP-FIELD-VALUE`, `IA-COMP-DISCRIMINATOR-FOREIGN`, `IA-COMP-STEWARD-MISSING`, `IA-COMP-COVERAGE-KIND`, `IA-COMP-NOT-EVALUATED` (warning) |
+
+Fix the source the finding names, or supply the missing record, then validate again.
+
+A requirement or check has three outcomes: `pass` means its evaluator observed the requirement satisfied, `fail` means it observed a violation, and `not-evaluated` means no supported observation was made. A missing or throwing evaluator gives `not-evaluated`, and admission never turns it into a pass. A new workspace reports two `IA-COMP-NOT-EVALUATED` warnings, `COMP-KERNEL` and `COMP-FIXTURES`, because no verification evidence was supplied, so its run outcome is `not-evaluated`. `ia validate` binds each `@check` to a built-in or installed-catalog evaluator and records the checks that passed or failed as `@observation` evidence under `.ia/work/evidence/`; when none passed or failed, or admission was refused, it records nothing.
+
+## Learn more
+
+- [Vocabulary catalogue](vocabulary.md) and [language reference contract](SPEC.md)
+- [Language](../../../packages/language/SPEC.md), [graph](../../../packages/graph/SPEC.md) and [compliance](../../../packages/compliance/SPEC.md) package contracts
+- [Public-language examples](../../../examples/public-language/README.md) and the [architecture reference](../architecture/README.md)
+- [Root README](../../../README.md) and the [CLI guide](../../../apps/cli/README.md)

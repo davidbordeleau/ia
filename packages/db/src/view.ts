@@ -46,8 +46,8 @@ export interface UnadmittedFinding {
   readonly message: string;
 }
 /**
- * One record occurrence of a view's sources that the view does not admit (lane D, D1), with the band of the placement
- * its source was read at, which is where capture membership and every band test read a record's band from, and its own
+ * One record occurrence of a view's sources that the view does not admit (D15), with the band of the placement its
+ * source was read at, which is where capture membership and every band test read a record's band from, and its own
  * admission finding:
  * - an occurrence `refused` names (a compliance exclusion, a schema failure, a refused system join or a refused
  *   enclosing record), with the finding that excluded it: the assessment's or system check's own, the enclosing
@@ -56,36 +56,35 @@ export interface UnadmittedFinding {
  * - a record a file declares when the file is refused whole, by a language error or by a requirement id another
  *   occurrence declares too, before any graph is built, with the error inside its lines, else the file's first error,
  *   which refused the file. Each header the view's own parse of the file reads is one, with the identity the compile of
- *   the file gives the record or, where the compile refused it, the identity spec 3.1 gives its header under its word's
- *   registration. The file's captured text, split at every line terminator (CRLF, CR or LF), adds three readings the
- *   parse cannot give (review findings D-R3, D2-R2 and D2-N2): a line that opens with `@<word>` after any whitespace or
- *   Unicode format characters (a no-break space, a form feed, a zero-width space, a byte-order mark) and is no header
- *   the parse read is one, wherever it stands, inside a parsed record too, with the name token after it and no
- *   identity; on a line no parsed record spans, each `@<word>` token anywhere on it is one, with no name, unless the
- *   language scanner reads the whole line as a comment (`#` after ASCII spaces or tabs, in a file with no bare CR), as
- *   it reads the attribution `ia author` writes, so a file whose parse reads no record (no or another pragma) lists
- *   every word it mentions outside such comments; and a line the first reading names no header on is one with no word,
- *   a record db cannot identify, when it holds one of the file's errors and no
- *   parsed record spans it, when an at sign opens it wherever it stands, or, in a file refused at its pragma, when it
- *   stands at column 0 and is neither blank nor a comment (`refusedWhole`; review D2-R2 and its recheck F1, F2). The
- *   readings err towards listing: a non-header line so spelled in a file already refused is listed under its word, an
- *   error or at-sign line that declares nothing with no word. An error inside a parsed record's lines, on a line no at
- *   sign opens, is that record's alone.
+ *   the file gives the record or, where the compile refused it, the identity language `identityOf` gives its header
+ *   under its word's registration. The file's captured text, split at every line terminator (CRLF, CR or LF), adds
+ *   three readings the parse cannot give: a line that opens with `@<word>` after any whitespace or Unicode format
+ *   characters (a no-break space, a form feed, a zero-width space, a byte-order mark) and is no header the parse read
+ *   is one, wherever it stands, inside a parsed record too, with the name token after it and no identity; on a line no
+ *   parsed record spans, each `@<word>` token anywhere on it is one, with no name, unless the language scanner reads
+ *   the whole line as a comment (`#` after ASCII spaces or tabs, in a file with no bare CR), as it reads the
+ *   attribution `ia author` writes, so a file whose parse reads no record (no or another pragma) lists every word it
+ *   mentions outside such comments; and a line the first reading names no header on is one with no word, a record db
+ *   cannot identify, when it holds one of the file's errors and no parsed record spans it, when an at sign opens it
+ *   wherever it stands, or, in a file refused at its pragma, when it stands at column 0 and is neither blank nor a
+ *   comment (`refusedWhole`). The readings err towards listing: a non-header line so spelled in a file already refused
+ *   is listed under its word, an error or at-sign line that declares nothing with no word. An error inside a parsed
+ *   record's lines, on a line no at sign opens, is that record's alone.
  */
 export interface UnadmittedRecord {
   /**
-   * The canonical identity, when the view compiled the record or spec 3.1 names its parsed header; absent for a header
-   * only the source text shows, or whose word no admitted system registers.
+   * The canonical identity, when the view compiled the record or language `identityOf` names its parsed header; absent
+   * for a header only the source text shows, or whose word no admitted system registers.
    */
   readonly identity?: string;
   /**
    * The word the header names, lowercased; absent for an error line of a file refused whole that no record db can
-   * identify accounts for (review D2-R2), which may declare a record of any word.
+   * identify accounts for, which may declare a record of any word.
    */
   readonly word?: string;
   /**
-   * The record's name as its header spells it, lowercased (lane D, D9: what a typed reference to it is matched by); absent
-   * for a header that spells none and for a token read past the start of a line.
+   * The record's name as its header spells it, lowercased (what a typed reference to it is matched by); absent for a
+   * header that spells none and for a token read past the start of a line.
    */
   readonly name?: string;
   readonly band: Band;
@@ -93,7 +92,7 @@ export interface UnadmittedRecord {
   /** The header line. */
   readonly line: number;
   readonly endLine: number;
-  /** The admission finding that refused it (review finding D-N5). */
+  /** The admission finding that refused it. */
   readonly finding: UnadmittedFinding;
 }
 /** Internal view; public reads project allowed nodes, never this candidate registry. */
@@ -140,7 +139,7 @@ const findingOf = (diagnostic: {
   Object.freeze({ code: diagnostic.code, path: diagnostic.path, line: diagnostic.line, message: diagnostic.message });
 /**
  * A line that opens with `@<word>` after any whitespace or Unicode format characters, and the name token after it when
- * one is there: the header syntax, read from text the parse could not read (review finding D-R3).
+ * one is there: the header syntax, read from text the parse could not read.
  */
 const HEADER = /^[\s\p{Cf}]*@([A-Za-z][A-Za-z0-9-]*)(?=[\s\p{Cf}]|$)(?:[\s\p{Cf}]+([^\s\p{Cf}]+))?/u;
 /** An `@<word>` token anywhere on a line. */
@@ -151,20 +150,19 @@ const BLANK = /^[\s\p{Cf}]*$/u;
 const COMMENT = /^[\s\p{Cf}]*#/u;
 /**
  * A line that opens, after any whitespace or format characters, with an at sign: `@`, the full-width U+FF20 or the small
- * U+FE6B (review D2 recheck F1).
+ * U+FE6B.
  */
 const AT = /^[\s\p{Cf}]*[@\uFF20\uFE6B]/u;
 /** A line at column 0, which no whitespace opens. */
 const TOP = /^\S/u;
-/** The codes of a file refused at its pragma, past which its parse reports nothing (review D2 recheck F1). */
+/** The codes of a file refused at its pragma, past which its parse reports nothing. */
 const PRAGMA = new Set(['IA-LANG-PRAGMA-MISSING', 'IA-LANG-VERSION-UNSUPPORTED']);
 /**
  * The occurrences of a file a view refuses whole (`UnadmittedRecord`): every header its parse reads, nested ones
- * included, with the identity its compile gives that header's record or, for one its compile refused, the identity spec
- * 3.1 gives it (`identityOf` over its word's registration), then every other line of `text` that opens with a header,
- * under its word and name, every `@<word>` token on a line no parsed record spans that is not a proven full-line
- * comment, under its word, and, under no word,
- * every line no header reading names that may declare a record db cannot identify (review D2-R2 and its recheck F1, F2):
+ * included, with the identity its compile gives that header's record or, for one its compile refused, the identity
+ * `identityOf` gives it over its word's registration, then every other line of `text` that opens with a header, under
+ * its word and name, every `@<word>` token on a line no parsed record spans that is not a proven full-line comment,
+ * under its word, and, under no word, every line no header reading names that may declare a record db cannot identify:
  * an error's (for one at a blank or comment line, the first line from there that is neither) that no parsed record
  * spans, one an at sign opens, and in a file refused at its pragma one at column 0 that is neither blank nor a comment.
  * Each carries the error inside its lines, else `errors[0]`, the file's first error.
@@ -251,12 +249,12 @@ function refusedWhole(
       ? []
       : [...spelled.matchAll(TOKEN)].map((token) => occurrence(token[1]!, undefined, line, line));
   });
-  // Review D2-R2: a line no header reading names that may declare a record db cannot identify, of any word, is listed
-  // with none. (1) An error at a line no parsed record spans; an error inside an identified record is that record's.
-  // An error at a blank or comment line, or past the text, as a missing pragma in an empty or comment-only file is, is
-  // taken at the first line from there that is neither (review D2 recheck F2), and at none when there is none. (2) A
-  // line opening with an at sign, wherever it stands, inside a parsed record's lines too (F1 b). (3) In a file refused at
-  // its pragma, whose parse reports nothing past it, every top-level line that is neither blank nor a comment (F1 a).
+  // A line no header reading names that may declare a record db cannot identify, of any word, is listed with none.
+  // (1) An error at a line no parsed record spans; an error inside an identified record is that record's. An error at a
+  // blank or comment line, or past the text, as a missing pragma in an empty or comment-only file is, is taken at the
+  // first line from there that is neither, and at none when there is none. (2) A line opening with an at sign, wherever
+  // it stands, inside a parsed record's lines too. (3) In a file refused at its pragma, whose parse reports nothing
+  // past it, every top-level line that is neither blank nor a comment.
   const declares = (spelled: string): boolean => !BLANK.test(spelled) && !COMMENT.test(spelled);
   const declaring = (line: number): number | undefined => {
     for (let at = Math.max(line, 1); at <= lines.length; at++) if (declares(lines[at - 1]!)) return at;
@@ -284,22 +282,22 @@ function diagnosticsOf(values: readonly Diagnostic[]): readonly Diagnostic[] {
 /** How a view admits: every existing reader takes the defaults. */
 export interface ViewOptions {
   /**
-   * D13 (plan amendments C15 and C21): `strict`, the default, admits a `@check` only when its runner is a built-in id
-   * (compliance validateCheck), so an unknown runner is IA-COMP-CHECK-UNKNOWN and the record is not admitted, as every
-   * released reader has it; `structural` admits any check that names one evaluator (validateCheckStructure), for the
-   * validate path that binds checks against a host's catalog.
+   * D13: `strict`, the default, admits a `@check` only when its runner is a built-in id (compliance validateCheck), so
+   * an unknown runner is IA-COMP-CHECK-UNKNOWN and the record is not admitted, as every released reader has it;
+   * `structural` admits any check that names one evaluator (validateCheckStructure), for the validate path that binds
+   * checks against a host's catalog.
    */
   readonly checks?: 'strict' | 'structural';
 }
 /**
- * D14, review findings B3-R4 and B4-RC1: the evidence file at `source` when it is exactly what the writer makes for the
- * checks `root` admits (`reproducesEvidence`): their bindings derived again from `root`'s own records and report, the
- * times taken from the file itself. A forged verdict, reason or record, an observation for a check not evaluated, a
- * relationship, another locator or revision, any byte the writer would not write, and anything written for another view,
- * is not evidence. Only built-in evaluators produce evidence, so no catalog takes part.
+ * D14: the evidence file at `source` when it is exactly what the writer makes for the checks `root` admits
+ * (`reproducesEvidence`): their bindings derived again from `root`'s own records and report, the times taken from the
+ * file itself. A forged verdict, reason or record, an observation for a check not evaluated, a relationship, another
+ * locator or revision, any byte the writer would not write, and anything written for another view, is not evidence.
+ * Only built-in evaluators produce evidence, so no catalog takes part.
  */
 function writerEvidence(source: RevisionSource, root: View): RevisionSource | undefined {
-  // Review finding F1: the validate request records nothing for a refused admission, so no file is evidence for one.
+  // The validate request records nothing for a refused admission, so no file is evidence for one.
   if (root.report.findings.some((finding) => finding.severity === 'error')) return undefined;
   const records = [...root.graph.nodes.values()];
   return reproducesEvidence({
@@ -349,9 +347,9 @@ function metadataOf(input: InputSnapshot): RevisionSource {
 }
 /**
  * The views of `input`, admitted as `options` says. With evidence listed (D14), the authored view is built first; the
- * one file named after its authored revision, and no other, is then read (review finding B3-N10) and admitted only when
- * it is exactly the file the writer makes for that view's checks (`writerEvidence`, B3-R4, B4-RC1) and adding it changes
- * nothing the authored records admit: their findings, verdicts, refusals and records stay as they were.
+ * one file named after its authored revision, and no other, is then read and admitted only when it is exactly the
+ * file the writer makes for that view's checks (`writerEvidence`) and adding it changes nothing the authored records
+ * admit: their findings, verdicts, refusals and records stay as they were.
  * Otherwise the authored view stands, as for a file that is not evidence. Evidence moves `revision`, never
  * `authoredRevision`, and is never what a validation binds or reports admission from.
  */
@@ -384,7 +382,8 @@ export function viewBuilder(
       evidenced = result;
     }
   }
-  // M7 adds only generated journal claims. D14 validation reproduction above is unchanged and stands independently.
+  // Runner evidence adds only generated journal claims. D14 validation reproduction above is unchanged and stands
+  // independently.
   if (!root.report.findings.some((finding) => finding.severity === 'error')) {
     const runner = runnerEvidenceSources(input, root.authoredRevision, evidenced.graph);
     if (runner.length > 0) {
@@ -480,7 +479,7 @@ function views(
       [...context.diagnostics, ...duplicates.diagnostics]
         .filter((d) => d.severity === 'error' && d.path === path)
         .sort((a, b) => a.line - b.line || compare(a.code, b.code));
-    /** Review D-N5: the finding that blocked each blocked system, the first one recorded, which its records carry. */
+    /** The finding that blocked each blocked system, the first one recorded, which its records carry. */
     const blockedBy = new Map<string, UnadmittedFinding>();
     for (const system of registry.systems.values()) {
       const error = blocked.has(system.name) ? fileErrors(system.path)[0] : undefined;

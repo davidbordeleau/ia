@@ -1,34 +1,76 @@
 # @inventarch/language
 
-A pure TypeScript pipeline for the `.ia` record language: one scanner, one parser, an explicit vocabulary registry and a semantic compiler. The implemented contract is [SPEC.md](SPEC.md); shared concepts are in the language design.
+[![npm](https://img.shields.io/npm/v/@inventarch/language?label=npm)](https://www.npmjs.com/package/@inventarch/language) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-`parse(text, path)` returns `{ ast, diagnostics }`; `scan(text, path)` returns the common token stream. Fields retain their parsed word run, typed value, children and source spans. Comments remain trivia. Slash fragments such as `#act/Decision` are accepted; their existence is a compliance concern.
+> The `.ia` language in pure TypeScript: one scanner, one parser, an explicit vocabulary registry, a semantic compiler, a loss-checked formatter and the embedded language floor. Use it to parse, register, compile and format IA text, or to edit one record of a source file.
+>
+> It is the first package in the dependency direction `language → graph → compliance → db → runtime → workspace-runtime`. [`@inventarch/graph`](../graph/README.md) loads the records it compiles.
 
-`buildRegistry(sources)` accepts `{ ...parse(text, path), location }` entries. It discovers system/schema declarations, merges by band, orders dependencies, lowers consent ledgers and joins each word to its schema. Only `system` and `schema` are built in. Other discriminators require actual registrations.
+## ⚡ Quick start
 
-`compile(ast, registry, location, pool)` returns `{ records, diagnostics, sourceMap }`. It produces identity, typed structured fields/items, containment, cells, selector groups, relationship edges, governance variants and contract requirements. It validates case structure and structural bindings. Field keys follow the parser word run and schema/floor spellings. Raw fields remain useful previews, including the spans of refused semantic carriers; a refused semantic product has no entry in its product/map array.
+```sh
+npm install @inventarch/language
+```
 
-The external `pool` contains admitted compiled occurrences and must exclude the current canonical source path. Inconsistent registration/identity data or a current-file entry throws `TypeError`, a caller-contract failure. The compiler discovers surviving local identities first, so local forward/self/nested references work independently of source order. It combines local and external candidates without selecting authority bands: zero matches retains a warning edge and its typed reference; multiple matches refuse it. Resolved relationships require both systems' row-wise consent in active-predicate direction.
+```js
+import { format, parse } from '@inventarch/language';
 
-Keep registry and compiler diagnostics once. Registry diagnostics already include parser diagnostics from its sources. AST `syntaxDiagnostics` preserves serializable parser refusal ownership, and compile withholds affected records and descendants without re-reporting those faults. Any error prevents loading the file, even when preview records are returned. Diagnostic `Severity` is `error | warning`; `KernelSeverity` is the separate `blocking | advisory | informational` dimension.
+const source = `#! ia 1.0
 
-For tree consumers, `resolveTarget` and `validatePool` share the compiler's candidate contract. `requirementCollisions` accepts explicit requirement occurrences and returns every duplicate participant, without a band exception. Compile applies it locally; a loader must apply it to the full tree before publication and remove all returned occurrences. `valuesFor`, `canonicalValue`, `verbOf` and `VERB_PHRASES` expose the closed vocabulary needed by graph/compliance. Internal carrier readers remain private.
+@decision   api-response-format
+  meaning
+    says    "Choose a response format for the public API."
+`;
 
-| Product | Authored example and current evidence | Implemented downstream consumer |
-| --- | --- | --- |
-| Cells and primitive/phase addresses | [24-cell registered authoring playbook](../compliance/fixtures/language/cells/pass/full-opal-grid.ia), cognition and integration tests | Graph indexing and runtime cell delivery |
-| Selectors | [Every axis/value](../compliance/fixtures/language/selectors/pass/all-axes-canonical-values.ia), canonical terms and refusal tests | Coordinate routing and exclusive selection |
-| Edges and consent | [All verb spellings](../compliance/fixtures/language/edges/pass/all-verbs-and-addresses.ia), asymmetric ledger and external ambiguity tests | Graph resolution, traversal and consent on later resolution |
-| Conditions and variants | [All carriers/dimensions](../compliance/fixtures/language/conditions/pass/all-carriers-and-dimensions.ia), duplicate/fallback tests | Graph condition evaluation; compliance overlap checks |
-| Requirements and cases | [Eight clause kinds](../compliance/fixtures/language/contracts/pass/all-requirement-kinds.ia), [five scenario kinds](../compliance/fixtures/language/cases/pass/all-scenario-kinds.ia), complete chain and tree-duplicate tests | Compliance fragments, declared coverage and explicit adoption evaluators; tools/systems executes its opted-in cases |
+const { ast, diagnostics } = parse(source, 'decision.ia');
+console.log(ast.records.map((record) => `@${record.discriminator} ${record.name}`), diagnostics.length);
+// [ '@decision api-response-format' ] 0
 
-The [graph](../graph/SPEC.md), [compliance](../compliance/SPEC.md), [database](../db/SPEC.md) and [runtime](../runtime/SPEC.md) now consume these products, including full native system admission and scoped procedure delivery. Local executable systems validate drafts and generate artifacts; model-led steward execution remains proposed. Language conformance alone does not establish these downstream behaviors. `format(source, path)` now returns formatted text or null with syntax diagnostics. It preserves physical trivia positions and raw multiline values; `checkFormatPreservation(source, output, path)` is the shared scanner-based write guard. The guard emits IA-LANG-FORMAT-LOSSY if comments, blank-line positions, tokens or structural line depth change. Neither function writes files.
+console.log(format(source, 'decision.ia').text);
+// #! ia 1.0
+//
+// @decision api-response-format
+//   meaning
+//     says "Choose a response format for the public API."
+```
 
-The [native floor](../../.ia/src/floor/README.md) is now the source of the closed constants. `pnpm kernel:check` at the root validates all 118 records before checking the generated embed; `pnpm kernel:generate` updates it after intentional source edits. Build tooling composes language and compliance while the runtime package remains dependency-free. `KERNEL_DIGEST`, `SHAPE_ROWS`, `KIND_LANES`, `PRIMITIVE_ANCHORS` and `DIMENSION_PATHS` expose validated data; graph consumes kind/lane metadata and runtime consumes shape defaults/focus. Primitive anchors remain exported metadata, not permission to infer the required request phase/primitive. Normal builds never read the donor repository.
+`parse` and `format` are syntax only: nothing above checks `@decision` against a vocabulary. `compile` does, against a registry you build with `buildRegistry`, and refuses a word that no registered system declares with `IA-LANG-DISCRIMINATOR-UNREGISTERED`. A file with a syntax error formats to `text: null` with its diagnostics.
 
-Conformance fixtures live under `packages/compliance/fixtures/language`. Compile fixtures can supply an optional `<name>.pool.json` of explicit external source texts/paths/locations; required pass/fail expectations remain separate. Every emitted language code now has a fail fixture, including the formatter preservation guard. Format fixtures alone admit expected .formatted.txt output and a deliberately lossy .candidate.txt companion. Direct tests additionally assert warning severity, refusal boundaries, diagnostic multiplicity and source-map correspondence.
+## 🧭 What it does
 
-Run `pnpm test`, `pnpm typecheck` and `pnpm build` in this package. The runtime has no dependencies and performs no filesystem discovery. Built-entry and emitted-declaration consumers are verified at plan closure; compiler success does not establish downstream execution.
-# Editor source helpers
+| Export | What it does |
+| --- | --- |
+| `scan(text, path)`, `parse(text, path)` | The token stream with trivia; `{ ast, diagnostics }` with records, typed fields, nesting, comments and line spans |
+| `buildRegistry(sources)` | Joins the `@system` and `@schema` declarations of parsed sources into a frozen registry. Only `system` and `schema` are built in; every other word needs a registration |
+| `compile(ast, registry, location, pool)` | `{ records, diagnostics, sourceMap }`: identities, typed fields, relationship edges with two-sided consent, cells, selectors, variants and contract requirements |
+| `resolveTarget`, `validatePool`, `requirementCollisions` | Reference resolution and whole-tree requirement uniqueness for callers that assemble many files |
+| `format(source, path)`, `checkFormatPreservation(source, output, path)` | Canonical spacing that keeps comments, blank lines and multiline values; the guard reports `IA-LANG-FORMAT-LOSSY` when a candidate changes them |
+| `references(ast)` | The typed references a file holds; prose is never read as a reference |
+| `identityOf`, `renderIdentity`, `canonicalPath`, taxonomy constants and `is*` guards | Identity, path and closed-value helpers such as `KINDS`, `PHASES`, `PREDICATES`, `INVERSE_OF` and `VERB_PHRASES` |
+| `KERNEL_SOURCES`, `KERNEL_DIGEST` | The validated language floor as frozen path and text sources, and its digest |
 
-`references(ast)` inventories typed field/list/relationship references without treating prose as a graph edge. `@inventarch/language/editor` provides UTF-16 source projection/ranges, incomplete-input cursor context, schema-form source serialization and preservation-checked formatting. `draftSource` writes only declared fields and leaves admission to downstream owners. It preserves IA quote/backslash semantics and writes each value as 2.0.0 did (text quoted, other types as given), refusing a multiline value with a plain Error and, since milestone generation-binding, a value that would add a `when` condition or a comment, or that opens a string, prose or list it does not close, with SourceEditError; use the source editor for structured/multiline content. `encodeValue` is the strict typed spelling. `appendRecord`, `addRelationship`, `setField` and `annotateRecord` return a whole file again with one top-level record changed, spliced into the file as it is: other lines keep their bytes and line endings, a byte-order mark stays, and only the edited record is formatted; `relationshipConsent` judges one relationship row's two-sided consent; a refused edit throws `SourceEditError`. See the colocated editor clauses and tests.
+The `./editor` subpath serves editors and authoring hosts:
+
+| Export | What it does |
+| --- | --- |
+| `projectSource`, `cursorContext`, `lineRange`, `recordsIn` | Zero-based UTF-16 ranges for tokens and references, and presentation-only cursor context |
+| `appendRecord`, `addRelationship`, `setField`, `annotateRecord` | Return the whole file with exactly one top-level record changed; every other line keeps its bytes and line ending |
+| `draftSource`, `encodeValue`, `draftValue`, `relationshipConsent` | Spell a schema-backed draft or one field value, and judge one relationship row's two-sided consent |
+| `SourceEditError` | Thrown by a refused edit, with a closed `reason` such as `parse`, `identity` or `field` |
+
+`@inventarch/runtime/editor` re-exports the source-edit functions for hosts that do not import this package. The `./internal/*` subpaths are published for IA's own toolchain; use the root and `./editor` entry points.
+
+## ⚖️ What it does not do
+
+- **No I/O.** It reads no files, clock, randomness, network or model, has no runtime dependencies and loads no vocabulary on its own. You supply the text, paths, registries, locations and candidate records.
+- **Parsing is not admission.** A file that parses can still fail registration or compilation, and a file with any error is not loadable even when `compile` returns preview records. Resolving references across files needs the whole selected corpus, not one file.
+- **Diagnostics, not verdicts.** Applying schemas to ordinary records, checking that a fragment's cell or requirement exists and evaluating contracts belong to [`@inventarch/compliance`](../compliance/README.md). Choosing the winning occurrence of an identity across bands belongs to [`@inventarch/graph`](../graph/README.md).
+- **Edits return text.** `format` and the editor functions never write a file, and an edit adds no diagnostic of its own: compile the result to judge it.
+
+## 📚 Learn more
+
+- [SPEC.md](SPEC.md): the package contract, including the semantic, formatting, kernel and editor clauses
+- [LANGUAGE.md](LANGUAGE.md): the packaged summary of the words this release ships
+- [Language guide](../../docs/reference/language/README.md) and [architecture reference](../../docs/reference/architecture/README.md#which-package-to-use)
+- Next in the dependency direction: [`@inventarch/graph`](../graph/README.md), [`@inventarch/compliance`](../compliance/README.md) and [`@inventarch/db`](../db/README.md)
+- [Root README](../../README.md)

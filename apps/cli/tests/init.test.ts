@@ -1,6 +1,6 @@
 /**
- * `ia init --apply`: the acceptance of docs/specs/workspace-initialization-apply/README.md §8 (M5.2)
- * and of docs/specs/workspace-initialization/README.md §7 (M5.1).
+ * `ia init --apply`: the acceptance of docs/specs/workspace-initialization-apply/README.md §8 (the apply spec) and of
+ * docs/specs/workspace-initialization/README.md §7 (the initialization spec).
  *
  * Every installed byte comes from the bundled base the root build generates (tools/native/language-base.ts), so
  * this suite needs that generator as a prerequisite, which tools/testing/tasks.json declares. The end state an
@@ -10,7 +10,8 @@
  * Interruption at an `applyInstallation` checkpoint is exercised twice. At every checkpoint it is a throw, after which
  * the installer's `finally` releases its lock, as it does for any failure inside the transaction. At the first
  * `store:`, `pending`, `active` and `complete` checkpoints it is also a hard kill in a child (tests/init-kill.ts),
- * which leaves the lock behind. Interruption at an init step boundary is the signal, observed where M5.2 §5 says.
+ * which leaves the lock behind. Interruption at an init step boundary is the signal, observed where the apply spec §5
+ * says.
  */
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -78,7 +79,7 @@ afterAll(cleanup);
 
 const base = readBase(cli);
 const pin = base.pin;
-/** The base package's id, read from the shipped pin, its only authority (apps/cli/SPEC.md C08). */
+/** The base package's id, read from the shipped pin, its only authority (the initialization spec §3). */
 const BASE_ID = pin.id;
 
 /** Every directory and file under `root`, with each file's bytes, so "byte-identical" is literal. */
@@ -113,7 +114,7 @@ const plan = (root: string, extra: readonly string[] = [], options: HostOptions 
   run(['init', root, '--json', ...extra], options);
 const view = (root: string, system = false) =>
   collectInit({ root, host: 'none', system, packageRoot: cli, git: gitIn(root, {}) });
-/** Position-and-projection §3's three records, as admission compiles a starter named `demo`. */
+/** SPEC `init`'s three records, as admission compiles a starter named `demo`. */
 const AUTHORED = [
   'workspace-system/definition/workspace/demo',
   'agent-system/binding/agent/demo',
@@ -143,7 +144,7 @@ async function checkpointNames(): Promise<readonly string[]> {
   return checkpoints;
 }
 
-it('initializes an empty directory offline with no fetch and no cache, into exactly the M5.1 end state', async () => {
+it('initializes an empty directory offline with no fetch and no cache, into exactly the specified end state', async () => {
   const fetch = vi.fn(() => {
     throw new Error('No network request is permitted');
   });
@@ -162,7 +163,7 @@ it('initializes an empty directory offline with no fetch and no cache, into exac
     records: ['@workspace demo', '@agent demo', '@mandate demo-mandate'],
     ignore: { path: '.ia/.gitignore', status: 'create' },
   });
-  // Position-and-projection §3: exactly three authored records, then the capture and project effects, reported apart.
+  // SPEC `init`: exactly three authored records, then the capture and project effects, reported apart.
   expect(envelope.applied).toEqual({
     status: 'initialized',
     resumed: false,
@@ -177,8 +178,7 @@ it('initializes an empty directory offline with no fetch and no cache, into exac
       project: 'skipped',
     },
   });
-  // M5.1 §7 item 1: validate passes with no local @system, one package at the pinned version located by digest,
-  // generation 1 active.
+  // Validate passes with no local @system, one package at the pinned version located by digest, generation 1 active.
   const validated = await run(['validate', '--root', root, '--json']);
   expect(validated.exitCode).toBe(0);
   expect(json(validated).status).toBe('admitted');
@@ -209,8 +209,9 @@ it('initializes an empty directory offline with no fetch and no cache, into exac
   const active = JSON.parse(readFileSync(resolve(root, INSTALL_PATHS.active), 'utf8'));
   expect(active).toMatchObject({ counter: 1, previous: null, generation: envelope.applied.generation });
   expect(fetch).not.toHaveBeenCalled();
-  // M5.1 §2.1: exactly the listed paths and nothing else — no floor, no host configuration, no local system. The one
-  // ignore file keeps the capture and the install state, which each clone makes for itself, out of version control.
+  // Exactly the paths the initialization spec §5 lists and nothing else — no floor, no host configuration, no local
+  // system. The one ignore file keeps the capture and the install state, which each clone makes for itself, out of
+  // version control.
   expect(readdirSync(root).sort()).toEqual(['.ia']);
   expect(readdirSync(resolve(root, '.ia')).sort()).toEqual([
     '.gitignore',
@@ -223,7 +224,7 @@ it('initializes an empty directory offline with no fetch and no cache, into exac
   expect(readFileSync(resolve(root, '.ia/.gitignore'), 'utf8')).toBe('work/\ndistributions/\n');
   expect(Object.keys(tree(resolve(root, '.ia/src'))).sort()).toEqual(['workspace.ia']);
   expect(Object.keys(tree(resolve(root, '.ia/work'))).sort()).toEqual(['snapshot/', 'snapshot/current.json']);
-  // Only fields the schemas declare (plan amendment B13), each record at placement authored (band 100).
+  // Only fields the schemas declare, each record at placement authored (band 100).
   expect(readFileSync(resolve(root, '.ia/src/workspace.ia'), 'utf8')).toBe(
     [
       '#! ia 1.0',
@@ -263,7 +264,7 @@ it('initializes an empty directory offline with no fetch and no cache, into exac
     ),
   );
   expect(readFileSync(resolve(root, `.ia/distributions/cache/${pin.archive}.ia.tgz`)).equals(base.bytes)).toBe(true);
-  // Plan amendment B7: a default starter authors no @distribution, so the descriptor names none.
+  // A default starter authors no @distribution, so the descriptor names none.
   const descriptor = JSON.parse(readFileSync(resolve(root, '.ia/release.json'), 'utf8'));
   expect(descriptor).toEqual({
     formatVersion: 1,
@@ -278,7 +279,8 @@ it('initializes an empty directory offline with no fetch and no cache, into exac
     source: { repository: null, commit: null, recipe: 'ustar-v1', epoch: 0 },
   });
   expect(base.systems).toHaveLength(11);
-  // Two uninterrupted runs in different parents are the same bytes, which is what makes §8 item 2 checkable.
+  // Two uninterrupted runs in different parents are the same bytes, which is what makes the comparison with an
+  // interrupted run checkable.
   expect(tree(root)).toEqual(await referenceTree());
 });
 
@@ -289,7 +291,7 @@ it('creates a target that did not exist yet, and renders what it applied', async
   expect(human.stdout).toContain('Init  local/demo');
   expect(human.stdout).toContain('Initialized local/demo; release descriptor .ia/release.json.');
   expect(human.stdout).toContain('counter 1.');
-  // Position-and-projection §3 in the human layout: the records authored and the ignore file, then each effect apart,
+  // SPEC `init` in the human layout: the records authored and the ignore file, then each effect apart,
   // and, with no distribution to pack, the position body as the way on.
   const text = human.stdout.replace(/\s+/g, ' '),
     snapshot = JSON.parse(readFileSync(resolve(root, '.ia/work/snapshot/current.json'), 'utf8'));
@@ -371,7 +373,7 @@ it('init --system authors the local system, its steward and a @distribution root
   expect(readFileSync(resolve(root, '.ia/src/systems/demo/records/distribution.ia'), 'utf8')).toContain(
     '  distribution\n    records [@system demo]\n',
   );
-  // Position-and-projection §2 case 2: a repository that owns vocabulary composes its own system, after the base's,
+  // SPEC `init --system`: a repository that owns vocabulary composes its own system, after the base's,
   // so the packet renders a pointer line for it.
   expect(readFileSync(resolve(root, '.ia/src/workspace.ia'), 'utf8')).toContain(
     `    systems [${[...base.systems, 'demo'].map((system) => `@system ${system}`).join(', ')}]\n`,
@@ -418,7 +420,7 @@ it('refuses to pack a default initialization, which names no distribution, befor
         where: { path: '.ia/release.json' },
         message: 'The release descriptor .ia/release.json names no distribution, so this workspace has nothing to pack',
       });
-      // Design row 27: the one command prints the word's schema; a release needs a @distribution in a system folder.
+      // The one next command prints the word's schema; a release needs a @distribution in a system folder.
       expect(commandsIn(json(refused).next)).toEqual(['ia vocabulary distribution']);
     } else expect(refused.stderr).toContain('IA-CLI-CONFLICT');
   }
@@ -456,8 +458,8 @@ it('positions, projects and formats a default initialization with no local @syst
     '.claude/rules/ia-workspace.md',
     '.claude/skills/ia-authoring/SKILL.md',
   ]);
-  // Hand-off from self-host-participant-records: the starter file sits under the workspace's authored root, outside
-  // every system folder, and the formatter takes it (the authoring-system draft target).
+  // The starter file sits under the workspace's authored root, outside every system folder, and the formatter takes
+  // it (the authoring-system draft target).
   const checked = json(await run(['format', '--root', root, '--check', '--json']));
   expect(checked).toMatchObject({ mode: 'check', changed: 0 });
   expect(checked.files).toEqual([{ path: '.ia/src/workspace.ia', status: 'unchanged', findings: expect.any(Array) }]);
@@ -482,7 +484,7 @@ it('packs a --system workspace with null provenance and installs that archive in
   vi.stubGlobal('fetch', fetch);
   const root = target();
   expect((await apply(root, ['--system'])).exitCode).toBe(0);
-  // M5.1 §7 item 2, the no-Git half.
+  // The packed manifest's provenance, the no-Git half.
   const packed = await run(['pack', '--root', root, '--descriptor', '.ia/release.json', '--json']);
   expect(packed.exitCode, packed.stderr).toBe(0);
   const archive = json(packed);
@@ -490,7 +492,7 @@ it('packs a --system workspace with null provenance and installs that archive in
   expect(archive.manifest.roots).toEqual(['floor/definition/system/demo']);
   expect(archive.manifest.systems.map((system: { name: string }) => system.name)).toEqual(['demo']);
   expect(archive.manifest.dependencies).toEqual([{ id: BASE_ID, range: `^${pin.version}` }]);
-  // M5.1 §7 item 3: a second freshly initialized workspace installs it from a local catalog, offline.
+  // A second freshly initialized workspace installs it from a local catalog, offline.
   const consumer = target('consumer');
   expect((await apply(consumer)).exitCode).toBe(0);
   mkdirSync(resolve(consumer, '.ia/work/dist'), { recursive: true });
@@ -550,7 +552,7 @@ it('sources provenance from an HTTPS remote and HEAD, and says which fact was mi
     status: 'local',
     missing: 'https-remote',
   });
-  // An SSH remote is not an HTTPS remote, and is never rewritten into a guessed one (M5.1 §2.3).
+  // An SSH remote is not an HTTPS remote, and is never rewritten into a guessed one (the initialization spec §2).
   await git(root, 'remote', 'add', 'origin', 'git@example.invalid:fixture/demo.git');
   const ssh = json(await plan(root, [], contained(root)));
   expect(ssh.plan.starter.provenance).toEqual({ status: 'local', missing: 'https-remote' });
@@ -563,7 +565,7 @@ it('sources provenance from an HTTPS remote and HEAD, and says which fact was mi
     epoch = Number(await git(root, 'log', '-1', '--format=%ct'));
   const human = await run(['init', root], contained(root));
   expect(human.stdout).toContain(`${repository} at ${commit.slice(0, 12)}`);
-  // M5.1 §7 item 2, the Git half: the packed manifest of a --system release carries that remote and HEAD.
+  // The Git half: the packed manifest of a --system release carries that remote and HEAD.
   expect((await apply(root, ['--system'], contained(root))).exitCode).toBe(0);
   expect(JSON.parse(readFileSync(resolve(root, '.ia/release.json'), 'utf8')).source).toEqual({
     repository,
@@ -635,7 +637,7 @@ it('normalizes the directory name into the id, asks for --id when it cannot, and
     expect(readdirSync(root), name).toEqual([]);
   }
   // --id supplies the name segment; its provider is the user's. The record names are the workspace's, never prefixed
-  // with the slug (decision identity-namespace).
+  // with the slug.
   const named = target('123');
   const applied = await apply(named, ['--id', 'acme/tools']);
   expect(applied.exitCode, applied.stdout).toBe(0);
@@ -662,9 +664,9 @@ it('normalizes the directory name into the id, asks for --id when it cannot, and
 });
 
 it('keeps the verified starter shape and its minimum refusals', async () => {
-  // M5.1 §2.2 requires M5.2 to keep an equivalent of the shape check: each starter admits (above), and removing a
-  // section a schema requires, `agent-system` from the local system's `requires`, or the steward's `governance`, is
-  // refused with the recorded codes.
+  // An equivalent of the shape check: each starter admits (above), and removing a section a schema requires,
+  // `agent-system` from the local system's `requires`, or the steward's `governance`, is refused with the recorded
+  // codes.
   const codes = async (system: boolean, path: string, edit: (text: string) => string): Promise<readonly string[]> => {
     const root = target(),
       controller = new AbortController();
@@ -682,7 +684,7 @@ it('keeps the verified starter shape and its minimum refusals', async () => {
     expect(edited).not.toBe(text);
     writeFileSync(resolve(root, path), edited);
     let result = json(await run(['validate', '--root', root, '--json']));
-    // Lane D: a starter @mandate that fails admission, or the starter @agent its mandate and workspace name (D9), fails
+    // A starter @mandate that fails admission, or the starter @agent its mandate and workspace name, fails
     // `ia validate` closed at that record; the admission report its refusal names, which runs in that state, lists the
     // findings.
     if (result.ok === false) {
@@ -706,7 +708,7 @@ it('keeps the verified starter shape and its minimum refusals', async () => {
       text.replace('  governance\n    requires "Claim no host permission or execution from this mandate."\n', ''),
     ),
   ).toContain('IA-COMP-SECTION-MISSING');
-  // The closed schemas declare no other field (plan amendment B13).
+  // The closed schemas declare no other field.
   expect(
     await codes(false, workspace, (text) =>
       text.replace('    scope [@workspace demo]\n', '    scope [@workspace demo]\n    granted-by "x"\n'),
@@ -721,11 +723,10 @@ it('keeps the verified starter shape and its minimum refusals', async () => {
   expect(governance).toContain('IA-COMP-STEWARD-MISSING');
 });
 
-it('admits one plan, milestone, task and decision in a fresh workspace with no edit to the starter (WS-A05)', async () => {
-  // .ia/src/systems/work-system/LANGUAGE.md, WS-A05: the neutral public example records are admitted as written. In a
-  // default workspace they sit beside the starter records, outside every system folder, where a record's word decides
-  // its system; in a --system workspace's folder the local system requires work-system, without which each is
-  // IA-COMP-DISCRIMINATOR-FOREIGN.
+it('admits one plan, milestone, task and decision in a fresh workspace with no edit to the starter', async () => {
+  // The neutral public example records are admitted as written. In a default workspace they sit beside the starter
+  // records, outside every system folder, where a record's word decides its system; in a --system workspace's folder
+  // the local system requires work-system, without which each is IA-COMP-DISCRIMINATOR-FOREIGN.
   const example = resolve(repository, 'examples/public-language/records/work.ia');
   const identities = [
     'work-system/contract/spec/example-reference-spec',
@@ -790,7 +791,7 @@ async function interruptAndResume(name: string): Promise<void> {
     }),
   ).rejects.toThrow(`interrupted at ${name}`);
   if (existsSync(resolve(root, INSTALL_PATHS.pending))) {
-    // M5.2 §4.1 recovery-required: refused before any write, naming the recovery command.
+    // A pending install refuses before any write, naming the recovery command (the apply spec §1).
     const before = tree(root),
       refused = await plan(root);
     expect(refused.exitCode, name).toBe(3);
@@ -927,7 +928,7 @@ it('init --host claude still projects when its capture fails, and names the capt
   blockCapture(root);
   const refused = await apply(root, ['--host', 'claude'], { env });
   expect(refused.exitCode, refused.stdout).toBe(3);
-  // The packet reads the live revision, not the capture (plan amendment B8), so the project effect ran.
+  // The packet reads the live revision, not the capture, so the project effect ran.
   expect(json(refused)).toMatchObject({
     code: 'IA-DB-PATH-UNSAFE',
     where: { path: '.ia/work' },
@@ -1048,7 +1049,7 @@ it('makes an edited starter, a foreign system folder, another lock request and a
   ]);
 
   // A different --id plans other starter bytes at the same path; with --system, a different system folder too, which
-  // makes the existing one foreign (M5.2 §4.1).
+  // makes the existing one foreign (the apply spec §1).
   const renamed = await interruptedAfter('author');
   expect((await refusesUnchanged(renamed, ['--id', 'local/other'])).conflicts).toEqual([
     { path: '.ia/src/workspace.ia', reason: 'Differs from the starter this initialization writes' },
@@ -1212,7 +1213,7 @@ it('refuses to initialize a directory holding the IA home, the home itself or a 
     for (const result of [await plan(root, [], { env }), await apply(root, [], { env })]) {
       expect(result.exitCode, `${root} ${result.stdout}`).toBe(3);
       expect(json(result)).toMatchObject({ ok: false, code: 'IA-DIST-PATH-UNSAFE', exit: 3 });
-      // Design row 27: the one command is the plan of this target again, once IA_HOME is moved outside it.
+      // The one next command is the plan of this target again, once IA_HOME is moved outside it.
       expect(commandsIn(json(result).next), root).toEqual([`ia init ${quote(root)}`]);
     }
     expect(tree(parent), root).toEqual(before);
@@ -1223,8 +1224,9 @@ it('refuses to initialize a directory holding the IA home, the home itself or a 
 
 /*
  * Host registration spec §4 "init --host" and §10 item 10. Every case points IA_HOST_HOME (the alias for IA_HOME) at
- * a scratch directory, so no test writes the real IA home. A root-level `.mcp.json` is not an init conflict — M5.2 §4.1
- * inspects only `.ia/`, the lock and the install state — so the refusal case seeds it before the one apply.
+ * a scratch directory, so no test writes the real IA home. A root-level `.mcp.json` is not an init conflict — the
+ * apply spec's conflicts (§1) concern only `.ia/`, the lock and the install state — so the refusal case seeds it
+ * before the one apply.
  */
 it.each(['claude', 'codex'] as const)('init --host %s --apply ends initialized and registered', async (selected) => {
   const root = target(),
@@ -1239,7 +1241,7 @@ it.each(['claude', 'codex'] as const)('init --host %s --apply ends initialized a
     id: 'local/demo',
     host: { status: 'host-registered', observed: false },
   });
-  // Milestone position-packet (B11): ia host registers no steward guard, so the host step has no hooks element.
+  // ia host registers no steward guard, so the host step has no hooks element.
   expect(envelope.applied.host.elements.map((row: { id: string }) => row.id)).toEqual(['mcp', 'context', 'projection']);
   expect(envelope.plan.steps.map((row: { id: string }) => row.id)).toEqual([...STEPS, 'project']);
   // The project effect is the position packet `applyHostProjection` wrote, as its receipt lists it: no agent file.
@@ -1321,7 +1323,7 @@ it('init --host claude --apply stays initialized when the host step refuses, and
   expect(json(result).next).toBe(
     `The workspace is initialized and captured. Remove that entry, then run "ia host claude --root ${quote(root)} --apply".`,
   );
-  // Each earlier result stays in place (design §3): the descriptor and the capture before the host step.
+  // Each earlier result stays in place: the descriptor and the capture before the host step.
   expect(existsSync(resolve(root, '.ia/release.json'))).toBe(true);
   expect(existsSync(resolve(root, '.ia/work/snapshot/current.json'))).toBe(true);
   expect(readFileSync(resolve(root, '.mcp.json'), 'utf8')).toBe(teammate);
@@ -1340,7 +1342,7 @@ it('init --host claude --apply stays initialized when the host step refuses, and
 });
 
 it('init --host claude --apply interrupted after initialization names the rooted rerun and writes nothing host-side', async () => {
-  // Design row 27: the rerun the verb supplies is the interruption's next command, on stderr and in the --json object.
+  // The rerun the verb supplies is the interruption's one next command, on stderr and in the --json object.
   // Past the descriptor, the completion point, the host step is the effect this invocation asked for, so it is the one
   // named, after a sentence saying whether the capture before it was taken.
   for (const [at, captured] of [
@@ -1352,8 +1354,8 @@ it('init --host claude --apply interrupted after initialization names the rooted
         env = { IA_HOST_HOME: scratch('init-host-home') },
         written = resolve(root, at);
       // runInit exposes no checkpoint through dispatch, so this signal is aborted exactly when a step's write has
-      // landed: it reads the existence of the descriptor, which is the moment M5.2 §4.1 calls completion, or of the
-      // capture. Only `aborted` and `throwIfAborted` are read on this path (consumer.ts, init.ts, host.ts).
+      // landed: it reads the existence of the descriptor, which is the moment the apply spec §5 calls completion, or
+      // of the capture. Only `aborted` and `throwIfAborted` are read on this path (consumer.ts, init.ts, host.ts).
       const signal = {
         get aborted() {
           return existsSync(written);
@@ -1447,7 +1449,7 @@ it.each(['store:', 'pending', 'active', 'complete'])(
     expect(existsSync(resolve(root, INSTALL_LOCK)), name).toBe(true);
     const journal = existsSync(resolve(root, INSTALL_PATHS.pending));
     expect(journal, name).toBe(prefix === 'pending' || prefix === 'active');
-    // M5.2 §4.1 recovery-required: the plan and the apply both refuse at class 3 before any write, naming recovery.
+    // A pending install: the plan and the apply both refuse at class 3 before any write, naming recovery.
     const before = tree(root);
     for (const refused of [await plan(root), await apply(root)]) {
       expect(refused.exitCode, name).toBe(3);
@@ -1482,7 +1484,7 @@ it('refuses while a live installer holds the lock, and recovery does not take it
 });
 
 it('ships a base pin that matches the native version policy and its one archive', () => {
-  // M5.2 §2.3's apps/cli half; tools/native/language-base.test.ts shows each check failing on disagreement.
+  // The apply spec §2's apps/cli half; tools/native/language-base.test.ts shows each check failing on disagreement.
   const shipped = JSON.parse(readFileSync(resolve(cli, PIN_PATH), 'utf8'));
   expect(shipped.version).toBe(
     JSON.parse(readFileSync(resolve(repository, 'examples/public-language/versions.json'), 'utf8')).language,
@@ -1519,7 +1521,7 @@ it('refuses before any write when the bundled bytes do not match the pin', async
   ).toMatchObject({ code: 'IA-CLI-FAILED', exit: 3 });
   expect(readdirSync(root)).toEqual([]);
 });
-it('reads the macOS git stub that asks for the Command Line Tools as git being unavailable (#323)', () => {
+it('reads the macOS git stub that asks for the Command Line Tools as git being unavailable (crowncodes/ia#323)', () => {
   const stub = (stderr: string) => gitAnswer({ status: 1, stdout: '', stderr });
   expect(
     stub(

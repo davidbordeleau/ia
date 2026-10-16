@@ -9,7 +9,7 @@ import { K0, normalizeScopeKey, positionBody, resolveScopeKey } from '../src/ind
 import type { LoadedRecord, PositionBody, ScopeKey } from '../src/index.js';
 import { database, declare, law, lawId, lawPath, methodPath, put, workspace, workspacePath } from './workspace.js';
 
-// R15 (position-and-projection §1, §6 and §7, design item 10; decision scope-key-caps): body(K) over the conformance
+// R15: body(K) over the conformance
 // corpus. The golden bodies are regenerated only by `node packages/runtime/tests/golden/write.mjs`, which sets
 // IA_POSITION_GOLDEN=write for the golden case alone; their diff is reviewed with the change that makes it.
 const foundation = 'workspace-system/definition/workspace/foundation-workspace',
@@ -21,7 +21,7 @@ const foundation = 'workspace-system/definition/workspace/foundation-workspace',
 const GOLDEN: Readonly<Record<string, Partial<ScopeKey>>> = {
   k0: {},
   'governance-at-law': { seat: lawId, shape: 'governance' },
-  // The law's `enforced-by` row holds only at act (decision conditional-relations-in-delivery): its check loads there.
+  // The law's `enforced-by` row holds only at act (R15): its check loads there.
   'governance-at-law-act': { seat: lawId, shape: 'governance', phase: 'act' },
   'sequence-depth-2': { shape: 'sequence', depth: 2 },
   'word-law': { seat: governanceSystem, shape: 'governance', word: 'law' },
@@ -651,7 +651,7 @@ it('gives a seat no declared root holds no workspace: the fallback closure, name
   expect(bodyOf(db, within).unknowns).toEqual([]);
 });
 
-// Decision conditional-relations-in-delivery: a conditional row is followed only where its condition holds at the key's
+// R15: a conditional row is followed only where its condition holds at the key's
 // coordinate, so the body agrees with graph traversal for the same coordinate.
 it('follows a conditional row only where it holds at the key coordinate, as graph traversal gates it', () => {
   const db = database(workspace()),

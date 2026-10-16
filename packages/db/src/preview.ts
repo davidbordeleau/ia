@@ -75,7 +75,7 @@ export function previewInputs(
   const ordered: readonly RevisionSource[] = Object.freeze(
     [...sources.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
   );
-  // Review finding B3-N5: a draft is previewed without evidence, which only an evidence reader lists.
+  // A draft is previewed without evidence, which only an evidence reader lists.
   const { evidence: _evidence, ...authored } = input;
   const snapshot = Object.freeze({
     ...authored,

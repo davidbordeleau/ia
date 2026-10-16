@@ -1,6 +1,6 @@
 # Descriptor codecs and compilers
 
-**Status (2026-09-28, LK-17): producer implemented; words unregistered.** This folder is the pure producer half of spec-0009 (OS09). The public `@inventarch/db/descriptors` export decodes and compiles `domain-model`, `storage-binding` and `app-composition` resources. Storage adapters, migration proposals and tenancy belong to the API (LK-18). Installed app consumers and the two hosts belong to ia-apps (LK-19). Nothing here is acceptance evidence for those tasks.
+**Status (2026-09-28): producer implemented; words unregistered.** This folder is the pure producer half of the descriptor contract. The public `@inventarch/db/descriptors` export decodes and compiles `domain-model`, `storage-binding` and `app-composition` resources. Storage adapters, migration proposals and tenancy belong to the API. Installed app consumers and the two hosts are owned outside this package. Nothing here is acceptance evidence for that work.
 
 The module has no I/O, clock, network, DDL or code execution. Compilers read only the values they are given: an envelope, the resource text the host disclosed, and a registry built by `createDescriptorRegistry`. They return frozen results.
 
@@ -12,11 +12,11 @@ The producer lives in `@inventarch/db`, as a subpath beside `@inventarch/db/dist
 - `@inventarch/db` owns native admission, and envelopes come from admitted records.
 - It is an existing public package, so the release export already publishes it.
 
-`@inventarch/service-contracts` is not suitable, because it may import only Zod and cannot hash. `@inventarch/compliance` cannot import the parser, because `@inventarch/db` depends on it. A new package would need new release, lock and schedule machinery for a slice this small. Catalog owners S07 and S09 do not need to become native systems (spec-0005 §4).
+`@inventarch/service-contracts` is not suitable, because it may import only Zod and cannot hash. `@inventarch/compliance` cannot import the parser, because `@inventarch/db` depends on it. A new package would need new release, lock and schedule machinery for a slice this small. The catalog owners do not need to become native systems.
 
-## Registration (ALIGN-06)
+## Registration
 
-The three words are **not registered** in any active source. Registration has to wait until the schema, the guide and the executable consumers land together. The LK-19 app consumer and the LK-18 storage consumer have not landed. The candidate registration lives only in [`fixtures/descriptors/native/`](../../fixtures/descriptors/native). That folder holds a `descriptor-candidate` system and steward, the three schemas, five envelope records and two fixture capabilities. [The descriptor test](../../tests/descriptors.test.ts) admits them through `ReadHandle.preview` over the real native tree. The overlay stays in memory: no source, cache or scope changes. The same test asserts that no active `.ia/src` file registers any of the three words. The candidate words reuse the existing taxonomy: `definition`/`representation` for the model and the app, and `binding`/`relation` for storage. The parser, the taxonomy and the vocabulary are unchanged, and no synonym words are introduced (ALIGN-07).
+The three words are **not registered** in any active source. Registration has to wait until the schema, the guide and the executable consumers land together. The app consumer and the storage consumer have not landed. The candidate registration lives only in [`fixtures/descriptors/native/`](../../fixtures/descriptors/native). That folder holds a `descriptor-candidate` system and steward, the three schemas, five envelope records and two fixture capabilities. [The descriptor test](../../tests/descriptors.test.ts) admits them through `ReadHandle.preview` over the real native tree. The overlay stays in memory: no source, cache or scope changes. The same test asserts that no active `.ia/src` file registers any of the three words. The candidate words reuse the existing taxonomy: `definition`/`representation` for the model and the app, and `binding`/`relation` for storage. The parser, the taxonomy and the vocabulary are unchanged, and no synonym words are introduced.
 
 ## Envelope schemas (candidate)
 
@@ -37,7 +37,7 @@ Each record requires `meaning.says` and `meaning.answers`, plus its owned sectio
 - `resource` is a same-envelope relative `.json` key, never a URL, an absolute or drive path, a dot segment or an import;
 - `source` is a record path inside the owner's system: `.ia/src/systems/<owner system>/…`, optionally below a verified installed store `.ia/distributions/store/<digest>/`. Each segment uses only `A-Z a-z 0-9 . _ -`, so control, bidi and separator characters never reach compiled output or diagnostics.
 
-Compiler inputs are read once. Each input field must be a data property of a plain, non-proxy object. The envelope, the disclosed resource map and the public allowlist are then copied as plain data: accessors, proxies, functions, symbols, class instances, cycles, an own `__proto__` key, and arrays that are not exactly indices `0`..`length-1` (holes or extra keys) all refuse. Excess depth or size also refuses; an array's length and an object's key count are checked before any property is read. Copies of objects have a null prototype, so no later read can reach `Object.prototype`. So a getter cannot change `source` or a resource between a check and its use. Missing permission (DESC-01) means absence: a resource the host did not put in the disclosed map refuses as `DESC-RESOURCE-UNDISCLOSED`.
+Compiler inputs are read once. Each input field must be a data property of a plain, non-proxy object. The envelope, the disclosed resource map and the public allowlist are then copied as plain data: accessors, proxies, functions, symbols, class instances, cycles, an own `__proto__` key, and arrays that are not exactly indices `0`..`length-1` (holes or extra keys) all refuse. Excess depth or size also refuses; an array's length and an object's key count are checked before any property is read. Copies of objects have a null prototype, so no later read can reach `Object.prototype`. So a getter cannot change `source` or a resource between a check and its use. Missing permission means absence: a resource the host did not put in the disclosed map refuses as `DESC-RESOURCE-UNDISCLOSED`.
 
 A resource-contained ID is data, not a native graph edge. `CompiledDomainModel.references` lists cross-model references as explicit `{model, entity, version}` mappings. The model ID is the owner qualifier: a domain resource's `model` must equal its owning record's name, so `{model, version}` names exactly one owner record per workspace. Adding a system-qualified owner to cross-model references is a future format change.
 
@@ -66,9 +66,9 @@ A resource-contained ID is data, not a native graph edge. `CompiledDomainModel.r
 - A field is `{ name, required, type }`. Its `type` is a scalar, `{ value }` or `{ reference: { model, entity, version }, cardinality: one|many }`. A same-model reference must name an entity of this exact version.
 - Commands and queries are `{ name, contract, input, output, error }`. Each resolves as `id@major` to a trusted `command`/`query` contract, and all three schema references must equal the contract's own.
 - Invariants are `{ name, validator, entity, required }`. An unknown required validator refuses. An unknown optional validator compiles as `status: "unavailable"`.
-- The result reports `evaluation: { structural: "compiled", invariants: "not-evaluated" }`. Compilation never evaluates business rules. Ownership, tenancy and authorization are never inferred from model text (DOM-01).
+- The result reports `evaluation: { structural: "compiled", invariants: "not-evaluated" }`. Compilation never evaluates business rules. Ownership, tenancy and authorization are never inferred from model text.
 
-`classifyModelChange(previous, next)` records both versions and digests, and classifies each change (DOM-02 producer half). Field types are compared after resolving named value types, so changing `money` from precision 12 to 2 is a `type-changed` break. Each change names its subject (`entity`, `command`, `query` or `invariant`).
+`classifyModelChange(previous, next)` records both versions and digests, and classifies each change (the producer half). Field types are compared after resolving named value types, so changing `money` from precision 12 to 2 is a `type-changed` break. Each change names its subject (`entity`, `command`, `query` or `invariant`).
 
 | Change | Classification |
 | --- | --- |
@@ -95,7 +95,7 @@ Mappings follow these rules:
 - The isolation column is supplied by the host at each operation and may not map a model field.
 - Adapters are allowlisted registry IDs, never driver URLs.
 
-The compiler emits no DDL, opens no connection and proposes no migration. Those are STORE-01/02 host duties (LK-18).
+The compiler emits no DDL, opens no connection and proposes no migration. Those are host duties.
 
 ### app-composition v1
 
@@ -105,8 +105,8 @@ The compiler emits no DDL, opens no connection and proposes no migration. Those 
 - **Screens.** `{ name, title?, view, layout, queries, actions }`. `view` is a trusted `view` contract and `queries` are trusted `query` contracts. A layout key or value fault is attributed to `layout.<key>`. `layout` values are bounded integers, booleans or ids.
 - **Actions.** `{ name, capability, operation, input, output, effect }`. Each capability must be one of the envelope's `@capability` refs. Input, output and effect must equal the trusted operation's.
 - **Configuration.** `{ key, visibility: public|server, secret, default? }`. A secret entry is a reference only: a `default` value or `public` visibility refuses. `publicConfiguration` holds only the keys the host passes in `AppInput.publicConfiguration`, and allowlisting a server or secret key refuses.
-- **Targets.** Each declared target profile compiles to `supported` only when every screen view, screen query and action operation is installed for it,, or to `unsupported` with typed diagnostics, and inspection continues either way. `activateTarget(app, profile)` refuses an unsupported or undeclared profile, and refuses any definition that `compileAppComposition` did not return (APPD-03).
-- **Digests.** The result carries `digests.input` (the canonical envelope), `resource`, `registry` and `definition`, together with the required capabilities (APPD-02).
+- **Targets.** Each declared target profile compiles to `supported` only when every screen view, screen query and action operation is installed for it,, or to `unsupported` with typed diagnostics, and inspection continues either way. `activateTarget(app, profile)` refuses an unsupported or undeclared profile, and refuses any definition that `compileAppComposition` did not return.
+- **Digests.** The result carries `digests.input` (the canonical envelope), `resource`, `registry` and `definition`, together with the required capabilities.
 
 ## Trusted registry
 
@@ -153,7 +153,7 @@ Every function returns either `{ ok: true, value }` or `{ ok: false, diagnostics
 - `field`, a JSON-style path such as `entities[1].fields[3].codec` or an envelope `section.field`;
 - a message bounded to 256 characters that never echoes values. `owner`, `source`, `field` and `message` are truncated to 256 UTF-16 units without splitting a surrogate pair.
 
-Decoding order is fixed, so equal input gives an equal refusal (DESC-Q08).
+Decoding order is fixed, so equal input gives an equal refusal.
 
 ## Fixtures and the installed consumer
 
@@ -172,13 +172,13 @@ The test checks three things. The source compilation must equal `expected.json`.
 
 - A new resource field, scalar, contract kind or target semantics is a new format or a named feature. Older compilers refuse it and never drop it.
 - A change to an executable key or value pattern needs a reviewed false-positive or false-negative case and a test; the patterns stay linear and length-bounded.
-- Registering the words needs the schema, this guide, a steward, and an executable consumer landing together, with the public-native gate run in the same change (ALIGN-06).
+- Registering the words needs the schema, this guide, a steward, and an executable consumer landing together, with the public-native gate run in the same change.
 
 ## Not included
 
-- Migration proposals and DDL (STORE-02 and DESC-Q05, LK-18).
-- Tenant context and service denial (DESC-Q04).
-- Browser or public projection publication (DESC-Q07).
-- Installed-base immutability and local extension (DESC-Q06).
-- Two real app hosts (DESC-Q01 and APPD-03, LK-19).
+- Migration proposals and DDL.
+- Tenant context and service denial.
+- Browser or public projection publication.
+- Installed-base immutability and local extension.
+- Two real app hosts.
 - Native registration and the steward.

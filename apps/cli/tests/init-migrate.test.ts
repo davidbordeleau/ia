@@ -1,5 +1,5 @@
 /**
- * `ia init --migrate`: milestone position-packet task init-migrate-flag's exit evidence.
+ * `ia init --migrate`: the migration tests docs/specs/workspace-initialization/README.md §7 names.
  *
  * The 1.1.0 fixture (tests/fixtures/workspace-1.1.0) is the v1.1.0 starter of a workspace named `demo` — its local
  * `@system demo` and `@agent demo-steward`, its `@workspace demo` and `@distribution demo-distribution`, and the
@@ -105,7 +105,7 @@ const LOCAL = `${FOLDER}/system.ia`;
 /** The user-authored record: its identity follows its word's owning system, work-system, not its folder. */
 const DECISION = 'work-system/definition/decision/api-response-format';
 const DISTRIBUTION = 'workspace-system/definition/distribution/demo-distribution';
-/** Position-and-projection §3's three records, as admission compiles a starter named `demo`. */
+/** SPEC `init`'s three records, as admission compiles a starter named `demo`. */
 const AUTHORED = [
   'workspace-system/definition/workspace/demo',
   'agent-system/binding/agent/demo',
@@ -664,7 +664,7 @@ it('leaves the migration and its capture in place when a projection apply fails,
     message: 'file write failed',
     next: `The workspace is migrated and captured. Repair the reported filesystem problem, then run "ia init ${quote(root)} --migrate --apply --yes" to finish migrating.`,
   });
-  // Every earlier result stays (design §3); the guard was retired before the first projection file changed (B11).
+  // Every earlier result stays; the guard was retired before the first projection file changed.
   expect(existsSync(resolve(root, '.ia/src/notes.ia'))).toBe(true);
   expect(existsSync(resolve(root, FOLDER))).toBe(false);
   expect(existsSync(resolve(root, '.ia/work/snapshot/current.json'))).toBe(true);
@@ -842,7 +842,7 @@ it('--migrate --system keeps a packable system: the @system and its steward stay
     `${FOLDER}/records/distribution.ia`,
     LOCAL,
   ]);
-  // Composed, the local system gets its pointer line in the packet (position-and-projection §2 case 2).
+  // Composed, the local system gets its pointer line in the packet (SPEC `init --system`).
   expect(renderProjectionFor(root, 'claude').files[0]!.text).toContain(
     '- `floor/definition/system/demo`: words none; band 100; steward `agent-system/binding/agent/demo-steward`; reach `ia position --seat floor/definition/system/demo`',
   );
@@ -1530,7 +1530,7 @@ it('refreshes completed migration host notes after capture repair while preservi
   }
 });
 
-it('refuses a migration whose projection effect would refuse a hook group changed by hand, before anything is written (H-R3)', async () => {
+it('refuses a migration whose projection effect would refuse a hook group changed by hand, before anything is written', async () => {
   const { root, env } = await legacyWorkspace();
   await registered(root, env);
   // A hook group registered against the materialized payload, then changed in the settings by hand.

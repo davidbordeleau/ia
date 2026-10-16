@@ -22,9 +22,9 @@ import {
 import type { GoverningMandate, GoverningOptions, Mode } from '../src/index.js';
 import { database, freshInit, packetFixture, put, workspace } from './workspace.js';
 
-// Plan amendment C1 and operator decision OD1 (milestone generation-binding, task mandate-resolution): the authored
-// @mandate records that govern an actor at a workspace or path, the default actor, and the refusal profile their moves
-// and excluded words give a mode. Amendment C2 (OD2): this repository's participant may make all five moves.
+// Mandate resolution (runtime R21): the authored @mandate records that govern an actor at a workspace or path, the
+// default actor a mandate-gated command acts as when none is named, and the refusal profile their moves and excluded
+// words give a mode. This repository's participant may make all five moves.
 const repository = resolve(import.meta.dirname, '../../..'),
   demo = 'workspace-system/definition/workspace/demo',
   participant = 'agent-system/binding/agent/demo',
@@ -38,7 +38,7 @@ const repository = resolve(import.meta.dirname, '../../..'),
   SCOPE = '    scope [@workspace demo]\n',
   UNGOVERNED = 'no authored @mandate governs here, so no move or word is restricted (a mandate only adds restrictions)';
 const RUNTIME: Location = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' };
-/** The three records a fresh init authors (B13): the demo workspace, its steward participant and its mandate. */
+/** The three records a fresh init authors: the demo workspace, its steward participant and its mandate. */
 const records = readFileSync(packetFixture, 'utf8'),
   /** The fresh init's three records without the mandate, the last of them. */
   unmandated = records.slice(0, records.indexOf('\n@mandate demo-mandate'));
@@ -80,7 +80,7 @@ it.each(['covers', 'participant'])('refuses actor-less use of a single participa
 /** Each governing mandate with whether it binds `options.actor`. */
 const bound = (db: Handle, options: GoverningOptions): readonly (readonly [string, boolean | undefined])[] =>
   governingMandates(db, token(db), options).map((entry) => [entry.identity, entry.binds] as const);
-/** Governing mandates in the position packet's mandate shape (B3), which names no band and binds no actor. */
+/** Governing mandates in the position packet's mandate shape, which names no band and binds no actor. */
 const asPacket = (entries: readonly GoverningMandate[]) =>
   entries.map(({ band: _band, binds: _binds, ...entry }) => entry);
 
@@ -564,7 +564,7 @@ it('names no default actor while several participants and no steward leave the c
   for (const mode of MODES) expect(profileAt(none, mode), mode).toEqual({ notice: UNGOVERNED });
 });
 
-it('counts only an authored steward as the default actor, and lists it among the actors (review C2-R1)', () => {
+it('counts only an authored steward as the default actor, and lists it among the actors', () => {
   // The adopted corpus's agent-steward is an installed (band 90) @agent: as composition.steward it names no actor, and
   // the choice falls to the participants, as if the workspace named no steward.
   const installed = 'agent-system/binding/agent/agent-steward',
@@ -970,7 +970,7 @@ it('reads only through its scope token, never at runtime placement, and refuses 
   );
 });
 
-it("resolves this repository's participant as its default actor, granted all five moves (amendment C2)", () => {
+it("resolves this repository's participant as its default actor, granted all five moves", () => {
   const db = database(repository),
     within = token(db),
     language = 'workspace-system/definition/workspace/language-workspace',
@@ -1130,7 +1130,7 @@ it('names the consumers the code has: the CLI mandate profile and the edit guard
   }
 });
 
-describe('a @mandate that fails admission (lane D, D1 and D2)', () => {
+describe('a @mandate that fails admission', () => {
   /** The fresh init with its mandate's moves replaced by an unknown move and an excluded word added: the probe. */
   const probe = records.replace(ALL_MOVES, 'moves [Bogus]\n    excluded-words [task]');
   /** A fixture file holding `body` after the pragma, so its first record's header is on line 3. */
@@ -1244,7 +1244,7 @@ describe('a @mandate that fails admission (lane D, D1 and D2)', () => {
     expect(identities(db, { actor: participant, workspace: demo })).toEqual([mandate('demo-mandate')]);
   });
 
-  it('fails every resolver closed, whatever the scope, with the first refused mandate located as data (D2)', () => {
+  it('fails every resolver closed, whatever the scope, with the first refused mandate located as data', () => {
     const root = freshInit(probe);
     put(root, '.ia/src/twin-a.ia', file(authorized('twin', ['moves [Observation]'])));
     put(root, '.ia/src/twin-b.ia', file(authorized('twin', ['moves [Observation]'])));
@@ -1265,7 +1265,7 @@ describe('a @mandate that fails admission (lane D, D1 and D2)', () => {
     ] as const) {
       const error = refusal(run);
       expect(error.code, name).toBe('IA-RUNTIME-REQUEST-INVALID');
-      // Review D-R2: the cause is marked on the error, which callers branch on.
+      // The cause is marked on the error, which callers branch on.
       expect(error.admission, name).toBe('refused');
       expect(isAdmissionRefusal(error), name).toBe(true);
       expect(error.where, name).toEqual({ path: '.ia/src/twin-a.ia', line: 3, identity: mandate('twin') });
@@ -1275,7 +1275,7 @@ describe('a @mandate that fails admission (lane D, D1 and D2)', () => {
       );
       expect(error.message, name).toContain('2 more @mandate records failed admission');
     }
-    // Review D-N4: a narrowed token fails closed just the same, but names no path, record or finding and carries no where.
+    // A narrowed token fails closed just the same, but names no path, record or finding and carries no where.
     for (const [name, run] of [
       ['governingMandates narrowed', () => governingMandates(db, narrowed)],
       ['defaultActor narrowed', () => defaultActor(db, narrowed, demo)],
@@ -1309,7 +1309,7 @@ describe('a @mandate that fails admission (lane D, D1 and D2)', () => {
   });
 });
 
-describe('a record an admitted @mandate depends on that fails admission (lane D, D9)', () => {
+describe('a record an admitted @mandate depends on that fails admission', () => {
   /** `@agent demo` with an undeclared section, so admission refuses it at its header, line 12 of the fixture. */
   const brokenAgent = (text: string): string =>
     text.replace('  governance\n    applies []\n', '  governance\n    applies []\n  bogus\n    note x\n');
@@ -1459,7 +1459,7 @@ describe('a record an admitted @mandate depends on that fails admission (lane D,
   });
 });
 
-describe('the mandate facet and the shadowing override (review D-N6, D-R2)', () => {
+describe('the mandate facet and the shadowing override', () => {
   it('reads a record as a mandate by its identity facet as well as its word', () => {
     const entry = (word: string, identity: string) => ({
       identity,
@@ -1502,7 +1502,7 @@ describe('the mandate facet and the shadowing override (review D-N6, D-R2)', () 
   });
 });
 
-it('spells the admission report root only when every character is inert unquoted (review D-R1, D-N2)', () => {
+it('spells the admission report root only when every character is inert unquoted', () => {
   const slash = (path: string) => (process.platform === 'win32' ? path.replaceAll('/', '\\') : path);
   expect(admissionReport(slash('/work/ws-1/a.b_c'))).toEqual({
     command: 'ia report --root /work/ws-1/a.b_c',
@@ -1526,7 +1526,7 @@ it('spells the admission report root only when every character is inert unquoted
   expect(admissionReport(undefined)).toEqual({ command: 'ia report', fromRoot: true });
 });
 
-describe('a file refused whole whose records db cannot all identify (review D2-R2)', () => {
+describe('a file refused whole whose records db cannot all identify', () => {
   const body = '  meaning\n    says "x"\n';
   it('keeps the restrictive profile when an unrelated rejected file contains an attribution comment', () => {
     const root = freshInit(readFileSync(packetFixture, 'utf8').replace(ALL_MOVES, 'moves [Observation]')),
@@ -1582,7 +1582,7 @@ describe('a file refused whole whose records db cannot all identify (review D2-R
     // Its first line reads as a comment; the next opens with a NUL at column 0 of a file refused at its pragma.
     ['UTF-16LE without a byte-order mark', Buffer.from(`#! ia 1.0\n\n@mandate sixteen\n${body}`, 'utf16le'), 2],
     ['a stray top-level line beside an identified record', `#! ia 1.0\n${agent('strayhost')}\ngarbage line here\n`, 10],
-    // Review D2 recheck F1 (a): a file refused at its pragma reports nothing past it.
+    // A file refused at its pragma reports nothing past it.
     [
       'a spaced header after a named first header, with no pragma',
       `@agent other\n${body}\n@ mandate extra\n${body}`,
@@ -1593,7 +1593,7 @@ describe('a file refused whole whose records db cannot all identify (review D2-R
       `@agent other\n${body}\n@${String.fromCharCode(0x200d)}mandate extra\n${body}`,
       5,
     ],
-    // F1 (b): a line opening with an at sign that no reading names counts wherever it stands.
+    // A line opening with an at sign that no reading names counts wherever it stands.
     [
       'a spaced header indented inside a parsed record',
       `#! ia 1.0\n\n@agent other\n${body}  @ mandate extra\n    meaning\n`,
@@ -1631,7 +1631,7 @@ describe('a file refused whole whose records db cannot all identify (review D2-R
     expect(refusedMandates(db)).toEqual([]);
     expect(identities(db, { actor: participant, workspace: demo })).toEqual([mandate('demo-mandate')]);
   });
-  it('does not fail closed for a file of comments alone, with no pragma, but does for a malformed header after one (review D2 recheck F2)', () => {
+  it('does not fail closed for a file of comments alone, with no pragma, but does for a malformed header after one', () => {
     const root = freshInit();
     put(root, '.ia/src/notes.ia', '# notes for later\n');
     const db = database(root);
@@ -1645,7 +1645,7 @@ describe('a file refused whole whose records db cannot all identify (review D2-R
       expect.objectContaining({ admission: 'refused' }),
     );
   });
-  it('counts a line the token scan reads as a mandate once (review D2 recheck F3)', () => {
+  it('counts a line the token scan reads as a mandate once', () => {
     const root = freshInit();
     put(root, '.ia/src/extra.ia', `#! ia 1.0\n${agent('other')}${String.fromCharCode(0)}@mandate extra\n${body}`);
     const db = database(root);
@@ -1693,7 +1693,7 @@ describe('a file refused whole whose records db cannot all identify (review D2-R
   });
 });
 
-describe('D9 through a tie and a file refused whole (review D2-N1)', () => {
+describe('a refused dependency through a tie and a file refused whole', () => {
   const dependencyOf = (root: string) => {
     const db = database(root);
     return { db, dependencies: refusedDependencies(db) };

@@ -14,7 +14,11 @@ export interface BoundedFetch {
   readonly optional?: boolean;
   readonly signal?: AbortSignal | undefined;
 }
-/** A 30 s timeout joined to the caller's signal, redirects refused, declared and streamed bytes bounded (spec §5.1, §6.4). */
+/**
+ * A 30 s timeout joined to the caller's signal, redirects refused, declared and streamed bytes bounded (spec §5.1, §6.4),
+ * and, whatever the caller checked, no request for a URL outside the shape of a canonical credential-free HTTPS URL
+ * without query or fragment: that refuses as INPUT-INVALID, naming the URL after `label`.
+ */
 export async function fetchBounded(request: BoundedFetch): Promise<Buffer | null> {
   const { url, signal } = request;
   // §6.4: a network failure, the 30 s timeout included, names the URL; only the caller's own abort stays an abort.
@@ -33,6 +37,21 @@ export async function fetchBounded(request: BoundedFetch): Promise<Buffer | null
 }
 async function transfer(request: BoundedFetch): Promise<Buffer | null> {
   const { url, limit, label, oversize, optional = false, signal } = request;
+  // A URL is requested only in the shape `new URL` writes for an `https:` URL without userinfo, query or fragment:
+  // `https://`, a host as URL serialization writes it (a lowercase ASCII name or IPv4 address, or a bracketed IPv6
+  // address), an optional decimal port, then a path of the characters serialization leaves in a path, `%` included. A
+  // bare `?`, `#` or `?#` at the end passes, because `URL.search` and `URL.hash` read that empty query or fragment as
+  // none, as the archive and lock checks do. The pattern uses explicit character classes only, and the URL it tests is
+  // the one fetched.
+  if (
+    !/^https:\/\/(?:[a-z0-9!"$&'()*+,;=_`{}~.-]+|\[[0-9a-f:]+\])(?::[0-9]{1,5})?\/[a-zA-Z0-9!$%&'()*+,;=:@\[\]^_|~.\/-]*\??#?$/.test(
+      url,
+    )
+  )
+    return fail(
+      'INPUT-INVALID',
+      `${label} ${url} is not a canonical credential-free HTTPS URL without query or fragment`,
+    );
   const timeout = AbortSignal.timeout(30_000),
     combined = signal === undefined ? timeout : AbortSignal.any([timeout, signal]);
   const response = await fetch(url, { redirect: 'error', signal: combined });

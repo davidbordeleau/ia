@@ -110,3 +110,77 @@ it('fetches every canonical spelling of a host or path character that a caller c
   for (const url of forms) expect((await get(url))?.toString(), url).toBe('ok');
   expect(requested).toEqual(forms);
 });
+
+it('refuses, before any request, a URL that is not a canonical credential-free HTTPS URL without query or fragment', async () => {
+  const refused = [
+    // Credentials, empty ones included.
+    'https://user:secret@registry.test/ia-registry.json',
+    'https://user@registry.test/ia-registry.json',
+    'https://@registry.test/ia-registry.json',
+    'https://:@registry.test/ia-registry.json',
+    // A query or a fragment.
+    'https://registry.test/ia-registry.json?token=1',
+    'https://registry.test/ia-registry.json?token',
+    'https://registry.test/ia-registry.json??',
+    'https://registry.test/ia-registry.json#part',
+    'https://registry.test/ia-registry.json?#part',
+    'https://registry.test/ia-registry.json#?',
+    'https://registry.test/ia-registry.json##',
+    // Another scheme, the scheme in another case, or no scheme.
+    'http://registry.test/ia-registry.json',
+    'HTTPS://registry.test/ia-registry.json',
+    'Https://registry.test/ia-registry.json',
+    'ftp://registry.test/ia-registry.json',
+    'wss://registry.test/ia-registry.json',
+    'file:///registry/ia-registry.json',
+    'data:text/plain,ia',
+    'https:registry.test/ia-registry.json',
+    'https:/registry.test/ia-registry.json',
+    '//registry.test/ia-registry.json',
+    'registry.test/ia-registry.json',
+    '',
+    // A host with uppercase letters, characters serialization never writes there, a broken IPv6 literal, or no host.
+    'https://Registry.test/ia-registry.json',
+    'https://REGISTRY.TEST/ia-registry.json',
+    'https://bücher.test/ia-registry.json',
+    'https://regi%73try.test/ia-registry.json',
+    'https://regi^stry.test/ia-registry.json',
+    'https://regi|stry.test/ia-registry.json',
+    'https://regi<stry.test/ia-registry.json',
+    'https://regi stry.test/ia-registry.json',
+    'https://registry.test\\ia-registry.json',
+    'https:///ia-registry.json',
+    'https://[::1/ia-registry.json',
+    'https://[::G]/ia-registry.json',
+    'https://[::1]x/ia-registry.json',
+    // A port that is empty, too long or not decimal.
+    'https://registry.test:/ia-registry.json',
+    'https://registry.test:123456/ia-registry.json',
+    'https://registry.test:84a3/ia-registry.json',
+    // No path, or a path with a space, a control, non-ASCII or a character serialization percent-encodes.
+    'https://registry.test',
+    'https://registry.test/a b/ia-registry.json',
+    'https://registry.test/a\tb/ia-registry.json',
+    'https://registry.test/a\nb/ia-registry.json',
+    'https://registry.test/é/ia-registry.json',
+    'https://registry.test/a"b/ia-registry.json',
+    'https://registry.test/a<b>/ia-registry.json',
+    'https://registry.test/a`b/ia-registry.json',
+    'https://registry.test/a{b}/ia-registry.json',
+    'https://registry.test/a\\b/ia-registry.json',
+    // Surrounding whitespace.
+    ' https://registry.test/ia-registry.json',
+    'https://registry.test/ia-registry.json ',
+    'https://registry.test/ia-registry.json\n',
+  ];
+  const requested = recording();
+  for (const url of refused) {
+    // None of these is a URL either caller admits, so the check refuses nothing a caller hands it.
+    expect(produced(url), JSON.stringify(url)).toBe(false);
+    await expect(get(url), JSON.stringify(url)).rejects.toMatchObject({
+      code: 'IA-DIST-INPUT-INVALID',
+      message: `Test request ${url} is not a canonical credential-free HTTPS URL without query or fragment`,
+    });
+  }
+  expect(requested).toEqual([]);
+});

@@ -87,7 +87,8 @@ jobs:
       # Public source tasks use four general lanes on Linux, six on Windows and three on macOS. Windows runs the
       # slowest, so it gets the most lanes. Hosted minutes are free on this public repository; what limits macOS is
       # the organization's five concurrent macOS jobs, shared by every run. Static, emitted and three test shards
-      # fill all five, so a second run's macOS jobs wait for a slot (tools/testing/plan.test.ts holds this).
+      # fill all five, so a second run's macOS jobs wait for a slot (tools/testing/plan.test.ts holds this). The
+      # Homebrew smoke needs only the plan and can outlast the macOS build; while it runs, one of the five waits.
       # Pull requests targeting main and every other trigger plan Linux, Windows and macOS. The planner also
       # emits the gate's rows and, for a scheduled run on an already verified main, run=false.
       - name: Assign tasks to shards

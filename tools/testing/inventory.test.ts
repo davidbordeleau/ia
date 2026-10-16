@@ -318,7 +318,8 @@ const RESULT_NEUTRAL_WORKFLOW_ENV: Readonly<Record<string, string>> = {
   NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN: 'the credential Nx sends to that remote cache; no task reads it',
   HOMEBREW_NO_AUTO_UPDATE: 'Homebrew smoke step only, outside every Nx task',
   HOMEBREW_NO_INSTALL_CLEANUP: 'Homebrew smoke step only, outside every Nx task',
-  GH_TOKEN: "the Plan job's lookup of the last successful scheduled run, a gh call outside every Nx task",
+  GH_TOKEN:
+    "the Plan job's lookups of the last successful scheduled run and of a copied verdict, GitHub API calls outside every Nx task",
   IA_REVIEW_RUN_ID: 'selects an upstream run for the uncached advisory review caller, outside every Nx task',
   IA_REVIEW_API: 'API origin for the uncached advisory review caller, outside every Nx task',
   IA_REVIEW_BINDING: 'workload binding for the uncached advisory review caller, outside every Nx task',

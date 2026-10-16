@@ -2912,7 +2912,8 @@
         "tools/testing/plan.test.ts",
         "tools/testing/report.test.ts",
         "tools/testing/resources.test.ts",
-        "tools/testing/subprocess.test.ts"
+        "tools/testing/subprocess.test.ts",
+        "tools/testing/verdict.test.ts"
       ],
       "profile": "installed",
       "platforms": [

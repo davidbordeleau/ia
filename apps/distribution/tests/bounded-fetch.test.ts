@@ -199,7 +199,7 @@ it('refuses, before any request, a URL that is not a canonical credential-free H
   expect(requested).toEqual([]);
 });
 
-it('refuses each printable ASCII character in a host or requests exactly the host the URL spells', async () => {
+it('refuses each ASCII character in a host or requests exactly the host the URL spells', async () => {
   // This stub reads the host as fetch parses the request, so a character that ends or reshapes the host shows up.
   const hosts: string[] = [];
   vi.stubGlobal('fetch', async (input: string | URL, init?: RequestInit) => {
@@ -208,7 +208,9 @@ it('refuses each printable ASCII character in a host or requests exactly the hos
     return new Response('ok');
   });
   let admitted = '';
-  for (let code = 0x20; code < 0x7f; code += 1) {
+  // Every ASCII character, controls included: URL parsing drops a tab or newline, so one admitted in a host would
+  // request a different host.
+  for (let code = 0; code < 0x80; code += 1) {
     const c = String.fromCharCode(code),
       url = `https://a${c}b.test/ia-registry.json`,
       // The host the URL spells: everything between `https://` and the first `/`.

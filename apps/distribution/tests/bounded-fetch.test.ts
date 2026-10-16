@@ -139,7 +139,9 @@ it('refuses, before any request, a URL that is not a canonical credential-free H
     '//registry.test/ia-registry.json',
     'registry.test/ia-registry.json',
     '',
-    // A host with uppercase letters, characters serialization never writes there, a broken IPv6 literal, or no host.
+    // A host with uppercase letters or characters serialization never writes there, a backslash, which `new URL` reads
+    // as the end of the host (`https://evil.test\registry.test/…` requests evil.test), an IPv6 literal that is broken
+    // or in uppercase or dotted form, or no host.
     'https://Registry.test/ia-registry.json',
     'https://REGISTRY.TEST/ia-registry.json',
     'https://bücher.test/ia-registry.json',
@@ -148,11 +150,14 @@ it('refuses, before any request, a URL that is not a canonical credential-free H
     'https://regi|stry.test/ia-registry.json',
     'https://regi<stry.test/ia-registry.json',
     'https://regi stry.test/ia-registry.json',
+    'https://evil.test\\registry.test/ia-registry.json',
     'https://registry.test\\ia-registry.json',
     'https:///ia-registry.json',
     'https://[::1/ia-registry.json',
     'https://[::G]/ia-registry.json',
     'https://[::1]x/ia-registry.json',
+    'https://[::A]/ia-registry.json',
+    'https://[::ffff:127.0.0.1]/ia-registry.json',
     // A port that is empty, too long or not decimal.
     'https://registry.test:/ia-registry.json',
     'https://registry.test:123456/ia-registry.json',

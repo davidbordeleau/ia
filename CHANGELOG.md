@@ -4,7 +4,7 @@ Generated from reviewed release changesets. Entries describe intended releases; 
 
 ## 3.1.0
 
-Coordinated 3.1.0 release of the 23 public npm packages: Lower and project host plugins; Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES.
+Coordinated 3.1.0 release of the 23 public npm packages: Lower and project host plugins; Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES; Cite the predecessor repository's issues by name; Refresh the package READMEs for 3.1; Self-contained phase rows in generated position packets; Cite public sources in package contracts and comments; Cite public contracts in package sources.
 
 ### Lower and project host plugins
 
@@ -18,11 +18,41 @@ Compliance C31. @inventarch/compliance adds verifyKernel(floor?) and verifyFixtu
 
 Packages: `@inventarch/compliance`.
 
+### Cite the predecessor repository's issues by name
+
+Comments, SPEC text and test titles that cited issues and pull requests of the predecessor repository by bare number now cite them as crowncodes/ia#N, so they no longer resolve to unrelated items in this repository. Comments, documentation and test titles only; no behaviour, export, output or dependency changes.
+
+Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/workspace-runtime`.
+
+### Refresh the package READMEs for 3.1
+
+Each package README now has a badge row, a short summary, a verified quick start or example, its main commands or exports, its limits and links, in the voice of the repository README. The CLI README is the 3.x command guide: preview and author, mandate checks and --actor, the removal of ia compile, Claude Code and Codex as the supported hosts, and the 3.1 host plugin commands ia init --from and ia project --product plugin. The compliance README shows the opt-in conformance evidence and the workspace-runtime README the host plugin subpaths. Documentation only; no package behaviour, export or dependency changes.
+
+Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/graph`, `@inventarch/language`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/steward-hook`, `@inventarch/workspace-runtime`.
+
+### Self-contained phase rows in generated position packets
+
+The position packet that `ia project` and `ia host` write (`.claude/rules/ia-workspace.md` for Claude Code, `AGENTS.md` for Codex) no longer cites a decision record outside this repository. Each phase row now reads `--phase selects the playbook cell delivered and decides which conditional relation rows apply`. The packet text and its digest change, so `ia doctor` reports a projection an earlier version wrote as outdated until `ia project <host> --apply` writes it again. Nothing else in the packet, the position body or the delivery view changes.
+
+Packages: `@inventarch/cli`, `@inventarch/runtime`.
+
+### Cite public sources in package contracts and comments
+
+Package SPECs, source comments and test titles state each rule, or cite the public SPEC clause or docs/specs section that states it, instead of planning milestones, tasks, amendments, design rows, review-finding ids and decision names that live outside this repository. Comments, documentation and test titles only; no behaviour, export, output or dependency changes.
+
+Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/graph`, `@inventarch/language`, `@inventarch/mcp-door`, `@inventarch/runtime`, `@inventarch/steward-hook`, `@inventarch/workspace-runtime`.
+
+### Cite public contracts in package sources
+
+Package contracts, source comments and tests cite the public SPEC clauses that state each rule instead of planning documents kept outside this repository. No behaviour, export or dependency changes.
+
+Packages: `@inventarch/db`, `@inventarch/graph`, `@inventarch/mcp-door`, `@inventarch/workspace-runtime`.
+
 ### Coordinated version alignment
 
 Package and native artifact version metadata follows the coordinated 3.1.0 release.
 
-Packages: `@inventarch/agent-system`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`.
+Packages: `@inventarch/agent-system`, `@inventarch/compliance-system`, `@inventarch/governance-system`, `@inventarch/hook-authoring-system`, `@inventarch/learning-system`, `@inventarch/template-system`, `@inventarch/work-system`.
 
 ## 3.0.0
 

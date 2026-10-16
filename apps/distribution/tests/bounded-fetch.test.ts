@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { fetchBounded } from '../src/bounded-fetch.js';
+import { parseRegistryBase } from '../src/registry-source.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -113,159 +114,165 @@ it('fetches every canonical spelling of a host or path character that a caller c
   expect(requested).toEqual(forms);
 });
 
-it('refuses, before any request, a URL that is not a canonical credential-free HTTPS URL without query or fragment', async () => {
+it('refuses, before any request, a URL that is malformed, not HTTPS or carries credentials', async () => {
   const refused = [
-    // Credentials, empty ones included.
-    'https://user:secret@registry.test/ia-registry.json',
-    'https://user@registry.test/ia-registry.json',
-    'https://@registry.test/ia-registry.json',
-    'https://:@registry.test/ia-registry.json',
-    // A query or a fragment.
-    'https://registry.test/ia-registry.json?token=1',
-    'https://registry.test/ia-registry.json?token',
-    'https://registry.test/ia-registry.json??',
-    'https://registry.test/ia-registry.json#part',
-    'https://registry.test/ia-registry.json?#part',
-    'https://registry.test/ia-registry.json#?',
-    'https://registry.test/ia-registry.json##',
-    // Another scheme, the scheme in another case, or no scheme.
+    // Another scheme, in any case.
     'http://registry.test/ia-registry.json',
-    'HTTPS://registry.test/ia-registry.json',
-    'Https://registry.test/ia-registry.json',
-    'ftp://registry.test/ia-registry.json',
-    'wss://registry.test/ia-registry.json',
+    'HTTP://registry.test/ia-registry.json',
     'file:///registry/ia-registry.json',
     'data:text/plain,ia',
-    'https:registry.test/ia-registry.json',
-    'https:/registry.test/ia-registry.json',
-    '//registry.test/ia-registry.json',
-    'registry.test/ia-registry.json',
+    'ftp://registry.test/ia-registry.json',
+    'wss://registry.test/ia-registry.json',
+    // A username, a password or both.
+    'https://user:secret@registry.test/ia-registry.json',
+    'https://user@registry.test/ia-registry.json',
+    'https://:secret@registry.test/ia-registry.json',
+    // Text `new URL` cannot parse: empty or blank, no scheme, or a host, IPv6 literal or port it rejects.
     '',
-    // A host with uppercase letters or characters serialization never writes there; a `?`, `#` or backslash where
-    // the host ends, which `new URL` reads as the start of a query, a fragment or the path (so
-    // `https://evil.test#.registry.test/…` and `https://evil.test\registry.test/…` request evil.test, and
-    // `https://registry.test?token=1/…` sends a query); an IPv6 literal that is broken or in uppercase or dotted
-    // form; or no host.
-    'https://Registry.test/ia-registry.json',
-    'https://REGISTRY.TEST/ia-registry.json',
-    'https://bücher.test/ia-registry.json',
-    'https://regi%73try.test/ia-registry.json',
+    ' ',
+    'registry.test/ia-registry.json',
+    '//registry.test/ia-registry.json',
+    'https://',
+    'https://regi stry.test/ia-registry.json',
     'https://regi^stry.test/ia-registry.json',
     'https://regi|stry.test/ia-registry.json',
-    'https://regi<stry.test/ia-registry.json',
-    'https://regi>stry.test/ia-registry.json',
-    'https://regi stry.test/ia-registry.json',
-    'https://registry.test?/ia-registry.json',
-    'https://registry.test#/ia-registry.json',
-    'https://registry.test?token=1/ia-registry.json',
-    'https://evil.test#.registry.test/ia-registry.json',
-    'https://evil.test\\registry.test/ia-registry.json',
-    'https://registry.test\\ia-registry.json',
-    'https:///ia-registry.json',
+    'https://regi%stry.test/ia-registry.json',
+    'https://xn--/ia-registry.json',
+    'https://xn--a/ia-registry.json',
+    'https://1.2.3.4.5/ia-registry.json',
     'https://[::1/ia-registry.json',
     'https://[::G]/ia-registry.json',
     'https://[::1]x/ia-registry.json',
-    'https://[::A]/ia-registry.json',
-    'https://[::ffff:127.0.0.1]/ia-registry.json',
-    // A port that is empty, too long or not decimal.
-    'https://registry.test:/ia-registry.json',
-    'https://registry.test:123456/ia-registry.json',
+    'https://[:::]/ia-registry.json',
+    'https://registry.test:99999/ia-registry.json',
     'https://registry.test:84a3/ia-registry.json',
-    // No path, or a path with a space, a control, non-ASCII or a character serialization percent-encodes.
-    'https://registry.test',
-    'https://registry.test/a b/ia-registry.json',
-    'https://registry.test/a\tb/ia-registry.json',
-    'https://registry.test/a\nb/ia-registry.json',
-    'https://registry.test/é/ia-registry.json',
-    'https://registry.test/a"b/ia-registry.json',
-    'https://registry.test/a<b>/ia-registry.json',
-    'https://registry.test/a`b/ia-registry.json',
-    'https://registry.test/a{b}/ia-registry.json',
-    'https://registry.test/a\\b/ia-registry.json',
-    // Surrounding whitespace.
-    ' https://registry.test/ia-registry.json',
-    'https://registry.test/ia-registry.json ',
-    'https://registry.test/ia-registry.json\n',
   ];
   const requested = recording();
-  for (const url of refused) {
-    // None of these is a URL either caller admits: the archive check's own test refuses each one.
-    expect(produced(url), JSON.stringify(url)).toBe(false);
+  for (const url of refused)
     await expect(get(url), JSON.stringify(url)).rejects.toMatchObject({
       code: 'IA-DIST-INPUT-INVALID',
-      message: `Test request ${url} is not a canonical credential-free HTTPS URL without query or fragment`,
+      message: `Test request ${url} is not a credential-free HTTPS URL`,
     });
-  }
   expect(requested).toEqual([]);
 });
 
-it('refuses each ASCII character in a host or requests exactly the host the URL spells', async () => {
-  // This stub reads the host as fetch parses the request, so a character that ends or reshapes the host shows up.
-  const hosts: string[] = [];
-  vi.stubGlobal('fetch', async (input: string | URL, init?: RequestInit) => {
-    expect(init?.redirect).toBe('error');
-    hosts.push(new URL(new Request(input, init).url).host);
-    return new Response('ok');
-  });
-  let admitted = '';
-  // Every ASCII character, controls included: URL parsing drops a tab or newline, so one admitted in a host would
-  // request a different host.
-  for (let code = 0; code < 0x80; code += 1) {
-    const c = String.fromCharCode(code),
-      url = `https://a${c}b.test/ia-registry.json`,
-      // The host the URL spells: everything between `https://` and the first `/`.
-      spelled = url.slice('https://'.length, url.indexOf('/', 'https://'.length));
-    const refusal = await get(url).then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    if (refusal === undefined) {
-      expect(hosts.pop(), url).toBe(spelled);
-      admitted += c;
-    } else expect(refusal, url).toMatchObject({ code: 'IA-DIST-INPUT-INVALID' });
-  }
-  // The characters the check admits in a host, and `/`, which ends it.
-  expect(admitted).toBe('!"$&\'()*+,-./0123456789;=_`abcdefghijklmnopqrstuvwxyz{}~');
-  expect(hosts).toEqual([]);
+it('made no request for a credentialed or malformed URL before this check either: fetch rejects one itself', async () => {
+  // The real fetch, before any stub: it builds no request for a URL with credentials or one it cannot parse, and
+  // rejects with a TypeError, which the transport reported as IA-DIST-ARTIFACT-UNAVAILABLE before this check.
+  for (const url of [
+    'https://user:secret@registry.test/ia-registry.json',
+    'https://:secret@registry.test/ia-registry.json',
+    'https://registry.test:99999/ia-registry.json',
+    'https://[::1/ia-registry.json',
+    '',
+  ])
+    await expect(fetch(url), JSON.stringify(url)).rejects.toThrow(TypeError);
 });
 
-it('checks the shape, not the canonical form: fetch requests a rewritten spelling as it parses it, or fails to', async () => {
-  // This stub builds the request as fetch does, so a URL it cannot parse throws fetch's own TypeError.
-  const requested: string[] = [];
-  vi.stubGlobal('fetch', async (input: string | URL, init?: RequestInit) => {
-    expect(init?.redirect).toBe('error');
-    requested.push(new Request(input, init).url);
-    return new Response('ok');
-  });
-  const rewritten: readonly (readonly [string, string])[] = [
+it('requests a non-canonical HTTPS spelling as new URL writes it, the request fetch built from that spelling', async () => {
+  const spellings: readonly (readonly [string, string])[] = [
+    // The host or scheme in another case, an explicit or empty default port, a percent-encoded host character, raw
+    // path characters that `new URL` percent-encodes, an IDN, and IPv6 and IPv4 long forms.
+    ['https://Registry.test/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    ['https://REGISTRY.TEST/Base/ia-registry.json', 'https://registry.test/Base/ia-registry.json'],
+    ['HTTPS://registry.test/ia-registry.json', 'https://registry.test/ia-registry.json'],
     ['https://registry.test:443/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    ['https://registry.test:/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    ['https://regi%73try.test/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    [
+      'https://registry.test/a b/é/"<>`{}/ia-registry.json',
+      'https://registry.test/a%20b/%C3%A9/%22%3C%3E%60%7B%7D/ia-registry.json',
+    ],
+    ['https://bücher.test/ia-registry.json', 'https://xn--bcher-kva.test/ia-registry.json'],
+    ['https://[::A]/ia-registry.json', 'https://[::a]/ia-registry.json'],
+    ['https://[0:0:0:0:0:ffff:127.0.0.1]:08443/ia-registry.json', 'https://[::ffff:7f00:1]:8443/ia-registry.json'],
     ['https://127.1/ia-registry.json', 'https://127.0.0.1/ia-registry.json'],
     ['https://2130706433/ia-registry.json', 'https://127.0.0.1/ia-registry.json'],
     ['https://0x7f.1/ia-registry.json', 'https://127.0.0.1/ia-registry.json'],
     ['https://0/ia-registry.json', 'https://0.0.0.0/ia-registry.json'],
+    // Dot segments, backslashes, a missing path and missing or extra slashes after the scheme.
     ['https://registry.test/a/../ia-registry.json', 'https://registry.test/ia-registry.json'],
     ['https://registry.test/%2e/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    ['https://registry.test\\base\\ia-registry.json', 'https://registry.test/base/ia-registry.json'],
+    ['https://registry.test', 'https://registry.test/'],
+    ['https:registry.test/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    ['https:///registry.test/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    // An empty userinfo, which holds no credentials and which `new URL` drops.
+    ['https://@registry.test/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    ['https://:@registry.test/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    // Surrounding whitespace, and a tab or newline inside, which URL parsing strips.
+    [' https://registry.test/ia-registry.json\n', 'https://registry.test/ia-registry.json'],
+    ['https://regi\tstry.test/ia-\nregistry.json', 'https://registry.test/ia-registry.json'],
+    // A query or a fragment as `new URL` writes them, where the host ends too, and a trailing slash, kept as it is.
+    ['https://registry.test/ia-registry.json?token=a b', 'https://registry.test/ia-registry.json?token=a%20b'],
+    ['https://registry.test/ia-registry.json#part', 'https://registry.test/ia-registry.json#part'],
+    ['https://evil.test#.registry.test/ia-registry.json', 'https://evil.test/#.registry.test/ia-registry.json'],
+    ['https://registry.test/base/', 'https://registry.test/base/'],
   ];
-  for (const [url, parsed] of rewritten) {
-    expect(produced(url), url).toBe(false);
-    expect((await get(url))?.toString(), url).toBe('ok');
-    expect(requested.pop(), url).toBe(parsed);
+  const requested = recording();
+  for (const [url, canonical] of spellings) {
+    expect(new URL(url).href, JSON.stringify(url)).toBe(canonical);
+    // Handed the spelling itself, as it was before this check, fetch built this same request.
+    expect(new Request(url).url, JSON.stringify(url)).toBe(new Request(canonical).url);
+    expect((await get(url))?.toString(), JSON.stringify(url)).toBe('ok');
+    expect(requested.pop(), JSON.stringify(url)).toBe(canonical);
   }
-  for (const url of [
-    'https://registry.test:99999/ia-registry.json',
-    'https://[:::]/ia-registry.json',
-    'https://xn--/ia-registry.json',
-    'https://xn--a/ia-registry.json',
-    'https://1.2.3.4.5/ia-registry.json',
+  expect(requested).toEqual([]);
+});
+
+it('refuses an ASCII character in a host, path, query or fragment exactly where new URL does, else requests its href', async () => {
+  const requested = recording();
+  let admitted = '';
+  // Every ASCII character, controls included: URL parsing strips a tab or newline, ends the host at `/`, `\`, `?` or
+  // `#`, reads `@` as userinfo and lowercases letters, and the request is then for the host `new URL` reads.
+  for (let code = 0; code < 0x80; code += 1) {
+    const c = String.fromCharCode(code);
+    for (const url of [
+      `https://a${c}b.test/ia-registry.json`,
+      `https://registry.test/a${c}b/ia-registry.json`,
+      `https://registry.test/ia-registry.json?a${c}b`,
+      `https://registry.test/ia-registry.json#a${c}b`,
+    ]) {
+      let href: string | undefined;
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) href = parsed.href;
+      } catch {
+        href = undefined;
+      }
+      const outcome = await get(url).then(
+        () => requested.pop(),
+        (error: unknown) => error,
+      );
+      if (href === undefined) expect(outcome, JSON.stringify(url)).toMatchObject({ code: 'IA-DIST-INPUT-INVALID' });
+      else {
+        expect(outcome, JSON.stringify(url)).toBe(href);
+        if (url.startsWith('https://a')) admitted += c;
+      }
+    }
+  }
+  // The characters a host admits: those `new URL` keeps or lowercases there, the tab, newline and carriage return it
+  // strips, and `#`, `/`, `?` and `\`, which end the host.
+  expect(admitted).toBe(
+    '\t\n\r!"#$&\'()*+,-./0123456789;=?ABCDEFGHIJKLMNOPQRSTUVWXYZ\\_`abcdefghijklmnopqrstuvwxyz{}~',
+  );
+  expect(requested).toEqual([]);
+});
+
+it('requests a URL that parseRegistryBase produced exactly as it produced it', async () => {
+  const requested = recording();
+  for (const value of [
+    'HTTPS://Registry.TEST:443/Base',
+    'https://registry.test:8443/a b/é/',
+    'https://bücher.test',
+    'https://[0:0::1]/base/',
+    'https://127.1',
   ]) {
-    // fetch's own wording varies with the Node version; the code and the URL that the message names are the
-    // contract (§6.4).
-    const failure = await get(url).then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    expect(failure, url).toMatchObject({ code: 'IA-DIST-ARTIFACT-UNAVAILABLE' });
-    expect((failure as Error).message.startsWith(`Test request ${url} failed: `), url).toBe(true);
+    const base = parseRegistryBase(value, '/');
+    if (base.kind !== 'https') throw new Error(`${value} is not an HTTPS base`);
+    const url = `${base.url}ia-registry.json`;
+    expect((await get(url))?.toString(), value).toBe('ok');
+    expect(requested.pop(), value).toBe(url);
   }
   expect(requested).toEqual([]);
 });

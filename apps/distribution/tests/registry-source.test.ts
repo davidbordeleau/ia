@@ -204,6 +204,27 @@ it('hands every HTTPS base it admits to the transport in serialized form, for ev
     ]);
   }
 });
+it('reads a hand-built HTTPS base in a spelling new URL rewrites, requesting its canonical form', async () => {
+  // `RegistryBase` is structural, so a caller can skip parseRegistryBase; the transport canonicalizes what it requests
+  // and every message still names the URL as the caller spelled it.
+  const requested: string[] = [];
+  vi.stubGlobal('fetch', async (input: string | URL, init?: RequestInit) => {
+    expect(init?.redirect).toBe('error');
+    requested.push(String(input));
+    return String(input).endsWith('/ia-registry.json') ? new Response(info()) : new Response('gone', { status: 410 });
+  });
+  const registry = await openRegistry({ kind: 'https', url: 'https://Registry.TEST:443/Base/' });
+  await expect(registry.index('acme/tools')).rejects.toMatchObject(
+    refusal(
+      'ARTIFACT-UNAVAILABLE',
+      /^Registry request https:\/\/Registry\.TEST:443\/Base\/packages\/acme\/tools\.json returned 410$/,
+    ),
+  );
+  expect(requested).toEqual([
+    'https://registry.test/Base/ia-registry.json',
+    'https://registry.test/Base/packages/acme/tools.json',
+  ]);
+});
 it('refuses bases that are not registries and names the base', async () => {
   const dir = temp();
   await expect(openRegistry(parseRegistryBase('absent', dir))).rejects.toMatchObject(

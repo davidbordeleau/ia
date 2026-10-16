@@ -16,8 +16,10 @@ export interface BoundedFetch {
 }
 /**
  * A 30 s timeout joined to the caller's signal, redirects refused, declared and streamed bytes bounded (spec §5.1, §6.4),
- * and, whatever the caller checked, no request for a URL outside the shape of a canonical credential-free HTTPS URL
- * without query or fragment: that refuses as INPUT-INVALID, naming the URL after `label`.
+ * and, whatever the caller checked, a request only for a URL that `new URL` parses as `https:` without a username or
+ * password, sent in the canonical form `new URL` writes; any other URL refuses as INPUT-INVALID, naming the URL after
+ * `label`. Messages name the URL as the caller spelled it. This is URL hygiene, not host authorization: it does not
+ * keep a request from internal, loopback or rebinding hosts.
  */
 export async function fetchBounded(request: BoundedFetch): Promise<Buffer | null> {
   const { url, signal } = request;
@@ -37,33 +39,29 @@ export async function fetchBounded(request: BoundedFetch): Promise<Buffer | null
 }
 async function transfer(request: BoundedFetch): Promise<Buffer | null> {
   const { url, limit, label, oversize, optional = false, signal } = request;
-  // A URL is requested only in the shape `new URL` writes for an `https:` URL without userinfo, query or fragment.
-  // The pattern below, part by part:
-  //   ^https:\/\/                                 the scheme, then `//`;
-  //   (?:[a-z0-9!"$&'()*+,;=_`{}~.-]+             a host of lowercase ASCII letters, digits and !"$&'()*+,-.;=_`{}~,
-  //     |\[[0-9a-f:]+\])                          which covers names and IPv4 addresses, or an IPv6 address in
-  //                                               brackets, of lowercase hex digits and `:`;
-  //   (?::[0-9]{1,5})?                            an optional decimal port;
-  //   \/[a-zA-Z0-9!$%&'()*+,;=:@\[\]^_|~.\/-]*     a path that starts with `/`, of ASCII letters, digits, `%` and
-  //                                               !$&'()*+,-./:;=@[]^_|~;
-  //   \??#?$                                      then at most a bare `?`, then at most a bare `#`.
-  // It checks that shape, not the canonical form: an IPv4 number form such as `127.1`, an explicit `:443` or a dot
-  // segment passes and is requested as fetch parses it. A bare `?`, `#` or `?#` passes because `URL.search` and
-  // `URL.hash` read that empty query or fragment as none, as the archive and lock checks do. The pattern uses explicit
-  // character classes only and tests the very URL that is fetched, and the `return` ends the refusing branch, so
-  // CodeQL sees that `fetch` is reached only after the test passes: keep the literal inline and keep the `return`.
-  if (
-    !/^https:\/\/(?:[a-z0-9!"$&'()*+,;=_`{}~.-]+|\[[0-9a-f:]+\])(?::[0-9]{1,5})?\/[a-zA-Z0-9!$%&'()*+,;=:@\[\]^_|~.\/-]*\??#?$/.test(
-      url,
-    )
-  )
-    return fail(
-      'INPUT-INVALID',
-      `${label} ${url} is not a canonical credential-free HTTPS URL without query or fragment`,
-    );
+  const refuse = (): never => fail('INPUT-INVALID', `${label} ${url} is not a credential-free HTTPS URL`);
+  // The policy: `url` parses as a WHATWG URL with the `https:` scheme and no username or password. Nothing else
+  // refuses: a query or fragment passes, and a spelling that `new URL` rewrites (case, `:443`, a percent-encoded host
+  // character, an IPv4 number form, a dot segment) is requested in the canonical form it writes, which is the request
+  // fetch built when handed the spelling itself. A malformed or credentialed URL never got a request: fetch rejects it.
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return refuse();
+  }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return refuse();
+  const href = parsed.href;
+  // `new URL` writes such a URL as `https://` and printable ASCII only: the host is lowercase ASCII (punycode for a
+  // non-ASCII name), and a control, space or non-ASCII character elsewhere is percent-encoded or, for a tab or newline,
+  // stripped. The test below therefore refuses nothing the checks above admit. It is the guard CodeQL reads
+  // (js/file-access-to-http): an anchored pattern listing every printable ASCII character, tested on the very string
+  // fetch receives, with a `return` that ends the refusing branch. Keep the literal inline, keep the `return`, and
+  // pass `href`, not `url`, to fetch.
+  if (!/^https:\/\/[a-zA-Z0-9!"#$%&'()*+,.\/:;<=>?@\[\\\]^_`{|}~-]+$/.test(href)) return refuse();
   const timeout = AbortSignal.timeout(30_000),
     combined = signal === undefined ? timeout : AbortSignal.any([timeout, signal]);
-  const response = await fetch(url, { redirect: 'error', signal: combined });
+  const response = await fetch(href, { redirect: 'error', signal: combined });
   if (!response.ok || (!response.body && !optional)) {
     await response.body?.cancel();
     if (optional && response.status === 404) return null;

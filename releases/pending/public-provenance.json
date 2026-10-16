@@ -1,0 +1,33 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "none",
+  "title": "Cite public sources in package contracts and comments",
+  "summary": "Package SPECs, source comments and test titles state each rule, or cite the public SPEC clause or docs/specs section that states it, instead of planning milestones, tasks, amendments, design rows, review-finding ids and decision names that live outside this repository. Comments, documentation and test titles only; no behaviour, export, output or dependency changes.",
+  "packages": [
+    "@inventarch/cli",
+    "@inventarch/compliance",
+    "@inventarch/db",
+    "@inventarch/distribution",
+    "@inventarch/graph",
+    "@inventarch/language",
+    "@inventarch/mcp-door",
+    "@inventarch/runtime",
+    "@inventarch/steward-hook",
+    "@inventarch/workspace-runtime"
+  ],
+  "paths": [
+    ".gitignore",
+    "CONTRIBUTING.md",
+    "apps/cli/",
+    "apps/distribution/",
+    "apps/mcp-door/",
+    "apps/steward-hook/",
+    "packages/compliance/",
+    "packages/db/",
+    "packages/graph/",
+    "packages/language/",
+    "packages/runtime/",
+    "packages/workspace-runtime/",
+    "tools/"
+  ]
+}

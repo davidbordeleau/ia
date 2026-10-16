@@ -7,7 +7,7 @@
     "version": "3.0.0"
   },
   "bump": "minor",
-  "summary": "Coordinated 3.1.0 release of the 23 public npm packages: Lower and project host plugins; Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES; Cite the predecessor repository's issues by name; Refresh the package READMEs for 3.1; Self-contained phase rows in generated position packets; Cite public sources in package contracts and comments; Cite public contracts in package sources.",
+  "summary": "Coordinated 3.1.0 release of the 23 public npm packages: Lower and project host plugins; Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES.",
   "packages": {
     "@inventarch/agent-composition-system": {
       "previous": "3.0.0",
@@ -27,12 +27,12 @@
     "@inventarch/cli": {
       "previous": "3.0.0",
       "kind": "changed",
-      "summary": "Lower and project host plugins. Cite the predecessor repository's issues by name. Refresh the package READMEs for 3.1. Self-contained phase rows in generated position packets. Cite public sources in package contracts and comments."
+      "summary": "Lower and project host plugins."
     },
     "@inventarch/compliance": {
       "previous": "3.0.0",
       "kind": "changed",
-      "summary": "Lower and project host plugins. Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES. Cite the predecessor repository's issues by name. Refresh the package READMEs for 3.1. Cite public sources in package contracts and comments."
+      "summary": "Lower and project host plugins. Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES."
     },
     "@inventarch/compliance-system": {
       "previous": "3.0.0",
@@ -41,13 +41,13 @@
     },
     "@inventarch/db": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Cite the predecessor repository's issues by name. Refresh the package READMEs for 3.1. Cite public sources in package contracts and comments. Cite public contracts in package sources."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/distribution": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Cite the predecessor repository's issues by name. Refresh the package READMEs for 3.1. Cite public sources in package contracts and comments."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/governance-system": {
       "previous": "3.0.0",
@@ -56,8 +56,8 @@
     },
     "@inventarch/graph": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Refresh the package READMEs for 3.1. Cite public sources in package contracts and comments. Cite public contracts in package sources."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/hook-authoring-system": {
       "previous": "3.0.0",
@@ -66,8 +66,8 @@
     },
     "@inventarch/language": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Refresh the package READMEs for 3.1. Cite public sources in package contracts and comments."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/learning-system": {
       "previous": "3.0.0",
@@ -77,32 +77,32 @@
     "@inventarch/mcp-door": {
       "previous": "3.0.0",
       "kind": "changed",
-      "summary": "Lower and project host plugins. Refresh the package READMEs for 3.1. Cite public sources in package contracts and comments. Cite public contracts in package sources."
+      "summary": "Lower and project host plugins."
     },
     "@inventarch/runner": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Refresh the package READMEs for 3.1."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/runtime": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Refresh the package READMEs for 3.1. Self-contained phase rows in generated position packets. Cite public sources in package contracts and comments."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/service-contracts": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Refresh the package READMEs for 3.1."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/session-system": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Cite the predecessor repository's issues by name."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/steward-hook": {
       "previous": "3.0.0",
-      "kind": "changed",
-      "summary": "Cite the predecessor repository's issues by name. Refresh the package READMEs for 3.1. Cite public sources in package contracts and comments."
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
     },
     "@inventarch/template-system": {
       "previous": "3.0.0",
@@ -117,7 +117,7 @@
     "@inventarch/workspace-runtime": {
       "previous": "3.0.0",
       "kind": "changed",
-      "summary": "Lower and project host plugins. Cite the predecessor repository's issues by name. Refresh the package READMEs for 3.1. Cite public sources in package contracts and comments. Cite public contracts in package sources."
+      "summary": "Lower and project host plugins."
     },
     "@inventarch/workspace-system": {
       "previous": "3.0.0",
@@ -167,149 +167,24 @@
       ]
     },
     {
-      "id": "cite-the-predecessor-repository-s-issues-by-name",
-      "title": "Cite the predecessor repository's issues by name",
-      "summary": "Comments, SPEC text and test titles that cited issues and pull requests of the predecessor repository by bare number now cite them as crowncodes/ia#N, so they no longer resolve to unrelated items in this repository. Comments, documentation and test titles only; no behaviour, export, output or dependency changes.",
-      "packages": [
-        "@inventarch/cli",
-        "@inventarch/compliance",
-        "@inventarch/db",
-        "@inventarch/distribution",
-        "@inventarch/session-system",
-        "@inventarch/steward-hook",
-        "@inventarch/workspace-runtime"
-      ],
-      "paths": [
-        ".ia/src/systems/session-system/",
-        "apps/cli/",
-        "apps/distribution/",
-        "apps/steward-hook/",
-        "packages/compliance/",
-        "packages/db/",
-        "packages/workspace-runtime/",
-        "tools/"
-      ]
-    },
-    {
-      "id": "package-readmes-3-1",
-      "title": "Refresh the package READMEs for 3.1",
-      "summary": "Each package README now has a badge row, a short summary, a verified quick start or example, its main commands or exports, its limits and links, in the voice of the repository README. The CLI README is the 3.x command guide: preview and author, mandate checks and --actor, the removal of ia compile, Claude Code and Codex as the supported hosts, and the 3.1 host plugin commands ia init --from and ia project --product plugin. The compliance README shows the opt-in conformance evidence and the workspace-runtime README the host plugin subpaths. Documentation only; no package behaviour, export or dependency changes.",
-      "packages": [
-        "@inventarch/cli",
-        "@inventarch/compliance",
-        "@inventarch/db",
-        "@inventarch/distribution",
-        "@inventarch/graph",
-        "@inventarch/language",
-        "@inventarch/mcp-door",
-        "@inventarch/runner",
-        "@inventarch/runtime",
-        "@inventarch/service-contracts",
-        "@inventarch/steward-hook",
-        "@inventarch/workspace-runtime"
-      ],
-      "paths": [
-        ".github/",
-        "README.md",
-        "apps/cli/",
-        "apps/distribution/",
-        "apps/mcp-door/",
-        "apps/runner/",
-        "apps/steward-hook/",
-        "apps/vscode/README.md",
-        "distributions/",
-        "docs/",
-        "examples/",
-        "packages/compliance/",
-        "packages/db/",
-        "packages/graph/",
-        "packages/language/",
-        "packages/runtime/",
-        "packages/service-contracts/",
-        "packages/workspace-runtime/",
-        "tools/"
-      ]
-    },
-    {
-      "id": "packet-phase-line",
-      "title": "Self-contained phase rows in generated position packets",
-      "summary": "The position packet that `ia project` and `ia host` write (`.claude/rules/ia-workspace.md` for Claude Code, `AGENTS.md` for Codex) no longer cites a decision record outside this repository. Each phase row now reads `--phase selects the playbook cell delivered and decides which conditional relation rows apply`. The packet text and its digest change, so `ia doctor` reports a projection an earlier version wrote as outdated until `ia project <host> --apply` writes it again. Nothing else in the packet, the position body or the delivery view changes.",
-      "packages": [
-        "@inventarch/cli",
-        "@inventarch/runtime"
-      ],
-      "paths": [
-        ".github/",
-        "AGENTS.md",
-        "CLAUDE.md",
-        "apps/cli/",
-        "packages/runtime/",
-        "tools/"
-      ]
-    },
-    {
-      "id": "public-provenance",
-      "title": "Cite public sources in package contracts and comments",
-      "summary": "Package SPECs, source comments and test titles state each rule, or cite the public SPEC clause or docs/specs section that states it, instead of planning milestones, tasks, amendments, design rows, review-finding ids and decision names that live outside this repository. Comments, documentation and test titles only; no behaviour, export, output or dependency changes.",
-      "packages": [
-        "@inventarch/cli",
-        "@inventarch/compliance",
-        "@inventarch/db",
-        "@inventarch/distribution",
-        "@inventarch/graph",
-        "@inventarch/language",
-        "@inventarch/mcp-door",
-        "@inventarch/runtime",
-        "@inventarch/steward-hook",
-        "@inventarch/workspace-runtime"
-      ],
-      "paths": [
-        ".gitignore",
-        "CONTRIBUTING.md",
-        "apps/cli/",
-        "apps/distribution/",
-        "apps/mcp-door/",
-        "apps/steward-hook/",
-        "packages/compliance/",
-        "packages/db/",
-        "packages/graph/",
-        "packages/language/",
-        "packages/runtime/",
-        "packages/workspace-runtime/",
-        "tools/"
-      ]
-    },
-    {
-      "id": "public-spec-citations",
-      "title": "Cite public contracts in package sources",
-      "summary": "Package contracts, source comments and tests cite the public SPEC clauses that state each rule instead of planning documents kept outside this repository. No behaviour, export or dependency changes.",
-      "packages": [
-        "@inventarch/db",
-        "@inventarch/graph",
-        "@inventarch/mcp-door",
-        "@inventarch/workspace-runtime"
-      ],
-      "paths": [
-        ".github/",
-        "AGENTS.md",
-        "CLAUDE.md",
-        "apps/mcp-door/",
-        "packages/db/",
-        "packages/graph/",
-        "packages/workspace-runtime/",
-        "tools/"
-      ]
-    },
-    {
       "id": "cohort-alignment",
       "title": "Coordinated version alignment",
       "summary": "Package and native artifact version metadata follows the coordinated 3.1.0 release.",
       "packages": [
         "@inventarch/agent-system",
         "@inventarch/compliance-system",
+        "@inventarch/db",
+        "@inventarch/distribution",
         "@inventarch/governance-system",
+        "@inventarch/graph",
         "@inventarch/hook-authoring-system",
+        "@inventarch/language",
         "@inventarch/learning-system",
+        "@inventarch/runner",
+        "@inventarch/runtime",
+        "@inventarch/service-contracts",
+        "@inventarch/session-system",
+        "@inventarch/steward-hook",
         "@inventarch/template-system",
         "@inventarch/work-system"
       ],
@@ -324,10 +199,20 @@
         ".ia/src/systems/hook-authoring-system/system.ia",
         ".ia/src/systems/learning-system/package.json",
         ".ia/src/systems/learning-system/system.ia",
+        ".ia/src/systems/session-system/package.json",
+        ".ia/src/systems/session-system/system.ia",
         ".ia/src/systems/template-system/package.json",
         ".ia/src/systems/template-system/system.ia",
         ".ia/src/systems/work-system/package.json",
-        ".ia/src/systems/work-system/system.ia"
+        ".ia/src/systems/work-system/system.ia",
+        "apps/distribution/package.json",
+        "apps/runner/package.json",
+        "apps/steward-hook/package.json",
+        "packages/db/package.json",
+        "packages/graph/package.json",
+        "packages/language/package.json",
+        "packages/runtime/package.json",
+        "packages/service-contracts/package.json"
       ]
     },
     {
@@ -345,21 +230,6 @@
     }
   ],
   "coverage": [
-    {
-      "path": ".github/workflows/inventarch-review.yml",
-      "sha256": "5e26221ac02195d74f371ac93adb6ae95af88ea881ad398bf7f70b96c3ee7aa5",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": ".github/workflows/platform-quality.yml",
-      "sha256": "b4b2c8bb4829f85448ecf495ccb7032e158618f2b13530b910126b13c5e2a1ad",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": ".gitignore",
-      "sha256": "db6faa51907dfe56872117f0cc928c436bb1c4f6fd5b6ad909f26ab9d23e1954",
-      "change": "public-provenance"
-    },
     {
       "path": ".ia/authoring.resources.json",
       "sha256": "636d6d1c1b2d2704a39f75945445bbbc5bd44419f1097eb0a7c563ed49f73ae2",
@@ -483,18 +353,13 @@
       "path": ".ia/src/systems/session-system/package.json",
       "sha256": "9b6b216bc2bb571ebb6b64e376441be7a8ad2064ff4804d4f231da09655eb47b",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": ".ia/src/systems/session-system/src/sqlite.ts",
-      "sha256": "2db0d6f56b118646bfcf190997cd50fc8dbfa8dbf2277b56489c20f75e6ac4c8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "cohort-alignment"
     },
     {
       "path": ".ia/src/systems/session-system/system.ia",
       "sha256": "e258018ed149cc1aa34540aaa808a5a9b2690156f4bc81a637e7a0820be29e07",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "cohort-alignment"
     },
     {
       "path": ".ia/src/systems/template-system/package.json",
@@ -538,24 +403,9 @@
       "change": "lower-and-project-host-plugins"
     },
     {
-      "path": "AGENTS.md",
-      "sha256": "ce782cbbec2bb6fba8064d570653892e0d5a1793eb389e0de7dd8e16d1d6e5a3",
-      "change": "packet-phase-line"
-    },
-    {
       "path": "CLAUDE.md",
-      "sha256": "c2028aab8a0298e2a38d11d4c50d596f54ae9f3692c6549151a47be2fa28f546",
+      "sha256": "0b99dd7f9a9f9e3047d0b7d0fd735089ae2554207dd4a1d4743cea3a640697b4",
       "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "CONTRIBUTING.md",
-      "sha256": "b7716cb836789c1e68d07078b58bc8514ad0044cc1ff63f5453e27b86e95725e",
-      "change": "public-provenance"
-    },
-    {
-      "path": "README.md",
-      "sha256": "2364acb2bafbf3d9b5a114c75134b6b9d6c7374fba75d5d29a1b65e9df7b2263",
-      "change": "package-readmes-3-1"
     },
     {
       "path": "SPEC.md",
@@ -563,532 +413,77 @@
       "change": "repository-maintenance"
     },
     {
-      "path": "apps/cli/README.md",
-      "sha256": "2303a75fb6c00e9d8621ed9ea991f8f998d1e5ce2c9c4ed607f5cedcb27a9720",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
       "path": "apps/cli/SPEC.md",
-      "sha256": "cd547b5d5056ec097770dd9305158d464eea11e3099159e4c34fb1821531233c",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "e77a068756291e3489f915c2ade74c65e94204b04b3f4e0d6e91f88ac563047a",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/assets/vocabulary.json",
       "sha256": "e96bd341bc0837d15bc23b517ac1a27cacafd6888250fb4e9deca4a4cb7e9242",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/package.json",
       "sha256": "968cc79e085600e9116a1140145685a37d8bcaaefb07fcc8509a7c17ac276359",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/author.ts",
-      "sha256": "f79e0e6c9bf91642987b5662f07d96d820e280dd5f219a6be3e9bd94ac482edb",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/briefing.ts",
-      "sha256": "5fc5907c86e468ac77fc77f7711649b99b072980dd7df2220a6e89d77dbe9065",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/capture.ts",
-      "sha256": "fa19e62d73866418f7534d5c5e8a43b8ff84b00b0eff7aa9faff9b43185041c8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/src/commands.ts",
-      "sha256": "9c3f8734108f425c760461f681a3d7ec3a014369c1287b47fc5d401385e6f2c6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "573b6566ef1af3c1ea23ab39139e1c3f0fddcf0fcaff53d250e5ef54db537690",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/src/consumer.ts",
-      "sha256": "eff1fe81e2777157d9093f04eff232ffbc122e4e0f0aeebf2abc26dfb9f0c3eb",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/decline.ts",
-      "sha256": "c36be67feefe589ee0275996fc6ce1408e4a5c7fa14d6709771fd105a76330b4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/distribute.ts",
-      "sha256": "d275ae6983c5a31cc042f9a20bc16ffb98cfb1bfd7a480351fdb505b3ac0ada6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/doctor-user.ts",
-      "sha256": "3ba24f0266df003c67412bdd211ffdb5c7078d743cffc8dc637e269b856ad2b7",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/doctor.ts",
-      "sha256": "0201b391a0514b19e25c247630a5b22eaefa5cfb67e09dc8454f5c78d5dbfb76",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/format.ts",
-      "sha256": "798ea051bcf95db8e100ae8ef8e571c68558f71e091af58db39e1cfe74336f88",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/home-remedy.ts",
-      "sha256": "b3783d05536ad5360645d4a8f0b9067bd8e7c920696a684d3fdf4f75d7f972bb",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "676fdc59e436b5953f5b93f3eb4b01dc67ebd7d3342900094232e8b46836d706",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/src/host-projection.ts",
-      "sha256": "4d8d5e4fdd5c034e99e7bd518165b3754b1b31d402161b6affaf4d3706fce63d",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/host.ts",
-      "sha256": "01842db2048eda5e00660524b20079e93d5d0ec49118756907047c75c3177a5f",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "e2f2bc60965157668f0664a3b2a970b9f12fd81a8fc62aa6491e5376cb0df902",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/src/init.ts",
-      "sha256": "034a5b1be936e40ea5508f0eadf692b2c7074059559b1850fe160741d69d974d",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/main.ts",
-      "sha256": "901172ca130a6727e8952c4ca71f6ecf64c52443507005327f2d29be389c7a7e",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/next.ts",
-      "sha256": "4e96e95c80c2573d84d9c25bb53671b4c687531174e927bff3c439f8d0e5009e",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/operation-help.ts",
-      "sha256": "9eed1d288ab2be5cfa5b7bec6837920181843e4b974ee18d2a0b76cfe602e072",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/pack.ts",
-      "sha256": "8be0cc72aca2b02d9b1f7016e52c312c0207125205c4bb57c72001dee2378369",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "1472ae181d3785838a3f8d7e9b61843cf833cc5ae560202ae5a5db79b4a88262",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/src/plugin-product.ts",
       "sha256": "599ddb4d81c378ddcd7c5c79bec0215222735f1e9b63059c3f58914e1b6f13e9",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/src/plugin-sources.ts",
       "sha256": "6e36e748262bcc4390cb902d757fb67952e9e9db35270a7aee72835b5c8c7818",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/position.ts",
-      "sha256": "6897f98f303fd7208159842a80564c0d7f10448fce40fc397ce2b58dc6b300ec",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/preview.ts",
-      "sha256": "49632a5cea46e9386709c8b520029b6a9ed27a2157fdf37d022bc0065a8ca282",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/src/profile.ts",
-      "sha256": "7807688a2fdc9dee4babeab0de89471ee357a62300798b520c213dba8e4ddf3a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "4f0d143a8ca63955facd0cf87c595d77c895cd61e9881e53302195b68484a245",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/src/project.ts",
-      "sha256": "91f13020c6525d33303e4a8bbc29d14f34de492621f9a3938fb8a25294d9a9ff",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/read.ts",
-      "sha256": "df7e4a3a0f7e0e53e5603dd14136131a4218fdb5bb090ca5a77baded94605330",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/render.ts",
-      "sha256": "071ebff2f6a078264e655394b902b1ddf71f194765a688785c3f8210d15b56c1",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/session.ts",
-      "sha256": "cbd35be16d3ac690055d473fd63a213b4a4f4cecdb989c9cd33b54a29fa2816c",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/validate.ts",
-      "sha256": "315df31de08efe0c35c278ed513811225f5c48feb28ca93577641deac468e594",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/src/vocabulary.ts",
-      "sha256": "fd332da769a5d457db7ebba4343006ab3ae13b1d925ca0033945efa9cafb2405",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/args.test.ts",
-      "sha256": "2ab926fa862ff920b6537568da823c95991b19b985107183ccf315955f9d7e4a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/author.test.ts",
-      "sha256": "c4047780a44375fae72079a977a5f3aab78dc4a3d9f189e6d60ce53afc40e633",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/bindings.test.ts",
-      "sha256": "e1164fbf62fe5651bd3fc96d8106ffb26993845542ea7ff094f81ed97c639389",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/capture.test.ts",
-      "sha256": "ea608ff741bac7287c987114c6fdc30d414d4407016b5bc6c72066251d41db14",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/check-admission.test.ts",
-      "sha256": "d5df25ed24410199d710f6e369f4301b99982603fb78c2ae53f3baf2673524ba",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/cli.test.ts",
-      "sha256": "d7d8f1931926edff5f851b2b8c586884e298c898a14f70be0fd4d1803ae7a083",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/consumer.test.ts",
-      "sha256": "6da14b5ba0325d9780f2c49a6821f6a504b901aa082bfba9370f170c71aac6c6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/distribution-verbs.test.ts",
-      "sha256": "8cb7d34194d6df6df6b6fb919d41eeaebd0e55d7cd2314e3b0c77d60b9f4933b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/equivalence.test.ts",
-      "sha256": "f9764c5e94532b80abe2fee32877f685fb41c5f0c443303dbb98d632129d0bda",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "c502e162cc97798aaae3eddd9cc1b8fc4b20ff32589a6f30abdbdee1c07a7cf0",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/tests/fixtures/composition-workspace/.ia/release.json",
       "sha256": "0fcd1560eb93b5500dccbe0a199c4a7f37031235242932c7a61ef2a78d065ea9",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/host-doctor.test.ts",
-      "sha256": "3bb881cdf17817759cbc10c3df97af5e2975ace782d3870cc0be0b1ecae9a4db",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/host-fixture.ts",
-      "sha256": "33fc878eed568c0c86eb65b6e6d59508556b12dd6f9e4efeb956858209df8fb8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/host-generated.test.ts",
-      "sha256": "b6e77900eaec4534d8e42059108d03de6742f2a0893e8fbeff69bd911b6e47e8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/host-install.test.ts",
-      "sha256": "4eed68e13e013713c18c3035798894a2389d06dda93f5e65bd41aecf5c61df3a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/cli/tests/host-plugin.test.ts",
-      "sha256": "5f6e3feb4b51f6bfd4df3952a3ba90debaabd51b381ff99ab4e778f0ab520449",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/host-projection.test.ts",
-      "sha256": "846f0096b7253cd5966225f0c491d01c38ce36858ff583acb3abd8394f06b7ec",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/host-recovery.test.ts",
-      "sha256": "bddfe39992c47afa8dae7c2de45dc976ec5e707fac8dfd027e9510ea9ebb3fcd",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/host-registration.test.ts",
-      "sha256": "74a66f0c4eecabef5ff646173cd9e512f4da675f08d1d2863882e4ccd9aa38ab",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/init-migrate.test.ts",
-      "sha256": "be51429f64b068cfd3e9b0ae82e21f73e088760a163b28359882ebb478fbba28",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/init.test.ts",
-      "sha256": "f948e712c89910077164334093bf6a59c3450526a1257a152fa2cdc9eac4e2d9",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/next.test.ts",
-      "sha256": "2a64b846af285418aa4fefca214bcd015f0b45e55d9a56f98e391c06d70cef72",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/position.test.ts",
-      "sha256": "b17714d10b22479cd977962e9396344b98ad77abeae1b59d76b4fb4b3abb2258",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/preview.test.ts",
-      "sha256": "9bfad9b9470920bd2f288ff8f4709c1e05aca9a7dcd167d57b6ad1e616f2da2a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/program.test.ts",
-      "sha256": "cdaee4dd715a619f8e1bd5f408ad942e4f5f9e1b381c8f75e396d03f3568b071",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/project.test.ts",
-      "sha256": "b7101509cc4a42abaf5bec1e005c744d4d9b402fed16b7a782ef0e2f9cb360eb",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/read.test.ts",
-      "sha256": "22a6bdca8aa7d8fbbbcd3b523e49e9e0892d791c70679c4a8b149245d508623b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/refusal-next.test.ts",
-      "sha256": "2e0f02b8185ebbcbe3486c7c7fd8476f9584730f3871123d3639f654058c857a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/registry.test.ts",
-      "sha256": "09dc0a38fac226d4ed9328b352f18ffc03ca7899fdcd70519effe8c44af032b5",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/untrusted-lookups.test.ts",
-      "sha256": "3886c723ea57a4c6bca433ee92b2cb80ace63dfbcd4148994fa555e75887c613",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/user-host.test.ts",
-      "sha256": "eec5659d0f90c5c6c7cbfaedd07fb6d86f9561984a8deacc4f75fc8eab5be377",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/validate-checks.test.ts",
-      "sha256": "f77938edb90d6b85ead8c54189b9188431fc33166737a9f8b95d6f7f5c221c87",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/workspace-fixture.ts",
-      "sha256": "4c6436cb0ddf709dee94beee85db08c93c8849c2463feb3bf6b5482708a3d4b6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/cli/tests/workspace-verbs.test.ts",
-      "sha256": "4287164b5082b405c892eec704b3694fd3f474740a5a0baba99340c813a85299",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/README.md",
-      "sha256": "4dd8a5d4cf0d5dfaae0ff92c0da24b53e404aa0efc36762ada9678a5a02b35b0",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/SPEC.md",
-      "sha256": "a90a26452b79467cdf9481e87560c4ffca0f8b39fa9407ba1094f490ee16b943",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/assets/host-launcher.mjs",
-      "sha256": "4a0c5a2b562db643a93e7971ce979ff778e9c8ad744db236e4f62c5c6de87afa",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "c63815813c5ce776a46849a40de857c360a20e5c0bd1ac46c9ce3b181c3043ee",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "apps/distribution/package.json",
       "sha256": "5ba767422fc5e4580e145eda7365a37a3c381833ac171b4402abf5b0cd097c5a",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/command.ts",
-      "sha256": "2f0b1e44462c0cf01caf166ab714313f203f32cfcff573ea28bb362a83222ae5",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/files.ts",
-      "sha256": "ca5fcb5e1084c33647cb265fc1118a0b3419b11d54f8a3faddca4898cc8a6ae9",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/guard-registration.ts",
-      "sha256": "bd2fcebe751b4e8afab62093b203d744cbbe63bb1730c06de5847bb5aab93620",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/host-home.ts",
-      "sha256": "e0be8056e35f30b3ecf76f3ca4eea721a547acb98bffd0a2a75ebf74ec365d93",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/host-observe.ts",
-      "sha256": "e7687e1349fedccf7350864ca6bf60d7b340493691c5a1987fad350706f1f8b8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/host.ts",
-      "sha256": "061c34026b60c5986da5e13a49b8303f04a903777902f65200a7d94d42e3cca1",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/hosts.ts",
-      "sha256": "ca543e66a172db5eee845ba3eb369417cad52dcc9705b46a1f60f13601bba7e6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/implementations.ts",
-      "sha256": "ba1d3261dd06137b7fd21b537cab43216aaf2d4aaaf759d2fffe4013b2c6cf5b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/install.ts",
-      "sha256": "7655a9e768fc6a2a52aff4491d63737f5a5e63948e25b70efa84a24ebc3bd2d2",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/inventory.ts",
-      "sha256": "2fcd338bb4dd2428e4dca5dc5ea8170c606e2f7b8e14ad2ef891310ae8cc5f76",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/lifecycle-registration.ts",
-      "sha256": "3daa37071bab3ab349a7ea8640ad77c05f3942713cd5240c5aad624f1009cadf",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/native-command.ts",
-      "sha256": "7b10c845fa36ba1b58489dcf6af1a21c0e8bc45223433347670075ed105a6d71",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/plugin-home.ts",
-      "sha256": "69779ede31fb32876cd0b0a80e79d175b139a8dbfa060688982392965e1b1527",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/projection.ts",
-      "sha256": "7ea069a016969d5b2bf7ecef3d5e791f9ec2d201051598cff17a2a3b3f31c9e3",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/registry-build.ts",
-      "sha256": "0b3714443929ae1ee91c6f7b18c884aba17973f131d8cc78cc5b8e7e3d020f45",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/services.ts",
-      "sha256": "d210dfec7578eddac3a68b2a5ff901f0c101ca23ac5f544bcab4b779b7fe649c",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/snapshot.ts",
-      "sha256": "24cb189b7f0a67377935565aaba0273e548e7c2dbf59b5c6e9b2f53e808ef391",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/src/updates.ts",
-      "sha256": "0658361883c5b2e45745e0ddbc97ca663be93806c5e3498369b996707316288a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/command.test.ts",
-      "sha256": "e31253cd2800402a5043fd31925d0a2d6a7973669f107a691bbb31b636ad99ba",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/context-launcher.test.ts",
-      "sha256": "d1206d336d2b043f3f5b84481dfebbeec130b59f5878bd5eaa3a216ad5165ca6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/guard-registration.test.ts",
-      "sha256": "670eed98cd5f3094ea2f3266a82431107cbdbee9a394124726b1e8fd84a7e8d8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/host-home.test.ts",
-      "sha256": "b868036a1f93b058e7b1069e9f50386af106fd3204fc36d29cf92be587877f93",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/host-observe.test.ts",
-      "sha256": "a5357b2cff11f3deb057ad9b591ee5b30c84ab98b85317545c5af1ee255d3987",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/host.test.ts",
-      "sha256": "da87de41f557a2aa45268033ecf905a495f12628d944bb1c51901c474645c18a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/hosts.test.ts",
-      "sha256": "5f598db1e03aee983b3fb531a3737026a204a0f85718f9a1460cf618a5d9c6d2",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/implementations.test.ts",
-      "sha256": "9b0289054f453dac50691a15770d0f2904b4c908575854c86fee174aa8ea04f6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/installed.test.ts",
-      "sha256": "f9cd2bff1f2ba136b2f83b52e430dc7402b2af0ad0b80ca1ea9aacb883000b33",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/lifecycle-registration.test.ts",
-      "sha256": "8195ad9664037018294bec7ebfbce5d0ea487c63f5ed06862eb341de0933fec6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/plugin-home.test.ts",
-      "sha256": "3f47491953a49e36808469bed1e298c55fce087af87b49d9be9a8e87b3d10d2b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/projection.test.ts",
-      "sha256": "79c18e5c22575840ce40ef47d4fb09b59de1f37ba82bf1b0a2496694de336925",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/registry-resolve.test.ts",
-      "sha256": "f34f68bc2d1efb92da50d6710fdfc7c2c14cf84e364c01cadfd61999141bd044",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/services.test.ts",
-      "sha256": "1be166b22a55b7f69cf3f0088c7bf43f84c0fb8aee49a708194ddc52c5a178e7",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/snapshot.test.ts",
-      "sha256": "2838802ffeda665f2466b6fe9e1725dc790937d7d0fb348e85b2eb91b868fd75",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/distribution/tests/updates.test.ts",
-      "sha256": "54331e2e7d84232d83692522610bd1f829518b5b0b339d483a4e317d6dc79e66",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/mcp-door/README.md",
-      "sha256": "eb7ee67e94c4b9de2bde77584d9205b5a85e65c8d9a4807c931cd3c4428447ae",
-      "change": "lower-and-project-host-plugins"
+      "change": "cohort-alignment"
     },
     {
       "path": "apps/mcp-door/assets/vocabulary.json",
@@ -1102,81 +497,16 @@
       "change": "lower-and-project-host-plugins"
     },
     {
-      "path": "apps/mcp-door/src/tools.ts",
-      "sha256": "6922dd8eeb6beb5c0e3e98624eb5aeee0c107c4f186391b291803a83c91957e0",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "apps/mcp-door/tests/protocol.test.ts",
-      "sha256": "c3e3599371333994a7dda44733737ff16d20f05e41f2c3bb425209e91a8b3d63",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "apps/runner/README.md",
-      "sha256": "cddc888916312aa3870bbe26e0376befc0527715ac75b8174a36b2b6e2bc0f56",
-      "change": "package-readmes-3-1"
-    },
-    {
       "path": "apps/runner/package.json",
       "sha256": "dc97e3955993b98edcd8c5ffa97ddcc250420cf32036ba1d35c6056ef754c973",
       "cohortOnly": true,
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "apps/steward-hook/README.md",
-      "sha256": "e789b67a2e46b6a8044dd394dc339d8f76aaeb4a6de00050d149cae95b9b8325",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/steward-hook/SPEC.md",
-      "sha256": "8a8d3f086e51c4dbe9afa212926795ba4593196fdd583519c687e9c1157ee92e",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "cohort-alignment"
     },
     {
       "path": "apps/steward-hook/package.json",
       "sha256": "61d14adae698f996f807bc4b27def19447cfe4112a768b69711c300c6ab1b3a0",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/steward-hook/src/context.ts",
-      "sha256": "684adcefe58353c3ed398653713dd4d40e0c3bbfd3fd63c980267cfa3260af91",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/steward-hook/src/main.ts",
-      "sha256": "8cedc2b625393658006a8d6e1b1677c5441ebcaee8ef8472421249fdb006bdfd",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/steward-hook/tests/consumer-guard.test.ts",
-      "sha256": "e799e80518454a542f578e621609e01c21d911f84fd76f5ec31bb9d1c4316e3c",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/steward-hook/tests/context-inventory.test.ts",
-      "sha256": "5d5fb16780b202a462c66d16703e641fd4bebdd352c4ee882f9ba84498622ecc",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/steward-hook/tests/context.test.ts",
-      "sha256": "c1584ec75806778ac115e9e61bf3005dc8c7d6dd2fd5ca8fd8a39cecd269a3b8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/steward-hook/tests/hook.test.ts",
-      "sha256": "f702ca6c25629c064a03b2373ea752d935ecc73850c591cc564438f440731d4b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/steward-hook/tests/mandate-guard.test.ts",
-      "sha256": "055c14ab1a947463f5c8df6413c5fbd090bf315d1825bb8b97e285e8265992c5",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "apps/vscode/README.md",
-      "sha256": "9e6d5812711afe927c7e18f97ac1200475848b4266ec1608aff0d0d35d897266",
-      "change": "package-readmes-3-1"
+      "change": "cohort-alignment"
     },
     {
       "path": "apps/vscode/THIRD_PARTY_NOTICES.txt",
@@ -1190,31 +520,6 @@
       "change": "repository-maintenance"
     },
     {
-      "path": "distributions/product-structure/.ia/src/systems/product-system/README.md",
-      "sha256": "4cd03e75dc4b0354d5a1125436f9bde70c5e16d6a678cc5cb8e97faeb400fa8e",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "distributions/product-structure/README.md",
-      "sha256": "1f6f5a767ffae293f98ada039c6179a3e92737c72efe1d0f1af98d12468d4eb8",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "docs/catalog.json",
-      "sha256": "d6f438cbed41af2573f20770dd6fd5d11b363cfe0e2440d8233406366099f2ce",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "docs/reference/architecture/README.md",
-      "sha256": "effd79f34d3e9966feec875b62efef6070c5a017ff9a1e84861382154cea85d0",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "docs/reference/language/README.md",
-      "sha256": "edb93665a9e1cf1bf391b913bd9e507fc4c66170980ebdc47db42f90aa73f6f6",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
       "path": "docs/reference/language/vocabulary.json",
       "sha256": "e96bd341bc0837d15bc23b517ac1a27cacafd6888250fb4e9deca4a4cb7e9242",
       "change": "lower-and-project-host-plugins"
@@ -1222,36 +527,6 @@
     {
       "path": "docs/reference/language/vocabulary.md",
       "sha256": "57154ef56785be1f830fb9fb5aa6c2f1a90400de22a82a7f8880dc20ef3cd08d",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "docs/specs/consumer-cli-contract/README.md",
-      "sha256": "ebfe98d0e30a5ec6f984f67732a74668afe47670316b257e2ec1780e14cf79ef",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "docs/specs/host-plugin-distribution/README.md",
-      "sha256": "aecac204c7440ad68ed2ed43b9ab8026003b8cdbf5d4eec40b11e819af370a9f",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "docs/specs/host-registration/README.md",
-      "sha256": "6492268762f1b126e6fa0b55445a18e5660cec93a7b9fd4746fc358b7a4c26bf",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "docs/specs/registry/README.md",
-      "sha256": "3b1d83351f0f17605462a723ece757fbceb26f6c7ae8e001ddb22d928d5def04",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "docs/specs/workspace-initialization-apply/README.md",
-      "sha256": "910e34abe54e4a6b1b5d2f16239d4fa19af2f2b077902d6f2d1b1465f46fa141",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "docs/specs/workspace-initialization/README.md",
-      "sha256": "14c3b65fb952286768b4fad070c5d7704a0f8f130535416bb3ad6ce598686f9b",
       "change": "lower-and-project-host-plugins"
     },
     {
@@ -1267,11 +542,6 @@
     {
       "path": "examples/conformance/native/systems/workspace-system/schemas/distribution.schema.ia",
       "sha256": "2871fb43951789c54d13cedee6f8176ef1336764eef64d45aad24ab375b75242",
-      "change": "lower-and-project-host-plugins"
-    },
-    {
-      "path": "examples/public-language/README.md",
-      "sha256": "ad192307cf0bd94271526518765ec9473fb71ba9025ac1dabfc235a85ae28dac",
       "change": "lower-and-project-host-plugins"
     },
     {
@@ -1348,704 +618,219 @@
     },
     {
       "path": "packages/compliance/README.md",
-      "sha256": "54e0d76ca29925e81e3a2949e7bb9d050768e700750bceb6f1331e3939aecdcd",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "a535644ae3a75d0e0cb02ac4057f432140f05d53aaa7ac88e0c2bcdb04f58e39",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/SPEC.md",
-      "sha256": "b844532ec42ad25d88433c52e1e1fa13051b768aa736dcec8230204d10f84ca4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "5ae599cca0e4a3a7559f44f473d2b869a9bed1f890e85cd77045165c402ce2b0",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/fixtures/loop/.ia/src/systems/workspace-system/schemas/distribution.schema.ia",
       "sha256": "2871fb43951789c54d13cedee6f8176ef1336764eef64d45aad24ab375b75242",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/fixtures/refusals.ts",
       "sha256": "e44f24af91ef283b4702f0e5d8e0940d46bf73f807fe94508c61eb021f4c8b72",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/package.json",
       "sha256": "485d3ce69e62cf1d9b835d3007e354200d1cdd5fd1eed36d34e0b6644c24052d",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/src/catalog.ts",
-      "sha256": "3b0ec18ce4d6e15eae9f135bd80156329ff68d3556f18211ce258ad9f47d8a51",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/bind.ts",
       "sha256": "9e4fc1dce2f2aeec0e2e3e763a77ffdd0f36d5395309e1f3ed72ae69470bf383",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/corpus.ts",
       "sha256": "e8734b2bb751e1b6891ae861adcaff149a5195eeff4f7c18a5425f68300ffa4b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/evidence-fixtures.ts",
       "sha256": "04de47cd21529b240cd7b3bd2304befd4ff8b6dc9d22ae5171f86f565445f56a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/evidence.ts",
       "sha256": "5a2f4e5366c970e146f26a0b5bffcbe948ca96ce1c56f7ccdf5ad8fde1b93785",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/inventory.generated.ts",
       "sha256": "d4425751bb0cb4b8db9e6e6a5438eddba858920a3c75a93cf5947796f8f7c831",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/inventory.ts",
       "sha256": "a423b5e277bb7814a68d09261cc009c0130da36f25b47b24c72f55413da1502d",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/refusals.ts",
-      "sha256": "2ff73e9afd968e44faf23f0161dbd0083d299fdad90dd610c4d3fb8f323b6c65",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "799d4d40d7e83c983d1c577fe97f0e92d45c3176854327d6f60bc1fa80d71600",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/verify-kernel.ts",
       "sha256": "481ce85eff7bd9405537e8221d2de69be49178fd5be321f12818a25836d155ec",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/conformance/verify.ts",
       "sha256": "9346af4fc7ba20ced8367f7fe572f03014f8fe9463b61ed906f4575d03087d0b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/src/evidence.ts",
-      "sha256": "3c68a242e96cb8431f596fd2ce85553e4c55d9e623c7da2a774a50fb7286a98f",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/src/graph-checks.ts",
-      "sha256": "61ab11403e7c9e6fc2acdc7a0a27899f4cec7c24eb4a318168c59fa0a6952d00",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/src/host-plugin.ts",
-      "sha256": "5b327c4d2ba004c2d09f31984c3c19b9fb3d91aeb78b4a94ca737418b0b8f450",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/index.ts",
       "sha256": "9f1321e3f75096fd6787b19d69446059ccc689d3d562103ce322e87c14c4902a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/kernel.ts",
       "sha256": "be9fd2f6bc18c98713fd0b230e70fcf76602a9bf5639aba8907428509862d534",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/src/obligations.ts",
-      "sha256": "682796b2d970dc239c60d58643e3cf927cee9d2b1db802d0514a4aa878f29fee",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/src/profiles.ts",
-      "sha256": "6335c17b0cf73f51711dd5c5202a4dad32f7aa8167aef784421b745261b2abe1",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/report.ts",
-      "sha256": "536dda30e2af24e98d0d46e319d32ad0c6f30bb9e68231afcbf4af7186e35b60",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/src/schema.ts",
-      "sha256": "ae97dcb60231e0be4076b72edf946e0d95c1f50e3c0a4278dc3d40eef24624c4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "27e6c6c6998388460e423049a7545aea0b5af72cdfb16aa29ff9a06eb3690325",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/src/types.ts",
       "sha256": "2a8bdeae623dcdca49363e33a37c7ce3ebd46f0fe1dd7e3b7bb57c6c6640ff03",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/src/values.ts",
-      "sha256": "10216a2064db9fff690aef8ef66d404f3ebff2e2ddb907aa4b332b46d4b4cd17",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/tests/evaluator-catalog.test.ts",
-      "sha256": "00de2a8a57e4db844a84a6e7bce8fe2a7ee78c7421ffe3241a1e69a73c7a57d9",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/tests/graph.test.ts",
-      "sha256": "7ac190a5b5bbcc67a8e1049a982e7b234bc4cc176d5edf2dc448951c43b42320",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/tests/host-plugin-node.test.ts",
-      "sha256": "31c06cbf4194a2b7a7f27e2ec5c6ee91c47e707d9309afecb4a8c42141630776",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/tests/host-plugin.test.ts",
-      "sha256": "9a83dacf5b507173c4fc3300545ccfd86eb9cbf939c35883223a6f5accb063c0",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/compliance/tests/report.test.ts",
       "sha256": "16f37f64cb7270486d776059b8d24e3536c25cb774723919a9c363f86c41a115",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/compliance/tests/schema.test.ts",
-      "sha256": "f2090d204fe15987199a750e23ee8bd878d445ca38f8ff9b8a6d591af6a12424",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/README.md",
-      "sha256": "9741e842f83d283270cfe8c4b9bb1d8f6b4a1dafb8672d553b62196722c9a2ba",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/SPEC.md",
-      "sha256": "d626925b554a15bd82f1986a3838336a22b63bbe20f50bfe9fc675dd4aeee24b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/db/package.json",
       "sha256": "35a4689de477e4b18fe5cdd2655c69cc46c80a546cdc314a00eb07ace234a24c",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/checks.ts",
-      "sha256": "6cd7e731c025108d2465a2e70fa735ab5c0c6fabe2bf7f2d499c120d92d4eba4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/descriptors/SPEC.md",
-      "sha256": "addefd7537ef7a98db7e05f4b7c9b96daa4ca447791fad36d40a62b1293d701f",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/distribution/contracts.ts",
-      "sha256": "244b8480b1b6175b0e0f05f3d593356b10ecb2e362e67b0a8afe49d3b4eef9eb",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/distribution/implementations.ts",
-      "sha256": "52567d7d6fa32f7c9feaadef83988a86f3b48dc1b56f11c6cbc3650fa031509f",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/distribution/reader.ts",
-      "sha256": "1f40ffd5bb5d76421f824ad3499068fda2ef40358b4865a95b26b6654a4a9f7b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/editor/index.ts",
-      "sha256": "aa60d9fc4175ece9678e29924047a78889f9a427684392547c60fb25a3e70251",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/evidence.ts",
-      "sha256": "fab885dfcf86f03c7ed0f933337e5de367711afa195c8aef8966e49fa1e32c50",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/handle.ts",
-      "sha256": "4e565564b478951cd331cdedcc4c4e949a721154295dd94f0f975338d80506bd",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/inputs.ts",
-      "sha256": "b55bd0248b0a2577864077346ca8b2b1e60816f01c53d36a9c5ddcc4c33967e7",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/paths.ts",
-      "sha256": "6022022d6859ca214c2c89cb6ac603bdfeb7cd34cb7c2b891f3128beac291dee",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/preview.ts",
-      "sha256": "89e4b8f4245fa7fd625edd9c5b446ec79cbb7c13c68b9dae8fc07b80e306b960",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/retention.ts",
-      "sha256": "0909453a6229bea8509be23d9b9638eabdc81c08343cd35e2c8c67951c3e642e",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/seat.ts",
-      "sha256": "1ef48a6a01c39343f058e841f0ca3a701a86eb11da16e2d79d84c3978ba984c4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/src/view.ts",
-      "sha256": "34b2b3a3ab503a60e9adb78016158e4cc5042c813bc3dfb2e96de30726450895",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/tests/check-evidence.test.ts",
-      "sha256": "03a11d847352e761a95384080a28a69595081ddeed7fabd5d8738b58c84ef2a4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/tests/descriptors.test.ts",
-      "sha256": "fcd98580f63f65db2875beb3c18b5b1114a5933b956d61beb46b6fc91e0dd74a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/tests/distribution-contracts.test.ts",
-      "sha256": "6d10408e2f2dbd0dc6918ccf1045d3e4a8890644b6c1f64d5af70dd7327c7308",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/tests/handle.test.ts",
-      "sha256": "ded557920a5b4e4d2a08f55a952e59ab33552864fe93544152b7e8e51d95466b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/tests/inputs.test.ts",
-      "sha256": "70089585cdb5bb6bf578ed44b41babd678a3466a3d68cfb18172ba1dc1910e98",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/tests/preview.test.ts",
-      "sha256": "5614b8a474ed709d6efec8dcb17e846c53c760e51d68378231623efa71ad84ca",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/db/tests/seat.test.ts",
-      "sha256": "a8bec17210418b720cd3ed2a50b8264076755a8ab655eef14c853e3addc51302",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/graph/README.md",
-      "sha256": "5e4d83402c3a79a3722fd1ba7c14fb3dd976cb540c4eab92b646357ec4938633",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/graph/SPEC.md",
-      "sha256": "0f27bd80539e750bf738db69be5edfe02af61d3f247b9ad3612d4d34407af916",
-      "change": "package-readmes-3-1"
+      "change": "cohort-alignment"
     },
     {
       "path": "packages/graph/package.json",
       "sha256": "461d73860606a95a18b6fe01f0b455f068d1ed8a575b4a25a349b98f28dbe55b",
       "cohortOnly": true,
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/graph/src/claims.ts",
-      "sha256": "26982e6f73e255649f92e4e70aceb840d5bf465103589b7ddd19c5a7e6175294",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/graph/src/revision.ts",
-      "sha256": "f04e2072f1946ae5f246ef5db705d1fcd54fc2a9532df02e5f5ddb0fbbfe1885",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/graph/tests/claims.test.ts",
-      "sha256": "937a03201888bbbe05e3e2586c31a71e9cd2d44057589bbe88a709fc48390f94",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/graph/tests/primitives.test.ts",
-      "sha256": "6c472de941a2b044c3afb299268978f49b00b706be111d1d85ca62d0e72c78b5",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/README.md",
-      "sha256": "f6bef1994cd17d3b9299e3ce40d342a6637006902aabeeb8ffc69f218862d892",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/SPEC.md",
-      "sha256": "b8b16153a17af8f50ebf7e5155c07cad929461ed7493a961fcc3d910c066f505",
-      "change": "package-readmes-3-1"
+      "change": "cohort-alignment"
     },
     {
       "path": "packages/language/package.json",
       "sha256": "53b1f0c7c0ac9972d05051590f7369477b785a771ea47a8ade472728fbe1d927",
       "cohortOnly": true,
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/src/editor/edit-source.ts",
-      "sha256": "228ac69cd4ca74feb6b051eadc641f6fb1689a065f97f8238a8bb0786e584be1",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/src/editor/values.ts",
-      "sha256": "68d22f42473d0b5410dafe37a9ebe2aec616158c2ded2f9ada6f7abaab88a5d8",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/src/registry/types.ts",
-      "sha256": "b62f1ff56aa6d13071b91d17d5719f07cc80fe7230d96a27a4624c5746452dfe",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/src/scanner/lines.ts",
-      "sha256": "62fa12d594fe3d2b259c8a92aaaaa0fde94a4b76ddbe2573d29be9e805415545",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/src/taxonomy.ts",
-      "sha256": "6958d071c61b58e8b8921943224bc7e23482a8b9bedb3f7fabb3774fbe12b0b9",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/tests/edit-source.test.ts",
-      "sha256": "6a5219b380e9c1a83d7134c164215e7124c1f2d36573aab52bf0a882057cde72",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/language/tests/editor.test.ts",
-      "sha256": "3b964d3c0e662fa2047e5b54e52569b460511c9e1ee2bd7d54608fbc85309640",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/README.md",
-      "sha256": "f688c04ddd500ae542a5b1a3c8e41c3ecc304e7e497984e5a47fc7c183b22923",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/SPEC.md",
-      "sha256": "7530f4080f7010be1491972ef3e32c6a92c668935466ee5bd1790a5a85b5acd2",
-      "change": "package-readmes-3-1"
+      "change": "cohort-alignment"
     },
     {
       "path": "packages/runtime/package.json",
       "sha256": "61b5a60cd34d1e671184a6e7741cd96760ab5cec8947b693ac90b1c84121e5d4",
       "cohortOnly": true,
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/door.ts",
-      "sha256": "62123f06812f1d96cb723f526f3808afcf351a52ef01e82be78ad04c6b945d06",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/editor/index.ts",
-      "sha256": "014e9bcb009938eb6fcce5705df7ad29ea34935c76a7ee1c1fb63cf4bf36792e",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/errors.ts",
-      "sha256": "2ee1631c00f5987bcfd64ef0d4964f6d627d11b1f025cd61897568b357206ed1",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/locator.ts",
-      "sha256": "a76ec8a2ecc3af43ce31f8ad3ab9e679cf3a68526f970db9bce308a07ec5838b",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/mandate-guard.ts",
-      "sha256": "2a4ab1e19a7508b633a976c350516a238cb821ca5fd5b47940a84e181171ea08",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/mandate-modes.ts",
-      "sha256": "630a5f9030f4d6013063300f78a7847a153ba6c19c164b367f6ee807032b7099",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/next.ts",
-      "sha256": "f4845e22683a858bb00b1dc224ad7650125125eccb140542cb3c8b096bde5fa7",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/packet-host.ts",
-      "sha256": "51a56dbb7887e9bcfee93ea75a5066fbd94d6062256a3b4b185d7e75a3e9b3eb",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/packet.ts",
-      "sha256": "4c97d53e96b2b8d587cf733433d8d46123cf11c91b435de2a1c3d3b85788c4fe",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/position.ts",
-      "sha256": "cd5124598b6de0fb3514c419d7327b5fe072af083e1b3d93f673df793d5b8659",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/render.ts",
-      "sha256": "5e16c5b7bd65a3eadf105974d4a87b1949cd8f1ce0378c5f79e084ea6345636d",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/scope-key.ts",
-      "sha256": "a4fe9bfc4806e0fd6fa36ff51ba4acc8b0186ad359edaf076cf9932e96ed6219",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/src/steward.ts",
-      "sha256": "3c7e0451faa82f1664903f9560d3a46d276f4e7a83bcefc607ecc785b9f2f655",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/applies.test.ts",
-      "sha256": "0f79ba5e8bb577370ca08e731be0d1944aa46e4bf6e1ac853c1144dfe775e496",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/door-position.test.ts",
-      "sha256": "07b0ffc3e7c8de3987708c25862e56d6cbc40bfdcfa8ce0b0177b32e93253678",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/door-read.test.ts",
-      "sha256": "61025ddc92e0a9f705269b8990c3634b58f8a1a0239427acde6e56d3b8a15355",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/golden/packet-fresh-init.json",
-      "sha256": "36e04c10a8721f53831fc95b9b88a048d7e0f6731f19c503bf7ac2cabce14377",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/locator.test.ts",
-      "sha256": "0fbafc84a4d42ffa20d958d843f2e1568c76da41711c7b1d4ae7bbd55c27eb7a",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/mandate-modes.test.ts",
-      "sha256": "6063f14e78a2b29283c2acd7ddbffb85f7681054f4d01fee1c077af1517e422d",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/mandate-resolution.test.ts",
-      "sha256": "6b7355a23a5a3aa6dc10f8a592f045cdcc995111d7c8a51f61082fb517fa990e",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/next.test.ts",
-      "sha256": "fd1da890d1c0e19fff48213234efc4554eb9679278e29c8ec44b2409899ebeb9",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/packet-host.test.ts",
-      "sha256": "001a830e3ff2b23012efa8b7b35ed591b01716c078a7240f834112f89897f91c",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/packet.test.ts",
-      "sha256": "806a06183b594a10d31e8a19b1af171e2d492d9f70a78c10213fd295fc24daf0",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/position.test.ts",
-      "sha256": "0f31adb58daa092a34c09103cd61272bc26d21f0d7ada7b7307c113bb0cd8314",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/purity.test.ts",
-      "sha256": "2153638a92a2d88db9a96fb4c24f4d663ec801e7186e5becab530d3b06678f80",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/scope-key.test.ts",
-      "sha256": "46dda4a24c78718fd5ae285255dbca9abe927beb530a1bf6d5664497a6cbec2f",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/select-door.test.ts",
-      "sha256": "02592d939be2b17aaf10a85f16b14a8a9e496b3580778756630e0fe7eedfd6cd",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/runtime/tests/workspace.ts",
-      "sha256": "506c67b7145867169853b47dcf00722a9b28649353509548d753161ea0395e7d",
-      "change": "package-readmes-3-1"
-    },
-    {
-      "path": "packages/service-contracts/README.md",
-      "sha256": "8cbb52597cece58f212e0477c9fd1ffddd28a4370828339a298ea9516f6dd888",
-      "change": "package-readmes-3-1"
+      "change": "cohort-alignment"
     },
     {
       "path": "packages/service-contracts/package.json",
       "sha256": "5f84b66121dfc5dca4281dc3b759197c8bc29dc2cb53b19f54101090e9eceb17",
       "cohortOnly": true,
-      "change": "package-readmes-3-1"
+      "change": "cohort-alignment"
     },
     {
       "path": "packages/workspace-runtime/README.md",
-      "sha256": "f3b7004ee25454a0bad9d71ab09b00a4f8306caf2bf5e2224ba40363687fbf31",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "e854062005d0c64f7dcd9c4687b31719811f871cb04910be123a5a77c1822521",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/SPEC.md",
-      "sha256": "89231a8ce80ea0e651c52fe9fb0d66fdf09751780efdd8b26a440bebd935d0c2",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "ae6b7bb99be84cf47533d3dabc5ac84baf62e95debebfa789e7cc191be74c998",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/package.json",
       "sha256": "beda505c72a6b0d46f956a7514e10aa7fa4fedb9a6491109064e11a2b27016a0",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/authoring-manifest.ts",
-      "sha256": "ebd3c16dd1f4ad93ff905e9a84e8948b08cb5afddf8aabe0f4095c5329e66bd8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/bind.ts",
-      "sha256": "c6f5c639bc894268dbac9d0d6033ff5cff8636e87fc18005bd280e87b2ff74a7",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/generate/agent-profile.ts",
-      "sha256": "ae12ef0b2d131169e366843af7118318caa0f115fb9bbdd2ce2b392d6f359786",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/generate/definitions.ts",
-      "sha256": "0f43b33c10226c13e4544a6eb016190648cc31ef0b47b9d9338aecb3bf66bfac",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/generate/format.ts",
-      "sha256": "e0cf55bc2b45b7cecc191a242245b329508d496d7c10e8f8e5fd89f09a1a2f36",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/generate/hook.ts",
-      "sha256": "921718206d5c4d97ebd09fbc700f6b54d1bd84293e55cb4bf2a39ca57fb07f80",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/generate/index.ts",
-      "sha256": "c79dc4e554e7543a1d6909d80ec6471a95198b0ff505e356a088c8bd176f204e",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/generate/playbook.ts",
-      "sha256": "af4046250e1a1ae94d6e839460ce08020ba93e1a53f5d45cdb2024fa851f51d2",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "05118b158f9f936da1d0a3ab0512ea71828d70b572a30de1a6ff27cbe7e2a9c7",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/generate/plugin.ts",
       "sha256": "8241e859e2cc8880e32a1b0579db1a1ab40a2d22fc99446471c345195d2b5c44",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/host-plugin/compare.ts",
       "sha256": "a0c4f14f81b08c8f0a6b30704f5f993b377b4e59fe0c4a93dad3dcea4fa2efd0",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/host-plugin/errors.ts",
       "sha256": "dd9a4f867bb9350a5590ad323a81ad5e8af09bd0062e962accb0fc58864c5c45",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/host-plugin/frontmatter.ts",
       "sha256": "243c378b41aa3c1abb3706384dc09f03b1f20ecb145651035aa0541ee463f602",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/host-plugin/index.ts",
       "sha256": "f34524ac873a4a5bb0618a85fe06722d854b48471ab3eed33a1a10a32f90446f",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/host-plugin/inventory.ts",
       "sha256": "2e30b63b9e0eb192b38b5f53006ad13c1927554ed0b4d8cf7ac312e338b9ae1f",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/host-plugin/json.ts",
       "sha256": "09a425035d911476a07f0b014bc5f96ea545dfb31311295ab221543b462a90c4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/host-plugin/lower.ts",
       "sha256": "f843aa3b88c5bdababfcf2cd7192df0017c3d699819e7161fb9679f7b73dd476",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/host-plugin/manifest.ts",
       "sha256": "01604001c8d08459f693b55de4235371e141fa864664f612dd7f094142a2cc11",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/src/projection-host.ts",
       "sha256": "971c7aa21929b43c53d4cadc8ebf9a7d98d7c42e4353ac1b5c50a88bb4cc70d1",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/record-fields.ts",
-      "sha256": "fc9c426e7e2dc6adfb3739682f618a4fd5747d6c3ae93b1d4060247ad2a4e313",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/resource-files.ts",
-      "sha256": "88bf4bbc8b6c7584b485d8769a716ae06c21c4c40b1bc0eda1befd8d384d19db",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/src/resources.ts",
-      "sha256": "2847e8c63be15381eb337210ca20e194175444e1d232f1bd9857e76d6dccdc62",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/tests/bind.test.ts",
-      "sha256": "52573616e8dfb118333e85e7243ccf6b094a399181192eef6db723c4e61cd649",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/tests/generate-agent-profile.test.ts",
-      "sha256": "70472225fe7f071c905276a518b48378a239a86ef562fadb82f98accba79e49d",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/tests/generate-playbook.test.ts",
-      "sha256": "906cd50a789c17a3b06f75a34f3c3fb9e9b6a405f055ea9f703ae4b90923ea38",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "d7b92e2d4272e0b1dc16b2828025ff6f6d371aca25fbe819e74f3321638225c8",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/tests/generate-plugin.test.ts",
-      "sha256": "93c11d01132a7ef7dab22fc539899200d83d51722882332b647a052941531cd4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "dfd42cc7d9f0157871f99a877565847e94aebc67e36decfb21a705b62b8ccf71",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/tests/host-plugin.test.ts",
-      "sha256": "6949aebbcd35c190690f0ac02447a2ef605d90c9f3b1125bf810e0914499f7e7",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/tests/lifecycle-profile.test.ts",
-      "sha256": "fa6e811209b5a547af42c74e4cc2fb5b624b7e21ad752a6102aca390d0229224",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "packages/workspace-runtime/tests/lifecycle.test.ts",
-      "sha256": "474d8194e63be96ac7d079276c1e669d37da606a7121baf5d6db51a3e6bb068d",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "aac0e8053cf6cec60957635847b5a43608350493b6fce2a66b0eb4380e12d899",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "packages/workspace-runtime/tests/projections.test.ts",
-      "sha256": "fecc07852927a9190240f9c35d285f46d30e96f254ed41b7a2944079dbb4ad9b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "releases/README.md",
-      "sha256": "fb891e60f4afed4c30416c9c72e51ccc78c8bd8602bf6fe29d669538804125b7",
-      "change": "repository-maintenance"
+      "sha256": "0c6f346fb160dfb5fdbd5973d05bcdea8512f20bbe14befde511b9dca435bf7f",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "releases/current.json",
@@ -2065,243 +850,123 @@
     {
       "path": "tools/compliance/SPEC.md",
       "sha256": "433f809a7fa96b1917fb84a303462f974c65e22d2c7afba085e85baeb559dc4c",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/compliance/check.test.ts",
-      "sha256": "9fc273524c08d28a001b55b45349c839c31d1406afeb7085be07bfdef4707c3b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "be7af303d11499d990a9ea3f02b4ec29b3f435af94a98af525091626f37609a7",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/compliance/check.ts",
       "sha256": "cf946353961c3d35f850c4d3837a3220f1659401ec9196ccf3a72ccf042cb626",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/compliance/evidence-fixtures.ts",
       "sha256": "f371b91883e4157f526972f23a47f2ee94149354eb5714285971e38762b44e15",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/compliance/hook-fixtures.ts",
-      "sha256": "d8ea1237ba73b1336e053f659a3b2c789e7689b54c9d4a49cc1e56d02100f8f8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/compliance/inventory.ts",
       "sha256": "7086a6f7cb8dda192f3cc65ace9fc6ebbe016f732b02a5f40d3ae98a4ecd6c2c",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/compliance/runtime-fixtures.ts",
-      "sha256": "86a1cebc2c040ecd03d95945e86a9e45aeeb54a5ecdde66ccdb36bb32767daa1",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/distribution/NPM-PUBLISHING.md",
       "sha256": "a59238656270f3f18aa928c77324cf01d8d66044f2b90c5c7b3f9c28f313c88d",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/distribution/SPEC.md",
-      "sha256": "f2e373bc2554067a4b318cd57b5899d6f60e027a3c29ae9c9333821798626aa4",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/distribution/host-payload.d.mts",
-      "sha256": "44ebd0d7d88556e0e6d4aacce08d9848a3ae5523e080f8a0af15110755ca194b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/distribution/host-payload.mjs",
-      "sha256": "ebe176cf2683d8ea75bf8c3fae5ee1a8fa9323055e626ebfe87ea130b07ed9de",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/distribution/host-payload.test.ts",
-      "sha256": "496d51bedb10a8f116645570a2f95a3cc35b092f4739f475ef64fafff975bd13",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/distribution/installed-views.mjs",
-      "sha256": "b2bb3980141b7ff1bffa4016b93b07ce0355a267144ca925d2e8a0239b5ce9d5",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/distribution/qualify-packages.mjs",
-      "sha256": "7b1ecee6928d9c6f792033cfc766edc8cd4887bb44f38bd57d577c66ce4df26a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/distribution/qualify-public.mjs",
-      "sha256": "c2879187bdf9683c47a7a29b8c415b81ef2c7cc6420123ec8089c956f4887097",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/distribution/system-package-policy.json",
       "sha256": "fdc9e590521083c1e9bac543e8203554f318c6c98ce44088114f0e82e2f73bd6",
       "cohortOnly": true,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/docs/fixtures/link-conformance.json",
-      "sha256": "0abf5e3f19655251b7bcd42503f9fa101f07a5b2d42b287322c2e4ad010c57fd",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/kernel/closed-contract.json",
       "sha256": null,
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/kernel/generate.ts",
       "sha256": "493f479cf56693c275a5832bde0fd99f94ccffd85aa0b3f453e8dd4b72d63682",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/native/check.test.ts",
-      "sha256": "bb0c21d6eee3a47baa9699952eec3b75eb0521e46425ad49239d036a65d8c711",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/native/public-fixture.test.ts",
-      "sha256": "d922facda3f0ddeeeef409e6209324e5e1339371c3ffa60dcf1c376438f8c862",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/native/public-language.test.ts",
-      "sha256": "a5ad0bd0f447f3f769fda06fb3475de8678f67ac77b6d2ca07c3cf5f2420858e",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/native/public-vocabulary.ts",
-      "sha256": "179c2985ea3d5aacd63c2492416ad8d2b5044588ccaddd43e4ddb058a9a776b7",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/projections/SPEC.md",
-      "sha256": "6146135c5dfc134ae854e288ebabec7c75a4ee74838407f5dbe6c9d11bc565f6",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/.claude-plugin/plugin.json",
       "sha256": "caac080d3c0f701ddcd4e40aad62f97e81e42abb6472c970fa882307eaea7d50",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/.codex-plugin/plugin.json",
       "sha256": "c59194fce0dad82b8bc295fa0cadc4fc20b5610db625fd81a3856c22a6fa9b02",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/.grok-plugin/plugin.json",
       "sha256": "caac080d3c0f701ddcd4e40aad62f97e81e42abb6472c970fa882307eaea7d50",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/CODEX.md",
       "sha256": "2896db28fdb0fc49288867e73e63be0c2356f4e21151e0e75c67d0f0d7d9c703",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/LICENSE",
       "sha256": "143dd2247eef29aa16c8d8e862c3f08971d1ba44e9a2cd20ebecdb1f0963028f",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/README.md",
       "sha256": "2f81ef3c6102745180340a5e5ab71833e886379b526acb8f1ddc10eb4c7a19a3",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/agents/sample-reader.md",
       "sha256": "bf731c1602d4473275e7e5c74cf41231d60d387f45749a5cc4ac22cd7d1dd26b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/skills/sample-guide/SKILL.md",
       "sha256": "be5924d90c482ab0d1a4e8888af73b2cdae5ec712a97798a4c2031523befec0a",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/skills/sample-guide/assets/templates/card.md",
       "sha256": "3c6e9edf0f1b53a3479302d7b99959d0156b9070e41f288fefa96ae3cecae267",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/skills/sample-guide/references/guide.md",
       "sha256": "856729ff8528cf378cdc32d88d441512831d4d64de4ac99faeb3ce543743eb99",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/skills/sample-run/SKILL.md",
       "sha256": "9536de2dd5a7d19321e676aa302effeb91f54183b668d219cf41d19222ffd65b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/projections/fixtures/host-plugin/sample/tests/sample.check.mjs",
       "sha256": "a4118f86dceeb85e0ecec434544d134b0650119f4e09a837ad2d9b3831e2a4b5",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/projections/generate.test.ts",
-      "sha256": "70384a778eea44674e514a1d0848b1255328c5deb46109f5036da44e7fdb327f",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/projections/generate.ts",
-      "sha256": "398cb0702752225091af46eda3567a280f7dca93a92c25b5ba7ddf3680a13191",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/projections/legacy-stewards.ts",
-      "sha256": "6469e45320533c996d0c1c1daa03cf527f4f57d2c6046af6f517363e154dc833",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/projections/live-features.mjs",
-      "sha256": "f29c84ef3816ec7ed44bc20b467ed81677a8a3181e0e53fa07aeafd5be478188",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/projections/membership.test.ts",
-      "sha256": "a5113440fdf09d4ee0a218ebf15ec08c81bd14ab37e954238d0e2d7ddb665fcb",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/release/SPEC.md",
-      "sha256": "56db79f066475e9cd141783bc3cbff306ba8144bc524851545e2e9863b6be307",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/release/public-content.test.ts",
-      "sha256": "b4c3086b7de2a76e2e79944884240ba423717672edd27750221ae356dcf4fbc0",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/review/README.md",
-      "sha256": "98599a365189f0310e9b196791e0db97984bea3772456fed6c04834008841bc8",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/systems/execute.test.ts",
-      "sha256": "7bb66247bf87529df98739e1dfd6deddfcebc7e6fe39b7b8babb68c468556e72",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "08965a7433b8dab364c55ab69eae4a11ccf8675fad11c54455ced29e0523c9c1",
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/testing/inventory.test.ts",
       "sha256": "2f79b71e95e9bda5e8bacc5ea933aa7ea4d11217d2639c4e86f231169db818f0",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
-    },
-    {
-      "path": "tools/testing/plan.test.ts",
-      "sha256": "b494cc602dcd0724cbe96eb73ebf198223934e61c6c73e9a965b8dd9abcc1891",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "change": "lower-and-project-host-plugins"
     },
     {
       "path": "tools/testing/tasks.json",
-      "sha256": "24a972d199900519e2e5f8838dcdfc4d4e0d82285b97098c7e666511553f3f8b",
-      "change": "cite-the-predecessor-repository-s-issues-by-name"
+      "sha256": "69d79228d2969be3bcf882b900e50e8ea36c3da8ecae319f7b7ba883f4f9f6dd",
+      "change": "lower-and-project-host-plugins"
     }
   ]
 }

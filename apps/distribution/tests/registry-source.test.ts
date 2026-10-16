@@ -2,6 +2,7 @@ import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { acquireArtifact } from '../src/acquire.js';
 import { openRegistry, parseRegistryBase, registryBudget } from '../src/registry-source.js';
 import { serveDirectory } from './registry-fixture.js';
 
@@ -187,13 +188,20 @@ it('hands every HTTPS base it admits to the transport in serialized form, for ev
     expect((await registry.index('acme/tools')).releases, value).toEqual([]);
     expect((await registry.index('kit', 'acme/kit')).releases, value).toEqual([]);
     expect((await registry.index('workspace', 'acme/space')).releases, value).toEqual([]);
+    const artifact = registry.artifactUrl(archive);
+    expect(artifact, value).toBe(`${url}artifacts/${archive}.ia.tgz`);
+    // The artifact URL is acquired as registry resolution acquires it, through the archive check, then the transport.
+    await expect(acquireArtifact({ root: from, url: artifact, digest: archive }), value).rejects.toMatchObject({
+      code: 'IA-DIST-ARTIFACT-UNAVAILABLE',
+      message: `Artifact request ${artifact} returned 404`,
+    });
     expect(requested, value).toEqual([
       `${url}ia-registry.json`,
       `${url}packages/acme/tools.json`,
       `${url}kits/acme/kit/index.json`,
       `${url}workspaces/acme/space/index.json`,
+      artifact,
     ]);
-    expect(registry.artifactUrl(archive), value).toBe(`${url}artifacts/${archive}.ia.tgz`);
   }
 });
 it('refuses bases that are not registries and names the base', async () => {

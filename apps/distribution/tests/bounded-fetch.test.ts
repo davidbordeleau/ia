@@ -175,12 +175,44 @@ it('refuses, before any request, a URL that is not a canonical credential-free H
   ];
   const requested = recording();
   for (const url of refused) {
-    // None of these is a URL either caller admits, so the check refuses nothing a caller hands it.
+    // None of these is a URL either caller admits: the archive check's own test refuses each one.
     expect(produced(url), JSON.stringify(url)).toBe(false);
     await expect(get(url), JSON.stringify(url)).rejects.toMatchObject({
       code: 'IA-DIST-INPUT-INVALID',
       message: `Test request ${url} is not a canonical credential-free HTTPS URL without query or fragment`,
     });
   }
+  expect(requested).toEqual([]);
+});
+
+it('checks the shape, not the canonical form: fetch requests a rewritten spelling as it parses it, or fails to', async () => {
+  // This stub builds the request as fetch does, so a URL it cannot parse throws fetch's own TypeError.
+  const requested: string[] = [];
+  vi.stubGlobal('fetch', async (input: string | URL, init?: RequestInit) => {
+    expect(init?.redirect).toBe('error');
+    requested.push(new Request(input, init).url);
+    return new Response('ok');
+  });
+  const rewritten: readonly (readonly [string, string])[] = [
+    ['https://registry.test:443/ia-registry.json', 'https://registry.test/ia-registry.json'],
+    ['https://127.1/ia-registry.json', 'https://127.0.0.1/ia-registry.json'],
+    ['https://registry.test/a/../ia-registry.json', 'https://registry.test/ia-registry.json'],
+    ['https://registry.test/%2e/ia-registry.json', 'https://registry.test/ia-registry.json'],
+  ];
+  for (const [url, parsed] of rewritten) {
+    expect(produced(url), url).toBe(false);
+    expect((await get(url))?.toString(), url).toBe('ok');
+    expect(requested.pop(), url).toBe(parsed);
+  }
+  for (const url of [
+    'https://registry.test:99999/ia-registry.json',
+    'https://[:::]/ia-registry.json',
+    'https://xn--/ia-registry.json',
+    'https://1.2.3.4.5/ia-registry.json',
+  ])
+    await expect(get(url), url).rejects.toMatchObject({
+      code: 'IA-DIST-ARTIFACT-UNAVAILABLE',
+      message: `Test request ${url} failed: Failed to parse URL from ${url} (Invalid URL)`,
+    });
   expect(requested).toEqual([]);
 });

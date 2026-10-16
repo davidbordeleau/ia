@@ -18,9 +18,11 @@ function recording(): string[] {
 const get = (url: string) =>
   fetchBounded({ url, limit: 16, label: 'Test request', oversize: () => 'Test response exceeds 16 bytes' });
 /**
- * The archive check's own test (`readArtifactBytes` in acquire.ts, without its digest suffix): HTTPS in the form `new URL`
- * writes, with no userinfo and no query or fragment as `URL` reads them. Every registry document URL passes it too: a
- * base the registry parser serialized, with no `?` or `#` at all, followed by a `portable` lowercase document path.
+ * The callers' own URL test, without the archive's digest suffix: the archive check (`readArtifactBytes`,
+ * apps/distribution/src/acquire.ts:19-29) and the lock decoder's `url`
+ * (packages/db/src/distribution/contracts.ts:124-135) both require HTTPS in the form `new URL` writes, with no
+ * userinfo and no query or fragment as `URL` reads them. Every registry document URL passes it too: a base the
+ * registry parser serialized, with no `?` or `#` at all, followed by a `portable` lowercase document path.
  */
 function produced(url: string): boolean {
   try {
@@ -139,9 +141,11 @@ it('refuses, before any request, a URL that is not a canonical credential-free H
     '//registry.test/ia-registry.json',
     'registry.test/ia-registry.json',
     '',
-    // A host with uppercase letters or characters serialization never writes there, a backslash, which `new URL` reads
-    // as the end of the host (`https://evil.test\registry.test/…` requests evil.test), an IPv6 literal that is broken
-    // or in uppercase or dotted form, or no host.
+    // A host with uppercase letters or characters serialization never writes there; a `?`, `#` or backslash where
+    // the host ends, which `new URL` reads as the start of a query, a fragment or the path (so
+    // `https://evil.test#.registry.test/…` and `https://evil.test\registry.test/…` request evil.test, and
+    // `https://registry.test?token=1/…` sends a query); an IPv6 literal that is broken or in uppercase or dotted
+    // form; or no host.
     'https://Registry.test/ia-registry.json',
     'https://REGISTRY.TEST/ia-registry.json',
     'https://bücher.test/ia-registry.json',
@@ -149,7 +153,12 @@ it('refuses, before any request, a URL that is not a canonical credential-free H
     'https://regi^stry.test/ia-registry.json',
     'https://regi|stry.test/ia-registry.json',
     'https://regi<stry.test/ia-registry.json',
+    'https://regi>stry.test/ia-registry.json',
     'https://regi stry.test/ia-registry.json',
+    'https://registry.test?/ia-registry.json',
+    'https://registry.test#/ia-registry.json',
+    'https://registry.test?token=1/ia-registry.json',
+    'https://evil.test#.registry.test/ia-registry.json',
     'https://evil.test\\registry.test/ia-registry.json',
     'https://registry.test\\ia-registry.json',
     'https:///ia-registry.json',
@@ -190,6 +199,34 @@ it('refuses, before any request, a URL that is not a canonical credential-free H
   expect(requested).toEqual([]);
 });
 
+it('refuses each printable ASCII character in a host or requests exactly the host the URL spells', async () => {
+  // This stub reads the host as fetch parses the request, so a character that ends or reshapes the host shows up.
+  const hosts: string[] = [];
+  vi.stubGlobal('fetch', async (input: string | URL, init?: RequestInit) => {
+    expect(init?.redirect).toBe('error');
+    hosts.push(new URL(new Request(input, init).url).host);
+    return new Response('ok');
+  });
+  let admitted = '';
+  for (let code = 0x20; code < 0x7f; code += 1) {
+    const c = String.fromCharCode(code),
+      url = `https://a${c}b.test/ia-registry.json`,
+      // The host the URL spells: everything between `https://` and the first `/`.
+      spelled = url.slice('https://'.length, url.indexOf('/', 'https://'.length));
+    const refusal = await get(url).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    if (refusal === undefined) {
+      expect(hosts.pop(), url).toBe(spelled);
+      admitted += c;
+    } else expect(refusal, url).toMatchObject({ code: 'IA-DIST-INPUT-INVALID' });
+  }
+  // The characters the check admits in a host, and `/`, which ends it.
+  expect(admitted).toBe('!"$&\'()*+,-./0123456789;=_`abcdefghijklmnopqrstuvwxyz{}~');
+  expect(hosts).toEqual([]);
+});
+
 it('checks the shape, not the canonical form: fetch requests a rewritten spelling as it parses it, or fails to', async () => {
   // This stub builds the request as fetch does, so a URL it cannot parse throws fetch's own TypeError.
   const requested: string[] = [];
@@ -201,6 +238,9 @@ it('checks the shape, not the canonical form: fetch requests a rewritten spellin
   const rewritten: readonly (readonly [string, string])[] = [
     ['https://registry.test:443/ia-registry.json', 'https://registry.test/ia-registry.json'],
     ['https://127.1/ia-registry.json', 'https://127.0.0.1/ia-registry.json'],
+    ['https://2130706433/ia-registry.json', 'https://127.0.0.1/ia-registry.json'],
+    ['https://0x7f.1/ia-registry.json', 'https://127.0.0.1/ia-registry.json'],
+    ['https://0/ia-registry.json', 'https://0.0.0.0/ia-registry.json'],
     ['https://registry.test/a/../ia-registry.json', 'https://registry.test/ia-registry.json'],
     ['https://registry.test/%2e/ia-registry.json', 'https://registry.test/ia-registry.json'],
   ];
@@ -213,11 +253,17 @@ it('checks the shape, not the canonical form: fetch requests a rewritten spellin
     'https://registry.test:99999/ia-registry.json',
     'https://[:::]/ia-registry.json',
     'https://xn--/ia-registry.json',
+    'https://xn--a/ia-registry.json',
     'https://1.2.3.4.5/ia-registry.json',
-  ])
-    await expect(get(url), url).rejects.toMatchObject({
-      code: 'IA-DIST-ARTIFACT-UNAVAILABLE',
-      message: `Test request ${url} failed: Failed to parse URL from ${url} (Invalid URL)`,
-    });
+  ]) {
+    // fetch's own wording varies with the Node version; the code and the URL that the message names are the
+    // contract (§6.4).
+    const failure = await get(url).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(failure, url).toMatchObject({ code: 'IA-DIST-ARTIFACT-UNAVAILABLE' });
+    expect((failure as Error).message.startsWith(`Test request ${url} failed: `), url).toBe(true);
+  }
   expect(requested).toEqual([]);
 });

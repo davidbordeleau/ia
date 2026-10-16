@@ -2,8 +2,8 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "9566f3b575931814858267e9b7bcb07eadeab987",
-    "tree": "3721039a7233825c7a27b58daeccc6d885520068",
+    "commit": "0bdf3e772296c28d4deadd677c0e48bb57bed96e",
+    "tree": "5575ba9831398ca602b3a631458c052c47117efb",
     "dirty": true
   },
   "membership": {
@@ -1359,7 +1359,7 @@
     },
     {
       "path": "CLAUDE.md",
-      "sha256": "c2028aab8a0298e2a38d11d4c50d596f54ae9f3692c6549151a47be2fa28f546"
+      "sha256": "e1d4911f5b1b9c001e7888d9d7d3dfd5f66f69343f22359c844991395e14f219"
     },
     {
       "path": "CODE_OF_CONDUCT.md",
@@ -1415,7 +1415,7 @@
     },
     {
       "path": "apps/cli/assets/vocabulary.json",
-      "sha256": "e96bd341bc0837d15bc23b517ac1a27cacafd6888250fb4e9deca4a4cb7e9242"
+      "sha256": "358c506a8973e7126d63248dadb67af0853144a092190401a2d61ab7b59dd802"
     },
     {
       "path": "apps/cli/package.json",
@@ -2251,7 +2251,7 @@
     },
     {
       "path": "apps/mcp-door/assets/vocabulary.json",
-      "sha256": "e96bd341bc0837d15bc23b517ac1a27cacafd6888250fb4e9deca4a4cb7e9242"
+      "sha256": "358c506a8973e7126d63248dadb67af0853144a092190401a2d61ab7b59dd802"
     },
     {
       "path": "apps/mcp-door/package.json",
@@ -2655,11 +2655,11 @@
     },
     {
       "path": "docs/reference/language/vocabulary.json",
-      "sha256": "e96bd341bc0837d15bc23b517ac1a27cacafd6888250fb4e9deca4a4cb7e9242"
+      "sha256": "358c506a8973e7126d63248dadb67af0853144a092190401a2d61ab7b59dd802"
     },
     {
       "path": "docs/reference/language/vocabulary.md",
-      "sha256": "57154ef56785be1f830fb9fb5aa6c2f1a90400de22a82a7f8880dc20ef3cd08d"
+      "sha256": "47e71cb00cf121162ac828834fdc3ff6f35081bae06eea67ebda14683f30db57"
     },
     {
       "path": "docs/specs/README.md",
@@ -6779,7 +6779,7 @@
     },
     {
       "path": "releases/changesets/3.1.1.json",
-      "sha256": "eb0830a9dcc143760dcf5abc0304ab960785fccfc813c9381ae9bdeadaee1f3e"
+      "sha256": "6372122f441fa78a4a9108f547344cea13e6d4791239eea2a4e3a3b205bd20e2"
     },
     {
       "path": "releases/current.json",
@@ -6791,7 +6791,7 @@
     },
     {
       "path": "releases/native/current.json",
-      "sha256": "60f63980f3c345f833b129b48ace77a5849ad31527c448b1da5215bce6cdbda0"
+      "sha256": "7a70f7e9c29ce93896b5d0e03c580fac805ea56217455b771b24f51ffbd4221a"
     },
     {
       "path": "releases/native/notes.json",
@@ -7706,5 +7706,5 @@
       "sha256": "291a1735a1bdf4a85d3baafef644f0bffe0d9bfbada49d63c648311ff4429ed1"
     }
   ],
-  "inputDigest": "c13d58ab182ae2d6a6fdfcf6c8698b0756d3313cdf0c3d226cc9882c2e3ed680"
+  "inputDigest": "2c2d7242878a41e0b8708c9031c81ed3fbebfd95f90ed969db43aa0d99e8c5d3"
 }

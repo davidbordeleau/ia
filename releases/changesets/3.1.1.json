@@ -472,7 +472,7 @@
     },
     {
       "path": "CLAUDE.md",
-      "sha256": "c2028aab8a0298e2a38d11d4c50d596f54ae9f3692c6549151a47be2fa28f546",
+      "sha256": "e1d4911f5b1b9c001e7888d9d7d3dfd5f66f69343f22359c844991395e14f219",
       "change": "packet-phase-line"
     },
     {
@@ -493,6 +493,11 @@
     {
       "path": "apps/cli/SPEC.md",
       "sha256": "cd547b5d5056ec097770dd9305158d464eea11e3099159e4c34fb1821531233c",
+      "change": "cite-the-predecessor-repository-s-issues-by-name"
+    },
+    {
+      "path": "apps/cli/assets/vocabulary.json",
+      "sha256": "358c506a8973e7126d63248dadb67af0853144a092190401a2d61ab7b59dd802",
       "change": "cite-the-predecessor-repository-s-issues-by-name"
     },
     {
@@ -999,6 +1004,11 @@
       "change": "package-readmes-3-1"
     },
     {
+      "path": "apps/mcp-door/assets/vocabulary.json",
+      "sha256": "358c506a8973e7126d63248dadb67af0853144a092190401a2d61ab7b59dd802",
+      "change": "package-readmes-3-1"
+    },
+    {
       "path": "apps/mcp-door/package.json",
       "sha256": "62c900f11f2e230d7b17c55655e1ec3f429f32d51eefd825d55d951e2c15f602",
       "cohortOnly": true,
@@ -1115,6 +1125,16 @@
     {
       "path": "docs/reference/language/README.md",
       "sha256": "edb93665a9e1cf1bf391b913bd9e507fc4c66170980ebdc47db42f90aa73f6f6",
+      "change": "package-readmes-3-1"
+    },
+    {
+      "path": "docs/reference/language/vocabulary.json",
+      "sha256": "358c506a8973e7126d63248dadb67af0853144a092190401a2d61ab7b59dd802",
+      "change": "package-readmes-3-1"
+    },
+    {
+      "path": "docs/reference/language/vocabulary.md",
+      "sha256": "47e71cb00cf121162ac828834fdc3ff6f35081bae06eea67ebda14683f30db57",
       "change": "package-readmes-3-1"
     },
     {
@@ -1809,6 +1829,11 @@
     {
       "path": "releases/current.json",
       "sha256": "8b667b4fa63381e70996c539be1ecc22a0ec5b4eead581cd2a1865bd90723948",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/native/current.json",
+      "sha256": "7a70f7e9c29ce93896b5d0e03c580fac805ea56217455b771b24f51ffbd4221a",
       "change": "repository-maintenance"
     },
     {

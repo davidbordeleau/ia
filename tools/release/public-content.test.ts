@@ -85,7 +85,7 @@ const PRIVATE_REFERENCES: readonly Pin[] = [
   { words: 2, length: 9, sha256: '63bb155f4e8b0363d1f39d8fcdc49f7fbc103b979ae1df74bee0124e01919ea5' },
 ];
 /** Phrasing that points at a private knowledge base's tasks or decisions, whatever their names. */
-const PRIVATE_PHRASE = /\bkb[ -](?:task|decision|plan|spec|document)s?\b/i;
+const PRIVATE_PHRASE = /\bkb[ -](?:task|decision|plan|spec|document)s?\b/gi;
 /**
  * Ids that only planning material kept outside this repository defines: a plan's amendments and their letters, the
  * rows, items and sections of a design document, review-finding ids, operator design rows, review notes and milestone
@@ -127,9 +127,8 @@ function privateReferences(files: ReadonlyMap<string, string>, pins: readonly Pi
     pinned.set(key, (pinned.get(key) ?? new Set()).add(pin.sha256));
   }
   for (const [path, text] of files) {
-    const at = (index: number): string => `${path}:${text.slice(0, index).split('\n').length}`,
-      phrase = PRIVATE_PHRASE.exec(text);
-    if (phrase) found.push(at(phrase.index));
+    const at = (index: number): string => `${path}:${text.slice(0, index).split('\n').length}`;
+    for (const phrase of text.matchAll(PRIVATE_PHRASE)) found.push(at(phrase.index));
     const words = [...text.matchAll(/\b\w+\b/g)];
     for (let index = 0; index < words.length; index++)
       for (let width = 1; width <= widest && index + width <= words.length; width++) {
@@ -163,6 +162,14 @@ it('finds a pinned name in any case and a knowledge-base pointer, by line', () =
       ['c.md', 'roughly 360 KB of payload\n'],
     ]);
   expect(privateReferences(files, [pin])).toEqual(['a.md:2', 'b.ts:1']);
+});
+
+it('finds every knowledge-base pointer in each file', () => {
+  const files = new Map([
+    ['a.md', [['KB', 'task'].join(' '), ['kb', 'decision'].join(' ')].join('\n')],
+    ['b.md', ['Kb', 'plan'].join(' ')],
+  ]);
+  expect(privateReferences(files, [])).toEqual(['a.md:1', 'a.md:2', 'b.md:1']);
 });
 
 it('finds planning ids by line and leaves public clause ids, sections and numbers alone', () => {

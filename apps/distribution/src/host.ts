@@ -586,7 +586,7 @@ export function recoverHost(rootInput: string): { status: 'host-recovered' | 'cu
 /**
  * The Node executable a registration records: the running one, except that a Homebrew keg's versioned path
  * (`<prefix>/Cellar/<formula>/<version>/bin/node`), which `brew upgrade` and cleanup delete, is recorded as the formula's
- * stable `<prefix>/opt/<formula>/bin/node` link while that link reaches the same executable (crowncodes/ia#323).
+ * stable `<prefix>/opt/<formula>/bin/node` link while that link reaches the same executable.
  */
 export function nodeCommand(execPath: string = process.execPath): string {
   const keg = /^(.+)[\\/]Cellar[\\/]([^\\/]+)[\\/][^\\/]+[\\/]bin[\\/](node(?:\.exe)?)$/.exec(execPath);

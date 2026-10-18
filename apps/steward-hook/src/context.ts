@@ -102,7 +102,7 @@ const fields = [
   'policy',
   'implementation',
 ];
-/** Paths compare as the volume compares names: case on win32; normalization and full case folding on darwin (crowncodes/ia#315, crowncodes/ia#323). */
+/** Paths compare as the volume compares names: case on win32; normalization and full case folding on darwin. */
 const fold = pathKey;
 const hash = (value: string | Uint8Array): string => createHash('sha256').update(value).digest('hex');
 function fail(message: string): never {
@@ -429,7 +429,7 @@ export function contextHookImplementationDigest(directory = import.meta.dirname)
       if (listed.isSymbolicLink()) fail('Hook implementation aliases are unsupported');
       if (listed.isDirectory()) visit(absolute, path + '/', depth + 1);
       else if (!listed.isFile()) fail('Hook implementation has a nonregular file');
-      // A Finder or AppleDouble file is never code: the launcher skips it, so the identity must too (crowncodes/ia#323).
+      // A Finder or AppleDouble file is never code: the launcher skips it, so the identity must too.
       else if (hashed(name)) {
         const bytes = implementationBytes(absolute, Math.min(8 * 1024 * 1024, 32 * 1024 * 1024 - total));
         total += bytes.length;

@@ -882,7 +882,7 @@ export function recoverGuardRegistration(rootInput: string): { status: 'guard-re
  * and any failure to run the guard at all exits 2, naming the remedy on stderr, which Claude Code shows with the block.
  * Claude Code lets a tool call through when a hook command cannot start or fails any other way, and blocks only on exit 2 or
  * a deny (code.claude.com/docs/en/hooks); the guard's own decisions exit 0 and pass through unchanged. win32 has no
- * `/bin/sh` and keeps the direct form, which still fails open (crowncodes/ia#323).
+ * `/bin/sh` and keeps the direct form, which still fails open.
  */
 export const FAIL_CLOSED =
   '"$0" "$@" || { echo "IA steward guard could not run: run ia doctor, then ia host claude --apply" >&2; exit 2; }';

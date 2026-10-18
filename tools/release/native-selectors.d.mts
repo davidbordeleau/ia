@@ -10,7 +10,17 @@ export interface NativeReleaseTarget {
 }
 export function readNativeReleaseTarget(root: string): NativeReleaseTarget;
 export function declarationVersion(text: string, from: string, to: string): string;
-export function prepareNativeSelection(root: string, target: string): Map<string, string>;
+/** Each native identity, `inventarch/language` included, to its native version. */
+export type NativeVersions = Readonly<Record<string, string>>;
+export function selectedNativeVersions(root: string): NativeVersions | undefined;
+export function releaseNativeVersions(root: string, published: string, target: string): NativeVersions | undefined;
+export function nativeNotesPending(root: string, published: string, commit?: string): boolean;
+export function prepareNativeSelection(
+  root: string,
+  target: string,
+  native?: NativeVersions,
+  options?: { lowerSelected?: boolean },
+): Map<string, string>;
 export function nativeVersionOnly(
   root: string,
   path: string,

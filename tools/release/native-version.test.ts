@@ -20,9 +20,12 @@ import {
   NATIVE_COMPOSITION_FIXTURE,
   NATIVE_LANGUAGE_POLICY,
   NATIVE_SYSTEM_POLICY,
+  nativeNotesPending,
   nativeVersionOnly,
   prepareNativeSelection,
   readNativeReleaseTarget,
+  releaseNativeVersions,
+  selectedNativeVersions,
 } from './native-selectors.mjs';
 
 const checkout = resolve(import.meta.dirname, '../..');
@@ -118,14 +121,25 @@ function selectorFixture() {
       );
   return root;
 }
+/** The selector fixture's three native identities, all at one version. */
+const allNatives = (version: string) => ({
+  'inventarch/language': version,
+  'inventarch/agent-system': version,
+  'inventarch/session-system': version,
+});
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-describe('coordinated native release selection', () => {
-  it.each(['3.0.1', '3.1.0', '4.0.0'])('aligns every unchanged archive to npm target %s', (target) => {
+describe('content-driven native release selection', () => {
+  it.each(['3.0.1', '3.1.0'])('keeps every unchanged archive at its published version for npm target %s', (target) => {
     const plan = planNativeVersions(baseline, archives, target, notes(['core'], 'major'));
-    expect(plan.versions).toEqual(Object.fromEntries(archives.map((row) => [row.id, target])));
+    expect(plan.versions).toEqual(Object.fromEntries(archives.map((row) => [row.id, '3.0.0'])));
+    expect(plan.changed).toEqual([]);
+  });
+  it('aligns every archive, changed or not, to the x.0.0 of a major npm target', () => {
+    const plan = planNativeVersions(baseline, archives, '4.0.0');
+    expect(plan.versions).toEqual(Object.fromEntries(archives.map((row) => [row.id, '4.0.0'])));
     expect(plan.changed).toEqual([]);
   });
   it('aligns the immutable npm2/native1.2 inventory to the upcoming3 target without another note target', () => {
@@ -136,14 +150,33 @@ describe('coordinated native release selection', () => {
     expect(Object.values(planNativeVersions(initial, initial.archives, '3.0.0').versions)).toEqual(
       Array(4).fill('3.0.0'),
     );
-    expect(() => planNativeVersions(initial, initial.archives, '2.0.0')).toThrow('cannot be realigned');
+    expect(Object.values(planNativeVersions(initial, initial.archives, '2.0.0').versions)).toEqual(
+      Array(4).fill('1.2.0'),
+    );
   });
-  it('requires impact notes for changed content and exact dependency consumers, while aligning unrelated archives', () => {
+  it('requires impact notes for changed content and exact dependency consumers, and moves only those archives', () => {
     const changed = archives.map((row) => (row.id === 'inventarch/core' ? { ...row, archive: 'c'.repeat(64) } : row));
     const plan = planNativeVersions(baseline, changed, '3.1.0', notes(['core', 'consumer', 'language'], 'minor'));
     expect(plan.direct).toEqual(['inventarch/core']);
     expect(plan.changed).toEqual(['inventarch/consumer', 'inventarch/core', 'inventarch/language']);
-    expect(Object.values(plan.versions)).toEqual(Array(4).fill('3.1.0'));
+    expect(plan.versions).toEqual({
+      'inventarch/core': '3.1.0',
+      'inventarch/consumer': '3.1.0',
+      'inventarch/unrelated': '3.0.0',
+      'inventarch/language': '3.1.0',
+    });
+    // Each changed archive moves by its own note from its own published version, below a larger npm target.
+    expect(
+      planNativeVersions(baseline, changed, '3.2.0', {
+        ...notes(['core'], 'minor'),
+        changes: [...notes(['core'], 'minor').changes, ...notes(['consumer', 'language']).changes],
+      }).versions,
+    ).toEqual({
+      'inventarch/core': '3.1.0',
+      'inventarch/consumer': '3.0.1',
+      'inventarch/unrelated': '3.0.0',
+      'inventarch/language': '3.0.1',
+    });
     expect(() => planNativeVersions(baseline, changed, '3.1.0', notes(['core']))).toThrow('own bump note');
     expect(() => planNativeVersions(baseline, changed, '3.1.0')).toThrow('latest published tag');
     expect(() =>
@@ -163,7 +196,7 @@ describe('coordinated native release selection', () => {
     expect(() => planNativeVersions(baseline, changed, rejected, changes)).toThrow('does not satisfy native');
     expect(planNativeVersions(baseline, changed, accepted, changes).versions['inventarch/core']).toBe(accepted);
   });
-  it('closes dependency cycles and still advances disconnected identities', () => {
+  it('closes dependency cycles and keeps disconnected identities at their published version', () => {
     const cycle = [pin('a', ['b']), pin('b', ['a']), pin('c')],
       base = { ...baseline, archives: cycle };
     const plan = planNativeVersions(
@@ -173,7 +206,30 @@ describe('coordinated native release selection', () => {
       notes(['a', 'b']),
     );
     expect(plan.changed).toEqual(['inventarch/a', 'inventarch/b']);
-    expect(Object.values(plan.versions)).toEqual(['3.0.1', '3.0.1', '3.0.1']);
+    expect(Object.values(plan.versions)).toEqual(['3.0.1', '3.0.1', '3.0.0']);
+  });
+  it('lets an archive keep its own version line across npm releases within a major', () => {
+    // A published 3.2.0 cohort whose natives moved independently: content decides, never the npm number.
+    const independent = {
+      source: { tag: 'v3.2.0', commit: 'e'.repeat(40) },
+      archives: [
+        { ...pin('core'), version: '3.1.2' },
+        pin('unrelated'),
+        { ...pin('language', ['core']), version: '3.1.2' },
+      ],
+    };
+    const changed = independent.archives.map((row) =>
+      row.id === 'inventarch/core' ? { ...row, archive: 'c'.repeat(64) } : row,
+    );
+    expect(
+      planNativeVersions(independent, changed, '3.2.1', {
+        ...notes(['core', 'language']),
+        baseline: independent.source,
+      }).versions,
+    ).toEqual({ 'inventarch/core': '3.1.3', 'inventarch/unrelated': '3.0.0', 'inventarch/language': '3.1.3' });
+    expect(Object.values(planNativeVersions(independent, independent.archives, '4.0.0').versions)).toEqual(
+      Array(3).fill('4.0.0'),
+    );
   });
   it('refuses malformed, duplicate and independent-target notes', () => {
     const valid = notes(['core']);
@@ -212,6 +268,85 @@ describe('coordinated native release selection', () => {
 });
 
 describe('dependency-free native selectors', () => {
+  it('moves only npm versions when no native selection is given, and the language range with the language', () => {
+    const root = selectorFixture(),
+      path = 'apps/cli/tests/fixtures/composition-workspace/.ia/release.json';
+    const descriptor = {
+      formatVersion: 1,
+      id: 'local/demo',
+      version: '0.1.0',
+      engine: '^0.1.1',
+      language: ['1.0'],
+      dependencies: [{ id: 'inventarch/language', range: '^3.0.0', systems: ['agent-system', 'session-system'] }],
+      assets: [],
+    };
+    write(root, path, descriptor);
+    const kept = prepareNativeSelection(root, '3.1.0');
+    expect(JSON.parse(kept.get(path)!).dependencies[0].range).toBe('^3.0.0');
+    expect(JSON.parse(kept.get(NATIVE_LANGUAGE_POLICY)!).language).toBe('3.0.0');
+    expect(
+      JSON.parse(kept.get(NATIVE_SYSTEM_POLICY)!).owners.map(
+        (row: { npmVersion: string; native: { version: string } }) => [row.npmVersion, row.native.version],
+      ),
+    ).toEqual([
+      ['3.1.0', '3.0.0'],
+      ['3.1.0', '3.0.0'],
+    ]);
+    for (const [file, text] of kept)
+      if (file.endsWith('.ia')) expect(text).toBe(readFileSync(resolve(root, file), 'utf8'));
+    expect(selectedNativeVersions(root)).toEqual({
+      'inventarch/language': '3.0.0',
+      'inventarch/agent-system': '3.0.0',
+      'inventarch/session-system': '3.0.0',
+    });
+    const mixed = prepareNativeSelection(root, '3.1.0', {
+      'inventarch/language': '3.0.1',
+      'inventarch/agent-system': '3.0.1',
+      'inventarch/session-system': '3.0.0',
+    });
+    expect(JSON.parse(mixed.get(path)!).dependencies[0].range).toBe('^3.0.1');
+    expect(mixed.get('.ia/src/systems/agent-system/system.ia')).toContain('version "3.0.1"');
+    expect(mixed.get('.ia/src/systems/session-system/system.ia')).toContain('version "3.0.0"');
+    expect(() => prepareNativeSelection(root, '3.1.0', { 'inventarch/language': '3.0.1' })).toThrow('inventory');
+    const lower = {
+      'inventarch/language': '2.9.0',
+      'inventarch/agent-system': '3.0.0',
+      'inventarch/session-system': '3.0.0',
+    };
+    expect(() => prepareNativeSelection(root, '3.1.0', lower)).toThrow('regressed');
+    // The native writer lowers an unpublished selection; it enforces the published floor itself.
+    const lowered = prepareNativeSelection(root, '3.1.0', lower, { lowerSelected: true });
+    expect(JSON.parse(lowered.get(NATIVE_LANGUAGE_POLICY)!).language).toBe('2.9.0');
+    expect(JSON.parse(lowered.get(path)!).dependencies[0].range).toBe('^2.9.0');
+    expect(() => prepareNativeSelection(root, '2.0.0', lower, { lowerSelected: true })).toThrow(
+      'npm version regressed',
+    );
+  });
+  it('selects natives for an npm release: aligned to a new major, otherwise as currently selected', () => {
+    const root = selectorFixture();
+    expect(releaseNativeVersions(root, '3.0.0', '3.0.1')).toEqual(selectedNativeVersions(root));
+    expect(releaseNativeVersions(root, '3.0.0', '3.1.0')).toEqual(selectedNativeVersions(root));
+    expect(releaseNativeVersions(root, '3.2.0', '4.0.0')).toEqual({
+      'inventarch/language': '4.0.0',
+      'inventarch/agent-system': '4.0.0',
+      'inventarch/session-system': '4.0.0',
+    });
+    expect(releaseNativeVersions(temporary(), '3.0.0', '4.0.0')).toBeUndefined();
+    expect(nativeNotesPending(root, '3.0.0')).toBe(false);
+    write(root, 'releases/native/notes.json', {
+      format: 'ia.native-release-notes.v1',
+      baseline: { tag: 'v3.0.0', commit: 'f'.repeat(40) },
+      changes: [{ id: 'inventarch/agent-system', bump: 'patch', summary: 'Reviewed.' }],
+    });
+    expect(nativeNotesPending(root, '3.0.0')).toBe(true);
+    expect(nativeNotesPending(root, '3.0.1')).toBe(false);
+    write(root, 'releases/native/notes.json', {
+      format: 'ia.native-release-notes.v1',
+      baseline: { tag: 'v3.0.0', commit: 'f'.repeat(40) },
+      changes: [],
+    });
+    expect(nativeNotesPending(root, '3.0.0')).toBe(false);
+  });
   it.each(['3.0.1', '4.0.0'])('aligns only the exact composition fixture language range for target %s', (target) => {
     const root = selectorFixture(),
       path = 'apps/cli/tests/fixtures/composition-workspace/.ia/release.json';
@@ -226,7 +361,7 @@ describe('dependency-free native selectors', () => {
     };
     const before = JSON.stringify(descriptor, null, 2).replaceAll('\n', '\r\n') + '\r\n';
     write(root, path, before);
-    const after = prepareNativeSelection(root, target).get(path);
+    const after = prepareNativeSelection(root, target, allNatives(target)).get(path);
     expect(after).toBe(before.replace('^3.0.0', '^' + target));
     expect(readFileSync(resolve(root, path), 'utf8')).toBe(before);
     expect(nativeVersionOnly(root, path, before, after!)).toBe(true);
@@ -250,7 +385,7 @@ describe('dependency-free native selectors', () => {
 
   it('prepares every paired declaration and policy, preserving syntax and CRLF without writing', () => {
     const root = selectorFixture(),
-      writes = prepareNativeSelection(root, '3.1.0');
+      writes = prepareNativeSelection(root, '3.1.0', allNatives('3.1.0'));
     expect(writes.size).toBe(6);
     for (const [path, text] of writes) {
       const before = readFileSync(resolve(root, path), 'utf8');
@@ -400,8 +535,19 @@ describe('published native evidence and candidate ledger', () => {
     write(root, NATIVE_CURRENT, candidate);
     const result = nativeRelease(root, 'check');
     expect(result.changed).toEqual([]);
-    expect(Object.values(result.versions)).toEqual(Array(12).fill('3.0.1'));
+    expect(Object.values(result.versions)).toEqual(Array(12).fill('3.0.0'));
   }, 120_000);
+  it('reads a published ledger whose native versions moved independently of the npm tag', () => {
+    const root = temporary(),
+      git = init(root),
+      previous = commit(root, 'Earlier published source');
+    const independent = archives.map((row) => ({ ...row, version: row.id === 'inventarch/core' ? '3.0.1' : '3.0.0' }));
+    write(root, 'releases/current.json', releasePolicy('3.1.0', '3.0.0', previous));
+    write(root, NATIVE_CURRENT, { format: 'ia.native-release.v1', archives: independent });
+    commit(root, 'Published 3.1.0 with one native patch');
+    git('tag', 'v3.1.0');
+    expect(nativeBaseline(root)).toMatchObject({ source: { tag: 'v3.1.0' }, archives: independent });
+  });
 });
 
 /** Real packing inputs with a literal historical version, independent of the checkout's future release target. */
@@ -478,40 +624,54 @@ function nativeWriterSnapshot(root: string) {
   );
 }
 
-function expectNativeWriterSelection(root: string, before: Map<string, Buffer | null>, target: string) {
+/** The writer's selection: every npm version at `npm`, and each native at `natives(id)` (one version by default). */
+function expectNativeWriterSelection(
+  root: string,
+  before: Map<string, Buffer | null>,
+  npm: string,
+  natives: string | ((id: string) => string) = npm,
+) {
+  const native = typeof natives === 'string' ? () => natives : natives;
   // All eleven owners have paired declarations; both policy files and the composition fixture also move.
   expect(before.size).toBe(26);
   const selected = JSON.parse(before.get(NATIVE_SYSTEM_POLICY)!.toString('utf8'));
   expect(selected.owners).toHaveLength(11);
   for (const owner of selected.owners) {
-    owner.npmVersion = target;
-    owner.native.version = target;
+    owner.npmVersion = npm;
+    owner.native.version = native(owner.native.id);
   }
   expect(JSON.parse(readFileSync(resolve(root, NATIVE_SYSTEM_POLICY), 'utf8'))).toEqual(selected);
   expect(JSON.parse(readFileSync(resolve(root, NATIVE_LANGUAGE_POLICY), 'utf8'))).toEqual({
     format: 'ia.public-native-versions.v1',
-    language: target,
+    language: native('inventarch/language'),
   });
-  for (const [path, bytes] of before)
-    if (path.endsWith('.ia'))
+  for (const owner of selected.owners)
+    for (const path of [
+      owner.owner + '/system.ia',
+      'examples/public-language/contracts/' + owner.native.system + '.ia',
+    ])
       expect(readFileSync(resolve(root, path), 'utf8')).toBe(
-        bytes!.toString('utf8').replace(/^  version "3\.0\.0"/m, `  version "${target}"`),
+        before
+          .get(path)!
+          .toString('utf8')
+          .replace(/^  version "3\.0\.0"/m, `  version "${owner.native.version}"`),
       );
   const composition = JSON.parse(before.get(NATIVE_COMPOSITION_FIXTURE)!.toString('utf8'));
-  composition.dependencies.find((row: { id: string }) => row.id === 'inventarch/language').range = '^' + target;
+  composition.dependencies.find((row: { id: string }) => row.id === 'inventarch/language').range =
+    '^' + native('inventarch/language');
   expect(JSON.parse(readFileSync(resolve(root, NATIVE_COMPOSITION_FIXTURE), 'utf8'))).toEqual(composition);
 }
 
 describe('native release writer', () => {
-  it('persists every selector and a fresh twelve-archive ledger for an npm-only 3.0.1 target', () => {
+  it('keeps every unchanged native version and writes a fresh twelve-archive ledger for an npm-only 3.0.1', () => {
     const { root, published } = realNativeReleaseFixture();
     write(root, 'releases/current.json', releasePolicy('3.0.1', '3.0.0', published));
     const before = nativeWriterSnapshot(root),
       result = nativeRelease(root, 'write');
     expect(result.changed).toEqual([]);
     expect(result.target).toBe('3.0.1');
-    expect(Object.values(result.versions)).toEqual(Array(12).fill('3.0.1'));
-    expectNativeWriterSelection(root, before, '3.0.1');
+    expect(Object.values(result.versions)).toEqual(Array(12).fill('3.0.0'));
+    expectNativeWriterSelection(root, before, '3.0.1', '3.0.0');
     expect(JSON.parse(readFileSync(resolve(root, NATIVE_CURRENT), 'utf8'))).toEqual({
       format: 'ia.native-release.v1',
       baseline: { tag: 'v3.0.0', commit: published },
@@ -519,10 +679,63 @@ describe('native release writer', () => {
       archives: result.archives,
     });
     expect(result.archives).toHaveLength(12);
-    expect(result.archives.map((row) => row.version)).toEqual(Array(12).fill('3.0.1'));
+    expect(result.archives.map((row) => row.version)).toEqual(Array(12).fill('3.0.0'));
     expect(readFileSync(resolve(root, NATIVE_CURRENT))).not.toEqual(before.get(NATIVE_CURRENT));
     expect(nativeRelease(root, 'check').archives).toEqual(result.archives);
   }, 120_000);
+
+  it('aligns all twelve archives to an npm-only major 4.0.0', () => {
+    const { root, published } = realNativeReleaseFixture();
+    write(root, 'releases/current.json', releasePolicy('4.0.0', '3.0.0', published));
+    const before = nativeWriterSnapshot(root),
+      result = nativeRelease(root, 'write');
+    expect(result.changed).toEqual([]);
+    expect(Object.values(result.versions)).toEqual(Array(12).fill('4.0.0'));
+    expectNativeWriterSelection(root, before, '4.0.0');
+    expect(nativeRelease(root, 'check').archives).toEqual(result.archives);
+  }, 120_000);
+
+  it('moves only a changed archive and its consumers by their notes, keeping the rest published', () => {
+    const { root, published } = realNativeReleaseFixture();
+    write(root, 'releases/current.json', releasePolicy('3.1.0', '3.0.0', published));
+    const schema = '.ia/src/systems/learning-system/schemas/observation.schema.ia';
+    write(root, schema, readFileSync(resolve(root, schema), 'utf8') + '# A reviewed source edit.\n');
+    // learning-system reaches authoring-system, whose consumers are reached in turn, and the language embeds them all.
+    const moved = [
+      'inventarch/agent-composition-system',
+      'inventarch/authoring-system',
+      'inventarch/hook-authoring-system',
+      'inventarch/language',
+      'inventarch/learning-system',
+      'inventarch/template-system',
+    ];
+    const reviewed = (ids: string[], bump: 'patch' | 'minor' = 'patch') =>
+      write(root, 'releases/native/notes.json', {
+        format: 'ia.native-release-notes.v1',
+        baseline: { tag: 'v3.0.0', commit: published },
+        changes: ids.map((id) => ({ id, bump, summary: 'Reviewed native change.' })),
+      });
+    reviewed(moved.slice(1));
+    expect(() => nativeRelease(root, 'write')).toThrow('own bump note');
+    reviewed(moved);
+    const before = nativeWriterSnapshot(root),
+      result = nativeRelease(root, 'write');
+    // The language archive embeds every public schema, so the schema edit changes its bytes directly too.
+    expect(result.direct).toEqual(['inventarch/language', 'inventarch/learning-system']);
+    expect(result.changed).toEqual(moved);
+    expect(result.versions).toEqual(
+      Object.fromEntries(Object.keys(result.versions).map((id) => [id, moved.includes(id) ? '3.0.1' : '3.0.0'])),
+    );
+    expectNativeWriterSelection(root, before, '3.1.0', (id) => (moved.includes(id) ? '3.0.1' : '3.0.0'));
+    expect(nativeRelease(root, 'check').versions).toEqual(result.versions);
+    // Before publication a note's impact can rise and fall again: only the published version is a floor.
+    reviewed(moved, 'minor');
+    expect(nativeRelease(root, 'write').versions['inventarch/learning-system']).toBe('3.1.0');
+    reviewed(moved);
+    expect(nativeRelease(root, 'write').versions).toEqual(result.versions);
+    expectNativeWriterSelection(root, before, '3.1.0', (id) => (moved.includes(id) ? '3.0.1' : '3.0.0'));
+    expect(nativeRelease(root, 'check').versions).toEqual(result.versions);
+  }, 360_000);
 
   it('preserves the complete historical ledger when writing an unchanged published target', () => {
     const historicalNotes = 'd'.repeat(64),
@@ -551,7 +764,7 @@ describe('native release writer', () => {
       const archiveSpy = vi.spyOn(nativeArchiveModule, 'nativeArchives').mockImplementation((candidate, overrides) => {
         if (candidate === root && overrides === undefined) {
           reachedPostWrite = true;
-          expectNativeWriterSelection(root, before, '3.0.1');
+          expectNativeWriterSelection(root, before, '3.0.1', '3.0.0');
           throw failure;
         }
         return realArchives(candidate, overrides);

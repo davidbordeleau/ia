@@ -298,7 +298,7 @@ export const STARTER_VERSION = '0.1.0';
 export const INSTALL_LOCK = '.ia/distributions/install-lock.json';
 const cachePath = (digest: string): string => `.ia/distributions/cache/${digest}.ia.tgz`;
 const systemFolder = (name: string): string => `.ia/src/systems/${name}`;
-/** Where `ia author system <name>` writes a local system, as `ia init --system` does. */
+/** Where a local system lives: `ia init --system` writes it there, and `ia preview system <name>` shows it there. */
 export const systemPath = (name: string): string => `${systemFolder(name)}/system.ia`;
 const distributionPath = (name: string): string => `${systemFolder(name)}/records/distribution.ia`;
 /** SPEC `init`: the one file the three starter records share, at the root of the authored source. */
@@ -425,7 +425,7 @@ function migrationGitConflict(root: string, base: Base, lock: DistributionLock):
 /** `packages/db/src/distribution/codec.ts` packageId and identifier: the id rule and the system-name ceiling. */
 const NAME = /^[a-z][a-z0-9-]*$/;
 const NAME_LIMIT = 64;
-/** A local system name `ia init --system` and `ia author system` accept: the id rule and the system-name ceiling. */
+/** A local system name `ia init --system` and `ia preview system` accept: the id rule and the system-name ceiling. */
 export const isSystemName = (name: string): boolean => NAME.test(name) && name.length <= NAME_LIMIT;
 /** `createFile`'s temporary name, `<target>.<randomUUID()>.tmp` (apps/distribution/src/files.ts:76). */
 export const LEFTOVER =
@@ -2852,7 +2852,7 @@ async function migrate(context: Context, root: string): Promise<Result> {
 /**
  * A finished git run's answer, or null when git is not really there: it could not start, or it is the macOS stub
  * `/usr/bin/git`, which only asks for the Xcode Command Line Tools and fails; reading that as "not a Git checkout" would
- * send the user after the wrong fix (crowncodes/ia#323).
+ * send the user after the wrong fix.
  */
 export function gitAnswer(result: {
   readonly error?: Error | undefined;

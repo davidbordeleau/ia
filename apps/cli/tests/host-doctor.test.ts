@@ -372,7 +372,7 @@ it('doctor warns when a registration pins its payload outside the IA home, and r
   expect(warning.detail).toMatch(/^Host claude pins its payload under .+, outside the IA home /);
   expect(warning.detail).toContain(`outside the IA home ${moved.IA_HOME}`);
   // legacyHostHome reads LOCALAPPDATA on win32 and XDG_DATA_HOME on Linux; macOS derives it from the user's home.
-  if (process.platform !== 'darwin') expect(warning.detail).toMatch(/ \(the M5\.3 per-OS location\)$/);
+  if (process.platform !== 'darwin') expect(warning.detail).toMatch(/ \(the per-OS location earlier releases used\)$/);
   // The registration still works, so doctor warns rather than fails; the briefing names the same remedy.
   expect(row(report.checks, 'host-claude')!.status).toBe('ok');
   expect(report.counts.fail).toBe(0);

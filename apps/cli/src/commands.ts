@@ -136,7 +136,8 @@ export const COMMANDS: readonly CommandSpec[] = [
       '        [--apply] [--json] [--yes]',
       'ia init [<directory>] --from <plugin-directory> [--id <provider/name>] [--apply] [--json] [--yes]',
       'ia init [<directory>] --migrate [--system] [--apply] [--json] [--yes]',
-      'ia init [<directory>] --decline today|forever | --forget-decline [--host claude|codex|none] [--json]',
+      'ia init [<directory>] --decline today|forever [--host claude|codex|none] [--json]',
+      'ia init [<directory>] --forget-decline [--json]',
     ],
     grammar: {
       options: [
@@ -273,7 +274,6 @@ export const COMMANDS: readonly CommandSpec[] = [
       'ia author --relate <owned> <spelling> <target> --digest <sha256> [--actor <agent>] [--json]',
       'ia author --set <owned> <section.key>=<value> --digest <sha256> [--actor <agent>] [--json]',
       'ia author --set <owned> <section.key>+=<item> --digest <sha256> [--actor <agent>] [--json]',
-      'ia author system <name> [--actor <agent>] [--json]',
     ],
     grammar: grammar(
       [
@@ -282,7 +282,7 @@ export const COMMANDS: readonly CommandSpec[] = [
           name: 'digest',
           kind: 'value',
           placeholder: '<sha256>',
-          summary: "The target file's sha256 that ia preview printed for the same form (required but for system)",
+          summary: "The target file's sha256 that ia preview printed for the same form (required)",
         }),
         ACTOR,
       ],

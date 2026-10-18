@@ -49,7 +49,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-// `within` judges nesting on disk, so a home or cache spelled in another case or normalization is still where it is (crowncodes/ia#315).
+// `within` judges nesting on disk, so a home or cache spelled in another case or normalization is still where it is.
 import { pathKey, within } from '@inventarch/db';
 import { decodeDistributionJson, INSTALL_PATHS } from '@inventarch/db/distribution';
 import type { DistributionLock } from '@inventarch/db/distribution';
@@ -775,7 +775,7 @@ function movedRows(request: DoctorRequest, observed: readonly HostObservation[],
             `ia-home-moved-${host.host}`,
             'IA home moved',
             'warn',
-            `Host ${host.host} pins its payload under ${host.cache}, outside the IA home ${home}${inside(legacy, host.cache) ? ' (the M5.3 per-OS location)' : ''}`,
+            `Host ${host.host} pins its payload under ${host.cache}, outside the IA home ${home}${inside(legacy, host.cache) ? ' (the per-OS location earlier releases used)' : ''}`,
             commands.apply(host.host),
           ),
         ],
@@ -1291,14 +1291,21 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
  * §8.2's host state from the rows already collected. `unknown` when the host set was not observed — an interrupted
  * installation, or installed state that could not be read — so the briefing never calls a host missing that doctor did
  * not look at. Stale covers the host row itself, a payload pinned outside the IA home (§3 names re-applying as its
- * remedy) and any failing projection row of a registered host, which `ia host <host> --apply` also repairs. A
+ * remedy) and any failing projection row of a registered host, which `ia host <host> --apply` also repairs, except a
+ * hook group deleted, changed or duplicated by hand: an apply refuses to put that back on its own, so `removeFirst`
+ * tells the briefing to name the removal first, as that row's remedy does. A
  * projection `ia project` wrote without a registration is no registration to call stale: the host stays `absent`, and
  * its failing rows name their own repair, `ia project <host> --apply`.
  */
 function hostState(
   host: string,
   checks: readonly Check[],
-): { readonly status: BriefInput['hostStatus']; readonly detail: string | null; readonly recovery: string | null } {
+): {
+  readonly status: BriefInput['hostStatus'];
+  readonly detail: string | null;
+  readonly recovery: string | null;
+  readonly removeFirst?: boolean;
+} {
   const pending = checks.find((check) => check.id === 'pending');
   const unobserved = checks.find((check) => check.id === 'host' && check.status === 'unknown');
   if (unobserved !== undefined || pending?.status === 'fail')
@@ -1315,7 +1322,12 @@ function hostState(
       (hostCheck !== undefined && check.id.startsWith(`projection-${host}`) && check.status === 'fail'),
   );
   if (failing.length > 0)
-    return { status: 'stale', detail: failing.map((check) => check.detail).join('; '), recovery: null };
+    return {
+      status: 'stale',
+      detail: failing.map((check) => check.detail).join('; '),
+      recovery: null,
+      ...(failing.some((check) => check.id.startsWith(`projection-${host}-hook:`)) ? { removeFirst: true } : {}),
+    };
   return { status: hostCheck === undefined ? 'absent' : 'registered', detail: null, recovery: null };
 }
 
@@ -1340,6 +1352,7 @@ function briefingFor(
     hostStatus: state.status,
     hostDetail: state.detail,
     recovery: state.recovery,
+    ...(state.removeFirst === true ? { removeFirst: true } : {}),
     // The cached update check and the refresh argv (host plugin distribution spec §11), both read without writing.
     updates: user.facts.updates,
     refresh: user.facts.refresh,

@@ -65,6 +65,11 @@ export interface BriefInput {
   readonly hostDetail: string | null;
   /** The pending row's remedy when an interrupted installation needs recovery, else null. */
   readonly recovery: string | null;
+  /**
+   * True when a registered hook group was deleted, changed or duplicated by hand: an apply refuses to put it back on
+   * its own, so the briefing names `ia host <host> --remove --apply` first, as doctor's row does.
+   */
+  readonly removeFirst?: boolean;
   readonly updates: { readonly latest: string | null; readonly behind: number | null } | null;
   readonly refresh: readonly string[] | null;
 }
@@ -147,7 +152,13 @@ export function brief(input: BriefInput): { readonly session: Session; readonly 
     } else if (workspaceRow(input.host) === undefined)
       context.push(`Host ${label} has no workspace registration in this ia.`);
     else if (input.hostStatus === 'registered') context.push(`Host ${label}: registered.`);
-    else {
+    else if (input.hostStatus === 'stale' && input.removeFirst === true) {
+      const remove = [...apply.slice(0, -1), '--remove', '--apply'];
+      const both = `${command(remove)}, then ${command(apply)}`;
+      first(`IA: a ${label} hook group for this workspace was changed or deleted by hand; run ${both}`);
+      context.push(`Host ${label}: stale${input.hostDetail === null ? '' : ` — ${input.hostDetail}`}. Run ${both}.`);
+      actions.push(action('host', remove), action('host', apply));
+    } else {
       if (input.hostStatus === 'stale') {
         first(`IA: the ${label} host registration for this workspace is stale; run ${command(apply)}`);
         context.push(

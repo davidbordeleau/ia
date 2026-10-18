@@ -4,17 +4,19 @@ genre: spec
 title: Host plugin distribution
 status: implemented
 created: "2026-10-12"
-last-reviewed: "2026-10-14"
+last-reviewed: "2026-10-18"
 owners: [inventarch]
 ---
 
 # Host plugin distribution
 
-This contract describes the user-level side of host support: the IA home, the Claude plugin that `ia host claude --user` installs, the session briefing that plugin runs, and the initialization choice it records. The implementation is [user-host](../../../apps/cli/src/user-host.ts), [doctor-user](../../../apps/cli/src/doctor-user.ts), [briefing](../../../apps/cli/src/briefing.ts), [decline](../../../apps/cli/src/decline.ts), [channel](../../../apps/cli/src/channel.ts), the host table in [hosts.ts](../../../apps/distribution/src/hosts.ts) and the pure [plugin renderer](../../../packages/compliance/src/host-plugin.ts). Workspace registration is described in [host registration](../host-registration/README.md).
+This contract describes the user-level side of host support: the IA home, the Claude plugin that `ia host claude --user` installs, the session briefing that plugin runs, and the initialization choice it records. It also covers plugin products: a plugin lowered into a kit workspace and rendered back (§12). The implementation is [user-host](../../../apps/cli/src/user-host.ts), [doctor-user](../../../apps/cli/src/doctor-user.ts), [briefing](../../../apps/cli/src/briefing.ts), [decline](../../../apps/cli/src/decline.ts), [channel](../../../apps/cli/src/channel.ts), the host table in [hosts.ts](../../../apps/distribution/src/hosts.ts) and the pure [plugin renderer](../../../packages/compliance/src/host-plugin.ts). Workspace registration is described in [host registration](../host-registration/README.md).
+
+Section numbers are stable because source comments cite them; retired sections keep their numbers unused.
 
 ## 3 IA home
 
-The IA home holds the materialized host payloads (`hosts/`), the Claude plugin marketplace (`claude/marketplace`), the initialization decisions (`state/decisions.json`) and the cached update check. It is `IA_HOME`, or `~/.ia` when that is unset; `IA_HOST_HOME` is still read and doctor warns that it is deprecated.
+The IA home holds the materialized host payloads (`hosts/`), the Claude plugin marketplace (`claude/marketplace`), the initialization decisions (`state/decisions.json`), the cached update check (`state/update-check.json`), the optional `config.json` and the `home.json` marker that names the directory as an IA home. It is `IA_HOME`, or `~/.ia` when that is unset; `IA_HOST_HOME` is still read and doctor warns that it is deprecated.
 
 A relative home refuses with `IA-DIST-INPUT-INVALID`. A home that contains `src/` refuses with `IA-DIST-PATH-UNSAFE`, because it must never look like a workspace, and the IA home and a workspace may not contain each other. Doctor reports a registration that pins a payload outside the current home as a warning naming `ia host <host> --apply`; it does not rewrite the registration.
 
@@ -26,7 +28,7 @@ One row per host decides what each command accepts:
 | --- | --- | --- | --- | --- |
 | `claude` | supported | yes | the Claude plugin | yes |
 | `codex` | partial | yes | none | no |
-| `cursor` | unsupported; refuses | no | none | no |
+| `cursor` | planned; refuses | no | none | no |
 
 `ia host cursor` and `ia host codex --user` refuse with `IA-DIST-HOST-UNSUPPORTED` and write nothing. `ia doctor --host` accepts all three; for a host with no workspace registration, the briefing says so and never suggests `ia host`.
 
@@ -38,15 +40,17 @@ Doctor reports how this `ia` is installed: a source `checkout`, with its commit 
 
 ### 6.1 Rendering
 
-The renderer is a pure function: the same input always yields the same files. It writes a marketplace manifest, the `ia` plugin manifest, an `ia-author` agent that reviews `.ia` records and proposes changes without editing files, a `SessionStart` hook, and `init`, `doctor` and `authoring` skills. The plugin has no MCP server; workspace registration stays with `ia host claude`. The CLI entry and the Node path are explicit renderer inputs.
+The renderer is a pure function: the same input always yields the same files. It writes a marketplace manifest, the `ia` plugin manifest, an `ia-author` agent, with `Read`, `Glob`, `Grep` and `Bash`, whose instructions are to review `.ia` records and propose changes without editing files, a `SessionStart` hook, and `init`, `doctor` and `authoring` skills. It also writes `plugins/ia/ia-plugin.json`, which records the CLI version, install channel, CLI entry and update instruction the hook reads. The hook is registered for `SessionStart` on `startup` and `clear`. The plugin has no MCP server; workspace registration stays with `ia host claude`. The CLI entry and the Node path are explicit renderer inputs.
 
 ### 6.2 Identity
 
-The plugin version is `<cli version>+<12 hex digits>`. The digits come from a digest of the files rendered with a placeholder version, including the Node path the hook uses, so the version changes whenever the rendered content changes.
+The plugin version is `<cli version>+<12 hex digits>`. The digits come from a digest of the files rendered with a placeholder version, so the version changes whenever the rendered content changes. On macOS and Linux the hook names the Node that ran the apply by absolute path, so that path is part of the digest; on Windows the hook runs `node` from `PATH`.
 
 ### 6.3 Apply
 
 `ia host claude --user` needs no workspace, refuses `--root`, and plans by default. `--apply` writes the plugin to `<IA home>/claude/marketplace`, then runs Claude's own `claude plugin marketplace add <that directory>` and `claude plugin install ia@inventarch --scope user`. The plan prints both commands. If `claude` cannot be run, the apply writes the plugin and says to run them by hand. `claude` is looked up only on fully qualified `PATH` entries. The apply never reads or edits Claude's settings files. `--remove --apply` runs Claude's removal commands first and deletes the plugin directory last.
+
+The plan runs `claude --version` to learn whether `claude` can be run, and a removal plan reads `claude plugin list --json` and `claude plugin marketplace list --json`. Removal runs `claude plugin uninstall ia@inventarch --scope user` and `claude plugin marketplace remove inventarch` only for what those lists report, or cannot rule out.
 
 ## 7 User state
 
@@ -69,6 +73,8 @@ These rows exist with or without a workspace: install channel, IA home, Claude p
 The plugin's `SessionStart` hook runs `ia doctor --json --host claude` and gives it five seconds. It runs the CLI entry that rendered the plugin, or, when that file is gone, an `ia` found on a fully qualified `PATH` entry. It turns the `session` field into context lines for the model and at most one notice for the user. The briefing distinguishes:
 
 - a directory that is not a workspace, where the model may offer `/ia:init` only when the request involves InventArch, `.ia` records or their governance;
+- a directory inside another workspace, which names that workspace and `ia doctor --root <workspace>` instead of offering initialization;
+- the InventArch framework source itself, when `ia` runs from a checkout and the workspace is that checkout, where consumer workspace advice does not apply;
 - an initialization declined today or permanently, which the model does not offer again;
 - a registered host, or a stale or missing registration with the `ia host <host> --apply` command;
 - a host set doctor could not observe, naming recovery first;
@@ -87,3 +93,9 @@ A decisions file that cannot be read is a doctor `warn` row naming the file and 
 Doctor reads update state only from the cache in the IA home; it never asks npm or git. When a refresh is due, doctor returns the refresh command as data and the session hook starts it in the background. `IA_NO_UPDATE_CHECK=1`, a non-empty `CI`, or `"updateCheck": false` in the IA home's `config.json` turns update checks off.
 
 [User host tests](../../../apps/cli/tests/user-host.test.ts) and [briefing tests](../../../apps/cli/tests/briefing.test.ts) cover state reporting and command behavior. Live plugin activation in Claude Code needs separate evidence.
+
+## 12 Plugin products
+
+A Claude Code, Codex or Grok plugin directory lowers into a kit workspace with `ia init <directory> --from <plugin-directory>`. The kit is one system under `.ia/src/systems/<name>/` whose `records/plugin.ia` authors one product `@distribution`; its `product.hosts` lists the hosts the plugin ships to. Skill bodies, agent prompts and owned Markdown become pinned resources in `.ia/authoring.resources.json`, every other file becomes an asset under `assets/plugin/`, and `assets/lowering-map.json` gives every file and frontmatter key one disposition. Lowering accepts only what rendering writes back; anything else refuses with `IA-LOWER-UNRESOLVED` and writes nothing.
+
+`ia project <claude|codex> --product plugin --out <directory>` renders that plugin, create-only, into an absent or empty directory outside the workspace, with a manifest for every listed host; it plans by default and writes with `--apply`. `--check` renders in memory, lowers the result again and requires a byte-exact fixed point; `--compare <plugin-directory>` also compares each file with the original. Neither writes. The [CLI contract](../../../apps/cli/SPEC.md#host-plugins) gives the lowering rules and the refusal codes, and [host-plugin tests](../../../apps/cli/tests/host-plugin.test.ts) pin the round trip on the public sample plugin.

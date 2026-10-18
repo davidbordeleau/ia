@@ -4,17 +4,17 @@ genre: spec
 title: Consumer CLI contract
 status: implemented
 created: "2026-10-12"
-last-reviewed: "2026-10-14"
+last-reviewed: "2026-10-18"
 owners: [inventarch]
 ---
 
 # Consumer CLI contract
 
-This contract describes the `ia` consumer shell: how it parses a command, which commands write, how it refuses and what it prints. The package [contract](../../../apps/cli/SPEC.md) records each command's detailed behavior. The [command table](../../../apps/cli/src/commands.ts), [parser](../../../apps/cli/src/args.ts) and [shell](../../../apps/cli/src/consumer.ts) are its executable owners.
+This contract describes the `ia` consumer shell: how it parses a command, which commands write, how it refuses and what it prints. The package [contract](../../../apps/cli/SPEC.md) records each command's detailed behavior. The [command table](../../../apps/cli/src/commands.ts), [parser](../../../apps/cli/src/args.ts) and [shell](../../../apps/cli/src/consumer.ts) are its executable owners. Section numbers are stable because source comments cite them; retired sections keep their numbers unused.
 
 ## 1.2 Dispatch and discovery
 
-The command table owns command names, arguments, options, help and handlers. Parsing runs before any workspace, cache or registry read. An unknown command is a usage error that names the nearest command, or `ia --help` when none is near; an unknown option names the command's `--help`. Operation help comes from the runtime's [machine protocol](../../../packages/runtime/src/machine-protocol.ts), so the supported operations and their input shapes have one owner. Workspace commands use the nearest ancestor that holds `.ia/src`; `--root` names another root where a command accepts it.
+The command table owns command names, arguments, options, help and handlers. Parsing runs before any workspace, cache or registry read. An unknown command is a usage error that names the nearest command, or `ia --help` when none is near; an unknown option names the command's `--help`. Operation help comes from the runtime's [machine protocol](../../../packages/runtime/src/machine-protocol.ts), so the supported operations and their input shapes have one owner. Workspace commands use the nearest ancestor that holds `.ia/src`; `--root` names another root where a command accepts it. When no ancestor holds `.ia/src`, or `--root` names no directory, the command refuses with `IA-DB-ROOT-INVALID` at exit 3. A directory whose `.ia` is the IA home is never a workspace. `ia <operation> --help` and `--schema` print help text at exit 0, `--version` prints the version, and the token `agent` is reserved: `ia agent` refuses as `IA-CLI-USAGE`.
 
 ## 2 Commands and arguments
 
@@ -22,9 +22,11 @@ The command table owns command names, arguments, options, help and handlers. Par
 
 Long options accept `--flag value` and `--flag=value`. Boolean options, an explicit `--`, repeatable options and repeated positionals follow each command's grammar. One-letter aliases such as `-y` and `-q` are exact tokens; a bundled form such as `-yq` is an unknown option. Closed value sets, integer bounds, conflicts and required arguments are checked before dispatch. Every parse refusal is `IA-CLI-USAGE` at exit 2.
 
+Every `--apply` (`init`, `adopt`, `install`, `update`, `remove`, `restore`, `project` and `host`) confirms the same way. On a terminal without `--yes`, an apply shows the change summary and accepts only `y` or `yes`, in any case, ignoring surrounding space. Declining exits 0 and applies nothing. An apply without a terminal, or with `--json`, requires `--yes`.
+
 ### 2.1 Initialization
 
-`init [directory]` previews. `--apply` installs the bundled language base, writes the three starter records and the release descriptor, and captures the workspace. The target is positional, so `--root` is refused. `--host claude` or `--host codex` also runs the host registration path, and `--host none` skips it. See [initialization](../workspace-initialization/README.md) and [apply](../workspace-initialization-apply/README.md).
+`init [directory]` previews. `--apply` installs the bundled language base, writes the three starter records and the release descriptor, and captures the workspace. The target is positional, so `--root` is refused. `--host claude` or `--host codex` also runs the host registration path, and `--host none` skips it. `--id` sets the package id, and `--system` also authors a local `@system` and `@distribution`. `--from <plugin-directory>` lowers a host plugin as a kit, `--migrate` rewrites a 1.1.0 starter, and `--adopt <id>` mounts a registry workspace. `--decline` and `--forget-decline` record or clear, in the IA home, that a repository should not be initialized; they write nothing in the repository. See [initialization](../workspace-initialization/README.md) and [apply](../workspace-initialization-apply/README.md).
 
 ### 2.2 Vocabulary and 2.3 formatting
 
@@ -46,15 +48,13 @@ Long options accept `--flag value` and `--flag=value`. Boolean options, an expli
 
 ### 2.8–2.11 Distribution changes
 
-`install`, `update`, `remove` and `adopt` plan by default and apply only with `--apply`. `restore` has no preview and requires `--apply`. An apply rechecks the plan's inputs.
+`install`, `update`, `remove` and `adopt` plan by default and apply only with `--apply`. `restore` has no preview and requires `--apply`. An apply rechecks the plan's inputs, and confirms as §2.0 describes.
 
-On a terminal without `--yes`, an apply shows the change summary and accepts only `y` or `yes`, in any case, ignoring surrounding space. Declining exits 0 and applies nothing. An apply without a terminal, or with `--json`, requires `--yes`.
-
-After the installed set changes, registered host projections are refreshed. A refresh that fails after the install committed refuses at exit 3 and says that the installation is applied. `ia recover` repairs an interrupted installation or host transaction. See [registry](../registry/README.md).
+After the installed set changes, registered host projections are refreshed. A refresh that fails after the install committed refuses at exit 3 and says that the installation is applied. `ia recover [installation|host|guard|lifecycle] --root <directory>` repairs an interrupted installation, host, guard or lifecycle transaction; `--root` is required. See [registry](../registry/README.md).
 
 ### 2.12 Doctor
 
-`doctor` reads state and returns `ok`, `info`, `warn`, `fail` or `unknown` rows, one status per row. A check that did not run is `unknown`. Doctor does not repair anything or start servers. See [host observations](../host-registration/README.md#7-doctor-and-support).
+`doctor` reads state and returns `ok`, `info`, `warn`, `fail` or `unknown` rows, one status per row. A check that did not run is `unknown`. Doctor exits 1 when any row is `fail` and 0 otherwise. It does not repair anything or start servers. See [host observations](../host-registration/README.md#7-doctor-and-support).
 
 ### 2.13 Preview and author
 
@@ -66,7 +66,7 @@ After the installed set changes, registered host projections are refreshed. A re
 
 ### 2.14 Projection and host registration
 
-`project <claude|codex>` plans, or with `--apply` writes, the position packet's files for one host and registers nothing. `host <claude|codex>` plans, or with `--apply` applies, the workspace's host registration. `host claude --user` installs a user-level plugin. All three plan by default. See [host registration](../host-registration/README.md) and [host plugin distribution](../host-plugin-distribution/README.md).
+`project <claude|codex>` plans, or with `--apply` writes, the position packet's files for one host and registers nothing. `project <claude|codex> --product plugin --out <directory>` writes the plugin a lowered workspace describes, and `--product plugin --check` compares it in memory, writing nothing. `host <claude|codex>` plans, or with `--apply` applies, the workspace's host registration, and `host --remove` plans removal of the owned host set. `host claude --user` installs a user-level plugin. All of them plan by default. See [host registration](../host-registration/README.md) and [host plugin distribution](../host-plugin-distribution/README.md).
 
 ### 2.15 Mandate checks
 
@@ -85,9 +85,9 @@ A refusal is `IA-RUNTIME-MANDATE-MOVE`, `IA-RUNTIME-MANDATE-WORD` or `IA-RUNTIME
 
 ## 3 Exit classes and protocol boundaries
 
-The consumer shell returns 0 for success, 1 for failed validation or a semantic refusal (a mandate refusal included), 2 for usage, 3 for state, I/O and conflict failures, and 130 for interruption.
+The consumer shell returns 0 for success, 1 for failed validation or a semantic refusal (a mandate refusal included), 2 for usage, 3 for state, I/O and conflict failures, 4 when `install`, `update` or `restore` cannot reach or read a remote registry or archive (`IA-DIST-ARTIFACT-UNAVAILABLE`, or a remote `IA-DIST-LIMIT-EXCEEDED`), and 130 for interruption.
 
-The machine protocol keeps its own boundary. Each operation prints one JSON line on stdout with no color and nothing on stderr, exits 0, 1 or 2, and carries no consumer `next`. Consumer formatting and flags never leak into it. The `ia-distribution` binary keeps its own protocol too, and never exits 2. [Protocol tests](../../../apps/cli/tests/protocols.test.ts) exercise the built entrypoints.
+The machine protocol keeps its own boundary. Its operations are `scope`, `context`, `select`, `get`, `records`, `resolve`, `search`, `traverse` and `report`. Each prints one JSON line on stdout with no color and nothing on stderr, exits 0, 1 or 2, and carries no consumer `next`. Consumer formatting and flags never leak into it. The `ia-distribution` binary keeps its own protocol too, and never exits 2. [Protocol tests](../../../apps/cli/tests/protocols.test.ts) exercise the built entrypoints.
 
 ## 4 Refusals
 
@@ -97,9 +97,11 @@ A refusal keeps the service's code, location and reason, and names one command t
 
 `--json` prints one parseable value to stdout. Prompts and incidental process output never share stdout. A parse-time refusal reads no workspace or installation state.
 
+A refusal is `{version: 1, ok: false, code, message, exit, where, next}`. `where` is `{path, line, identity}` or `null`, `next` is the one command to run next, and `details` appears when the refusal carries one. An interruption is the same object with `code` `IA-CLI-INTERRUPTED` and `exit` 130.
+
 ## 6 Terminal rendering
 
-Human output is rendered from structured tokens, with terminal capability and width handling. `--no-color` (or `NO_COLOR`), `--color`, `--ascii` and `--quiet` adjust it. Every command prints a terminal state line; progress output is optional. Severity and rendering limits do not change admission.
+Human output is rendered from structured tokens, with terminal capability and width handling. `--no-color` (or `NO_COLOR`), `--color`, `--ascii` and `--quiet` adjust it. `NO_COLOR` disables color even with `--color`, and `--json` never prints color. `FORCE_COLOR` and `--color` force it, `IA_ASCII` or a non-UTF-8 locale selects ASCII symbols, and `--color` with `--no-color` is a usage error. Every command prints a terminal state line; progress output is optional. Severity and rendering limits do not change admission.
 
 ## 7 Qualification
 

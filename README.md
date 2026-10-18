@@ -296,7 +296,7 @@ IA is method-neutral. It defines what records mean, how they compose and what a 
 | `apps/` | CLI, MCP server, runner, edit-guard hook, distribution tooling and VS Code extension | [Apps](#%EF%B8%8F-apps) |
 | `.ia/src/floor/` | The closed language kernel: domains, predicate pairs and routing vocabulary | [Kernel README](.ia/src/floor/README.md) · [contract](.ia/src/floor/SPEC.md) |
 | `.ia/src/systems/` | The eleven public vocabulary owners, their canonical schemas and system implementations | [Native systems](#-native-systems) |
-| `docs/` | Language reference, vocabulary catalogue, architecture reference and implemented specifications | [Documentation map](#-documentation-map) |
+| `docs/` | Language reference, vocabulary catalogue, architecture and package references, and implemented specifications | [Documentation map](#-documentation-map) |
 | `examples/` | Authoring examples and executable conformance fixtures | [Public-language examples](examples/public-language/README.md) |
 | `distributions/` | The optional product-structure distribution | [Distribution README](distributions/product-structure/README.md) |
 | `releases/`, `tools/` | Release inputs, and the build, generation, documentation and qualification tools | [Release process](releases/README.md) · [repository contract](SPEC.md) |
@@ -366,7 +366,7 @@ The [language floor](.ia/src/floor/README.md) supplies the kernel. These systems
 | --- | --- |
 | **Language and identity** | [Language guide](docs/reference/language/README.md) · [language contract](docs/reference/language/SPEC.md) |
 | **Words, fields and relationships** | [Vocabulary catalogue](docs/reference/language/vocabulary.md) · [machine-readable catalogue](docs/reference/language/vocabulary.json) |
-| **Packages, ownership and enforcement** | [Architecture reference](docs/reference/architecture/README.md) |
+| **Packages, ownership and enforcement** | [Architecture reference](docs/reference/architecture/README.md) · [package reference](docs/reference/packages/README.md) |
 | **Command and host behavior** | [Implemented specifications](docs/specs/README.md) · [CLI guide](apps/cli/README.md) · [MCP server](apps/mcp-door/README.md) · [runner](apps/runner/README.md) · [VS Code extension](apps/vscode/README.md) |
 | **Worked examples** | [Public-language examples](examples/public-language/README.md) · [conformance fixtures](examples/conformance/SPEC.md) |
 | **Changing this repository** | [Contributing guide](CONTRIBUTING.md) · [repository contract](SPEC.md) and the nearest package or system `SPEC.md` |

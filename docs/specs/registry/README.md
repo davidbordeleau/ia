@@ -4,7 +4,7 @@ genre: spec
 title: Distribution registry
 status: implemented
 created: "2026-10-12"
-last-reviewed: "2026-10-14"
+last-reviewed: "2026-10-18"
 owners: [inventarch]
 ---
 
@@ -14,16 +14,18 @@ A registry is a read-only source of release, kit and workspace indexes and of th
 
 ## 3 Provider interface
 
-A registry base is a credential-free HTTPS URL or a local directory. Opening one reads `ia-registry.json` (format `ia.registry.v1`) once; a base without it is not a registry. A registry exposes `base`, the decoded `info`, `index(id)` (also spelled `index('release', id)`), `index('kit', id)`, `index('workspace', id)`, `artifactUrl(digest)` and `artifactBytes(digest)`.
+Section numbers are stable because source comments cite them; retired sections keep their numbers unused.
+
+A registry base is a credential-free HTTPS URL or a local directory. Opening one reads `ia-registry.json` once; a base without it is not a registry. That file is exactly `{format, name}`, with `format` `ia.registry.v1`. A registry exposes `base`, the decoded `info`, `index(id)` (also spelled `index('release', id)`), `index('kit', id)`, `index('workspace', id)`, `artifactUrl(digest)` and `artifactBytes(digest)`.
 
 | Path | Holds |
 | --- | --- |
 | `packages/<provider>/<name>.json` | A release index (`ia.registry-package.v1`) of at most 1,000 releases |
-| `kits/<provider>/<name>/index.json` | A kit index (`ia.registry-kit.v1`) |
-| `workspaces/<provider>/<name>/index.json` | A workspace index (`ia.registry-workspace.v1`) |
+| `kits/<provider>/<name>/index.json` | A kit index (`ia.registry-kit.v1`) of at most 1,000 releases |
+| `workspaces/<provider>/<name>/index.json` | A workspace index (`ia.registry-workspace.v1`) of at most 1,000 releases |
 | `artifacts/<sha256>.ia.tgz` | One archive, named by its validated SHA-256 |
 
-A release lists its version, archive and manifest digests, engine range, syntax versions, dependencies, `withdrawn` and `access`. A `public` release names its artifact; a `licensed` one names none (§7). Indexes are append-only: a published version's digests never change, and a registry that changes them is a conflict. Each index call reads fresh metadata, and an absent index means no releases. HTTPS registries expose artifact URLs; directory registries expose bounded artifact bytes and refuse links and hard links.
+A release index is `{format, id, releases}`, with an optional reserved `signatures` key. A release is exactly `{version, archive, manifest, engine, language, dependencies, withdrawn, access}`: its version, archive and manifest digests, engine range, syntax versions (`language`, exactly `["1.0"]`), dependencies, `withdrawn` and `access`. A `public` release adds `artifact`, which is `artifacts/<archive>.ia.tgz`; a `licensed` one names none (§7). An unknown field refuses. Indexes are append-only: a published version's digests never change, and a registry that changes them is a conflict. Each index call reads fresh metadata, and an absent index means no releases. HTTPS registries expose artifact URLs; directory registries expose bounded artifact bytes and refuse links and hard links.
 
 ## 4 Selection and doctor
 
@@ -32,20 +34,20 @@ One chooser per command picks each id's registry by its provider. Each level is 
 | Level | Source | Directory bases |
 | --- | --- | --- |
 | 1 | `--registry <url\|dir>`, for every id in the command | Absolute, or relative to the caller's directory |
-| 2 | `IA_REGISTRY` | Absolute, or relative to the caller's directory |
+| 2 | `IA_REGISTRY`, for every id in the command; an empty value is ignored | Absolute, or relative to the caller's directory |
 | 3 | The workspace's `.ia/registries.json` | Relative only, and inside the workspace |
 | 4 | `registries.json` in the user configuration directory (`IA_CONFIG_HOME`, else the platform's) | Absolute only |
 | 5 | The built-in default, which maps provider `inventarch` to `https://api.inventarch.dev/registry` | None |
 
-Levels 3 and 4 are `ia.registries.v1` files that map a provider, or `*`, to a base; an exact provider beats `*`. A provider no level maps refuses with `IA-DIST-REGISTRY-UNMAPPED`, naming `.ia/registries.json`. HTTPS bases must carry no credentials, query or fragment, and other URL schemes refuse. `--registry` cannot be combined with `--catalog` or `--offline`.
+Levels 3 and 4 are files of the form `{"format": "ia.registries.v1", "registries": {"<provider>|*": "<base>"}}`; an exact provider beats `*`. Every entry is checked, so one invalid entry refuses every provider that reaches that level. The user file lives in `IA_CONFIG_HOME`, which must be absolute; otherwise in `%APPDATA%\ia` on Windows, `~/Library/Preferences/ia` on macOS, and `$XDG_CONFIG_HOME/ia` or `~/.config/ia` elsewhere. A provider no level maps refuses with `IA-DIST-REGISTRY-UNMAPPED`, naming `.ia/registries.json`. HTTPS bases must carry no credentials, query or fragment, and other URL schemes refuse with `IA-DIST-INPUT-INVALID`. `--registry` cannot be combined with `--catalog` or `--offline`.
 
-`ia doctor` adds a `registry-<provider>` row for each provider the lock names, with the base and the level that chose it. It reads only the portable lock and the configuration files, so it reports a fresh clone, or an installation whose activation is missing, and it never contacts a registry. Choosing a registry or acquiring an archive never grants executable or host authority.
+`ia doctor` adds a `registry-<provider>` row for each provider the lock names, with the base and the level that chose it. A provider that no level maps, or whose configuration refuses, is a `warn` row naming the refusal code, and no registry rows appear while an apply is interrupted. Doctor reads only the portable lock and the configuration files, so it reports a fresh clone, or an installation whose activation is missing, and it never contacts a registry. Choosing a registry or acquiring an archive never grants executable or host authority.
 
 ## 5 Resolution and acquisition
 
 ### 5.1 Reads and bounds
 
-All registries one command opens share one budget of 256 document reads, one cancellation signal and the transport bounds: 4 MiB per document and no redirects. An id's index is read when the command names the id, when the lock has no usable cached archive for it, or when a known range excludes the locked version; otherwise the verified cached archive answers for it. An archive without source provenance, such as the bundled language base, is unpublished: no registry can list it, so a registry that does fails integrity. Exhausted budgets, transport failures and malformed metadata are attributable refusals.
+All registries one command opens share one budget of 256 document reads, one cancellation signal and the transport bounds: 4 MiB per document and no redirects. An id's index is read when the command names the id, when the lock has no usable cached archive for it, or when a known range excludes the locked version; otherwise the verified cached archive answers for it. An archive without source provenance, such as the bundled language base, is unpublished: no registry can list it, so a registry that does fails integrity. An archive is published when its release descriptor's `source.repository` names a URL and `source.commit` names a full commit hash. `ia init` records both from Git when it can (see [initialization](../workspace-initialization/README.md#2-inputs)); set them before `ia pack` to publish an archive to a registry. Exhausted budgets, transport failures and malformed metadata are attributable refusals.
 
 ### 5.2 Selection
 
@@ -63,7 +65,7 @@ Only the selected archives are fetched and verified, in id order: by artifact UR
 
 ### 6.1 Install
 
-`ia install` plans before any write, and `--apply` rechecks every input. The lock pins each package's version, archive and manifest digests and its location: `sha256:<digest>` from a directory registry, the artifact URL from an HTTPS one. With `--json`, a `registries` field lists `{provider, base, level}` for each provider a registry answered.
+`ia install` plans before it applies anything, though acquiring for the plan may fill the archive cache, and `--apply` rechecks every input. The lock pins each package's version, archive and manifest digests and its location: `sha256:<digest>` from a directory registry, the artifact URL from an HTTPS one. With `--json`, a `registries` field lists `{provider, base, level}` for each provider a registry answered.
 
 ### 6.2 Update
 
@@ -71,11 +73,13 @@ Only the selected archives are fetched and verified, in id order: by artifact UR
 
 ### 6.3 Restore
 
-Online, `ia restore` asks each locked package's registry whether its release was withdrawn before it reacquires anything, and refuses a withdrawn release unless `--allow-withdrawn`. A locked release the registry no longer lists, or lists with other digests, is a conflict. Unpublished archives are skipped, because no registry lists them; a clone whose cache is empty restores the bundled base from the CLI's own archive.
+Online, `ia restore` asks each locked package's registry whether its release was withdrawn before it reacquires anything, and refuses a withdrawn release with `IA-DIST-RELEASE-WITHDRAWN` unless `--allow-withdrawn`. A locked release the registry no longer lists, or lists with other digests, is a conflict. Unpublished archives are skipped, because no registry lists them; a clone whose cache is empty restores the bundled base from the CLI's own archive.
+
+Restore reacquires only artifact URLs. A package locked from a directory registry has a `sha256:` location, and restore reads its bytes from the workspace cache, never from the registry. A clone whose cache lacks them refuses with `IA-DIST-RESTORE-REQUIRED` until `ia restore --catalog <file>` names every locked archive.
 
 ### 6.4 Transport refusals
 
-Every transport failure, including DNS, TLS and the 30-second timeout, is `IA-DIST-ARTIFACT-UNAVAILABLE` and names the URL. A configured base without `ia-registry.json` is not a registry (`IA-DIST-INPUT-INVALID`). An unavailable built-in default is `IA-DIST-ARTIFACT-UNAVAILABLE`, and its message names the other sources. A refusal on the registry route names a registry remedy, never a catalog one.
+Every transport failure, including DNS, TLS and the 30-second timeout, is `IA-DIST-ARTIFACT-UNAVAILABLE` and names the URL. `ia install`, `ia update` and `ia restore` refuse a transport failure at exit 4, as they do a remote document or archive over its byte bound (`IA-DIST-LIMIT-EXCEEDED`); `ia adopt` refuses the same failure at exit 3. A configured base without `ia-registry.json` is not a registry (`IA-DIST-INPUT-INVALID`). A built-in default that answers without `ia-registry.json` is `IA-DIST-ARTIFACT-UNAVAILABLE` for install, update and restore, and its message names the other sources. A refusal on the registry route names a registry remedy, never a catalog one.
 
 ### 6.5 Remove, refresh, kits and adoption
 
@@ -89,6 +93,6 @@ A `licensed` release lists no artifact, and this CLI has no licensed acquisition
 
 ## 8 Registry builder
 
-`ia-distribution registry add --registry <dir> --archive <file>` adds one verified archive to an existing directory registry: the artifact first, then `ia-registry.json` if absent, then the release index, so an index never names a missing artifact. Adding the same version with the same digests changes nothing; other digests are a conflict, and an unpublished archive is refused. `ia-distribution registry withdraw` marks a release withdrawn and removes nothing. `registryAddCollection` writes kit and workspace indexes and refuses to remove or change a listed version. The builder writes only inside the registry directory, refuses links and never contacts a network. Publishing the directory is a separate step.
+`ia-distribution`, the binary of `@inventarch/distribution`, builds directory registries. `ia-distribution registry add --registry <absolute dir> --archive <absolute file> [--name <text>]` adds one verified archive to an existing directory registry: the artifact first, then `ia-registry.json` if absent, then the release index, so an index never names a missing artifact. A relative path refuses with `IA-DIST-INPUT-INVALID`. Adding the same version with the same digests changes nothing; other digests are a conflict, and an unpublished archive (§5.1) is refused. `ia-distribution registry withdraw --registry <absolute dir> --id <provider/name> --version <semver>` marks one release withdrawn and removes nothing. `registryAddCollection` writes kit and workspace indexes and refuses to remove or change a listed version. The builder writes only inside the registry directory, refuses links and never contacts a network. Publishing the directory is a separate step.
 
 [Registry tests](../../../apps/cli/tests/registry.test.ts) and [adoption tests](../../../apps/cli/tests/adopt.test.ts) cover the consumer commands; the distribution app's tests cover metadata and transport refusals.

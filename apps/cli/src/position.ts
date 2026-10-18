@@ -296,7 +296,7 @@ function positionNext(error: RuntimeError, context: Pick<Context, 'command' | 'a
   return `Run "ia position${rooted}" for the position of the repository's workspace, K0.`;
 }
 /**
- * §4.1: the runtime's refusal with its code and message unchanged. The key's form (its closed sets and caps) is
+ * §4: the runtime's refusal with its code and message unchanged. The key's form (its closed sets and caps) is
  * checked before the workspace is read, so its refusal reads nothing and is usage, exit 2; a word or seat the workspace
  * does not answer is exit 1, as `ia inspect` refuses an identity it does not admit, located at the workspace with a
  * seat identity as its identity.

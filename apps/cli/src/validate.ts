@@ -7,7 +7,7 @@
  * Acquisition and presentation are separated: `collectValidation` is the only part of this verb that touches a
  * workspace, and `renderValidation` and `validationEnvelope` render only the view it captured, so the human report and
  * the JSON envelope describe one acquisition and a test can render a captured view without opening a workspace. The
- * display root is the one value the view carries that differs between machines (§2.5).
+ * display root is the one value the view carries that differs between machines.
  *
  * The report also carries the workspace's execution bindings, each joined against the installed-implementation catalog
  * its host joined, through the same distribution service `ia-distribution validate` reports
@@ -101,7 +101,7 @@ export const checkNames = (
   return byFinding;
 };
 
-/** §2.5: a positional selects for reporting by exact file or by directory prefix, relative to the root. */
+/** A positional selects for reporting by exact file or by directory prefix, relative to the root. */
 const selects = (finding: Finding, filters: readonly string[]): boolean => {
   if (filters.length === 0) return true;
   const path = finding.path.replaceAll('\\', '/');
@@ -112,7 +112,7 @@ const selects = (finding: Finding, filters: readonly string[]): boolean => {
 };
 
 export interface ValidationView {
-  /** The path the CLI resolved, never the runtime's own `result.root`, which is always empty (§2.5). */
+  /** The path the CLI resolved, never the runtime's own `result.root`, which is always empty. */
   readonly root: string;
   readonly revision: string;
   /** The authored revision, which names the evidence this request records. */

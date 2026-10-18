@@ -187,7 +187,7 @@ function hostEnv(path: string): NodeJS.ProcessEnv {
 }
 
 // Windows keeps the earlier command, which looks node up on PATH: a residual limit of the rendering (host plugin
-// distribution spec §6.1). So this case runs on macOS and Linux only; the Windows rendering case above checks that
+// distribution spec §6.2). So this case runs on macOS and Linux only; the Windows rendering case above checks that
 // command byte for byte.
 const posixIt = it.skipIf(process.platform === 'win32');
 posixIt(

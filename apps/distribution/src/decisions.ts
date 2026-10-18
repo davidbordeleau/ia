@@ -3,7 +3,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fail } from './files.js';
 import { readHomeFile, writeHomeFile } from './ia-home.js';
 
-/** Host plugin distribution spec §9: answers to "initialize this repository?", kept in the IA home, never in the repository. */
+/** Host plugin distribution spec §7.2: answers to "initialize this repository?", kept in the IA home, never in the repository. */
 export const DECISIONS = 'state/decisions.json';
 export type DeclineKind = 'today' | 'forever';
 export interface Decision {
@@ -36,7 +36,7 @@ function realPrefix(directory: string): string {
   }
   return remaining.length > 0 ? join(real, ...remaining) : real;
 }
-/** §9.1: the git top level when inside a work tree, else the directory; its real path, case-folded on Windows. */
+/** The git top level when inside a work tree, else the directory; its real path, case-folded on Windows. */
 export function repositoryKey(
   directory: string,
   platform: string = process.platform,
@@ -63,7 +63,7 @@ const shaped = (value: unknown): value is Decision => {
     ? row['until'] === undefined
     : row['decision'] === 'declined-today' && validAt(row['until']);
 };
-/** §9.2: an unreadable or malformed file reads as empty and says so. `reason` is the filesystem error's `code`, `'parse'` for JSON that does not parse, or `'schema'` for a wrong/missing schema or a row that fails `shaped`. */
+/** §9: an unreadable or malformed file reads as empty and says so. `reason` is the filesystem error's `code`, `'parse'` for JSON that does not parse, or `'schema'` for a wrong/missing schema or a row that fails `shaped`. */
 export function readDecisions(home: string): {
   readonly repositories: Readonly<Record<string, Decision>>;
   readonly invalid: boolean;
@@ -100,7 +100,7 @@ export function decisionFor(home: string, directory: string, now: Date = new Dat
   const found = readDecisions(home).repositories[repositoryKey(directory).key];
   return found !== undefined && live(found, now) ? found : null;
 }
-/** §9.2: never overwrite a file that did not parse; expired entries are dropped on every write. */
+/** §9: never overwrite a file that did not parse; expired entries are dropped on every write. */
 function writable(home: string, now: Date): Record<string, Decision> {
   const current = readDecisions(home);
   if (current.invalid) {

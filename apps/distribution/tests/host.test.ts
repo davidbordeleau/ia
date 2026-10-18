@@ -389,7 +389,7 @@ it.each(['garbage\n', json({ format: 'ia.host-state.v1' })])(
   },
 );
 /**
- * Spec §10 item 8 for the MCP element: an interruption at every applyHost checkpoint, the named recovery and a rerun
+ * Spec §6 for the MCP element: an interruption at every applyHost checkpoint, the named recovery and a rerun
  * end byte for byte where an uninterrupted apply ends in the same workspace.
  */
 it.each(['pending', 'config', 'state', 'complete'])(

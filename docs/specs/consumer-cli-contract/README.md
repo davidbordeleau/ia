@@ -97,7 +97,7 @@ A refusal keeps the service's code, location and reason, and names one command t
 
 `--json` prints one parseable value to stdout. Prompts and incidental process output never share stdout. A parse-time refusal reads no workspace or installation state.
 
-A refusal is `{version: 1, ok: false, code, message, exit, where, next}`. `where` is `{path, line, identity}` or `null`, `next` is the one command to run next, and `details` appears when the refusal carries one. An interruption is the same object with `code` `IA-CLI-INTERRUPTED` and `exit` 130.
+A refusal is `{version: 1, ok: false, code, message, exit, where, next}`. `where` is `{path, line, identity}` or `null`, `next` is the one command to run next, and `details` appears when the refusal carries one. An interruption is `{version: 1, ok: false, code: 'IA-CLI-INTERRUPTED', message, exit: 130, next}`, with no `where`; its `next` is also printed on one stderr line.
 
 ## 6 Terminal rendering
 

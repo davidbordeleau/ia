@@ -1,13 +1,13 @@
 /**
  * The IA home as `ia host`, `ia host --user` and `ia init --decline` resolve and check it: host plugin distribution
- * spec §3. A service refusal keeps its code and message (contract §4.1); the CLI adds the location and next action.
+ * spec §3. A service refusal keeps its code and message (contract §4); the CLI adds the location and next action.
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { resolveIaHome } from '@inventarch/distribution/ia-home';
 import { Refusal, refusalOf } from './consumer.js';
 
-/** A service refusal kept verbatim (§4.1) and given the location and next action the CLI can supply. */
+/** A service refusal kept verbatim (contract §4) and given the location and next action the CLI can supply. */
 export function located<T>(where: string | null, next: string, run: () => T): T {
   try {
     return run();

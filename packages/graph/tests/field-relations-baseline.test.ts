@@ -5,7 +5,7 @@ import { load, stableSerialize } from '../src/index.js';
 import type { LoadOptions } from '../src/index.js';
 import { inputs, records, registry } from './native.js';
 
-// The @spec composition-field-relations baseline guard (§4.1). It records what the
+// The @spec composition-field-relations baseline guard. It records what the
 // corpus graph derives its edges from, before a second relation channel exists to
 // blur it. Every assertion is recomputed from the compiled records: none is an
 // observed count, so none of them survives a change that moves what it describes.
@@ -66,7 +66,7 @@ describe('composition-field-relations baseline (@spec composition-field-relation
   });
 
   it('accounts for every edge by the refs in those two sections', () => {
-    // §1's reconciliation, recomputed. Equality also asserts that no two assertions
+    // The reconciliation, recomputed. Equality also asserts that no two assertions
     // merged in the edge map, which is what makes a silent duplication visible.
     expect(native.edges.length).toBe(refsInSection('relationships') + refsInSection('discriminators'));
   });

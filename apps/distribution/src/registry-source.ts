@@ -26,7 +26,7 @@ export const registryBudget = (total: number = REGISTRY_LIMITS.reads): RegistryB
 export interface Registry {
   readonly base: RegistryBase;
   readonly info: RegistryInfo;
-  /** Reads the current index on every call (§5.1: never cached); a missing index is an empty one ("the registry has no releases of X"). */
+  /** Reads the current index on every call (§3: never cached); a missing index is an empty one ("the registry has no releases of X"). */
   index(id: string): Promise<PackageIndex>;
   index(kind: 'release', id: string): Promise<PackageIndex>;
   index<K extends 'kit' | 'workspace'>(kind: K, id: string): Promise<CollectionIndex<K>>;

@@ -218,8 +218,8 @@ export function mandateRefusal(
 /** One authored `@mandate` that failed admission, and the admission finding that refused it. */
 export interface RefusedMandate {
   /**
-   * Its canonical identity, when db compiled the record or spec 3.1 names its parsed header; absent for a header only
-   * the source text shows.
+   * Its canonical identity, when db compiled the record or language `identityOf` names its parsed header (db D15);
+   * absent for a header only the source text shows.
    */
   readonly identity?: string;
   readonly path: string;

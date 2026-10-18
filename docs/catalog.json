@@ -9,7 +9,7 @@
       "genre": "spec",
       "title": "Consumer CLI contract",
       "status": "implemented",
-      "sourceDigest": "fc056891392f7e5795e8d06454252519015e56ca64ce7ee1e48ab0e92975a7bf"
+      "sourceDigest": "ef95c51cf08b3555a2de162dd7d7737d29ffc7c4cf9cf971ab990912941f1a1e"
     },
     {
       "id": "spec-host-plugin-distribution",
@@ -54,7 +54,7 @@
       "genre": "spec",
       "title": "Workspace initialization",
       "status": "implemented",
-      "sourceDigest": "2126f5ba66504a6f83c7864c293cd6995698f17d46521e881d2b5abd6c81f81b"
+      "sourceDigest": "ba3ba79cea1b8eb07c79b213a6b3be12b3ecc2846f209258fd98984e515f3d89"
     }
   ]
 }

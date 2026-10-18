@@ -46,7 +46,7 @@ export interface ProjectionPlan {
   readonly before: string | null;
   readonly digest: string;
 }
-/** Spec §6.3: the exact paths each host's projection writes for the position packet. */
+/** Host registration spec §4: the exact paths each host's projection writes for the position packet. */
 export const PROJECTION_PATHS: Readonly<Record<Host, readonly string[]>> = Object.freeze({
   claude: ['.claude/rules/ia-workspace.md', '.claude/skills/ia-authoring/SKILL.md'],
   codex: ['AGENTS.md', '.agents/skills/ia-authoring/SKILL.md'],
@@ -215,7 +215,7 @@ export function legacyProjectionActions(
     new Set(written),
   ).sort((a, b) => (a.path < b.path ? -1 : 1));
 }
-/** Spec §6.3: a marked `.claude/agents/*.md` file neither rendered nor owned is reported, never touched. Claude only. */
+/** A marked `.claude/agents/*.md` file neither rendered nor owned is reported, never touched. Claude only. */
 function orphanStewardFiles(root: string, host: Host, exclude: ReadonlySet<string>, marker: string): string[] {
   const found: string[] = [];
   for (const path of agentEntries(root, host)) {

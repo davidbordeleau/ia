@@ -752,8 +752,8 @@ describe('final review: ia init --from', () => {
     expect(body['code']).toBe('IA-LOWER-UNRESOLVED');
     expect(body['details']).toHaveLength(25);
   });
-  // The licence guard belongs to packing (spec §5.2); until then a lowered kit's descriptor is UNLICENSED, whatever the
-  // plugin's manifest says (the sample's is Apache-2.0).
+  // The licence guard belongs to packing (apps/cli/SPEC.md “Host plugins”); until then a lowered kit's descriptor is
+  // UNLICENSED, whatever the plugin's manifest says (the sample's is Apache-2.0).
   it('keeps the descriptor licence UNLICENSED for a lowered kit until the pack-time licence guard', async () => {
     const kit = await lowered();
     expect(json(readFileSync(join(SAMPLE, '.claude-plugin/plugin.json'), 'utf8'))['license']).toBe('Apache-2.0');

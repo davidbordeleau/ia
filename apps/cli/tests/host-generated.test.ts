@@ -978,6 +978,16 @@ it('reports a changed and a foreign hook group, an unregistered hook and a recei
     detail: expect.stringContaining('changed since it was registered, or appears twice; delete only that group'),
     remedy: `ia host claude --root ${quote(root)} --remove --apply`,
   });
+  // The session briefing names the same removal first: an apply alone refuses a group changed by hand.
+  const briefed = JSON.parse((await run(['doctor', '--root', root, '--host', 'claude', '--json'], { env })).stdout) as {
+    session: { notice: string };
+    nextActions: { argv: string[] }[];
+  };
+  expect(briefed.nextActions.map((action) => action.argv)).toEqual([
+    ['ia', 'host', 'claude', '--root', root, '--remove', '--apply'],
+    ['ia', 'host', 'claude', '--root', root, '--apply'],
+  ]);
+  expect(briefed.session.notice).toMatch(/was changed or deleted by hand; run .*--remove --apply, then .*--apply$/);
   // A group naming another hook for this root, which no registration owns: a warning, left in place.
   const foreign = structuredClone(kept),
     other = 'hook-authoring-system/binding/hook/other-edits',

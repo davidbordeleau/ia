@@ -2,7 +2,7 @@
   "version": 1,
   "language": "ia 1.0",
   "status": "public IA 1.0 language contract",
-  "sourceDigest": "8ebfaf93977468e42897cf4951025d11fab1297bacce94971a76d484aec43201",
+  "sourceDigest": "c1ca45affdfc693efa6c81991722055ab5db711234d70d3aee151b9d97531d69",
   "words": [
     {
       "word": "agent",
@@ -1308,7 +1308,7 @@
         "distribution"
       ],
       "identity": "workspace-system/definition/<facet>/<name>",
-      "description": "Declares root records from which a distributable closure is selected.",
+      "description": "Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes.",
       "schema": {
         "name": "distribution",
         "path": ".ia/src/systems/workspace-system/schemas/distribution.schema.ia",
@@ -3033,7 +3033,7 @@
         "predicate"
       ],
       "identity": "taxonomy/definition/<facet>/<name>",
-      "description": "Defines a directed relationship and its inverse spelling.",
+      "description": "Defines a directed relationship, its inverse spelling and its present phrase.",
       "schema": {
         "name": "kernel-predicate",
         "path": ".ia/src/floor/kernel.schema.ia",

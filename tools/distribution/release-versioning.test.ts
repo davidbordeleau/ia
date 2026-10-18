@@ -845,7 +845,8 @@ async function withAlignedRelease(
     read: (path: string) => any;
     commit: (message: string) => Promise<string>;
     projects: () => PublicPackage[];
-    note: (narrowOwner?: boolean) => Promise<void>;
+    /** Pending notes for the next release: a `bump` CLI fix, and with `narrowOwner` a `none` agent guide edit. */
+    note: (narrowOwner?: boolean, bump?: 'patch' | 'major') => Promise<void>;
   }) => Promise<void>,
 ) {
   await inRepository(async (root) => {
@@ -942,11 +943,11 @@ async function withAlignedRelease(
     collectChanges(root, projects());
     await commit('Publish aligned 3.0.0');
     await fixtureGit(root, 'tag', 'v3.0.0');
-    const note = async (narrowOwner = false) => {
+    const note = async (narrowOwner = false, bump: 'patch' | 'major' = 'patch') => {
       write('apps/cli/index.txt', 'CLI corrected\n');
       write('releases/pending/cli-fix.json', {
         format: 'ia.npm-change-note.v1',
-        bump: 'patch',
+        bump,
         title: 'Correct CLI output',
         summary: 'CLI output is corrected.',
         packages: ['@inventarch/cli'],
@@ -970,13 +971,62 @@ async function withAlignedRelease(
   });
 }
 
-it('aligns every native selector on an npm-only patch and covers a narrowly documented owner exactly', async () => {
+it('keeps every native selector on an npm-only patch, moving only the npm versions', async () => {
   await withAlignedRelease(async ({ root, read, projects, note }) => {
     await note(true);
+    const ledger = readFileSync(resolve(root, 'releases/native/current.json')),
+      selectors = nativePaths
+        .filter((path) => path !== 'tools/distribution/system-package-policy.json')
+        .map((path) => readFileSync(resolve(root, path)));
+    const result = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    expect(result).toMatchObject({ action: 'version', version: '3.0.1', nativeRegenerationRequired: false });
+    expect(projects().map(({ manifest }) => manifest.version)).toEqual(['3.0.1', '3.0.1', '3.0.1']);
+    expect(
+      read('tools/distribution/system-package-policy.json').owners.map(
+        (owner: { npmVersion: string; native: { version: string } }) => [owner.npmVersion, owner.native.version],
+      ),
+    ).toEqual([
+      ['3.0.1', '3.0.0'],
+      ['3.0.1', '3.0.0'],
+    ]);
+    expect(
+      nativePaths
+        .filter((path) => path !== 'tools/distribution/system-package-policy.json')
+        .map((path) => readFileSync(resolve(root, path))),
+    ).toEqual(selectors);
+    expect(readFileSync(resolve(root, 'releases/native/current.json'))).toEqual(ledger);
+    const entry = read(result.changeset!) as Changeset;
+    expect(entry.changes.find(({ id }) => id === 'cohort-alignment')).toMatchObject({
+      packages: ['@inventarch/agent-system', '@inventarch/session-system'],
+      paths: nativeSystems.map((system) => nativeOwner(system) + '/package.json').sort(),
+    });
+    expect(() => releaseChanges(root, projects())).not.toThrow();
+  });
+}, 120_000);
+
+it('asks for native regeneration on a patch only when native notes target this release', async () => {
+  await withAlignedRelease(async ({ root, write, read, commit, projects, note }) => {
+    write('releases/native/notes.json', {
+      format: 'ia.native-release-notes.v1',
+      baseline: { tag: 'v3.0.0', commit: await fixtureGit(root, 'rev-parse', 'v3.0.0') },
+      changes: [{ id: 'inventarch/agent-system', bump: 'patch', summary: 'Reviewed native change.' }],
+    });
+    await commit('Describe a native change');
+    await note(true);
+    const result = await versionRelease(root, projects(), { write: false, registry: null, sealInputs: false });
+    expect(result).toMatchObject({ action: 'version', version: '3.0.1', nativeRegenerationRequired: true });
+    // The versioner never selects a content-driven native version itself: `pnpm native:version --write` does.
+    expect(read('examples/public-language/versions.json').language).toBe('3.0.0');
+  });
+}, 120_000);
+
+it('aligns every native selector on an npm-only major and covers a narrowly documented owner exactly', async () => {
+  await withAlignedRelease(async ({ root, read, projects, note }) => {
+    await note(true, 'major');
     const ledger = readFileSync(resolve(root, 'releases/native/current.json'));
     const result = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
-    expect(result).toMatchObject({ action: 'version', version: '3.0.1', nativeRegenerationRequired: true });
-    expect(projects().map(({ manifest }) => manifest.version)).toEqual(['3.0.1', '3.0.1', '3.0.1']);
+    expect(result).toMatchObject({ action: 'version', version: '4.0.0', nativeRegenerationRequired: true });
+    expect(projects().map(({ manifest }) => manifest.version)).toEqual(['4.0.0', '4.0.0', '4.0.0']);
     const systems = read('tools/distribution/system-package-policy.json');
     expect(
       systems.owners.map((owner: { npmVersion: string; native: { version: string } }) => [
@@ -984,13 +1034,13 @@ it('aligns every native selector on an npm-only patch and covers a narrowly docu
         owner.native.version,
       ]),
     ).toEqual([
-      ['3.0.1', '3.0.1'],
-      ['3.0.1', '3.0.1'],
+      ['4.0.0', '4.0.0'],
+      ['4.0.0', '4.0.0'],
     ]);
-    expect(read('examples/public-language/versions.json').language).toBe('3.0.1');
+    expect(read('examples/public-language/versions.json').language).toBe('4.0.0');
     for (const system of nativeSystems)
       for (const path of [nativeOwner(system) + '/system.ia', `examples/public-language/contracts/${system}.ia`])
-        expect(readFileSync(resolve(root, path), 'utf8')).toBe(nativeDeclaration(system, '3.0.1'));
+        expect(readFileSync(resolve(root, path), 'utf8')).toBe(nativeDeclaration(system, '4.0.0'));
     expect(readFileSync(resolve(root, 'releases/native/current.json'))).toEqual(ledger);
     const entry = read(result.changeset!) as Changeset;
     expect(entry.changes.find(({ id }) => id === 'cohort-alignment')).toMatchObject({
@@ -1023,11 +1073,12 @@ async function alignedFixtureSnapshot(root: string) {
 
 it('refreshes stale native selectors even when same-version npm coverage is already fresh', async () => {
   await withAlignedRelease(async ({ root, write, read, commit, projects, note }) => {
-    await note(true);
+    // Only a major release aligns native selectors, so only a major one can leave them lagging.
+    await note(true, 'major');
     await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
     const selected = nativePaths.map((path) => readFileSync(resolve(root, path))),
       ledger = readFileSync(resolve(root, 'releases/native/current.json'));
-    await commit('Prepare aligned 3.0.1');
+    await commit('Prepare aligned 4.0.0');
 
     // Reproduce an older versioner: npm fields and its collected hashes are fresh, while every native selector lags.
     const policy = read('tools/distribution/system-package-policy.json');
@@ -1043,12 +1094,12 @@ it('refreshes stale native selectors even when same-version npm coverage is alre
     collectChanges(root, projects());
     await commit('Collect npm coverage while native selectors lag');
     expect(() => releaseChanges(root, projects())).not.toThrow();
-    expect(projects().map(({ manifest }) => manifest.version)).toEqual(['3.0.1', '3.0.1', '3.0.1']);
+    expect(projects().map(({ manifest }) => manifest.version)).toEqual(['4.0.0', '4.0.0', '4.0.0']);
     expect(
       read('tools/distribution/system-package-policy.json').owners.map(
         (owner: { npmVersion: string }) => owner.npmVersion,
       ),
-    ).toEqual(['3.0.1', '3.0.1']);
+    ).toEqual(['4.0.0', '4.0.0']);
 
     const result = await versionRelease(root, projects(), {
       write: true,
@@ -1056,7 +1107,7 @@ it('refreshes stale native selectors even when same-version npm coverage is alre
       sealInputs: false,
       refresh: true,
     });
-    expect(result).toMatchObject({ action: 'refresh', version: '3.0.1', nativeRegenerationRequired: true });
+    expect(result).toMatchObject({ action: 'refresh', version: '4.0.0', nativeRegenerationRequired: true });
     expect(nativePaths.map((path) => readFileSync(resolve(root, path)))).toEqual(selected);
     expect(readFileSync(resolve(root, 'releases/native/current.json'))).toEqual(ledger);
     expect(() => releaseChanges(root, projects())).not.toThrow();
@@ -1086,9 +1137,10 @@ it('restores native selectors, the index, removed notes and sealed-input bytes a
 
 it('refuses a semantic edit under generated alignment, rejects a forged proof, and accepts authored fallback coverage', async () => {
   await withAlignedRelease(async ({ root, write, read, commit, projects, note }) => {
-    await note(true);
+    // A major release aligns the native declarations, the version-only edits generated alignment covers.
+    await note(true, 'major');
     const result = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
-    await commit('Prepare aligned 3.0.1');
+    await commit('Prepare aligned 4.0.0');
     const path = nativeOwner('agent-system') + '/system.ia',
       entry = read(result.changeset!) as Changeset,
       policy = read('releases/current.json') as ReleasePolicy;
@@ -1097,7 +1149,7 @@ it('refuses a semantic edit under generated alignment, rejects a forged proof, a
       cohortOnly: true,
       change: 'cohort-alignment',
     });
-    write(path, nativeDeclaration('agent-system', '3.0.1').replace('Retained meaning', 'Changed behavior'));
+    write(path, nativeDeclaration('agent-system', '4.0.0').replace('Retained meaning', 'Changed behavior'));
     const actual = trackedChanges(root, policy),
       semantic = actual.find((row) => row.path === path);
     expect(semantic).toBeDefined();
@@ -1135,16 +1187,17 @@ it('refuses a semantic edit under generated alignment, rejects a forged proof, a
 
 it('requires exact generated filenames even for a sibling manifest with a fresh version-only proof', async () => {
   await withAlignedRelease(async ({ root, write, read, commit, projects, note }) => {
-    await note(true);
+    // A major release aligns the native declarations, the version-only edits generated alignment covers.
+    await note(true, 'major');
     const result = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
-    await commit('Prepare aligned 3.0.1');
+    await commit('Prepare aligned 4.0.0');
     const path = nativeOwner('agent-system') + '/system.ia-extra/package.json',
       entry = read(result.changeset!) as Changeset,
       policy = read('releases/current.json') as ReleasePolicy;
     expect(entry.changes.find(({ id }) => id === 'cohort-alignment')!.paths).toContain(
       nativeOwner('agent-system') + '/system.ia',
     );
-    write(path, { name: 'fixture-only', private: true, version: '3.0.1' });
+    write(path, { name: 'fixture-only', private: true, version: '4.0.0' });
     const actual = trackedChanges(root, policy);
     expect(actual.find((row) => row.path === path)).toMatchObject({ cohortOnly: true });
     expect(() => collectChanges(root, projects())).toThrow('No reviewed change scope for ' + path);
@@ -1191,7 +1244,8 @@ it('refuses an undocumented semantic native change before generated alignment ca
 
 it('runs the production versioner in a plain Node child that rejects every non-builtin package import', async () => {
   await withAlignedRelease(async ({ root, projects, note }) => {
-    await note(true);
+    // A major release, so the child also writes every native selector without workspace dependencies.
+    await note(true, 'major');
     // The release PR workflow runs this module before dependency installation. Keep that property executable.
     const loader = `import { isBuiltin } from 'node:module';
 export async function resolve(specifier, context, nextResolve) {
@@ -1217,7 +1271,7 @@ process.stdout.write(JSON.stringify(result));`;
       timeout: 60_000,
       env: { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' },
     });
-    expect(JSON.parse(output)).toMatchObject({ action: 'version', version: '3.0.1', nativeRegenerationRequired: true });
+    expect(JSON.parse(output)).toMatchObject({ action: 'version', version: '4.0.0', nativeRegenerationRequired: true });
     expect(() => releaseChanges(root, projects())).not.toThrow();
   });
 }, 120_000);
@@ -1240,11 +1294,14 @@ it.each([false, true])(
         'authoring:generate',
         'native:version --write',
         'platform:qualify',
-        'release:collect',
-        'npm:inputs',
+        'release:version --write --refresh',
+        'release:check --strict',
         'npm:prepare',
       ])
         expect(body).toContain('`pnpm ' + command + '`');
+      // A content-driven native selection changes version fields after the changeset was written, which only a
+      // refresh can cover: collecting alone cannot add the generated alignment coverage.
+      expect(body).toContain('commit them');
       expect(body).toContain('fixed point');
       expect(body).toContain('regenerate projections');
       expect(body).toContain('After all source/generated bytes are final');

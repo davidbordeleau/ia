@@ -1,7 +1,7 @@
 /**
  * The consumer command table: docs/specs/consumer-cli-contract/README.md §1.2 “Dispatch and discovery” and §2 “Commands and arguments”.
  *
- * One row per verb, carrying its help text and its whole argument grammar. §1.2's order is a property of this
+ * One row per verb, carrying its help text and its whole argument grammar. The dispatch order is a property of this
  * table and of the dispatcher that reads it; nothing else in the binary enumerates a verb or a flag name.
  */
 import type { MODE_MOVES, Mode, PacketCatalogRow } from '@inventarch/runtime';
@@ -57,7 +57,7 @@ export const ROOT: OptionSpec = option({
   placeholder: '<path>',
   summary: 'Workspace root (default: nearest ancestor with .ia/src)',
 });
-/** §2.0. Shared consumer options; §2.1 refuses `--root` for `init` alone, with its own reason. */
+/** §2.0. Shared consumer options; `init` (§2.1) and `vocabulary` (§2.2) refuse `--root`, each with its own reason. */
 export const COMMON_OPTIONS: readonly OptionSpec[] = [
   ROOT,
   option({ name: 'json', kind: 'boolean', summary: 'One JSON value on stdout; no color, progress or prompts' }),
@@ -136,7 +136,8 @@ export const COMMANDS: readonly CommandSpec[] = [
       '        [--apply] [--json] [--yes]',
       'ia init [<directory>] --from <plugin-directory> [--id <provider/name>] [--apply] [--json] [--yes]',
       'ia init [<directory>] --migrate [--system] [--apply] [--json] [--yes]',
-      'ia init [<directory>] --decline today|forever | --forget-decline [--host claude|codex|none] [--json]',
+      'ia init [<directory>] --decline today|forever [--host claude|codex|none] [--json]',
+      'ia init [<directory>] --forget-decline [--json]',
     ],
     grammar: {
       options: [
@@ -273,7 +274,6 @@ export const COMMANDS: readonly CommandSpec[] = [
       'ia author --relate <owned> <spelling> <target> --digest <sha256> [--actor <agent>] [--json]',
       'ia author --set <owned> <section.key>=<value> --digest <sha256> [--actor <agent>] [--json]',
       'ia author --set <owned> <section.key>+=<item> --digest <sha256> [--actor <agent>] [--json]',
-      'ia author system <name> [--actor <agent>] [--json]',
     ],
     grammar: grammar(
       [
@@ -282,7 +282,7 @@ export const COMMANDS: readonly CommandSpec[] = [
           name: 'digest',
           kind: 'value',
           placeholder: '<sha256>',
-          summary: "The target file's sha256 that ia preview printed for the same form (required but for system)",
+          summary: "The target file's sha256 that ia preview printed for the same form (required)",
         }),
         ACTOR,
       ],
@@ -533,7 +533,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     grammar: {
       options: [
         ...COMMON_OPTIONS.filter((entry) => entry.name !== 'root'),
-        // §2.0's exception: this verb resolves no root at all, so accepting --root and discarding it would be a
+        // §2.2's exception: this verb resolves no root at all, so accepting --root and discarding it would be a
         // flag that does nothing. It refuses with the reason instead.
         {
           ...ROOT,

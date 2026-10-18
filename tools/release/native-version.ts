@@ -201,7 +201,8 @@ export function nativeRelease(root: string, mode: 'plan' | 'check' | 'write') {
   const notes = existsSync(resolve(root, NATIVE_NOTES)) ? (readJson(root, NATIVE_NOTES) as NativeNotes) : undefined;
   const normalized = nativeArchives(root, Object.fromEntries(baseline.archives.map((row) => [row.id, row.version])));
   const plan = planNativeVersions(baseline, normalized, policy.version, notes);
-  const writes = prepareNativeSelection(root, policy.version, plan.versions);
+  // An unpublished selection may move down with its notes; assertNativeImmutability keeps the published floor.
+  const writes = prepareNativeSelection(root, policy.version, plan.versions, { lowerSelected: true });
   // Compute and validate every output before writing any selected version.
   const archives = nativeArchives(root, plan.versions);
   assertNativeImmutability(baseline, archives);

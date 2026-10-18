@@ -181,9 +181,11 @@ export function nativeNotesPending(root, published, commit) {
 /**
  * Prepare every exact selector before any effect. Generic npm fixtures may omit the entire native surface. Every npm
  * version moves to `target`; each native identity moves to its version in `native`, or stays as selected when it is
- * omitted, and the composition fixture follows the language.
+ * omitted, and the composition fixture follows the language. A native version may not fall below the current
+ * selection unless `lowerSelected` is set: the native writer sets it, since an unpublished selection can move back
+ * down with its notes, and it enforces the published floor itself.
  */
-export function prepareNativeSelection(root, target, native) {
+export function prepareNativeSelection(root, target, native, { lowerSelected = false } = {}) {
   assert.ok(stable(target), 'Native release requires a stable npm target');
   const selected = selection(root),
     writes = new Map();
@@ -193,7 +195,7 @@ export function prepareNativeSelection(root, target, native) {
   assert.deepEqual(Object.keys(versions).sort(), Object.keys(current).sort(), 'Native identity inventory changed');
   for (const [id, version] of Object.entries(versions)) {
     assert.ok(stable(version), id + ': invalid native version');
-    assert.ok(compare(version, current[id]) >= 0, id + ': native version regressed');
+    assert.ok(lowerSelected || compare(version, current[id]) >= 0, id + ': native version regressed');
   }
   for (const owner of selected.systems.owners) {
     assert.ok(compare(target, owner.npmVersion) >= 0, owner.native.id + ': npm version regressed');
@@ -212,7 +214,10 @@ export function prepareNativeSelection(root, target, native) {
   const language = versions[LANGUAGE_ID];
   if (existsSync(resolve(root, NATIVE_COMPOSITION_FIXTURE))) {
     const fixture = compositionFixture(parse(root, NATIVE_COMPOSITION_FIXTURE), selected.systems);
-    assert.ok(compare(language, fixture.dependencies[0].range.slice(1)) >= 0, 'Composition fixture version regressed');
+    assert.ok(
+      lowerSelected || compare(language, fixture.dependencies[0].range.slice(1)) >= 0,
+      'Composition fixture version regressed',
+    );
     fixture.dependencies[0].range = '^' + language;
     writes.set(NATIVE_COMPOSITION_FIXTURE, json(fixture, read(root, NATIVE_COMPOSITION_FIXTURE)));
   }

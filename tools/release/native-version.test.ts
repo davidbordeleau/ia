@@ -308,13 +308,19 @@ describe('dependency-free native selectors', () => {
     expect(mixed.get('.ia/src/systems/agent-system/system.ia')).toContain('version "3.0.1"');
     expect(mixed.get('.ia/src/systems/session-system/system.ia')).toContain('version "3.0.0"');
     expect(() => prepareNativeSelection(root, '3.1.0', { 'inventarch/language': '3.0.1' })).toThrow('inventory');
-    expect(() =>
-      prepareNativeSelection(root, '3.1.0', {
-        'inventarch/language': '2.9.0',
-        'inventarch/agent-system': '3.0.0',
-        'inventarch/session-system': '3.0.0',
-      }),
-    ).toThrow('regressed');
+    const lower = {
+      'inventarch/language': '2.9.0',
+      'inventarch/agent-system': '3.0.0',
+      'inventarch/session-system': '3.0.0',
+    };
+    expect(() => prepareNativeSelection(root, '3.1.0', lower)).toThrow('regressed');
+    // The native writer lowers an unpublished selection; it enforces the published floor itself.
+    const lowered = prepareNativeSelection(root, '3.1.0', lower, { lowerSelected: true });
+    expect(JSON.parse(lowered.get(NATIVE_LANGUAGE_POLICY)!).language).toBe('2.9.0');
+    expect(JSON.parse(lowered.get(path)!).dependencies[0].range).toBe('^2.9.0');
+    expect(() => prepareNativeSelection(root, '2.0.0', lower, { lowerSelected: true })).toThrow(
+      'npm version regressed',
+    );
   });
   it('selects natives for an npm release: aligned to a new major, otherwise as currently selected', () => {
     const root = selectorFixture();
@@ -703,11 +709,11 @@ describe('native release writer', () => {
       'inventarch/learning-system',
       'inventarch/template-system',
     ];
-    const reviewed = (ids: string[]) =>
+    const reviewed = (ids: string[], bump: 'patch' | 'minor' = 'patch') =>
       write(root, 'releases/native/notes.json', {
         format: 'ia.native-release-notes.v1',
         baseline: { tag: 'v3.0.0', commit: published },
-        changes: ids.map((id) => ({ id, bump: 'patch', summary: 'Reviewed native change.' })),
+        changes: ids.map((id) => ({ id, bump, summary: 'Reviewed native change.' })),
       });
     reviewed(moved.slice(1));
     expect(() => nativeRelease(root, 'write')).toThrow('own bump note');
@@ -722,7 +728,14 @@ describe('native release writer', () => {
     );
     expectNativeWriterSelection(root, before, '3.1.0', (id) => (moved.includes(id) ? '3.0.1' : '3.0.0'));
     expect(nativeRelease(root, 'check').versions).toEqual(result.versions);
-  }, 240_000);
+    // Before publication a note's impact can rise and fall again: only the published version is a floor.
+    reviewed(moved, 'minor');
+    expect(nativeRelease(root, 'write').versions['inventarch/learning-system']).toBe('3.1.0');
+    reviewed(moved);
+    expect(nativeRelease(root, 'write').versions).toEqual(result.versions);
+    expectNativeWriterSelection(root, before, '3.1.0', (id) => (moved.includes(id) ? '3.0.1' : '3.0.0'));
+    expect(nativeRelease(root, 'check').versions).toEqual(result.versions);
+  }, 360_000);
 
   it('preserves the complete historical ledger when writing an unchanged published target', () => {
     const historicalNotes = 'd'.repeat(64),

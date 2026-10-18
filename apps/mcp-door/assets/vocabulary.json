@@ -2449,11 +2449,11 @@
         "edges": []
       },
       "kernelMembers": [
-        "delegation",
-        "execution",
-        "observation",
-        "synthesis",
-        "verification"
+        "Delegation",
+        "Execution",
+        "Observation",
+        "Synthesis",
+        "Verification"
       ],
       "consumer": "language/schema admission; graph resolution; explicitly selected domain consumer for stronger semantics"
     },
@@ -3151,12 +3151,12 @@
         "edges": []
       },
       "kernelMembers": [
-        "attention",
-        "decision",
-        "escalation",
-        "inference",
-        "learning",
-        "memory"
+        "Attention",
+        "Decision",
+        "Escalation",
+        "Inference",
+        "Learning",
+        "Memory"
       ],
       "consumer": "language/schema admission; graph resolution; explicitly selected domain consumer for stronger semantics"
     },

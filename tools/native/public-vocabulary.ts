@@ -114,7 +114,8 @@ export function vocabulary(root: string, read?: (path: string) => string) {
           registration.system === 'taxonomy'
             ? corpus.records
                 .filter((r) => r.discriminator === registration.keyword)
-                .map((r) => r.name)
+                // The authored spelling: closed members such as `@move Synthesis` are matched case-sensitively.
+                .map((r) => r.displayName)
                 .sort()
             : [],
         consumer:

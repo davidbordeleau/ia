@@ -711,7 +711,7 @@ Required sections: meaning, data. Optional sections: none.
 | meaning.answers | text | yes |
 | data.order | number | yes |
 
-Closed kernel members: `delegation`, `execution`, `observation`, `synthesis`, `verification`.
+Closed kernel members: `Delegation`, `Execution`, `Observation`, `Synthesis`, `Verification`.
 
 ## @observation
 
@@ -920,7 +920,7 @@ Required sections: meaning, data. Optional sections: none.
 | data.order | number | yes |
 | data.anchor | id | yes |
 
-Closed kernel members: `attention`, `decision`, `escalation`, `inference`, `learning`, `memory`.
+Closed kernel members: `Attention`, `Decision`, `Escalation`, `Inference`, `Learning`, `Memory`.
 
 ## @principle
 

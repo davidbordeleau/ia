@@ -16,7 +16,7 @@ export const descriptions: Readonly<Record<string, string>> = {
   phase: 'Defines a cognitive phase coordinate: orient, plan, act or learn.',
   primitive: 'Defines a cognitive primitive coordinate; a cell is selected using its phase and primitive.',
   move: 'Defines the closed classification of an agent action or activity.',
-  predicate: 'Defines a directed relationship and its inverse spelling.',
+  predicate: 'Defines a directed relationship, its inverse spelling and its present phrase.',
   axis: 'Defines a closed coordinate axis for selection.',
   dimension: 'Defines a supported record dimension used by conditions and lookup.',
   'intent-shape': 'Defines a request framing and its retrieval defaults.',
@@ -33,7 +33,8 @@ export const descriptions: Readonly<Record<string, string>> = {
   case: 'Declares scenario inputs, expected behavior and evaluator attribution. A declaration is not an observed test result.',
   workspace:
     'Groups systems into an explicit work boundary; relationships can describe dependencies between boundaries. Its sources name the roots and placement bands its records are captured from, and its steward the agent that directs it by default.',
-  distribution: 'Declares root records from which a distributable closure is selected.',
+  distribution:
+    'Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes.',
   law: 'Declares a rule with severity. Structural admission cannot establish the truth or suitability of its prose.',
   principle: 'Declares a governing rationale in the shared governance shape.',
   convention: 'Declares a convention in the shared governance shape.',

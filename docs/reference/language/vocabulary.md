@@ -380,7 +380,7 @@ Closed kernel members: `artifact-set`, `provenance`, `severity`.
 
 ## @distribution
 
-Declares root records from which a distributable closure is selected.
+Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes.
 
 Owner: `workspace-system`. Kind: `definition`. Category: `representation`. Artifact set: `projection`. Primitive: `Attention`. Move: `Observation`. Identity: `workspace-system/definition/<facet>/<name>`.
 
@@ -877,7 +877,7 @@ Required sections: meaning, cognition. Optional sections: relationships, activat
 
 ## @predicate
 
-Defines a directed relationship and its inverse spelling.
+Defines a directed relationship, its inverse spelling and its present phrase.
 
 Owner: `taxonomy`. Kind: `definition`. Category: `kind`. Artifact set: `contract`. Primitive: `Memory`. Move: `Observation`. Identity: `taxonomy/definition/<facet>/<name>`.
 

@@ -1,6 +1,6 @@
 # @predicate
 
-Defines a directed relationship and its inverse spelling.
+Defines a directed relationship, its inverse spelling and its present phrase.
 
 Owner: taxonomy. Identity: taxonomy/definition/\<facet>/\<name>. Facets: predicate. Artifact set: contract. Primitive: Memory. Move: Observation.
 

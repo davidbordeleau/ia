@@ -1,5 +1,5 @@
 /**
- * Host plugin distribution spec §11: the cached update check and local compatibility. Sources are injected, so no
+ * Host plugin distribution spec §11 and §7.3: the cached update check and local compatibility. Sources are injected, so no
  * case reaches the npm registry; only the two crowncodes/ia#436 process cases at the end run the built CLI, a stand-in npm and
  * this machine's git.
  */

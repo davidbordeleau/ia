@@ -2,9 +2,9 @@
  * docs/specs/host-plugin-distribution/README.md §8.2: what the session hook tells the model and the user.
  * A pure function of facts `ia doctor` already gathered, so every row of §8.2 is a unit test. At most one notice:
  * version skew, then an interrupted installation or a stale or missing host, then a decline reminder, then an update.
- * Dates are the user's local calendar date, as the `declined-today` expiry is (§9.1).
+ * Dates are the user's local calendar date, as the `declined-today` expiry is (§7.2).
  *
- * `nextActions` is §7.3's `[{intent, argv, host}]`: `host` is the adapter row's own invocation where §4's table
+ * `nextActions` is §7.3's `[{intent, argv, host}]`: `host` is the adapter row's own invocation where the row
  * declares one (Claude's `/ia:init`), otherwise the plain command. The Claude plugin is a Claude concern, so its version
  * skew is reported only to a host whose row installs a plugin; a host with no workspace set (§4, Cursor) is never told
  * its registration is missing, because `ia host` would refuse to write one. When doctor could not observe the host set
@@ -33,7 +33,7 @@ export interface NextAction {
   readonly host: string;
 }
 export interface Session {
-  /** Lines for the model (§8.1 step 3's `additionalContext`). */
+  /** Lines for the model (§8.2: the hook's `additionalContext`). */
   readonly context: readonly string[];
   /** The one line the user sees, or null in the §8.2 states where the user sees nothing. */
   readonly notice: string | null;
@@ -97,7 +97,7 @@ export function brief(input: BriefInput): { readonly session: Session; readonly 
   const first = (text: string): void => {
     if (notice === null) notice = text;
   };
-  // §8.2 row 2: the plugin the user runs was rendered by another ia; re-rendering it is the whole remedy.
+  // §8.2: the plugin the user runs was rendered by another ia; re-rendering it is the whole remedy.
   if (hostRow(input.host)?.user === 'plugin' && input.plugin !== null && input.plugin.cli !== input.version) {
     const user = ['ia', 'host', input.host, '--user', '--apply'];
     first(`IA: the plugin was installed by ia ${input.plugin.cli} but ia is ${input.version}; run ${command(user)}`);
@@ -126,7 +126,7 @@ export function brief(input: BriefInput): { readonly session: Session; readonly 
     } else if (decision?.decision === 'declined-today') {
       context.push('The user declined initialization here today. Do not offer it again.');
     } else {
-      // §8.3: an instruction to the model, not a mechanical guarantee.
+      // §8.2: an instruction to the model, not a mechanical guarantee.
       const init = action('init', ['ia', 'init', input.supplied ?? '.']);
       context.push(
         `${rooted ? `${input.supplied} is` : 'This directory is'} not an InventArch workspace. Do not search the filesystem for other .ia trees or IA tooling. Offer initialization only if the user's request involves InventArch, .ia records or their governance; then use ${init.host === command(init.argv) ? `"${init.host}"` : init.host}.`,
@@ -171,7 +171,7 @@ export function brief(input: BriefInput): { readonly session: Session; readonly 
       actions.push(action('host', apply));
     }
   }
-  // §8.2 last row and §11: only from the cache doctor already read; the hook, not doctor, limits it to once a day.
+  // §8.2's update row and §11: only from the cache doctor already read; the hook, not doctor, limits it to once a day.
   const updates = input.updates;
   const newer = updates !== null && updates.latest !== null && updates.latest !== input.version;
   if (updates !== null && (newer || (updates.behind ?? 0) > 0)) {

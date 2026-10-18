@@ -31,8 +31,7 @@
  * that declaration says the minimum must be validated before being advertised. A platform outside it is `warn`,
  * never `fail`, and the word "unsupported" is not used about it.
  *
- * The environment is a parameter rather than a read of the process, so this verb is testable and so the contract's
- * §7 examples can state which machine's Node version and platform they show.
+ * The environment is a parameter rather than a read of the process, so this verb is testable.
  *
  * docs/specs/host-plugin-distribution/README.md §7.3 adds rows that exist with or without a workspace
  * (`doctor-user.ts`: install channel, IA home, Claude plugin, §11's cached update check and local language
@@ -139,7 +138,7 @@ export interface Runtime {
 }
 export interface DoctorRequest {
   readonly cwd: string;
-  /** The supplied `--root`, or undefined to discover one. Absence is a check result, not a refusal (§2.0). */
+  /** The supplied `--root`, or undefined to discover one. Absence is a check result, not a refusal (§2.12). */
   readonly root?: string | undefined;
   readonly packageRoot: string;
   readonly runtime: Runtime;
@@ -150,7 +149,7 @@ export interface DoctorRequest {
   readonly version?: string;
   /** `--host`: adds the §8.2 session briefing and §7.3 next actions for this host. */
   readonly host?: string | undefined;
-  /** The clock a `declined-today` decision is compared against (§9.1); now by default. */
+  /** The clock a `declined-today` decision is compared against (§7.2); now by default. */
   readonly now?: Date;
   /** The install channel as observed (§5); detected from `packageRoot` when absent. The contract's examples supply it. */
   readonly channel?: Channel | undefined;
@@ -304,9 +303,9 @@ const commandsFor = (root: string | undefined): Commands => {
 };
 
 /**
- * §3.3: the payload this installation pins, and whether the host home holds it. Cheap on purpose — one stat and
- * one directory listing, no verification (each host row verifies the payload its registration uses). A `.stage-*`
- * directory is an unfinished materialization, never a payload, so only 64-hex names are listed.
+ * Spec §3: the payload this installation pins, and whether the host home holds it. Cheap on purpose — one stat and one
+ * directory listing, no verification (each host row verifies the payload its registration uses). A `.stage-*` directory
+ * is an unfinished materialization, never a payload, so only 64-hex names are listed.
  */
 function payloadRow(request: DoctorRequest, pinned: Pinned): Check {
   if (pinned.release === null)
@@ -352,7 +351,7 @@ function payloadRow(request: DoctorRequest, pinned: Pinned): Check {
 }
 
 /**
- * Spec §8: the host lock and the three host journals, as the install lock and journal have their rows. A held lock is
+ * Spec §7: the host lock and the three host journals, as the install lock and journal have their rows. A held lock is
  * `warn`, because a live run holds it too; its recovery clears only a dead holder's. A journal is `fail`, because
  * every `ia host` plan refuses until its own recovery runs (`assertHostRegistrationIdle`).
  */
@@ -1237,7 +1236,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
   }
 
   // Host plugin distribution spec §7.3 and §8.2: rows that exist with or without a workspace, and the briefing. One
-  // report has one root. Without --root it was discovered upward from the cwd, which is how the §8.1 hook runs doctor.
+  // report has one root. Without --root it was discovered upward from the cwd, which is how the §8.2 hook runs doctor.
   // A supplied --root is literal, as for every other verb: it is a workspace only when it holds .ia/src itself. When it
   // does not but lies inside a workspace, that workspace is only named (`enclosing`), never described or offered init.
   const workspaceRoot =

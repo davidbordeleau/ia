@@ -1,9 +1,9 @@
 /**
- * Opening a workspace for a consumer verb: docs/specs/consumer-cli-contract/README.md §2.0 and §3.
+ * Opening a workspace for a consumer verb: docs/specs/consumer-cli-contract/README.md §1.2 and §3.
  *
  * The open is the one step every workspace verb shares and the one that decides class 3 rather than class 1:
  * a root that cannot be read produced no finding set, so it is a refusal and never a diagnostic. The service's
- * own code is carried through unchanged (§4.1); only the next action is the CLI's.
+ * own code is carried through unchanged (§4); only the next action is the CLI's.
  */
 import { EditorDatabase } from '@inventarch/db/editor';
 import type { EditorSnapshot } from '@inventarch/db/editor';
@@ -26,7 +26,7 @@ export const codeOf = (error: unknown, fallback: string): string =>
 /**
  * The next action for a workspace that does not open. `requireRoot` has already found a directory, and a directory with
  * no sources opens with the floor alone, so what reaches here is mostly a workspace whose sources the db does not read.
- * §2.5: IA-DB-SOURCE-UNAVAILABLE carries the installation state when the db raised it as an InstallationError: an
+ * IA-DB-SOURCE-UNAVAILABLE carries the installation state when the db raised it as an InstallationError: an
  * interrupted apply names the recovery, a missing or drifted generation the restore, any other state `ia doctor`.
  * Without one it is a source the db could not read, repaired first and then confirmed. A source path it does not admit
  * (a link or junction, an alias, a nonregular or misplaced source) is repaired first, and a source that changed during

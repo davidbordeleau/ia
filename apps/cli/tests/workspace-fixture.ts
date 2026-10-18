@@ -72,7 +72,7 @@ export interface HostOptions {
   readonly isTTY?: boolean;
   readonly columns?: number;
   readonly interactive?: boolean;
-  /** §2.8 rule 3: the lines stdin would hand back, in order. An exhausted script is EOF, which declines. */
+  /** §2.0's confirmation: the lines stdin would hand back, in order. An exhausted script is EOF, which declines. */
   readonly answers?: readonly string[];
   /** Everything the interaction wrote — the change summary, then the question — in the order it was written. */
   readonly prompts?: string[];

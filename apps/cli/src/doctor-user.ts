@@ -6,7 +6,7 @@
  *
  * §11's `updates` row reads only the cache in the IA home; it never asks npm or git, and never refreshes. When a refresh
  * is due it returns the `ia-distribution refresh-updates` argument vector as a fact, and the session hook starts it
- * detached, so doctor stays read-only. §11.2's `compatibility` row is local: the workspace's
+ * detached, so doctor stays read-only. §7.3's `compatibility` row is local: the workspace's
  * `.ia/release.json` language versions against the versions this ia's parser reads.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -41,7 +41,7 @@ export interface UserFacts {
   readonly decision: Decision | null;
   /** §8.2: the channel is a checkout and the workspace is that checkout. */
   readonly frameworkSource: boolean;
-  /** §11.1: what the cache says is newer, or null when checks are off or nothing usable is cached; `latest` is null unless newer. */
+  /** §11: what the cache says is newer, or null when checks are off or nothing usable is cached; `latest` is null unless newer. */
   readonly updates: { readonly latest: string | null; readonly behind: number | null } | null;
   /** The refresh argument vector when one is due, else null. Doctor never runs it. */
   readonly refresh: readonly string[] | null;
@@ -88,7 +88,7 @@ const distributionBin = (): string | null => {
     return null;
   }
 };
-/** §11.2: the language versions `.ia/release.json` records, or why none could be read. */
+/** §7.3: the language versions `.ia/release.json` records, or why none could be read. */
 const workspaceLanguages = (root: string): { readonly languages: readonly string[] } | { readonly why: string } => {
   let text: string;
   try {
@@ -119,7 +119,7 @@ export function userRows(input: {
   readonly home: string;
   readonly packageRoot: string;
   readonly version: string;
-  /** The directory a decision is keyed from (§9.1) when there is no workspace. */
+  /** The directory a decision is keyed from (§7.2) when there is no workspace. */
   readonly directory: string;
   /** The `--root` doctor was given, so the decision's remedy names the same directory; undefined for the cwd. */
   readonly supplied: string | undefined;
@@ -236,7 +236,7 @@ export function userRows(input: {
     }
   }
 
-  // §11.1: the cache only. A cache written for another channel or another ia version is not about this one, so it counts
+  // §11: the cache only. A cache written for another channel or another ia version is not about this one, so it counts
   // as none and a refresh is due. Newer means newer: a cached `latest` at or below this version is not an update.
   const disabled = updateCheckDisabled(input.env, home === null ? null : readIaConfig(home));
   const stored = home === null ? null : readUpdateCheck(home);
@@ -273,7 +273,7 @@ export function userRows(input: {
         updateInstruction(channel),
       ),
     );
-  // §7.3: a check older than a week means the background refresh keeps failing to finish.
+  // §11: a check older than a week means the background refresh keeps failing to finish.
   else if (!(input.now.getTime() - Date.parse(cached.checkedAt) < WEEK))
     checks.push(updatesRow('warn', `Last checked ${checkedOn}; no background check has completed since`));
   else if (cached.cli.checked) checks.push(updatesRow('ok', `Up to date as of ${checkedOn}`));
@@ -286,7 +286,7 @@ export function userRows(input: {
           : `Not checked; the last check (${checkedOn}) could not reach its source`,
       ),
     );
-  // §11.3: the private layer's notices, shown through the same section; read here, never fetched.
+  // §11: the private layer's notices, shown through the same section; read here, never fetched.
   if (!disabled)
     for (const notice of stored?.account?.notices ?? [])
       checks.push(row('updates-account', 'Environment', 'Account', 'info', notice));
@@ -310,7 +310,7 @@ export function userRows(input: {
           ...(channel.kind === 'checkout' ? ['--checkout', channel.root] : []),
         ];
 
-  // §11.2: only for a workspace this report describes.
+  // §7.3: only for a workspace this report describes.
   if (input.root !== undefined) {
     const found = workspaceLanguages(input.root);
     if ('why' in found)
@@ -330,7 +330,7 @@ export function userRows(input: {
     }
   }
 
-  // §9.2: only where no workspace was found; an unreadable file reads as empty and is a warning naming it.
+  // §7.3 and §9: only where no workspace was found; an unreadable file reads as empty and is a warning naming it.
   let decision: Decision | null = null;
   if (input.root === undefined && input.enclosing === undefined && home !== null) {
     const file = readDecisions(home),

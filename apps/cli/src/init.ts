@@ -449,8 +449,9 @@ export function ownedPaths(
 }
 
 /**
- * §2.1: an existing directory, or a single new segment under an existing directory. Anything else is usage. `rerun`
- * spells the refused invocation for another target; `runInit` keeps every other argument it was given.
+ * The initialization spec §2: an existing directory, or a single new segment under an existing directory. Anything else
+ * is usage. `rerun` spells the refused invocation for another target; `runInit` keeps every other argument it was
+ * given.
  */
 export function resolveTarget(
   cwd: string,
@@ -1070,13 +1071,13 @@ const CAPTURED = 'The workspace is initialized and captured.';
 const UNCAPTURED = 'The workspace is initialized but not captured.';
 /**
  * The apply's steps, in SPEC `init`'s order. Each step before the descriptor either completes or leaves a state
- * `collectInit` classifies as resumable or recovery-required. The signal is observed at step boundaries (§5): before
- * the first write it is the plain interruption and the target is byte-identical; after one, the interruption names the
- * rerun that finishes. Two effects follow the completion point, each reported apart, and each that fails or is
- * interrupted leaves the workspace initialized and names its own command: the capture, `ia capture`, and, only when
- * `options.project` is given (`--host`), the project effect, `ia host`. The project effect reads the live revision,
- * never the capture, so it runs after a capture that failed too, and that failure is then refused with the capture's
- * own repair, after a sentence saying the projection is written.
+ * `collectInit` classifies as resumable or recovery-required. The signal is observed at step boundaries (the apply spec
+ * §5): before the first write it is the plain interruption and the target is byte-identical; after one, the
+ * interruption names the rerun that finishes. Two effects follow the completion point, each reported apart, and each
+ * that fails or is interrupted leaves the workspace initialized and names its own command: the capture, `ia capture`,
+ * and, only when `options.project` is given (`--host`), the project effect, `ia host`. The project effect reads the
+ * live revision, never the capture, so it runs after a capture that failed too, and that failure is then refused with
+ * the capture's own repair, after a sentence saying the projection is written.
  */
 export async function applyInit(view: InitView, options: ApplyOptions): Promise<Applied> {
   const { root, starter } = view;
@@ -1089,7 +1090,7 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
     checkpoint(`init:${step}`);
     if (options.signal?.aborted) throw resume;
   };
-  // Step 2. The pin is read again rather than trusted from the plan, and must still be the one the plan showed.
+  // The pin is read again rather than trusted from the plan, and must still be the one the plan showed.
   const base = readBase(options.packageRoot);
   if (base.pin.archive !== starter.base.archive || base.pin.manifest !== starter.base.manifest)
     throw new Refusal(
@@ -1100,28 +1101,28 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
       DAMAGED,
     );
   options.signal?.throwIfAborted();
-  // The last point at which the target is byte-identical to its state before the command (§5).
+  // The last point at which the target is byte-identical to its state before the command.
   mkdirSync(root, { recursive: true });
   for (const path of view.leftovers) unlinkSync(resolve(root, path));
   const step = (id: StepId): Step => view.steps.find((row) => row.id === id)!;
-  // Step 3: the bundled base, installed as the workspace's one request.
+  // The install step: the bundled base, installed as the workspace's one request.
   if (step('install').status === 'pending')
     await installBase(root, base, 'install', { signal: options.signal, checkpoint }, resume);
   boundary('install');
   if (view.adoption) applyAdoption(planAdoption(root, view.adoption.id, view.adoption.release, false));
-  // Step 4, author: create-only, so a starter file already present with these bytes is skipped and nothing is ever
+  // The author step: create-only, so a starter file already present with these bytes is skipped and nothing is ever
   // rewritten. The ignore file is written only where none exists; one the target already holds is its own.
   for (const file of starter.files)
     if (!view.present.includes(file.path)) createFile(root, file.path, Buffer.from(file.text));
   const ignore = existsSync(resolve(root, IGNORE_PATH)) ? 'present' : 'written';
   if (ignore === 'written') createFile(root, IGNORE_PATH, Buffer.from(IGNORE_TEXT));
   boundary('author');
-  // Step 5, admission: the identities are read from the compiled graph, never string-constructed.
+  // The admission step: the identities are read from the compiled graph, never string-constructed.
   const { compiled } = admitStarter(root, starter.records, 'initialized', '');
   const authored = compiled.map((record) => record.identity),
     distribution = compiled.find((record) => record.discriminator === 'distribution')?.identity ?? null;
   boundary('admission');
-  // Step 6, the completion point (the apply spec §5). A default starter's descriptor names no distribution.
+  // The descriptor, the completion point (the apply spec §5). A default starter's descriptor names no distribution.
   createFile(
     root,
     DESCRIPTOR_PATH,
@@ -1131,7 +1132,7 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
   );
   checkpoint('init:descriptor');
   const installed = readInstalledState({ root });
-  // Step 7, the capture effect: `ia capture` on the workspace just initialized, written through db's writeCapture. A
+  // The capture effect: `ia capture` on the workspace just initialized, written through db's writeCapture. A
   // failure is refused as `ia capture` refuses it, located and with its repair (`captureFailure`), for this root.
   const recapture = `ia capture --root ${quote(root)}`;
   let capture: CaptureEffect | undefined, failed: Refusal | undefined;
@@ -1145,7 +1146,7 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
       failed = refusalOf(captureFailure(error, root, recapture));
     }
   if (capture !== undefined) checkpoint('init:capture');
-  // Step 8, the project effect, only with `--host`: after a capture that failed too. A signal the capture stopped for,
+  // The project effect, only with `--host`: after a capture that failed too. A signal the capture stopped for,
   // it observes itself, naming `ia host`, the effect this invocation asked for, after saying the capture was not taken.
   const projected = options.project?.(capture === undefined ? UNCAPTURED : CAPTURED);
   if (failed !== undefined)
@@ -1201,7 +1202,7 @@ async function installBase(
   } catch (error) {
     if (options.signal?.aborted) throw resume;
     // collectInit already refuses a lock present at planning time; this is another installer taking it between
-    // planning and apply. The installer's code is kept (§4.1 of the contract); the next action names the recovery
+    // planning and apply. The installer's code is kept (§4 of the contract); the next action names the recovery
     // that clears the lock if that installer has since died.
     if (codeOf(error, '') === 'IA-DIST-INSTALL-BUSY')
       throw new Refusal(
@@ -1488,7 +1489,7 @@ export function renderInit(view: InitView, caps: Capabilities, supplied?: string
     { leadingBlank: true },
   );
 }
-/** §2.8 rule 3's change summary for `init`: the plan's own blocks without the preview note or the footer. */
+/** Contract §2.0's change summary for `init`: the plan's own blocks without the preview note or the footer. */
 export const renderInitSummary = (view: InitView, caps: Capabilities): string =>
   document([headerLine('Plan', 'init', [{ text: view.root, column: 50 }], caps), ...planBlocks(view, caps)], {
     leadingBlank: true,
@@ -1569,7 +1570,7 @@ export function renderApplied(view: InitView, applied: Applied, caps: Capabiliti
             caps,
           ),
       stepRows(view, () => 'success', caps),
-      // Spec §5.3 and §5.4: the notes `ia host` prints after a registration, from the same function.
+      // Host registration spec §4: the notes `ia host` prints after a registration, from the same function.
       ...(applied.host === undefined || view.host === 'none' ? [] : hostNotes(view.host, caps)),
       closingEntry(applied.distribution, caps),
     ],
@@ -1616,7 +1617,7 @@ export async function runInit(context: Context): Promise<Result> {
   const id = args.value('id');
   if (args.value('registry') !== undefined && args.value('adopt') === undefined)
     throw new UsageError('ia init --registry requires --adopt');
-  // A malformed identity is usage (§3), decided before the target is read.
+  // A malformed identity is usage (the initialization spec §2), decided before the target is read.
   if (id !== undefined && (!PACKAGE_ID.test(id) || id.includes('..')))
     throw new UsageError(`--id must be <provider/name>; got ${id}`);
   const root = resolveTarget(host.cwd, args.positionals[0], (target) => respell(context, { positionals: [target] }));
@@ -1673,10 +1674,10 @@ async function initialize(context: Context, root: string, id: string | undefined
             applied === null ? renderInit(view, caps, args.positionals[0], host) : renderApplied(view, applied, caps),
           stderr: '',
         };
-  // §2.1: conflicts are reported inside the plan and are not an error class, so a plan is always exit 0.
+  // The apply spec §1: conflicts are reported inside the plan and are not an error class, so a plan is always exit 0.
   if (!apply) return rendered(null);
   if (view.state !== 'fresh' && view.state !== 'resumable') throw conflictRefusal(view);
-  // §2.8 rule 3, as `ia install` asks it: parsing already refused every `--apply` whose question cannot be answered.
+  // Contract §2.0, as `ia install` asks it: parsing already refused every `--apply` whose question cannot be answered.
   if (!args.flag('yes') && !(await confirm(host.interaction, renderInitSummary(view, caps), CONFIRMATION)))
     return { exitCode: 0, stdout: renderDeclined(view, caps, args.positionals[0], host), stderr: '' };
   // The project effect, last (SPEC `init`): the `ia host` path, whose apply writes the receipt.
@@ -1695,7 +1696,7 @@ async function initialize(context: Context, root: string, id: string | undefined
  * Its arguments come from `ia host`'s own grammar rather than a hand-built object, so the host step reads exactly
  * what `ia host` would. `--yes` stands for the answer this invocation already gave, by flag or at the prompt, so
  * the step never asks a second question. Every failure here happens after initialization completed: the workspace
- * stays initialized, and each refusal keeps the service's code, message and location (contract §4.1).
+ * stays initialized, and each refusal keeps the service's code, message and location (contract §4).
  *
  * Its next action is `ia host`'s own remedy for that refusal, after `done`, the sentence saying what initialization
  * completed, the capture included or not. Every `ia host` command the remedy names gains `--root <root>`, because
@@ -2107,7 +2108,8 @@ export function collectMigration(request: MigrationRequest): MigrationView {
           path: found.source.path,
           reason: `Holds @${record.word} ${record.name}, which the migration authors in ${record.path}`,
         });
-  // Spec §8: a pending host journal refuses the whole verb and names the recovery that clears it, as `ia host` does.
+  // Host registration spec §6: a pending host journal refuses the whole verb and names the recovery that clears it, as
+  // `ia host` does.
   if (!system) {
     const removedRecords = [...local, ...starter.filter((record) => record.discriminator === 'distribution')];
     const references = (value: unknown, word: string, name: string, identity: string): boolean => {
@@ -2575,7 +2577,7 @@ export function migrationEnvelope(view: MigrationView, apply: boolean, applied: 
   };
 }
 
-/** One row per file: its path, then what the migration does to it, each row on one content column (§6.4 rule 2). */
+/** One row per file: its path, then what the migration does to it, each row on one content column. */
 const fileRows = (
   rows: readonly { readonly symbol: SymbolName; readonly path: string; readonly text: string }[],
   caps: Capabilities,
@@ -2753,7 +2755,7 @@ export function renderMigration(view: MigrationView, caps: Capabilities, supplie
     { leadingBlank: true },
   );
 }
-/** §2.8 rule 3's change summary: the plan's own blocks without the preview note or the footer. */
+/** Contract §2.0's change summary: the plan's own blocks without the preview note or the footer. */
 const renderMigrationSummary = (view: MigrationView, caps: Capabilities): string =>
   document([migrationHeader(view, caps), ...migrationBlocks(view, caps)], { leadingBlank: true });
 export function renderMigrated(view: MigrationView, applied: Migrated, caps: Capabilities): string {

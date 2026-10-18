@@ -901,7 +901,7 @@ it('leaves the workspace initialized when its capture fails, with the location a
   blockCapture(root);
   const refused = await apply(root);
   expect(refused.exitCode, refused.stdout).toBe(3);
-  // The capture's code and location are kept (contract §4.1), and its repair is `ia capture`'s own, for this root,
+  // The capture's code and location are kept (contract §4), and its repair is `ia capture`'s own, for this root,
   // after the sentence saying what is done.
   expect(json(refused)).toMatchObject({
     code: 'IA-DB-PATH-UNSAFE',
@@ -1083,7 +1083,7 @@ it('lists and removes leftover temporary files, and keeps any other extra file a
   expect(planned.plan.leftovers).toEqual(
     [...leftovers].sort().map((path) => ({ path, reason: 'leftover temporary file' })),
   );
-  // §6.4 wraps at 80 columns, so the words are compared with each break folded back to a space.
+  // The renderer wraps at 80 columns, so the words are compared with each break folded back to a space.
   expect((await run(['init', root])).stdout.replace(/\s+/g, ' ')).toContain('leftover temporary file');
   expect((await apply(root)).exitCode).toBe(0);
   expect(tree(root)).toEqual(await referenceTree());
@@ -1223,7 +1223,7 @@ it('refuses to initialize a directory holding the IA home, the home itself or a 
 });
 
 /*
- * Host registration spec §4 "init --host" and §10 item 10. Every case points IA_HOST_HOME (the alias for IA_HOME) at
+ * Host registration spec §4 "init --host". Every case points IA_HOST_HOME (the alias for IA_HOME) at
  * a scratch directory, so no test writes the real IA home. A root-level `.mcp.json` is not an init conflict — the
  * apply spec's conflicts (§1) concern only `.ia/`, the lock and the install state — so the refusal case seeds it
  * before the one apply.
@@ -1284,7 +1284,7 @@ it.each(['claude', 'codex'] as const)(
     expect(prompts.join('').replace(/\s+/g, ' ')).toContain(
       `--host ${selected} selected; registered after initialization by ia host`,
     );
-    // §6.4 wraps at 80 columns, so the notes are compared with each break folded back to a space.
+    // The renderer wraps at 80 columns, so the notes are compared with each break folded back to a space.
     const text = result.stdout.replace(/\s+/g, ' ');
     // The project effect as the receipt lists it: each file the packet wrote, then the receipt's own path.
     const receipt = `.ia/distributions/hosts/${selected}-receipt.json`,
@@ -1294,7 +1294,7 @@ it.each(['claude', 'codex'] as const)(
       `Projected the position packet for ${selected}: ${files.join(' ')} Receipt ${receipt}. Registered with ${selected}; written, not observed answering.`,
     );
     expect(text).not.toContain('Project skipped');
-    // Spec §5.3's machine-local sentence for this host, and §5.4's approval note for Claude alone.
+    // Spec §4's machine-local sentence for this host, and the approval note for Claude alone.
     expect(text).toContain(MACHINE_LOCAL[selected]);
     expect(text.includes(MCP_APPROVAL)).toBe(selected === 'claude');
     expect(text.includes(GUARD_SCOPE)).toBe(selected === 'claude');
@@ -1312,8 +1312,8 @@ it('init --host claude --apply stays initialized when the host step refuses, and
   // The target is named relative to its parent, so a rerun from this cwd reaches it only through --root.
   const result = await run(['init', 'demo', '--apply', '--yes', '--json', '--host', 'claude'], { env, cwd });
   expect(result.exitCode, result.stdout).toBe(3);
-  // The service's code and location are kept (contract §4.1). The next action is ia host's own remedy for an unowned
-  // entry (spec §5.3), after the sentence saying initialization completed, with --root in the command it names.
+  // The service's code and location are kept (contract §4). The next action is ia host's own remedy for an unowned
+  // entry (spec §5), after the sentence saying initialization completed, with --root in the command it names.
   expect(json(result)).toMatchObject({
     ok: false,
     code: 'IA-DIST-LOCAL-MODIFICATION',

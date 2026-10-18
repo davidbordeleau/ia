@@ -104,7 +104,7 @@ export const HOST_CONFIG: Readonly<Record<Host, { readonly file: string; readonl
   codex: { file: '.codex/config.toml', format: 'toml' },
 };
 const configFile = (host: Host): string => HOST_CONFIG[host].file;
-/** Spec §5.1: one registration id per workspace and host for the v2 consumer payload. */
+/** One registration id per workspace and host for the v2 consumer payload. */
 export const HOST_REGISTRATION = 'workspace';
 /** REQ-HRC-2: the only constructor of an IA server's command and arguments, durable or ephemeral. */
 export function doorServer(entrypoint: string, args: readonly string[]): { command: string; args: string[] } {
@@ -420,7 +420,7 @@ function planHostWith(root: string, host: Host, cache: HostCacheTarget | null, r
     const gone = !server && prior !== null && !Object.hasOwn(servers, key);
     if (!gone && (prior ? json(servers[key]) !== prior.owned : Object.hasOwn(servers, key)))
       fail('LOCAL-MODIFICATION', 'MCP registration changed or collides with an unmanaged server');
-    // In place (spec §5.1): only the owned member changes; every other byte of the file is kept.
+    // In place: only the owned member changes; every other byte of the file is kept.
     existing = prior ? keptPaths(prior.existing, containers) : presentJson(current, containers);
     if (gone) next = current;
     else {

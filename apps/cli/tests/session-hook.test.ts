@@ -97,7 +97,7 @@ it('shows the nudge again on a new local day rather than staying silent forever 
 
 // The real `ia doctor` is read-only: clearing NODE_OPTIONS (as tests/host-registration.test.ts does) keeps an inherited
 // --conditions=development from repointing the built packages this hook loads at their source instead.
-// IA_NO_UPDATE_CHECK: doctor would otherwise name a due refresh (spec §11.1) and the hook would start it detached,
+// IA_NO_UPDATE_CHECK: doctor would otherwise name a due refresh (spec §11) and the hook would start it detached,
 // writing the scratch IA home after these assertions, and possibly after cleanup.
 const e2eEnv = (extra: Record<string, string>): NodeJS.ProcessEnv => ({
   ...process.env,

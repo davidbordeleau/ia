@@ -100,7 +100,7 @@ function readNext(refusal: ReadRefusal, locator: string, rooted: string, reader?
   }
 }
 /**
- * §4.1: the runtime's read refusal with its code and message unchanged. A locator that answers no record, or no part of
+ * §4: the runtime's read refusal with its code and message unchanged. A locator that answers no record, or no part of
  * one, is exit 1, as `ia inspect` refuses an identity it does not admit; a document the read cannot reach and a
  * placement it does not include are exit 3. An identity no admitted record answers is located at the workspace, as
  * `ia inspect` locates it.

@@ -49,7 +49,7 @@ afterAll(cleanup, 120_000);
 
 it('doctor reports registered, then stale after a simulated upgrade, and projection drift', async () => {
   const { root, env } = await initialized();
-  // No host state at all is a note, never a verdict (spec §7 `absent`).
+  // No host state at all is a note, never a verdict (`absent`).
   const none = await doctor(root, env);
   expect(none.exitCode).toBe(0);
   // Given --root, each command it names carries it; discovered from the cwd, neither does.
@@ -81,7 +81,7 @@ it('doctor reports registered, then stale after a simulated upgrade, and project
     `Release ${release.slice(0, 12)}, present in ${resolve(env.IA_HOST_HOME, 'hosts')}`,
   );
   expect(registered.checks.filter((check) => check.id.startsWith('projection-claude'))).toEqual([noDrift()]);
-  // §3.3: an unfinished `.stage-*` materialization is never listed as a payload; another release's directory is.
+  // An unfinished `.stage-*` materialization is never listed as a payload; another release's directory is.
   mkdirSync(resolve(env.IA_HOST_HOME, 'hosts', '.stage-interrupted'));
   mkdirSync(resolve(env.IA_HOST_HOME, 'hosts', 'a'.repeat(64)));
   expect(row((await doctor(root, env)).checks, 'host-payload')!.detail).toBe(
@@ -103,7 +103,7 @@ it('doctor reports registered, then stale after a simulated upgrade, and project
   // Discovered from the cwd rather than given, the root is not repeated in the remedy.
   const discovered = JSON.parse((await run(['doctor', '--json'], { env, cwd: root })).stdout).checks as Row[];
   expect(row(discovered, 'host-claude')!.remedy).toBe('ia host claude --apply');
-  // §10 item 3's second half: the remedy alone, re-applying, restores `registered` and the bytes a fresh apply wrote.
+  // The remedy alone, re-applying, restores `registered` and the bytes a fresh apply wrote.
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   const restored = await doctor(root, env);
   expect(restored.exitCode).toBe(0);
@@ -516,8 +516,8 @@ it('names --root in every ia host next action only when the invocation gave it, 
   expect(humanRefusal.exitCode).toBe(3);
   expect(humanRefusal.stderr.replace(/\s+/g, ' ')).toContain(rooted);
   // The preview's conflict row prints the same next action the refusal carries, and its undo line carries the root;
-  // the JSON plan's `undo` stays the unrooted command (§4 `--json`).
-  // A command too long for the line is broken with a trailing `\` (§6.4), which a reader's shell joins back.
+  // the JSON plan's `undo` stays the unrooted command.
+  // A command too long for the line is broken with a trailing `\`, which a reader's shell joins back.
   const joined = (text: string): string => text.replace(/ \\\r?\n\s*/g, ' ').replace(/\s+/g, ' ');
   const preview = joined((await human(root, env, 'claude')).stdout);
   expect(preview).toContain(rooted);

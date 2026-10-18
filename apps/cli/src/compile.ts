@@ -89,7 +89,7 @@ export function collectCompile(root: string): CompileView {
   }
 }
 
-/** §2.4: the artifact is written even when the compilation produced errors; the exit class carries the verdict. */
+/** The artifact is built even when the compilation produced errors; the exit class carries the verdict. */
 export const compileExit = (view: CompileView): 0 | 1 => (view.artifact.counts.errors === 0 ? 0 : 1);
 
 export function compileEnvelope(view: CompileView, path: string): unknown {

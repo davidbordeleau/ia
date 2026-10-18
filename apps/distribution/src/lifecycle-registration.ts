@@ -310,7 +310,7 @@ export function planLifecycleRegistration(
     const projectHooks = project['hooks'] === undefined ? {} : plain(project['hooks']);
     if (projectHooks[event] !== undefined && collision(projectHooks[event], target))
       fail('LOCAL-MODIFICATION', 'Context binding already appears in project settings');
-    // In place (spec §5.1): replace or append the owned group, or remove it by index; every other byte is kept.
+    // In place: replace or append the owned group, or remove it by index; every other byte is kept.
     edited = editJson(edited, ['hooks', event, prior ? matching[0]! : -1], owned ? owned[event] : undefined, existing);
   }
   const nextConfig = prior?.created && emptyJson(edited!) ? null : edited;

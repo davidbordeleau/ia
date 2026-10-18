@@ -161,7 +161,7 @@ it('names registered projections in the plan only when one is registered, and re
   const applied = await install('--apply', '--yes', '--json');
   expect(applied.exitCode, applied.stdout).toBe(0);
   const envelope = JSON.parse(applied.stdout);
-  // `applied` is exactly applyInstallation's return, its host literal included (contract §2.8).
+  // `applied` is exactly applyInstallation's return, its host literal included.
   expect(Object.keys(envelope.applied).sort()).toEqual(['counter', 'generation', 'host', 'status']);
   expect(envelope.applied).toMatchObject({ status: 'installed', host: 'pending' });
   expect(envelope.refresh).toEqual(['claude']);
@@ -421,7 +421,7 @@ it('refuses at class 3 naming the applied install when its projection refresh is
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   // A projection state that owns the rules file alone, as one written before the skill was projected, and the user's
   // own file where the skill goes. The pre-check sees no hand edit — the file is not one this workspace's projection
-  // owns — so the install applies, and the refresh then refuses the unmanaged file rather than replace it (§6.3).
+  // owns — so the install applies, and the refresh then refuses the unmanaged file rather than replace it (§5).
   const state = JSON.parse(read(root, PROJECTION_STATE));
   put(root, PROJECTION_STATE, json({ ...state, files: { [RULES]: state.files[RULES] } }));
   const mine = '.claude/skills/ia-authoring/SKILL.md';

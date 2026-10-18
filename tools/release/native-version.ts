@@ -1,4 +1,4 @@
-/** Native artifacts follow the npm target; immutable published Git objects own their comparison baseline. */
+/** Native artifacts version by content within a major; immutable published Git objects own their comparison baseline. */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -75,11 +75,8 @@ export function nativeBaseline(root: string): NativeBaseline {
     );
     const ledger = JSON.parse(git(root, 'show', `${commit}:${NATIVE_CURRENT}`));
     assert.equal(ledger.format, 'ia.native-release.v1');
+    // Within a major, each native archive keeps its own version line, so a ledger's versions need not be its tag's.
     archives = ledger.archives;
-    assert.ok(
-      archives.every((row: NativeArchive) => row.version === tag.slice(1)),
-      'Published native versions differ from npm tag',
-    );
   }
   validateArchives(archives);
   return { source: { tag, commit }, archives };
@@ -117,7 +114,11 @@ export function assertNativeBaseline(root: string, baseline: NativeBaseline, pol
   }
   return publishedCurrent;
 }
-/** Normalized content changes and dependency consumers need impact notes; every identity takes the npm target. */
+/**
+ * Normalized content changes and dependency consumers need impact notes. A new npm major aligns every identity to the
+ * npm target; within a major each changed identity moves by its own note from its published version, every unchanged
+ * one keeps its published version, and no native version may pass the npm target.
+ */
 export function planNativeVersions(
   baseline: NativeBaseline,
   normalized: NativeArchive[],
@@ -139,11 +140,8 @@ export function planNativeVersions(
     assert.equal(row.version, prior.get(row.id)!.version, 'Comparison is not normalized to published versions');
     assert.ok(compare(target, row.version) >= 0, row.id + ': native version regressed');
   }
-  if (target === baseline.source.tag.slice(1))
-    assert.ok(
-      baseline.archives.every((row) => row.version === target),
-      'Published native versions cannot be realigned',
-    );
+  const major = (version: string) => Number(version.split('.')[0]),
+    aligned = major(target) > major(baseline.source.tag.slice(1));
   const direct = normalized.filter((row) => row.archive !== prior.get(row.id)!.archive).map((row) => row.id);
   const changed = new Set(direct);
   for (let size = -1; size !== changed.size; ) {
@@ -172,15 +170,17 @@ export function planNativeVersions(
   }
   const applicable = notes?.baseline.tag === baseline.source.tag && notes?.baseline.commit === baseline.source.commit;
   if (changed.size) assert.ok(applicable, 'Changed native archives require notes against the latest published tag');
+  const moved = new Map<string, string>();
   for (const id of changed) {
     const note = applicable ? notes!.changes.find((entry) => entry.id === id) : undefined;
     assert.ok(note, id + ': changed archive requires its own bump note (including dependency changes)');
-    assert.ok(
-      compare(target, bump(prior.get(id)!.version, note.bump)) >= 0,
-      id + ': npm target does not satisfy native ' + note.bump + ' impact',
-    );
+    const version = bump(prior.get(id)!.version, note.bump);
+    assert.ok(compare(target, version) >= 0, id + ': npm target does not satisfy native ' + note.bump + ' impact');
+    moved.set(id, version);
   }
-  const versions = Object.fromEntries(normalized.map((row) => [row.id, target]));
+  const versions = Object.fromEntries(
+    normalized.map((row) => [row.id, aligned ? target : (moved.get(row.id) ?? prior.get(row.id)!.version)]),
+  );
   return { versions, direct: direct.sort(), changed: [...changed].sort() };
 }
 export function assertNativeImmutability(baseline: NativeBaseline, archives: NativeArchive[]): void {
@@ -196,12 +196,12 @@ export function nativeRelease(root: string, mode: 'plan' | 'check' | 'write') {
   const policy = readNativeReleaseTarget(root),
     baseline = nativeBaseline(root),
     current = nativeVersions(root),
-    publishedCurrent = assertNativeBaseline(root, baseline, policy),
-    writes = prepareNativeSelection(root, policy.version);
-  assert.ok(writes.size, 'Missing native selector surface');
+    publishedCurrent = assertNativeBaseline(root, baseline, policy);
+  assert.ok(prepareNativeSelection(root, policy.version).size, 'Missing native selector surface');
   const notes = existsSync(resolve(root, NATIVE_NOTES)) ? (readJson(root, NATIVE_NOTES) as NativeNotes) : undefined;
   const normalized = nativeArchives(root, Object.fromEntries(baseline.archives.map((row) => [row.id, row.version])));
   const plan = planNativeVersions(baseline, normalized, policy.version, notes);
+  const writes = prepareNativeSelection(root, policy.version, plan.versions);
   // Compute and validate every output before writing any selected version.
   const archives = nativeArchives(root, plan.versions);
   assertNativeImmutability(baseline, archives);

@@ -2,11 +2,16 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseArgs } from 'node:util';
+import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { isEntry } from '../entry/is-entry.mjs';
 import { PUBLIC_INPUTS, publicPackageInputs, refreshPublicPackageInputs } from '../release/public-pack.mjs';
 import { REGISTRY } from './npm-release.mjs';
-import { prepareNativeSelection } from '../release/native-selectors.mjs';
+import {
+  nativeNotesPending,
+  prepareNativeSelection,
+  releaseNativeVersions,
+  selectedNativeVersions,
+} from '../release/native-selectors.mjs';
 import {
   RELEASE_POLICY,
   changeApplies,
@@ -134,7 +139,11 @@ export async function versionRelease(root, projects, options = {}) {
     if (!refresh) return none(`${policy.version} is prepared; pass --refresh to re-collect it`);
     try {
       releaseChanges(root, projects);
-      const selectors = prepareNativeSelection(root, policy.version);
+      const selectors = prepareNativeSelection(
+        root,
+        policy.version,
+        releaseNativeVersions(root, policy.baseline.version, policy.version),
+      );
       if ([...selectors].every(([path, bytes]) => readFileSync(resolve(root, path), 'utf8') === bytes))
         return none(`${policy.version} is prepared and current`);
     } catch {}
@@ -148,9 +157,12 @@ export async function versionRelease(root, projects, options = {}) {
   const bump = maxBump(bumps),
     version = bumpVersion(baseline.version, bump),
     action = published ? 'version' : notes.length ? 'amend' : 'refresh';
-  // Validate the complete native selector surface before any write, including explicit same-version refreshes.
-  const selectors = prepareNativeSelection(root, version),
-    selectorWrites = [...selectors].filter(([path, bytes]) => readFileSync(resolve(root, path), 'utf8') !== bytes);
+  // Validate the complete native selector surface before any write, including explicit same-version refreshes. Native
+  // versions move here only for a new major; within one, `pnpm native:version --write` selects them by content.
+  const natives = releaseNativeVersions(root, baseline.version, version),
+    selectors = prepareNativeSelection(root, version, natives),
+    selectorWrites = [...selectors].filter(([path, bytes]) => readFileSync(resolve(root, path), 'utf8') !== bytes),
+    nativesMove = natives !== undefined && !isDeepStrictEqual(natives, selectedNativeVersions(root));
   const plan = {
     action,
     state,
@@ -159,7 +171,8 @@ export async function versionRelease(root, projects, options = {}) {
     bump,
     baseline,
     notes: notes.map(({ id }) => id),
-    nativeRegenerationRequired: selectors.size > 0,
+    nativeRegenerationRequired:
+      selectors.size > 0 && (nativesMove || nativeNotesPending(root, baseline.version, baseline.commit)),
   };
   if (!write) return plan;
 

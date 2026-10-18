@@ -255,7 +255,7 @@ function nextAfter(
   }
 }
 /**
- * §4.1: the runtime's delivery refusal with its code and message unchanged, at exit 1, as `ia inspect` refuses an
+ * §4: the runtime's delivery refusal with its code and message unchanged, at exit 1, as `ia inspect` refuses an
  * identity it does not admit: each concerns the workspace's records. A cycle is located at its first declared row.
  */
 export function nextRefusal(

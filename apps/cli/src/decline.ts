@@ -23,7 +23,7 @@ type Env = Readonly<Record<string, string | undefined>>;
 const homeOf = (env: Env): string => resolveIaHome(env, homedir()).home;
 
 /**
- * §9.2: the remedy depends on why the write failed, not on a fixed sentence. `home` is undefined only when
+ * §9: the remedy depends on why the write failed, not on a fixed sentence. `home` is undefined only when
  * `resolveIaHome` itself refused (a relative IA_HOME/IA_HOST_HOME), before any file could be named; `ia host`'s own
  * `homeSrcRemedy` is reused rather than duplicated for the home-looks-like-a-workspace cause, and an invalid
  * decisions file is inspected directly with `readDecisions` rather than by pattern-matching the caught message.
@@ -89,7 +89,7 @@ export function runDecline(context: Context, target: string, kind: DeclineKind |
         : `Recorded: do not offer to initialize ${decision.path} again today.`;
   return {
     exitCode: 0,
-    // §9.2's "no entry" case is informational, not a completed action; every other line records one, and keeps `success`.
+    // The "no entry" case is informational, not a completed action; every other line records one, and keeps `success`.
     stdout: document(
       [entry([words(line)], { depth: 0, symbol: decision === null && !forgotten ? 'info' : 'success' }, caps)],
       { leadingBlank: true },
@@ -101,6 +101,6 @@ export function clearDecline(env: Env, target: string): void {
   try {
     forgetDecision(homeOf(env), target);
   } catch {
-    // §9.2: a broken decisions file never fails an init; `ia doctor` reports it.
+    // §7.2 and §9: a broken decisions file never fails an init; `ia doctor` reports it.
   }
 }

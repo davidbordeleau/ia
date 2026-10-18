@@ -597,7 +597,7 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
     )) {
       // Colocated executable systems contain package artifacts, never corpus sources.
       if (['node_modules', 'dist', '.git'].includes(entry.name.toLowerCase())) continue;
-      // Where the volume opens `.ia/src/systems` as `Systems`, that is the systems folder; its members keep their names (crowncodes/ia#315, crowncodes/ia#323).
+      // Where the volume opens `.ia/src/systems` as `Systems`, that is the systems folder; its members keep their names.
       const folded = pathKey(entry.name),
         name =
           path === '.ia/src' &&

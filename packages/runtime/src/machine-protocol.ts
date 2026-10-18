@@ -3,7 +3,7 @@
  * its purpose, parameter schema, result, refusals with a next action, and an example that returns `ok: true` on
  * packages/compliance/fixtures/loop, or for `next`, as that fixture authors no @plan, on the delivery fixture
  * packages/runtime/tests/fixtures/delivery/base laid over the conformance corpus. `ia <operation> --help` (the version
- * 1 operations, which are the CLI's machine routes), the MCP door's tools/list and docs/reference/cli/machine-protocol.md
+ * 1 operations, which are the CLI's machine routes) and the MCP door's tools/list
  * are projections of this table. It describes the frozen wire format and changes none of it: the Door validates every
  * request itself, and tests/select-door.test.ts, tests/door-read.test.ts, tests/next.test.ts,
  * tests/door-position.test.ts and apps/cli/tests/cli.test.ts hold this table to what the Door admits and refuses. A

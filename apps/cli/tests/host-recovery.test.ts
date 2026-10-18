@@ -169,7 +169,7 @@ it('reports each pending host journal as a failure naming its own recovery', asy
 });
 
 /**
- * §10 item 8 at the CLI: an interruption at each sub-transaction boundary, then the rerun, ends byte for byte where an
+ * §6 at the CLI: an interruption at each sub-transaction boundary, then the rerun, ends byte for byte where an
  * uninterrupted apply ends. The reference is taken in the same workspace, because every owned entry embeds the root.
  */
 it('converges byte for byte after an interruption at each apply and removal boundary', async () => {

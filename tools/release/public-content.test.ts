@@ -108,14 +108,11 @@ const PLANNING_IDS: readonly RegExp[] = [
 /** Published release history is immutable: a consumed changeset and the changelog generated from it keep their bytes. */
 const IMMUTABLE = (path: string): boolean => path === 'CHANGELOG.md' || path.startsWith('releases/changesets/');
 /**
- * Files that still carry references only a release of their own can remove, with how many each holds: the
- * authoring-system SPEC is packed into that system's native archive, and doctor prints its legacy-home warning. The
- * release that rewrites the text drops the row; any other reference, or a changed count, fails.
+ * Files that still carry references only a release of their own can remove, with how many each holds, such as a
+ * native archive's packed text or a message the CLI prints. The release that rewrites the text drops the row; any
+ * other reference, or a changed count, fails. None is awaiting a release now.
  */
-const AWAITING_RELEASE: ReadonlyMap<string, number> = new Map([
-  ['.ia/src/systems/authoring-system/SPEC.md', 2],
-  ['apps/cli/src/doctor.ts', 1],
-]);
+const AWAITING_RELEASE: ReadonlyMap<string, number> = new Map();
 
 /** Each private reference in `files` (path to text), as `path:line`. */
 function privateReferences(files: ReadonlyMap<string, string>, pins: readonly Pin[]): string[] {

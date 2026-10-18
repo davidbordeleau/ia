@@ -31,8 +31,7 @@
  * that declaration says the minimum must be validated before being advertised. A platform outside it is `warn`,
  * never `fail`, and the word "unsupported" is not used about it.
  *
- * The environment is a parameter rather than a read of the process, so this verb is testable and so the contract's
- * §7 examples can state which machine's Node version and platform they show.
+ * The environment is a parameter rather than a read of the process, so this verb is testable.
  *
  * docs/specs/host-plugin-distribution/README.md §7.3 adds rows that exist with or without a workspace
  * (`doctor-user.ts`: install channel, IA home, Claude plugin, §11's cached update check and local language
@@ -49,7 +48,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-// `within` judges nesting on disk, so a home or cache spelled in another case or normalization is still where it is (crowncodes/ia#315).
+// `within` judges nesting on disk, so a home or cache spelled in another case or normalization is still where it is.
 import { pathKey, within } from '@inventarch/db';
 import { decodeDistributionJson, INSTALL_PATHS } from '@inventarch/db/distribution';
 import type { DistributionLock } from '@inventarch/db/distribution';
@@ -139,7 +138,7 @@ export interface Runtime {
 }
 export interface DoctorRequest {
   readonly cwd: string;
-  /** The supplied `--root`, or undefined to discover one. Absence is a check result, not a refusal (§2.0). */
+  /** The supplied `--root`, or undefined to discover one. Absence is a check result, not a refusal (§2.12). */
   readonly root?: string | undefined;
   readonly packageRoot: string;
   readonly runtime: Runtime;
@@ -150,7 +149,7 @@ export interface DoctorRequest {
   readonly version?: string;
   /** `--host`: adds the §8.2 session briefing and §7.3 next actions for this host. */
   readonly host?: string | undefined;
-  /** The clock a `declined-today` decision is compared against (§9.1); now by default. */
+  /** The clock a `declined-today` decision is compared against (§7.2); now by default. */
   readonly now?: Date;
   /** The install channel as observed (§5); detected from `packageRoot` when absent. The contract's examples supply it. */
   readonly channel?: Channel | undefined;
@@ -304,9 +303,9 @@ const commandsFor = (root: string | undefined): Commands => {
 };
 
 /**
- * §3.3: the payload this installation pins, and whether the host home holds it. Cheap on purpose — one stat and
- * one directory listing, no verification (each host row verifies the payload its registration uses). A `.stage-*`
- * directory is an unfinished materialization, never a payload, so only 64-hex names are listed.
+ * Spec §3: the payload this installation pins, and whether the host home holds it. Cheap on purpose — one stat and one
+ * directory listing, no verification (each host row verifies the payload its registration uses). A `.stage-*` directory
+ * is an unfinished materialization, never a payload, so only 64-hex names are listed.
  */
 function payloadRow(request: DoctorRequest, pinned: Pinned): Check {
   if (pinned.release === null)
@@ -352,7 +351,7 @@ function payloadRow(request: DoctorRequest, pinned: Pinned): Check {
 }
 
 /**
- * Spec §8: the host lock and the three host journals, as the install lock and journal have their rows. A held lock is
+ * Spec §7: the host lock and the three host journals, as the install lock and journal have their rows. A held lock is
  * `warn`, because a live run holds it too; its recovery clears only a dead holder's. A journal is `fail`, because
  * every `ia host` plan refuses until its own recovery runs (`assertHostRegistrationIdle`).
  */
@@ -775,7 +774,7 @@ function movedRows(request: DoctorRequest, observed: readonly HostObservation[],
             `ia-home-moved-${host.host}`,
             'IA home moved',
             'warn',
-            `Host ${host.host} pins its payload under ${host.cache}, outside the IA home ${home}${inside(legacy, host.cache) ? ' (the M5.3 per-OS location)' : ''}`,
+            `Host ${host.host} pins its payload under ${host.cache}, outside the IA home ${home}${inside(legacy, host.cache) ? ' (the per-OS location earlier releases used)' : ''}`,
             commands.apply(host.host),
           ),
         ],
@@ -1237,7 +1236,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
   }
 
   // Host plugin distribution spec §7.3 and §8.2: rows that exist with or without a workspace, and the briefing. One
-  // report has one root. Without --root it was discovered upward from the cwd, which is how the §8.1 hook runs doctor.
+  // report has one root. Without --root it was discovered upward from the cwd, which is how the §8.2 hook runs doctor.
   // A supplied --root is literal, as for every other verb: it is a workspace only when it holds .ia/src itself. When it
   // does not but lies inside a workspace, that workspace is only named (`enclosing`), never described or offered init.
   const workspaceRoot =
@@ -1291,14 +1290,21 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
  * §8.2's host state from the rows already collected. `unknown` when the host set was not observed — an interrupted
  * installation, or installed state that could not be read — so the briefing never calls a host missing that doctor did
  * not look at. Stale covers the host row itself, a payload pinned outside the IA home (§3 names re-applying as its
- * remedy) and any failing projection row of a registered host, which `ia host <host> --apply` also repairs. A
+ * remedy) and any failing projection row of a registered host, which `ia host <host> --apply` also repairs, except a
+ * hook group deleted, changed or duplicated by hand: an apply refuses to put that back on its own, so `removeFirst`
+ * tells the briefing to name the removal first, as that row's remedy does. A
  * projection `ia project` wrote without a registration is no registration to call stale: the host stays `absent`, and
  * its failing rows name their own repair, `ia project <host> --apply`.
  */
 function hostState(
   host: string,
   checks: readonly Check[],
-): { readonly status: BriefInput['hostStatus']; readonly detail: string | null; readonly recovery: string | null } {
+): {
+  readonly status: BriefInput['hostStatus'];
+  readonly detail: string | null;
+  readonly recovery: string | null;
+  readonly removeFirst?: boolean;
+} {
   const pending = checks.find((check) => check.id === 'pending');
   const unobserved = checks.find((check) => check.id === 'host' && check.status === 'unknown');
   if (unobserved !== undefined || pending?.status === 'fail')
@@ -1315,7 +1321,12 @@ function hostState(
       (hostCheck !== undefined && check.id.startsWith(`projection-${host}`) && check.status === 'fail'),
   );
   if (failing.length > 0)
-    return { status: 'stale', detail: failing.map((check) => check.detail).join('; '), recovery: null };
+    return {
+      status: 'stale',
+      detail: failing.map((check) => check.detail).join('; '),
+      recovery: null,
+      ...(failing.some((check) => check.id.startsWith(`projection-${host}-hook:`)) ? { removeFirst: true } : {}),
+    };
   return { status: hostCheck === undefined ? 'absent' : 'registered', detail: null, recovery: null };
 }
 
@@ -1340,6 +1351,7 @@ function briefingFor(
     hostStatus: state.status,
     hostDetail: state.detail,
     recovery: state.recovery,
+    ...(state.removeFirst === true ? { removeFirst: true } : {}),
     // The cached update check and the refresh argv (host plugin distribution spec §11), both read without writing.
     updates: user.facts.updates,
     refresh: user.facts.refresh,

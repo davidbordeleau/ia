@@ -58,7 +58,7 @@ export interface Word {
   readonly schema: WordSchema;
   readonly kernelMembers: readonly string[];
   readonly consumer: string;
-  /** Absent from every word the generator emits today; §2.2 and §8 both record that. */
+  /** Absent from every word the generator emits today. */
   readonly example?: string;
 }
 export interface Catalogue {

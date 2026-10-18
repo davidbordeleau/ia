@@ -149,7 +149,7 @@ it('plans without writing, then registers a server that answers initialize', asy
     })),
   );
 
-  // §10 item 1: the exact recorded argument vector answers MCP initialize. This is test evidence; ia host never
+  // §10: the exact recorded argument vector answers MCP initialize. This is test evidence; ia host never
   // claims it, which is why `observed` above is false.
   const entry = JSON.parse(read(root, '.mcp.json')).mcpServers['ia-workspace'];
   const initialize = {
@@ -224,14 +224,14 @@ it('preserves unrelated settings and CLAUDE.md byte for byte, then removes exact
   // Two-space indentation and CRLF, so format preservation is exercised end to end rather than by value equality.
   const mcp =
     '{\r\n  "mcpServers": {\r\n    "other": {\r\n      "command": "x"\r\n    }\r\n  },\r\n  "note": 1\r\n}\r\n';
-  // An unrelated hook group shares the PreToolUse array the guard group joins (§10 item 4).
+  // An unrelated hook group shares the PreToolUse array the guard group joins.
   const settings =
     '{\r\n  "permissions": {\r\n    "allow": [\r\n      "Read"\r\n    ]\r\n  },\r\n  "hooks": {\r\n    "PreToolUse": [\r\n      {\r\n        "matcher": "Bash",\r\n        "hooks": [\r\n          {\r\n            "type": "command",\r\n            "command": "echo"\r\n          }\r\n        ]\r\n      }\r\n    ]\r\n  }\r\n}\r\n';
   put(root, '.mcp.json', mcp);
   put(root, '.claude/settings.local.json', settings);
   put(root, 'CLAUDE.md', 'mine\r\n');
   const lock = readFileSync(resolve(root, '.ia/distributions.lock.json'));
-  // Installation data under .ia/distributions/, every file but the host area's, by content (§10 item 7).
+  // Installation data under .ia/distributions/, every file but the host area's, by content.
   const data = (): Record<string, string> =>
     Object.fromEntries(
       (readdirSync(resolve(root, '.ia/distributions'), { recursive: true }) as string[])
@@ -269,7 +269,7 @@ it('preserves unrelated settings and CLAUDE.md byte for byte, then removes exact
     expect(existsSync(resolve(root, path)), path).toBe(false);
   // The removal deletes the receipt too, so the hosts area holds nothing but the lock file.
   expect(readdirSync(resolve(root, '.ia/distributions/hosts')).filter((name) => name !== 'lock.json')).toEqual([]);
-  // §8: removal never touches the lock or the materialized payload.
+  // Removal never touches the lock or the materialized payload.
   expect(readFileSync(resolve(root, '.ia/distributions.lock.json')).equals(lock)).toBe(true);
   expect(data()).toEqual(installed);
   expect(Object.keys(installed).length).toBeGreaterThan(0);

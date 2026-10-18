@@ -4,10 +4,10 @@
  * revisions, findings, digests, identities, counters, refusal codes.
  *
  * What is deliberately not compared, and what would be wrong to compare: spacing, column positions, status
- * symbols, colour, wrapping and wording. tests/render.test.ts owns presentation and tools/docs/cli-examples.ts
- * pins §7 byte for byte; a column assertion in this file would be in the wrong file. Exit classes and streams are
- * compared as the deliberate divergence they are rather than asserted equal: §1.4, §3 and §4.4 require the three
- * protocols to stay observably different, and none is normalized to another.
+ * symbols, colour, wrapping and wording. tests/render.test.ts owns presentation and pins its reference blocks byte
+ * for byte; a column assertion in this file would be in the wrong file. Exit classes and streams are compared as the
+ * deliberate divergence they are rather than asserted equal: §3 requires the three protocols to stay observably
+ * different, and none is normalized to another.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -80,7 +80,7 @@ it('reports one admission through ia validate --json and ia-distribution validat
   expect(refusedConsumer['status']).toBe('refused');
   expect(refusedConsumer['findings']).toEqual(refusedMachine['findings']);
   expect(refusedConsumer['revision']).toBe(refusedMachine['revision']);
-  // §2.5: the consumer adds a report outcome the native verdict does not carry; it is a read of the same report.
+  // The consumer adds a report outcome the native verdict does not carry; it is a read of the same report.
   expect(refusedConsumer['reportOutcome']).toBe('fail');
   expect(Object.hasOwn(refusedMachine, 'reportOutcome')).toBe(false);
 });
@@ -129,7 +129,7 @@ it('produces one archive through ia pack --json and ia-distribution pack', async
   const { version, ...facts } = consumer;
   expect(version).toBe(1);
   // Every integrity value the two produced, compared whole: archive and manifest digests, the source
-  // fingerprint, the archive name and the decoded manifest. §2.7 renames the flag; the packer is one packer.
+  // fingerprint, the archive name and the decoded manifest. The consumer renames the flag; the packer is one packer.
   expect(facts).toEqual(machine);
   expect(facts['status']).toBe('packed');
   expect(facts['archive']).toMatch(/^[0-9a-f]{64}$/);
@@ -181,7 +181,7 @@ it('plans one installation through ia install --json and ia-distribution plan in
   expect(consumer['plan']).toEqual(machine);
   expect(machine['digest']).toMatch(/^[0-9a-f]{64}$/);
   expect(consumer['applied']).toBeUndefined();
-  // §2.8 rule 1: a preview writes no installation state, and acquisition fills the content-addressed cache
+  // Registry spec §6.1: a preview writes no installation state, and acquisition fills the content-addressed cache
   // because resolution is by verified bytes. Both entrypoints do exactly that, and nothing more.
   expect(existsSync(resolve(root, '.ia/distributions.lock.json'))).toBe(false);
   expect(existsSync(resolve(root, '.ia/distributions/active.json'))).toBe(false);
@@ -269,7 +269,7 @@ it('refuses the same bad input with the same service code on both entrypoints', 
   ];
   for (const pair of pairs) {
     const label = pair.consumer.join(' ');
-    // §4.1: the consumer never rewrites a service's code, so the two carry the same string...
+    // §4: the consumer never rewrites a service's code, so the two carry the same string...
     const consumer = result(await ia([...pair.consumer, '--json']), 'stdout', 3, label);
     const machine = result(await native(pair.machine), 'stderr', 1, label);
     expect(consumer['code'], label).toBe(pair.code);

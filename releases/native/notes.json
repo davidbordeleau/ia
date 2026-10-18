@@ -1,69 +1,69 @@
 {
   "format": "ia.native-release-notes.v1",
   "baseline": {
-    "tag": "v3.0.0",
-    "commit": "8f9220040d29fce02f230c2899ff284b69293ff3"
+    "tag": "v3.1.1",
+    "commit": "1363fc9c949a485448d3699ff3e2756119a8d142"
   },
   "changes": [
     {
       "id": "inventarch/agent-composition-system",
-      "bump": "minor",
-      "summary": "`@capability` gains an optional invocation section, and `@agent-profile` gains optional invocation and presentation sections and `execution.effort`, so a Claude, Codex or Grok plugin can be lowered into records and rendered back; existing records remain valid and IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/agent-system",
       "bump": "patch",
-      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/authoring-system",
-      "bump": "minor",
-      "summary": "Reference guides for `@capability`, `@agent-profile` and `@distribution` document the new optional invocation, presentation and product fields; exact dependency versions move to 3.1.0. IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "The `@distribution` and `@predicate` reference guides and `LANGUAGE.md` carry the corrected descriptions (the optional product section, the present phrase), and `SPEC.md` no longer names a private planning item. No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/compliance-system",
       "bump": "patch",
-      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/governance-system",
       "bump": "patch",
-      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/hook-authoring-system",
       "bump": "patch",
-      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/language",
-      "bump": "minor",
-      "summary": "Embeds the extended agent-profile, capability and distribution schemas and every public system declaration at 3.1.0. IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "No content change of its own; it embeds the eleven public systems, whose `LANGUAGE.md` guides changed. IA syntax remains 1.0."
     },
     {
       "id": "inventarch/learning-system",
       "bump": "patch",
-      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/session-system",
       "bump": "patch",
-      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/template-system",
       "bump": "patch",
-      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/work-system",
       "bump": "patch",
-      "summary": "No content change; exact dependency versions on changed public systems, including inventarch/workspace-system, move to 3.1.0. IA syntax remains 1.0."
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     },
     {
       "id": "inventarch/workspace-system",
-      "bump": "minor",
-      "summary": "`@distribution` gains an optional product section (name, display name, version, description, author, licence, keywords, hosts, short description and category) for plugin projection; existing records remain valid and IA syntax remains 1.0."
+      "bump": "patch",
+      "summary": "`LANGUAGE.md` lists the corrected `@distribution` description (its optional product section) and `@predicate` description (its present phrase). No schema or record changes; IA syntax remains 1.0."
     }
   ]
 }

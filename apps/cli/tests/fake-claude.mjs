@@ -1,4 +1,4 @@
-// Test double for the claude CLI (behaviour observed in host plugin distribution spec §2.3). Every invocation, the
+// Test double for the claude CLI (behaviour observed in host plugin distribution spec §6.3). Every invocation, the
 // `--version` probe and the lists included, is appended to $IA_CLAUDE_CALLS when that is set. `--version` prints a
 // version and exits 0. `plugin list --json` and `plugin marketplace list --json` print $FAKE_CLAUDE_PLUGINS /
 // $FAKE_CLAUDE_MARKETPLACES (default []). Those three are not written to $IA_CLAUDE_LOG; every other call is, and exits

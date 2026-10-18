@@ -1,6 +1,6 @@
 # @distribution
 
-Declares root records from which a distributable closure is selected.
+Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes.
 
 Owner: workspace-system. Identity: workspace-system/definition/\<facet>/\<name>. Facets: distribution. Artifact set: projection. Primitive: Attention. Move: Observation.
 

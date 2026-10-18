@@ -4,7 +4,7 @@
  * Everything here is pure with respect to the process. The host — argv, environment, cwd, both stream
  * descriptions and the package version — arrives as a parameter and the result is returned as text, so a test
  * observes exactly the bytes the entry point writes and §5's `--json` invariant is checkable without a
- * subprocess. Progress is not produced by any verb in this release; §6.6 permits its absence and requires the
+ * subprocess. Progress is not produced by any verb in this release; §6 permits its absence and requires the
  * terminal state line, which every verb prints as text.
  */
 import { existsSync, realpathSync, statSync } from 'node:fs';
@@ -60,25 +60,25 @@ import {
 } from './render.js';
 
 /**
- * §2.8 rule 3's one question, described rather than performed — the same move `render.ts` makes for the terminal.
+ * §2.0's one question, described rather than performed — the same move `render.ts` makes for the terminal.
  * The reader and the writer arrive from the entry point, so the decision is a pure function of a string and a test
  * observes the exact bytes the question put on the wire. Unlike a rendered result this cannot be returned as text:
  * the prompt has to be written before the answer can be read.
  */
 export interface Interaction {
-  /** §2.8 rule 3: both stdin and stdout are terminals. A question that cannot be answered is never asked. */
+  /** §2.0: both stdin and stdout are terminals. A question that cannot be answered is never asked. */
   readonly interactive: boolean;
   /** §5 keeps every prompt off stdout, so the entry point points this at stderr. */
   readonly write: (text: string) => void;
   /** One line of input, or null at EOF, on a closed stdin, or where stdin cannot be read at all. */
   readonly read: () => Promise<string | null>;
 }
-/** §2.8 rule 3: `y` or `yes`, in any case and ignoring surrounding space. Everything else, EOF included, declines. */
+/** §2.0: `y` or `yes`, in any case and ignoring surrounding space. Everything else, EOF included, declines. */
 export const consents = (answer: string | null): boolean =>
   answer !== null && ['y', 'yes'].includes(answer.trim().toLowerCase());
 /**
  * Shows the change summary, asks once, and reports the answer. What a declined answer means belongs to the caller:
- * §2.8 rule 3 makes declining an answer to the question, not a failure of the command.
+ * §2.0 makes declining an answer to the question, not a failure of the command.
  */
 export async function confirm(interaction: Interaction, summary: string, question: string): Promise<boolean> {
   interaction.write(summary);
@@ -91,14 +91,14 @@ export interface Host {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly stdout: Terminal;
   readonly stderr: Terminal;
-  /** §2.8 rule 3: `--apply` may prompt only when a question can actually be asked and answered. */
+  /** §2.0: `--apply` may prompt only when a question can actually be asked and answered. */
   readonly interaction: Interaction;
   readonly version: string;
   /** The directory holding `assets/`, so §2.2's catalogue travels with the package rather than the workspace. */
   readonly packageRoot: string;
   readonly signal?: AbortSignal;
   /**
-   * Called once, only when §1.2 step 5 has selected a consumer verb. §3 forbids a SIGINT handler on the legacy
+   * Called once, only when §1.2's dispatch has selected a consumer verb. §3 forbids a SIGINT handler on the legacy
    * route's path, so the entry point installs its cleanup here rather than at startup.
    */
   readonly onConsumerRoute?: () => void | (() => void);
@@ -139,7 +139,10 @@ export class Refusal extends Error {
     readonly exit: number,
     readonly where: { readonly path?: string; readonly line?: number; readonly identity?: string } | null = null,
     readonly next: string | null = null,
-    /** §6.5 element 1 when there is no `where`: the invocation that was refused, rendered but never serialized. */
+    /**
+     * The error block's location when there is no `where`: the invocation that was refused, rendered but never
+     * serialized.
+     */
     readonly at: string | null = null,
     readonly registryIntent?: AdviceContext['registryIntent'],
     /** A machine-readable account of the refusal, serialized under `details` by `--json`. */
@@ -151,9 +154,9 @@ export class Refusal extends Error {
 }
 
 /**
- * §5's first signal, raised by a verb that had already written when it observed the signal. The JSON result stays
- * §5's fixed object plus `next`; the one stderr line gains the rerun that finishes the work, which `ia init` must
- * name once it has written anything.
+ * §5's interruption at the first signal, raised by a verb that had already written when it observed the signal. The
+ * JSON result stays §5's fixed object plus `next`; the one stderr line gains the rerun that finishes the work, which
+ * `ia init` must name once it has written anything.
  */
 export class Interrupted extends Error {
   constructor(readonly next: string) {
@@ -214,8 +217,9 @@ export function serviceNext(code: string, refused: Refused): string {
     : `Run "ia doctor${rooted}" for the observed runtime, workspace, installation and host state.`;
 }
 /**
- * §4.1: the consumer never rewrites a service's code. Class 4 is unreachable from the three verbs this release
- * implements, because none of them acquires anything over a network, so every unmapped failure is class 3. With the
+ * §4: the consumer never rewrites a service's code, and this function never assigns class 4: every unmapped failure
+ * is class 3. Class 4 arrives only as a Refusal a verb built, which passes through unchanged: distribute.ts refuses
+ * an `install`, `update` or `restore` that cannot reach or read a remote registry or archive at exit 4 (§3). With the
  * refused invocation named, the next action is `serviceNext`'s spelled for it; without, it is null as in 1.x, and
  * `renderRefusal` supplies the fallback.
  */
@@ -235,7 +239,7 @@ export function refusalOf(error: unknown, refused?: Refused): Refusal {
 }
 
 /**
- * §4.3 and §6.5. Human mode renders the block on stderr; `--json` emits the one object on stdout. Every refusal names
+ * §4, §5 and §6. Human mode renders the block on stderr; `--json` emits the one object on stdout. Every refusal names
  * one next command, at this boundary too: a refusal built without a next action (the 1.x constructor form) is given
  * `serviceNext`'s, spelled for `refused` when the caller names the refused invocation.
  */
@@ -292,7 +296,7 @@ export function renderRefusal(
   );
   return { exitCode: refusal.exit, stdout: '', stderr: document([block]) };
 }
-/** §6.5's strip rule applied to the serializer as well as the renderer, so both carry the same message. */
+/** The error block's strip rule applied to the serializer as well as the renderer, so both carry the same message. */
 export const stripFor = (message: string, code: string, location: string | null, identity: string | null): string => {
   let text = message;
   for (const prefix of [location, identity, code])
@@ -334,7 +338,7 @@ const groupBlock = (group: Group, label: string, caps: Capabilities): readonly s
 ];
 
 /**
- * §1.2 step 1 and §7.1. The nine legacy operations are listed verbatim under their own heading, together with their own
+ * §1.2 and §3. The nine legacy operations are listed verbatim under their own heading, together with their own
  * usage line, because the consumer help is the only place a reader learns that the machine protocol exists and is
  * unchanged. One row points at each operation's own help. Private namespaces are supplied by the caller so that a tree
  * without them prints a help text that does not mention them.
@@ -402,13 +406,13 @@ export function renderCommandHelp(command: CommandSpec, caps: Capabilities): str
 }
 
 /**
- * §2.0: walk from cwd toward the filesystem root and take the first directory containing `.ia/src`. Host plugin
+ * §1.2: walk from cwd toward the filesystem root and take the first directory containing `.ia/src`. Host plugin
  * distribution spec §3: a directory whose `.ia` is the IA home is never a workspace, even if src/ appeared there.
  */
 export function discoverRoot(start: string, iaHome?: string): string | undefined {
   let current = resolve(start);
   for (;;) {
-    // The IA home by device and inode, so a home spelled in another case or normalization is still recognized (crowncodes/ia#315).
+    // The IA home by device and inode, so a home spelled in another case or normalization is still recognized.
     if (existsSync(resolve(current, '.ia/src')) && (iaHome === undefined || !sameFile(resolve(current, '.ia'), iaHome)))
       return current;
     const parent = dirname(current);
@@ -466,15 +470,15 @@ export function respell(
     : ['ia', command.name, ...positionals, ...options].join(' ');
 }
 /**
- * §2.0: the real path of the resolved absolute root, because `workspace()` refuses a relative root and any link on the
- * way to one (`apps/distribution/src/files.ts:51`). A failed discovery is exit 3 with IA-DB-ROOT-INVALID.
+ * §1.2: the real path of the resolved absolute root, because `workspace()` refuses a relative root and any link on the
+ * way to one (`workspace` in `apps/distribution/src/files.ts`). A failed discovery is exit 3 with IA-DB-ROOT-INVALID.
  */
 export function requireRoot(context: Context): string {
   const supplied = context.args.value('root');
   if (supplied !== undefined) {
     const path = isAbsolute(supplied) ? resolve(supplied) : resolve(context.host.cwd, supplied);
-    // §2.5 names IA-DB-ROOT-INVALID for an unavailable root. The distribution `workspace()` guard would refuse a
-    // missing directory as IA-DIST-INPUT-INVALID first, and §4.1 forbids rewriting a service's code, so the CLI
+    // §1.2 names IA-DB-ROOT-INVALID for an unavailable root. The distribution `workspace()` guard would refuse a
+    // missing directory as IA-DIST-INPUT-INVALID first, and §4 forbids rewriting a service's code, so the CLI
     // makes the check itself and the service is never reached with a root it would name differently.
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory())
       throw new Refusal(
@@ -486,7 +490,7 @@ export function requireRoot(context: Context): string {
       );
     // The root the user chose opens at its real path, as `ia host` resolves it, so a root reached through links (macOS
     // /tmp, a linked checkout) works; every path below it is still checked link by link. The JS `realpathSync`, not
-    // `.native`: it keeps each name's case as typed, which the steward guard now folds (`unaliased`, crowncodes/ia#315). An 8.3
+    // `.native`: it keeps each name's case as typed, which the steward guard now folds (`unaliased`). An 8.3
     // short name or a subst drive that the JS form keeps is still an alias to the guard.
     return realpathSync(path);
   }
@@ -504,14 +508,14 @@ export function requireRoot(context: Context): string {
 }
 
 export const HELP_TOKENS: ReadonlySet<string> = new Set(['--help', '-h']);
-/** §2.0: `-h` short-circuits before the rest of the grammar, so a command's own help is never gated on it. */
+/** `-h` short-circuits before the rest of the grammar, so a command's own help is never gated on it. */
 const wantsHelp = (argv: readonly string[]): boolean => {
   const end = argv.indexOf('--');
   return argv.slice(0, end === -1 ? argv.length : end).some((token) => HELP_TOKENS.has(token));
 };
 
 type Handler = (context: Context) => Result | Promise<Result>;
-/** The consumer verbs of §1.2 step 5. A verb with no row here is a defect in this table, not a missing feature. */
+/** The consumer verbs §1.2 dispatches to. A verb with no row here is a defect in this table, not a missing feature. */
 const HANDLERS: Readonly<Record<string, Handler>> = {
   init: runInit,
   adopt: runAdopt,
@@ -562,7 +566,7 @@ function parsedInvocation(command: CommandSpec, args: Arguments): string {
   return ['ia', command.name, ...argv].map(quote).join(' ');
 }
 
-/** §1.2 step 5. Parse, then run; every class-2 check has already happened when a handler is entered. */
+/** §1.2. Parse, then run; every class-2 check has already happened when a handler is entered. */
 export async function runCommand(command: CommandSpec, argv: readonly string[], host: Host): Promise<Result> {
   const preliminary = resolveCapabilities(host.stdout, {});
   if (wantsHelp(argv)) return { exitCode: 0, stdout: renderCommandHelp(command, preliminary), stderr: '' };
@@ -580,9 +584,9 @@ export async function runCommand(command: CommandSpec, argv: readonly string[], 
       ...(args.flag('ascii') ? { ascii: true } : {}),
       json,
     });
-    // §2.8 rule 3 and §2.1: the confirmation check is part of parsing, so it precedes every class-3 refusal and
-    // keeps §3's promise that an exit 2 read nothing and wrote nothing. Both branches refuse the same invocation
-    // for the same reason — the question rule 3 specifies cannot be put where the answer could come from.
+    // §2.0: the confirmation check is part of parsing, so it precedes every class-3 refusal and
+    // keeps §1.2's promise that an exit 2 read nothing and wrote nothing. Both branches refuse the same invocation
+    // for the same reason — the question §2.0 specifies cannot be put where the answer could come from.
     if (args.flag('apply') && !args.flag('yes')) {
       if (!host.interaction.interactive) throw new UsageError('--apply without a terminal requires --yes');
       // §5: `--json` stdout is one parseable value with no prompt in it, so a terminal does not make it askable.
@@ -680,8 +684,8 @@ export interface Legacy {
 }
 
 /**
- * §1.2's ordered table. The first match wins and the order is normative: step 4 precedes step 5 unconditionally,
- * so a legacy operation can never be shadowed by a consumer verb.
+ * §1.2's dispatch, in order. The first match wins and the order is normative: the legacy route precedes the consumer
+ * route unconditionally, so a legacy operation can never be shadowed by a consumer verb.
  */
 export async function dispatch(
   argv: readonly string[],
@@ -692,12 +696,12 @@ export async function dispatch(
   const plain = (result: { readonly exitCode: number; readonly stdout: string }): Result => ({ ...result, stderr: '' });
   const token = argv[0];
   const caps = resolveCapabilities(host.stdout, {});
-  // §1.2 step 1, which supersedes main.ts:11's usage-exit: no arguments is a request for help, not a syntax
+  // The first route, which supersedes `runCli`'s usage exit in main.ts: no arguments is a request for help, not a syntax
   // error. The nine named routes are fixed, and a bare invocation is not one of them.
   if (token === undefined || (argv.length === 1 && HELP_TOKENS.has(token)))
     return { exitCode: 0, stdout: renderHelp(host, caps, extensions), stderr: '' };
   if (argv.length === 1 && token === '--version') return { exitCode: 0, stdout: host.version + '\n', stderr: '' };
-  // §1.6: an extension never takes a core, legacy or reserved token; such a token falls through to its core route.
+  // An extension never takes a core, legacy or reserved token; such a token falls through to its core route.
   const extension = CORE_TOKENS.has(token) ? undefined : extensions.find((candidate) => candidate.token === token);
   if (extension !== undefined) return plain(await extension.run(argv.slice(1)));
   if ((LEGACY_OPERATIONS as readonly string[]).includes(token)) return plain(legacy(argv));

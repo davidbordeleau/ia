@@ -55,7 +55,7 @@ function assertDirectory(path: string): void {
     if (dirname(current) === current) break;
   }
 }
-/** OS-local adapter: ownership uses a separate lock-only database, released by process death. On macOS each database also syncs with F_FULLFSYNC, which SQLite uses only when told, since fsync(2) there leaves the drive's own cache unflushed (crowncodes/ia#323). */
+/** OS-local adapter: ownership uses a separate lock-only database, released by process death. On macOS each database also syncs with F_FULLFSYNC, which SQLite uses only when told, since fsync(2) there leaves the drive's own cache unflushed. */
 export class SqliteBackend implements JournalBackend {
   private readonly databases = new Map<string, DatabaseSync>();
   private readonly leases = new Map<string, Lease>();

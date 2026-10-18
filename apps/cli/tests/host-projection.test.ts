@@ -1,5 +1,5 @@
 /**
- * Host registration spec §6: a consumer workspace's projection, rendered from its own admitted records. It is the
+ * Host registration spec §4: a consumer workspace's projection, rendered from its own admitted records. It is the
  * position packet's consumer rendering (runtime R19 and R20): the target is initialized from the bundled base, so
  * every system line comes from the base's systems.
  */
@@ -38,7 +38,8 @@ it('renders a consumer workspace for claude as its position packet, with no agen
   for (const file of files) expect(file.text.split('\n')).toContain(PACKET_MARKER);
   const rules = files[0]!.text;
   expect(rules.startsWith(`${PACKET_MARKER}\n\n# IA position packet: demo\n`)).toBe(true);
-  // The base's eleven systems (spec §2.2) are pointer lines, each with its steward and the command that seats at it.
+  // The base's eleven systems (workspace initialization spec §3) are pointer lines, each with its steward and the
+  // command that seats at it.
   const systems = section(rules, 'Systems');
   expect(systems).toHaveLength(11);
   for (const line of systems)

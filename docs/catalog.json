@@ -9,7 +9,7 @@
       "genre": "spec",
       "title": "Consumer CLI contract",
       "status": "implemented",
-      "sourceDigest": "ebfe98d0e30a5ec6f984f67732a74668afe47670316b257e2ec1780e14cf79ef"
+      "sourceDigest": "ef95c51cf08b3555a2de162dd7d7737d29ffc7c4cf9cf971ab990912941f1a1e"
     },
     {
       "id": "spec-host-plugin-distribution",
@@ -18,7 +18,7 @@
       "genre": "spec",
       "title": "Host plugin distribution",
       "status": "implemented",
-      "sourceDigest": "aecac204c7440ad68ed2ed43b9ab8026003b8cdbf5d4eec40b11e819af370a9f"
+      "sourceDigest": "f90e3a88159d76888c67f021132dfb78d3d6ff0e34556263e0f44bc50af8d3f8"
     },
     {
       "id": "spec-host-registration",
@@ -27,7 +27,7 @@
       "genre": "spec",
       "title": "Host registration",
       "status": "implemented",
-      "sourceDigest": "6492268762f1b126e6fa0b55445a18e5660cec93a7b9fd4746fc358b7a4c26bf"
+      "sourceDigest": "0d7860cef2a26cf5bfdc797d860fdabbc8ebbd6cddf675372f10de546b637879"
     },
     {
       "id": "spec-registry",
@@ -36,7 +36,7 @@
       "genre": "spec",
       "title": "Distribution registry",
       "status": "implemented",
-      "sourceDigest": "3b1d83351f0f17605462a723ece757fbceb26f6c7ae8e001ddb22d928d5def04"
+      "sourceDigest": "0449fec30e387bfb97fe233d8b7d6cfa2b8e618a5c5174c243c2ec05a8373e46"
     },
     {
       "id": "spec-workspace-initialization-apply",
@@ -45,7 +45,7 @@
       "genre": "spec",
       "title": "Workspace initialization apply",
       "status": "implemented",
-      "sourceDigest": "910e34abe54e4a6b1b5d2f16239d4fa19af2f2b077902d6f2d1b1465f46fa141"
+      "sourceDigest": "04401432e43c1e95f7bfc353fdef97db9099203586ab028b3a51b50baa10cdd1"
     },
     {
       "id": "spec-workspace-initialization",
@@ -54,7 +54,7 @@
       "genre": "spec",
       "title": "Workspace initialization",
       "status": "implemented",
-      "sourceDigest": "14c3b65fb952286768b4fad070c5d7704a0f8f130535416bb3ad6ce598686f9b"
+      "sourceDigest": "ba3ba79cea1b8eb07c79b213a6b3be12b3ecc2846f209258fd98984e515f3d89"
     }
   ]
 }

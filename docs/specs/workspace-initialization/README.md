@@ -31,7 +31,7 @@ Create a workspace that admits with zero errors and holds only what its owner ne
 
 The published `@inventarch/cli` package carries `assets/base.json`, a pin of `{id, version, archive, manifest}`, and exactly the one archive it pins, `assets/base/<archive digest>.ia.tgz`, so an installed CLI initializes offline. The pin is the only authority for those bytes: `ia init` verifies the archive against it and refuses, writing nothing, when they disagree.
 
-[language-base.ts](../../../tools/native/language-base.ts) builds both from the floor, the public system contracts and schemas, and the language distribution root that [the public manifest](../../../examples/public-language/manifest.json) selects. Example records are excluded. The package is `inventarch/language`, which supplies the eleven public systems. Its artifact version is set in [versions.json](../../../examples/public-language/versions.json) (currently `3.1.1`). Syntax, format and engine requirements are unchanged: 3.x artifacts still use the `.ia` syntax version `1.0`.
+[language-base.ts](../../../tools/native/language-base.ts) builds both from the floor, the public system contracts and schemas, and the language distribution root that [the public manifest](../../../examples/public-language/manifest.json) selects. Example records are excluded. The package is `inventarch/language`, which supplies the eleven public systems. Its artifact version is set in [versions.json](../../../examples/public-language/versions.json) (currently `3.1.2`); within an npm major, native versions are chosen by content, so it need not equal the CLI version. Syntax, format and engine requirements are unchanged: 3.x artifacts still use the `.ia` syntax version `1.0`.
 
 ## 4 Authored starter
 

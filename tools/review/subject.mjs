@@ -1,3 +1,4 @@
+import { containedFile } from '../shared/paths.mjs';
 import { createHash } from 'node:crypto';
 import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -49,9 +50,9 @@ export function evidenceFiles(directory, omissions) {
       }
       // Public quality emits <task>/evidence.json alongside raw logs/Vitest output.
       if (!entry.isFile() || entry.name !== 'evidence.json') continue;
-      const report = evidenceReport(resolve(directory, name), name, bytes, omissions);
+      const report = evidenceReport(resolve(directory, name), name, bytes, omissions, directory);
       if (!report) continue;
-      JSON.parse(report.content);
+      try { JSON.parse(report.content); } catch { throw new Error('Invalid JSON in gate evidence: ' + name); }
       reports.push({ name, digest: digest(report.content), content: report.content });
       bytes += report.size;
     }
@@ -65,7 +66,7 @@ export function evidenceFiles(directory, omissions) {
  * js/file-system-race): its text and the size it was opened at, or undefined when it is omitted or is no regular file.
  * `disclosed` is the size of the reports already admitted.
  */
-function evidenceReport(path, name, disclosed, omissions) {
+function evidenceReport(path, name, disclosed, omissions, directory) {
   let fd;
   try {
     // NOFOLLOW refuses a link put in place after the listing; NONBLOCK keeps a FIFO from blocking the open.
@@ -110,6 +111,7 @@ function evidenceReport(path, name, disclosed, omissions) {
     }
     // The size and the modification time of the opened file catch a rewrite while it was read, at any size.
     const after = fstatSync(fd, { bigint: true });
+    containedFile(directory, name);
     if (
       length !== size ||
       after.size !== opened.size ||

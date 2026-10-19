@@ -37,8 +37,9 @@ it('cannot reuse a kernel PASS after changing the evaluated repository floor', a
       mkdirSync(dirname(resolve(candidate, path)), { recursive: true });
       cpSync(resolve(root, path), resolve(candidate, path));
     }
-    for (const directory of ['packages', 'apps', 'tools', 'examples', 'releases'])
+    for (const directory of ['packages', 'apps', 'tools', 'releases'])
       symlinkSync(resolve(root, directory), resolve(candidate, directory), 'junction');
+    cpSync(resolve(root, 'examples'), resolve(candidate, 'examples'), { recursive: true });
     appendFileSync(resolve(candidate, '.ia/src/floor/move.ia'), '\n');
     const { report } = checkCompliance(candidate);
     expect(report.verdicts.find((v) => v.check === 'COMP-KERNEL')?.outcome).not.toBe('pass');

@@ -1,5 +1,5 @@
-import { ensureQualification, installConsumer } from './consumer.mjs';
 import '../temp/physical-temp.mjs';
+import { ensureQualification, installConsumer } from './consumer.mjs';
 import { packageManagerCommand } from '../entry/package-manager.mjs';
 import { packPublicPackages, COMPATIBILITY } from '../release/public-pack.mjs';
 import { scanPackedPublicContent } from '../release/scan-packed.mjs';

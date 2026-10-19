@@ -195,7 +195,6 @@ it('is the first import of every Vitest configuration a task runs', () => {
 const NOT_ENTRY_POINTS: Readonly<Record<string, { reason: string; loadedBy?: readonly string[] }>> = {
   'tools/compliance/hook-fixtures.ts': { reason: 'a library', loadedBy: ['tools/compliance/check.ts'] },
   'tools/compliance/publication-fixtures.ts': { reason: 'a library', loadedBy: ['tools/compliance/check.ts'] },
-  'tools/compliance/runtime-fixtures.ts': { reason: 'a library', loadedBy: ['tools/compliance/check.ts'] },
   'tools/systems/fixture.ts': {
     reason: 'a library that creates isolated public system fixtures',
     loadedBy: ['tools/systems/scenarios.ts'],

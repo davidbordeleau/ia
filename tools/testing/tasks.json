@@ -2701,12 +2701,12 @@
       "mode": "source",
       "inputProfile": "installed-cli",
       "dependsOn": [
-        "language-base:generate",
-        "distribution:build",
         "cli:build",
+        "distribution:build",
+        "host-payload:generate",
+        "language-base:generate",
         "mcp-door:build",
-        "steward-hook:build",
-        "host-payload:generate"
+        "steward-hook:build"
       ],
       "outputs": [
         "artifacts/tests/tools-test-installed-views"
@@ -3491,6 +3491,7 @@
       "kind": "vitest",
       "project": ".",
       "files": [
+        "tools/review/main.test.ts",
         "tools/review/runner.test.ts"
       ],
       "profile": "unit",
@@ -3510,6 +3511,36 @@
       "resourceClass": "pure",
       "covers": [
         "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tools/review/runner.test.ts > omits a report symlink and skips a FIFO named like a report without opening either",
+          "reason": "Windows has no FIFOs and needs a privilege to create a file symbolic link; Linux and macOS run this case, and the junction, bound and nesting cases run on every platform.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/review/runner.test.ts > omits an unreadable report past either disclosure bound before reading it, and rethrows its error within them",
+          "reason": "chmod cannot make a file unreadable on Windows, where it only sets the read-only attribute; Linux and macOS run this case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/review/runner.test.ts > rethrows the open error of an unreadable report exactly at the per-report bound",
+          "reason": "chmod cannot make a file unreadable on Windows, where it only sets the read-only attribute; Linux and macOS run this case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/review/runner.test.ts > rethrows the open error of an unreadable report that brings the running total exactly to its bound",
+          "reason": "chmod cannot make a file unreadable on Windows, where it only sets the read-only attribute; Linux and macOS run this case.",
+          "platforms": [
+            "windows"
+          ]
+        }
       ]
     },
     {
@@ -3935,7 +3966,7 @@
         "macos"
       ],
       "mode": "emitted",
-      "inputProfile": "emitted",
+      "inputProfile": "qualification-source",
       "dependsOn": [
         "agent-composition-system:build",
         "agent-system:build",
@@ -3953,17 +3984,19 @@
         "language:build",
         "runtime:build",
         "service-contracts:build",
-        "kb:build"
+        "kb:build",
+        "packages:pack"
       ],
       "outputs": [
         "artifacts/tests/kb-qualify"
       ],
-      "cache": true,
+      "cache": false,
       "workerLimit": 1,
       "resourceClass": "subprocess",
       "covers": [
         "node tools/distribution/qualify-kb.mjs"
-      ]
+      ],
+      "reason": "Exact archive provenance is rechecked on every run; restored test evidence cannot replace this verification."
     },
     {
       "id": "tools:test-shared",
@@ -4014,169 +4047,6 @@
       "covers": [
         "tsc -p tsconfig.tools-js.json"
       ]
-    },
-    {
-      "id": "kb:build",
-      "kind": "command",
-      "project": "packages/kb",
-      "command": "pnpm build",
-      "profile": "unit",
-      "platforms": [
-        "linux",
-        "windows",
-        "macos"
-      ],
-      "mode": "source",
-      "inputProfile": "workspace-records",
-      "dependsOn": [
-        "language:build",
-        "graph:build",
-        "db:build",
-        "runtime:build",
-        "workspace-runtime:build",
-        "session-system:build"
-      ],
-      "outputs": [
-        "packages/kb/dist",
-        "artifacts/tests/kb-build"
-      ],
-      "cache": true,
-      "workerLimit": 1,
-      "resourceClass": "io",
-      "covers": [
-        "pnpm -r build"
-      ]
-    },
-    {
-      "id": "kb:typecheck",
-      "kind": "command",
-      "project": "packages/kb",
-      "command": "pnpm typecheck",
-      "profile": "unit",
-      "platforms": [
-        "linux",
-        "windows",
-        "macos"
-      ],
-      "mode": "source",
-      "inputProfile": "workspace-records",
-      "dependsOn": [
-        "kb:build"
-      ],
-      "outputs": [
-        "artifacts/tests/kb-typecheck"
-      ],
-      "cache": true,
-      "workerLimit": 1,
-      "resourceClass": "io",
-      "covers": [
-        "pnpm -r typecheck"
-      ]
-    },
-    {
-      "id": "kb:test",
-      "kind": "vitest",
-      "project": "packages/kb",
-      "files": [
-        "tests/legacy.test.ts",
-        "tests/foundation.test.ts",
-        "tests/installation.test.ts",
-        "tests/package.test.ts",
-        "tests/local.test.ts",
-        "tests/protocol.test.ts"
-      ],
-      "profile": "installed",
-      "platforms": [
-        "linux",
-        "windows",
-        "macos"
-      ],
-      "mode": "source",
-      "inputProfile": "workspace-records",
-      "dependsOn": [
-        "kb:build"
-      ],
-      "outputs": [
-        "artifacts/tests/kb-test"
-      ],
-      "cache": true,
-      "workerLimit": 1,
-      "resourceClass": "subprocess",
-      "covers": [
-        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
-      ]
-    },
-    {
-      "id": "cli:test-kb",
-      "kind": "vitest",
-      "project": "apps/cli",
-      "files": [
-        "tests/kb.test.ts"
-      ],
-      "profile": "installed",
-      "platforms": [
-        "linux",
-        "windows",
-        "macos"
-      ],
-      "mode": "source",
-      "inputProfile": "workspace-records",
-      "dependsOn": [
-        "cli:build"
-      ],
-      "outputs": [
-        "artifacts/tests/cli-test-kb"
-      ],
-      "cache": true,
-      "workerLimit": 1,
-      "resourceClass": "subprocess",
-      "covers": [
-        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
-      ]
-    },
-    {
-      "id": "kb:qualify",
-      "kind": "command",
-      "project": ".",
-      "command": "pnpm kb:qualify",
-      "profile": "installed",
-      "platforms": [
-        "linux",
-        "windows",
-        "macos"
-      ],
-      "mode": "emitted",
-      "inputProfile": "qualification-source",
-      "dependsOn": [
-        "agent-composition-system:build",
-        "agent-system:build",
-        "authoring-system:build",
-        "session-system:build",
-        "template-system:build",
-        "cli:build",
-        "distribution:build",
-        "mcp-door:build",
-        "steward-hook:build",
-        "vscode:build",
-        "compliance:build",
-        "db:build",
-        "graph:build",
-        "language:build",
-        "runtime:build",
-        "service-contracts:build",
-        "kb:build",
-        "packages:pack"
-      ],
-      "outputs": [
-        "artifacts/tests/kb-qualify"
-      ],
-      "cache": false,
-      "workerLimit": 1,
-      "resourceClass": "subprocess",
-      "covers": [
-        "node tools/distribution/qualify-kb.mjs"
-      ],
-      "reason": "Exact archive provenance is rechecked on every run; restored test evidence cannot replace this verification."
     },
     {
       "id": "packages:pack",

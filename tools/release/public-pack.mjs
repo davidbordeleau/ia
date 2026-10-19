@@ -1,3 +1,4 @@
+import '../temp/physical-temp.mjs';
 import { packageManagerCommand } from '../entry/package-manager.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -11,7 +12,6 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { copyPackInputs } from './shared/pack-inputs.mjs';
 import { child, separate } from './shared/paths.mjs';
@@ -209,7 +209,7 @@ export function packPublicPackages(root, target, pnpm = process.env.npm_execpath
   if (rootManifest.packageManager !== 'pnpm@' + pnpmVersion)
     throw new Error('Package manager differs from the emitted toolchain policy');
   if (existsSync(target) && readdirSync(target).length) throw new Error('Public package destination must be empty');
-  const parent = realpathSync(tmpdir()),
+  const parent = realpathSync(dirname(root)),
     staging = mkdtempSync(resolve(parent, '.ia-public-npm-pack-'));
   const run = (args, cwd = staging) => {
     const invocation = packageManagerCommand(pnpm, args);

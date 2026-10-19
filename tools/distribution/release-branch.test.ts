@@ -117,3 +117,46 @@ it.each(['update', 'delete'] as const)(
   },
   60000,
 );
+
+it.each(['update', 'delete'] as const)(
+  'migrates a single legacy bot release commit for %s',
+  async (operation) => {
+    const { updateReleaseBranch, deleteReleaseBranch } = await import('./release-branch.mjs');
+    await inRepository(async (root) => {
+      const remote = resolve(root, '.git/legacy-remote.git');
+      await git(root, 'init', '--bare', '--quiet', remote);
+      writeFileSync(resolve(root, 'version.txt'), 'base');
+      await git(root, 'add', 'version.txt');
+      await git(root, 'commit', '--quiet', '-m', 'Base');
+      await git(root, 'remote', 'add', 'origin', remote);
+      await git(root, 'push', '--quiet', 'origin', 'main');
+      await git(root, 'fetch', '--quiet', 'origin');
+      const base = await git(root, 'rev-parse', 'HEAD');
+      writeFileSync(resolve(root, 'version.txt'), 'legacy');
+      await git(root, 'add', 'version.txt');
+      await git(
+        root,
+        '-c',
+        'user.name=github-actions[bot]',
+        '-c',
+        'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+        'commit',
+        '--quiet',
+        '-m',
+        'Release 3.2.2',
+      );
+      const legacy = await git(root, 'rev-parse', 'HEAD');
+      await git(root, 'push', '--quiet', 'origin', 'HEAD:refs/heads/release/next');
+      await git(root, 'switch', '--detach', base);
+      if (operation === 'update') {
+        writeFileSync(resolve(root, 'version.txt'), 'next');
+        await git(root, 'add', 'version.txt');
+        expect(updateReleaseBranch(root, '3.2.3').previous).toBe(legacy);
+      } else {
+        expect(deleteReleaseBranch(root).previous).toBe(legacy);
+        expect(await git(root, 'ls-remote', 'origin', 'refs/heads/release/next')).toBe('');
+      }
+    });
+  },
+  60000,
+);

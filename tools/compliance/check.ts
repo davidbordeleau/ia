@@ -1,5 +1,5 @@
-import { parseOptions } from '../shared/args.mjs';
 import '../temp/physical-temp.mjs';
+import { parseOptions } from '../shared/args.mjs';
 import { publicSystemNames } from '../native/public-systems.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';

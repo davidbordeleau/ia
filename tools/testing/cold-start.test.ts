@@ -50,7 +50,7 @@ it('materializes candidate additions and relocations in the scratch Git index', 
 it(
   'plans before build and produces every installed-view prerequisite in a source-only checkout',
   async () => {
-    const parent = realpathSync(tmpdir()),
+    const parent = realpathSync(dirname(source)),
       root = mkdtempSync(resolve(parent, 'ia-tools-cold-'));
     const env: NodeJS.ProcessEnv = { ...process.env, NX_DAEMON: 'false' };
     for (const name of Object.keys(env)) if (name.startsWith('NX_') && name !== 'NX_DAEMON') delete env[name];

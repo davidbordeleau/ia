@@ -47,31 +47,38 @@ export function containedFile(root, path, { allowMissing = false } = {}) {
 export function readRegular(root, path, limit) {
   if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Invalid file byte ceiling');
   const target = containedFile(root, path),
-    before = lstatSync(target);
-  if (before.size > limit) throw new Error('Unbounded file: ' + path);
+    ceiling = Math.min(limit, 2147483647);
   const fd = openSync(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.ino !== before.ino || stat.dev !== before.dev || stat.size > limit)
+    const stat = fstatSync(fd, { bigint: true }),
+      named = lstatSync(target, { bigint: true });
+    if (stat.size > BigInt(ceiling)) throw new Error('Unbounded file: ' + path);
+    if (
+      !stat.isFile() ||
+      stat.nlink !== 1n ||
+      named.isSymbolicLink() ||
+      stat.ino !== named.ino ||
+      stat.dev !== named.dev
+    )
       throw new Error('Aliased or changed file: ' + path);
-    const bytes = Buffer.alloc(stat.size + 1);
+    const bytes = Buffer.alloc(Number(stat.size) + 1);
     let length = 0,
       count;
     do {
       count = readSync(fd, bytes, length, bytes.length - length, null);
       length += count;
     } while (count && length < bytes.length);
-    const after = fstatSync(fd),
-      retained = lstatSync(containedFile(root, path));
+    const after = fstatSync(fd, { bigint: true }),
+      retained = lstatSync(containedFile(root, path), { bigint: true });
     if (
-      length !== stat.size ||
+      BigInt(length) !== stat.size ||
       [after, retained].some(
         (value) =>
           value.ino !== stat.ino ||
           value.dev !== stat.dev ||
           value.size !== stat.size ||
-          value.mtimeMs !== stat.mtimeMs ||
-          value.nlink !== 1,
+          value.mtimeNs !== stat.mtimeNs ||
+          value.nlink !== 1n,
       )
     )
       throw new Error('File changed during read: ' + path);

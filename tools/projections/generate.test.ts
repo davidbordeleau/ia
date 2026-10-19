@@ -480,7 +480,7 @@ it.each(['--keep', '--typo'])('rejects qualifier %s before allocating a consumer
       env: { ...process.env, TEMP: parent, TMP: parent, TMPDIR: parent },
     });
     expect(result.status, result.stderr).toBe(2);
-    expect(result.stderr).toContain('accepts no optional');
+    expect(result.stderr).toContain('Unknown argument: ' + flag);
     expect(readdirSync(parent)).toEqual([]);
   } finally {
     rmSync(parent, { recursive: true, force: true });

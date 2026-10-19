@@ -1,3 +1,5 @@
+import { readRegular } from '../shared/paths.mjs';
+import { packedManifest } from './release-graph.mjs';
 import { noAliases, separate } from '../release/shared/paths.mjs';
 import { releaseArtifacts, installConsumer } from './consumer.mjs';
 import { publicPackageInputs } from '../release/public-pack.mjs';
@@ -31,9 +33,6 @@ const inventory = {
   artifacts: release.packages.map((row) => ({
     ...row,
     path: row.filename,
-    sha256: createHash('sha256')
-      .update(readFileSync(resolve(archives, row.filename)))
-      .digest('hex'),
   })),
 };
 const pins = [];
@@ -43,18 +42,9 @@ for (const name of packages) {
   assert.equal(matches.length, 1, `Select exactly one @inventarch/${name} archive`);
   assert(/^[A-Za-z0-9_.-]+\.tgz$/.test(matches[0].path), 'Unsafe selected archive path');
   const path = resolve(archives, matches[0].path),
-    stat = lstatSync(path);
-  assert(stat.isFile() && !stat.isSymbolicLink());
-  assert.equal(digest(readFileSync(path)), matches[0].sha256, 'Selected archive digest mismatch');
-  const packed = JSON.parse(
-    execFileSync('tar', ['-xOf', basename(path), 'package/package.json'], {
-      cwd: archives,
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 30000,
-      maxBuffer: 1024 * 1024,
-    }),
-  );
+    bytes = readRegular(archives, matches[0].path, 256 * 1024 * 1024);
+  assert.equal(digest(bytes), matches[0].sha256, 'Selected archive digest mismatch');
+  const packed = packedManifest(path, bytes);
   assert.equal(packed.name, matches[0].name, 'Selected archive name mismatch');
   assert.equal(packed.version, matches[0].version, 'Selected archive version mismatch');
   for (const group of ['dependencies', 'optionalDependencies', 'peerDependencies'])
@@ -71,7 +61,7 @@ for (const name of packages) {
   pins.push({
     package: `@inventarch/${name}`,
     archive: basename(path),
-    sha256: createHash('sha256').update(readFileSync(path)).digest('hex'),
+    sha256: digest(bytes),
   });
 }
 separate(output, candidate, archives, store);

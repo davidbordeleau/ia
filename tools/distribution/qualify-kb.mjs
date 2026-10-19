@@ -1,5 +1,5 @@
-import { ensureQualification, installConsumer } from './consumer.mjs';
 import '../temp/physical-temp.mjs';
+import { ensureQualification, installConsumer } from './consumer.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

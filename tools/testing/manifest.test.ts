@@ -55,7 +55,7 @@ it('loads manifest parsing alone in a source-only fixture with no inventory, com
   const entry = resolve(directory, 'probe.mts');
   writeFileSync(
     entry,
-    "import {readManifest} from './tools/testing/manifest.ts'; console.log(readManifest(process.cwd()).schemaVersion);\n",
+    "import {readManifest} from './tools/testing/manifest.ts'; console.log(String(readManifest(process.cwd()).schemaVersion));\n",
   );
   const result = spawnSync(
     process.execPath,

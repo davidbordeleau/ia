@@ -29,14 +29,18 @@ export function inspectReleaseBranch(root) {
   if (!commits.length) return expected;
   const head = commits[0] ?? '';
   const message = git(root, 'show', '-s', '--format=%B', head);
-  const base = message.match(/^IA-Release-Base: ([a-f0-9]{40})$/m)?.[1];
+  const declaredBase = message.match(/^IA-Release-Base: ([a-f0-9]{40})$/m)?.[1];
   const parents = git(root, 'show', '-s', '--format=%P', head);
+  const legacy = /^Release (0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(message);
+  const base = legacy ? parents : declaredBase;
   const recognized =
     commits.length === 1 &&
     head === expected &&
     base === parents &&
-    /^Release (0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\n\n/.test(message) &&
-    message.split('\n').includes(marker) &&
+    /^[a-f0-9]{40}$/.test(parents) &&
+    (legacy ||
+      (/^Release (0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\n\n/.test(message) &&
+        message.split('\n').includes(marker))) &&
     git(root, 'show', '-s', '--format=%ae%n%ce', head) === `${bot}\n${bot}`;
   if (!recognized || !base)
     throw new Error('Refusing unrecognized release/next commits; preserve and reconcile maintainer amendments');

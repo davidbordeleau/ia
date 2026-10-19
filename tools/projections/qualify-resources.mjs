@@ -1,6 +1,6 @@
+import '../temp/physical-temp.mjs';
 import { ensureQualification, installConsumer } from '../distribution/consumer.mjs';
 import { parseOptions } from '../shared/args.mjs';
-import '../temp/physical-temp.mjs';
 import { compiledSystemFolders } from '../native/public-systems.mjs';
 // Build first. This qualification installs emitted packages in a disposable consumer.
 import assert from 'node:assert/strict';

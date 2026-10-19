@@ -111,10 +111,10 @@ async function main() {
     throw new Error('Review exceeded CI deadline');
   }
   const expected = { repository, pr: subject.pr, head: subject.head, subject: subjectDigest };
-  validateResult(receipt.result, expected);
   mkdirSync('artifacts/review', { recursive: true });
   writeFileSync('artifacts/review/result.json', JSON.stringify(receipt.result, null, 2));
   if (receipt.result.id !== review) throw new Error('Review result identity required');
+  validateResult(receipt.result, expected);
   const delivery = await publishReview(gh, repository, receipt.result, expected);
   if (delivery.reviewId) await api(`/${review}/delivery`, { reviewId: delivery.reviewId, head: subject.head });
   if (process.env.GITHUB_STEP_SUMMARY)

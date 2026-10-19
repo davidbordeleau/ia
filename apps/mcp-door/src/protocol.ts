@@ -107,11 +107,21 @@ export class Protocol {
             ? vocabulary(args)
             : this.#door.request({ operation, params: args });
         const result = format === 'compact' ? compactContext(raw as DoorResponse) : raw;
-        const response = success({
-          content: [{ type: 'text', text: JSON.stringify(result) }],
-          structuredContent: result,
-          isError: !result.ok,
-        });
+        const envelope = (value: typeof result) =>
+          success({
+            content: [{ type: 'text', text: JSON.stringify(value) }],
+            structuredContent: value,
+            isError: !value.ok,
+          });
+        let response = envelope(result);
+        if (operation === 'kb:search' && result.ok && 'value' in result) {
+          const search = result.value as { results: readonly unknown[]; truncated: boolean };
+          const results = [...search.results];
+          while (Buffer.byteLength(JSON.stringify(response)) > 48 * 1024 && results.length) {
+            results.pop();
+            response = envelope({ ...result, value: { ...search, results, truncated: true } });
+          }
+        }
         if (operation.startsWith('kb:') && Buffer.byteLength(JSON.stringify(response)) > 48 * 1024) {
           const refusal = {
             version: 1,

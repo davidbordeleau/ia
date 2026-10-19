@@ -74,10 +74,10 @@ These commands are judged against the acting participant's governing mandates be
 
 | Move | Commands |
 | --- | --- |
-| Observation | `read`, `next` |
-| Verification | `validate`, `preview` |
+| Observation | `read`, `next`, `kb search/read/resolve/traverse` |
+| Verification | `validate`, `preview`, `kb check` and `kb pack` preview |
 | Synthesis | `author` |
-| Execution | `capture`, `project` and a workspace `host --apply` |
+| Execution | `capture`, `project`, `kb pack --apply` and a workspace `host --apply` |
 
 A capture or project plan is judged as the effect it plans. No other command is judged, including `position`, `inspect`, `init`, `doctor`, the distribution commands, the machine protocol, and a `host` plan, `--remove` or `--user`. Each judged command takes `--actor <agent>` to name which authored participant is acting.
 

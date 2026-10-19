@@ -2,6 +2,28 @@
 
 Generated from reviewed release changesets. Entries describe intended releases; publication is a separate action.
 
+## 3.3.0
+
+Coordinated 3.3.0 release of the 23 public npm packages: Judge a held user host lock from one opened file; Complete native authoring and consumer contracts.
+
+### Judge a held user host lock from one opened file
+
+When `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run, @inventarch/distribution now judges whether that lock is stale from one opened file: its type, age and pid all come from a single descriptor, and a stale lock is removed only after its name is found, while that descriptor is open, to still name the judged file (CodeQL js/file-system-race). A lock that replaced the judged file before that check is therefore no longer removed; a brief window between the check and the removal remains, as Node has no unlink-if-same. A symbolic link or other non-regular file at the lock path now counts as busy and is not taken over, and a FIFO at the lock path no longer hangs the takeover; each refuses IA-DIST-INSTALL-BUSY, as does a lock file the run cannot open. Locks the CLI writes are judged as before: taken over once their pid has died, after 10 minutes, or after 10 seconds when their pid is empty or unparseable. The IA-DIST-INSTALL-BUSY message is unchanged.
+
+Packages: `@inventarch/distribution`.
+
+### Complete native authoring and consumer contracts
+
+Add explicit primitive selection with protocol-2 compatibility, actionable per-word authoring guidance and executable native operation cases. Normalize captured-read refusals, allow structured templates to omit unused legacy fields, and omit unknown journal phases while retaining legacy schemas and record identities. Release qualification and publication remain separate. Regenerate both host position packets and honor the installed context primitive in runner turns.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
+### Add reusable knowledge packages and local CLI/MCP readers
+
+Read admitted records and bound documents without a .kb folder. Export explicitly selected committed knowledge, preserve legacy portable validation, and expose bounded reads through ia kb and five MCP tools. Central policy and lifecycle remain host owned.
+
+Packages: `@inventarch/cli`, `@inventarch/kb`, `@inventarch/mcp-door`.
+
 ## 3.2.1
 
 Coordinated 3.2.1 release of the 23 public npm packages: Refuse a coordinate value whose text conversion throws as an unknown value.

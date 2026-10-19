@@ -223,7 +223,10 @@ describe('conformance verification (D10)', () => {
     const inputs = {
       sources: KERNEL_SOURCES.map((source) => ({
         ...source,
-        location: { placement: { kind: 'floor' as const, band: 10 as const, reach: '' }, provenance: 'bootstrap' as const },
+        location: {
+          placement: { kind: 'floor' as const, band: 10 as const, reach: '' },
+          provenance: 'bootstrap' as const,
+        },
       })),
       languageVersion: LANGUAGE_VERSION,
       kernelDigest: KERNEL_DIGEST,

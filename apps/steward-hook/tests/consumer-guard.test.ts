@@ -542,8 +542,8 @@ const fileLink = (target: string, path: string): boolean => {
 /**
  * Puts `kind` at `path`, beside a regular `elsewhere/valid.json` holding `content`: a link to that file, a junction to its
  * directory, another name for it, or a directory, a FIFO with no writer or a socket. A socket is bound at a short name
- * first, since socket paths are short on macOS, and moved into place. A file link that Windows denies (EPERM) skips the
- * case of the `context` passed.
+ * first, since socket paths are short on macOS, and moved into place. A file link needs the case's `context`, through
+ * which a link Windows denies (EPERM) skips the case.
  */
 async function place(root: string, path: string, kind: Kind, content: string, context?: TestContext): Promise<void> {
   const elsewhere = resolve(root, 'elsewhere'),
@@ -552,7 +552,9 @@ async function place(root: string, path: string, kind: Kind, content: string, co
   writeFileSync(valid, content);
   rmSync(path, { force: true });
   if (kind === 'a file link') {
-    if (!fileLink(valid, path)) return context?.skip('Windows denied file symlink creation (EPERM)');
+    // Without a context a denied link could not skip the case; it would return with no fixture at `path`.
+    if (!context) throw new Error('A file link case passes its test context so that a denied link skips it');
+    if (!fileLink(valid, path)) return context.skip('Windows denied file symlink creation (EPERM)');
   } else if (kind === 'a junction') symlinkSync(elsewhere, path, 'junction');
   else if (kind === 'a hard link') linkSync(valid, path);
   else if (kind === 'a directory') mkdirSync(path);

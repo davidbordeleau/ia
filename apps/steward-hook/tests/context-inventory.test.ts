@@ -294,12 +294,13 @@ it.skipIf(process.platform === 'win32')('passes on the error of a code file it m
 });
 /**
  * Lists the file `name`, makes it `kind` once its directory is listed, and expects the refusal a listed entry of that
- * kind gets. Windows has no FIFO or socket file to swap in, and makes a file link only with a privilege.
+ * kind gets. Windows has no FIFO or socket file to swap in, and makes a file link only with a privilege, so a link case
+ * passes its test `context`, through which a link Windows denies (EPERM) skips the case.
  */
 async function swappedOnceListed(
   name: string,
   contents: string,
-  kind: 'removed' | 'a FIFO' | 'a socket' | 'a link',
+  kind: 'removed' | 'a directory' | 'a FIFO' | 'a socket' | 'a link',
   context?: TestContext,
 ): Promise<void> {
   const root = fixture(),
@@ -308,13 +309,20 @@ async function swappedOnceListed(
     replacement = join(aside, 'replacement');
   writeFileSync(path, contents);
   if (kind === 'a FIFO' || kind === 'a socket') await special(kind, replacement, join(aside, 's'));
-  else if (kind === 'a link' && !fileLink(join(root, 'main.js'), replacement))
-    return context?.skip('Windows denied file symlink creation (EPERM)');
+  else if (kind === 'a link') {
+    // Without a context a denied link could not skip the case; it would return early and pass without running.
+    if (!context) throw new Error('A link case passes its test context so that a denied link skips it');
+    if (!fileLink(join(root, 'main.js'), replacement))
+      return context.skip('Windows denied file symlink creation (EPERM)');
+  }
   seam.afterList = (directory) => {
     if (resolve(directory) !== resolve(root)) return;
     seam.afterList = undefined;
     if (kind === 'removed') unlinkSync(path);
-    else renameSync(replacement, path);
+    else if (kind === 'a directory') {
+      unlinkSync(path);
+      mkdirSync(path);
+    } else renameSync(replacement, path);
   };
   expect(refusal(() => contextHookImplementationDigest(root))).toEqual(
     kind === 'removed'
@@ -326,24 +334,12 @@ async function swappedOnceListed(
   expect(seam.waited).toEqual([]);
 }
 const SWAPPED_CODE = 'refuses a code file that is %s once its directory is listed';
-it.for(['removed', 'a link'] as const)(SWAPPED_CODE, (kind, context) =>
+it.for(['removed', 'a link', 'a directory'] as const)(SWAPPED_CODE, (kind, context) =>
   swappedOnceListed('swapped.js', '// listed', kind, context),
 );
 it.skipIf(process.platform === 'win32').each(['a FIFO', 'a socket'] as const)(SWAPPED_CODE, (kind) =>
   swappedOnceListed('swapped.js', '// listed', kind),
 );
-it('refuses a code file that is a directory once its directory is listed', () => {
-  const root = fixture(),
-    path = join(root, 'swapped.js');
-  writeFileSync(path, '// listed');
-  seam.afterList = (directory) => {
-    if (resolve(directory) !== resolve(root)) return;
-    seam.afterList = undefined;
-    unlinkSync(path);
-    mkdirSync(path);
-  };
-  expect(refusal(() => contextHookImplementationDigest(root))).toEqual(NONREGULAR);
-});
 it('refuses a code file replaced after it was opened', () => {
   const root = fixture(),
     path = join(root, 'policy.json');

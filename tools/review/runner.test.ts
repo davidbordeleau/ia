@@ -329,7 +329,7 @@ it('omits linked and too-deep evidence, skips other entries and admits reports u
     rmSync(root, { recursive: true, force: true });
   }
 });
-// Windows has no FIFOs and needs a privilege to create a file symbolic link: a declared Windows skip.
+// Windows has no FIFOs: a declared Windows skip.
 it.skipIf(process.platform === 'win32')(
   'omits a report symlink and skips a FIFO named like a report without opening either',
   async () => {

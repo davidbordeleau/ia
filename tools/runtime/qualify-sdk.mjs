@@ -61,8 +61,8 @@ function archiveBytes(path) {
     // NOFOLLOW refuses a final link; NONBLOCK keeps a FIFO from blocking the open.
     fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   } catch (error) {
-    // A link fails the open (ELOOP), and so does a directory if the platform refuses to open one: refused as the check
-    // by name refused them.
+    // A link fails the open (ELOOP); anything whose open fails and whose name is no regular file is refused, as the
+    // check by name refused it, and a regular file keeps its open's error. A directory opens; the fstat refuses it.
     const stat = lstatSync(path);
     assert(stat.isFile() && !stat.isSymbolicLink());
     throw error;

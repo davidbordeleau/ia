@@ -403,7 +403,14 @@ it('versions, amends and protects a release from pending notes in a real reposit
       kind: 'changed',
       summary: 'Cover A with tests. Faster A.',
     });
-    expect(entry.packages[names[1]!]!.kind).toBe('cohort');
+    expect(entry.packages[names[1]!]).toEqual({
+      previous: '1.1.0',
+      kind: 'cohort',
+      summary: 'Package version metadata aligned with the coordinated cohort.',
+    });
+    expect(entry.changes.find((change) => change.id === 'cohort-alignment')!.summary).toBe(
+      'Package version metadata follows the coordinated 1.2.0 release.',
+    );
     expect(entry.changes.find((change) => change.id === 'repository-maintenance')).toMatchObject({
       internal: true,
       packages: [],
@@ -999,6 +1006,15 @@ it('keeps every native selector on an npm-only patch, moving only the npm versio
     expect(entry.changes.find(({ id }) => id === 'cohort-alignment')).toMatchObject({
       packages: ['@inventarch/agent-system', '@inventarch/session-system'],
       paths: nativeSystems.map((system) => nativeOwner(system) + '/package.json').sort(),
+      // Within a major the prose says natives follow their own content, not the npm release.
+      summary:
+        'Package version metadata follows the coordinated 3.0.1 release; each native artifact version follows its own archive content.',
+    });
+    expect(entry.packages['@inventarch/session-system']).toEqual({
+      previous: '3.0.0',
+      kind: 'cohort',
+      summary:
+        'Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content.',
     });
     expect(() => releaseChanges(root, projects())).not.toThrow();
   });
@@ -1048,6 +1064,14 @@ it('aligns every native selector on an npm-only major and covers a narrowly docu
       paths: nativeSystems
         .flatMap((system) => [nativeOwner(system) + '/package.json', nativeOwner(system) + '/system.ia'])
         .sort(),
+      summary:
+        'Package version metadata follows the coordinated 4.0.0 release, and every native artifact version aligns to 4.0.0.',
+    });
+    expect(entry.packages['@inventarch/session-system']).toEqual({
+      previous: '3.0.0',
+      kind: 'cohort',
+      summary:
+        'Package version metadata aligned with the coordinated cohort; any native artifact version aligns to the new major.',
     });
     for (const path of nativeSystems.flatMap((system) => [
       nativeOwner(system) + '/package.json',
@@ -1058,6 +1082,109 @@ it('aligns every native selector on an npm-only major and covers a narrowly docu
         change: 'cohort-alignment',
       });
     expect(() => releaseChanges(root, projects())).not.toThrow();
+  });
+}, 120_000);
+
+it('replaces the old generated wording on amend and keeps a reviewer-written cohort summary', async () => {
+  await withAlignedRelease(async ({ root, write, read, commit, projects, note }) => {
+    await note();
+    const prepared = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    expect(prepared).toMatchObject({ action: 'version', version: '3.0.1' });
+    const entry = read(prepared.changeset!) as Changeset;
+    // The changeset as the versioner wrote it before natives versioned by content, plus one summary a reviewer wrote.
+    write(prepared.changeset!, {
+      ...entry,
+      packages: {
+        ...entry.packages,
+        '@inventarch/agent-system': {
+          ...entry.packages['@inventarch/agent-system']!,
+          summary: 'Package and native artifact version metadata aligned with the coordinated cohort.',
+        },
+        '@inventarch/session-system': { ...entry.packages['@inventarch/session-system']!, summary: 'Reviewed cohort.' },
+      },
+      changes: entry.changes.map((change) =>
+        change.id === 'cohort-alignment'
+          ? {
+              ...change,
+              summary: 'Package and native artifact version metadata follows the coordinated 3.0.1 release.',
+            }
+          : change,
+      ),
+    });
+    await commit('Prepare 3.0.1 in the old wording');
+    write('apps/cli/index.txt', 'CLI corrected again\n');
+    write('releases/pending/cli-fix-again.json', {
+      format: 'ia.npm-change-note.v1',
+      bump: 'patch',
+      title: 'Correct CLI output again',
+      summary: 'CLI output is corrected again.',
+      packages: ['@inventarch/cli'],
+      paths: ['apps/cli/'],
+    });
+    await commit('Correct the CLI again');
+    const amended = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    expect(amended).toMatchObject({ action: 'amend', version: '3.0.1' });
+    const after = read(amended.changeset!) as Changeset;
+    expect(after.packages['@inventarch/agent-system']).toEqual({
+      previous: '3.0.0',
+      kind: 'cohort',
+      summary:
+        'Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content.',
+    });
+    expect(after.packages['@inventarch/session-system']!.summary).toBe('Reviewed cohort.');
+    expect(after.changes.find(({ id }) => id === 'cohort-alignment')!.summary).toBe(
+      'Package version metadata follows the coordinated 3.0.1 release; each native artifact version follows its own archive content.',
+    );
+    expect(() => releaseChanges(root, projects())).not.toThrow();
+  });
+}, 120_000);
+
+it('regenerates generated cohort prose when an amended release crosses a major, and keeps a reviewed summary', async () => {
+  await withAlignedRelease(async ({ root, write, read, commit, projects, note }) => {
+    await note(true);
+    const patch = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    expect(patch).toMatchObject({ action: 'version', version: '3.0.1' });
+    expect(read(patch.changeset!).packages['@inventarch/session-system'].summary).toBe(
+      'Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content.',
+    );
+    await commit('Prepare 3.0.1');
+    const major = (id: string, title: string) =>
+      write(`releases/pending/${id}.json`, {
+        format: 'ia.npm-change-note.v1',
+        bump: 'major',
+        title,
+        summary: title + '.',
+        packages: ['@inventarch/cli'],
+        paths: ['apps/cli/'],
+      });
+    write('apps/cli/index.txt', 'CLI broken\n');
+    major('cli-break', 'Break the CLI output');
+    await commit('Break the CLI');
+    const amended = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    expect(amended).toMatchObject({ action: 'amend', version: '4.0.0' });
+    const entry = read(amended.changeset!) as Changeset;
+    expect(entry.packages['@inventarch/session-system']!.summary).toBe(
+      'Package version metadata aligned with the coordinated cohort; any native artifact version aligns to the new major.',
+    );
+    expect(entry.changes.find(({ id }) => id === 'cohort-alignment')!.summary).toBe(
+      'Package version metadata follows the coordinated 4.0.0 release, and every native artifact version aligns to 4.0.0.',
+    );
+    expect(() => releaseChanges(root, projects())).not.toThrow();
+    await commit('Amend to 4.0.0');
+    // A summary a reviewer wrote is never replaced by generated prose.
+    write(amended.changeset!, {
+      ...entry,
+      packages: {
+        ...entry.packages,
+        '@inventarch/session-system': { ...entry.packages['@inventarch/session-system']!, summary: 'Reviewed cohort.' },
+      },
+    });
+    write('apps/cli/index.txt', 'CLI broken again\n');
+    major('cli-break-again', 'Break the CLI output again');
+    await commit('Review the cohort summary and break the CLI again');
+    const again = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    expect(again).toMatchObject({ action: 'amend', version: '4.0.0' });
+    expect(read(again.changeset!).packages['@inventarch/session-system'].summary).toBe('Reviewed cohort.');
   });
 }, 120_000);
 

@@ -2,6 +2,22 @@
 
 Generated from reviewed release changesets. Entries describe intended releases; publication is a separate action.
 
+## 3.2.1
+
+Coordinated 3.2.1 release of the 23 public npm packages: Refuse a coordinate value whose text conversion throws as an unknown value.
+
+### Refuse a coordinate value whose text conversion throws as an unknown value
+
+`validateCoordinate` now refuses a coordinate value whose conversion to text throws, such as the JSON object `{"toString":1}` or a very deeply nested array, with `IA-GRAPH-COORDINATE-VALUE-UNKNOWN`, and its message shows that value as `<unprintable>`. It used to throw whatever that conversion threw, which the runtime door answered with `IA-RUNTIME-REQUEST-INVALID` for such a value in a `context`, `select` or `traverse` coordinate or in the `phase` parameter of `scope`, `get`, `records`, `resolve`, `search` or `traverse`. The admitted axes, the error order, the output and the message for every other value are unchanged.
+
+Packages: `@inventarch/graph`, `@inventarch/runtime`.
+
+### Coordinated version alignment
+
+Package and native artifact version metadata follows the coordinated 3.2.1 release.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
 ## 3.2.0
 
 Coordinated 3.2.0 release of the 23 public npm packages: Registry and archive downloads refuse URLs that are not credential-free HTTPS; ia doctor names the removal for a hook group changed by hand, and two help lines are corrected; Package guides and contracts corrected against the code; Read the steward hook's ownership markers, actor map, binding and code files through the opened file; Session stores can require host admission before each durable write; Source comments cite the spec sections that state their rules; Verify host cache, runtime and system package files through the file that is read; The vocabulary describes the distribution product section and the predicate phrase; The vocabulary catalogue lists closed kernel members in their authored spelling.

@@ -529,6 +529,21 @@ it('takes over a lock whose pid died or that holds no pid from 1 to 2147483647 p
   // One comparison, so a changed verdict shows every case it moves, not only the first.
   expect(seen).toEqual(expected);
 });
+it('checks liveness at the inclusive maximum owner pid before taking over a young lock', () => {
+  const home = join(temp(), '.ia'),
+    lockPath = join(home, 'claude', '.lock');
+  mkdirSync(join(home, 'claude'), { recursive: true });
+  writeFileSync(lockPath, `2147483647 ${OTHER_TOKEN}`);
+  const when = new Date(Date.now() - 20_000);
+  utimesSync(lockPath, when, when);
+  const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+  try {
+    expect(materialized(home)).toEqual(heldBy(lockPath));
+    expect(kill).toHaveBeenCalledWith(2147483647, 0);
+  } finally {
+    kill.mockRestore();
+  }
+});
 // Only ESRCH from process.kill means the pid is not running: any other error, such as the EPERM another user's or a
 // protected process answers, leaves the lock busy until it is a day old, so a live run is not taken over.
 it('refuses INSTALL-BUSY untouched for a lock under a day old whose pid process.kill answers with EPERM', () => {

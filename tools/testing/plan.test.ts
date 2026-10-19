@@ -401,9 +401,16 @@ it('records executed durations and excludes restored ones from the schedule', ()
     });
     writeEvidence(resolve(directory, 'ran/evidence.json'), evidence('ran:test', 'executed', 42_000));
     writeEvidence(resolve(directory, 'hit/evidence.json'), evidence('hit:test', 'restored', 1));
+    // A task that executed and failed may have stopped early, so its time estimates nothing.
+    const failed = evidence('bad:test', 'executed', 9_000);
+    writeEvidence(resolve(directory, 'bad/evidence.json'), {
+      ...failed,
+      report: { ...failed.report, status: 'failed' },
+    });
     const updated = updateSchedule(emptySchedule(), directory);
     expect(updated.platforms[platform]!['ran:test']).toBe(42);
     expect(updated.platforms[platform]!['hit:test']).toBeUndefined();
+    expect(updated.platforms[platform]!['bad:test']).toBeUndefined();
     // Every platform keeps its section, including those the evidence does not mention.
     expect(Object.keys(updated.platforms)).toEqual([...PLATFORMS]);
     const original = readFileSync(resolve(root, 'tools/testing/schedule.json'), 'utf8');
@@ -709,9 +716,12 @@ it('gives a reuse run its own concurrency group, runs no lane in it, and never s
   expect(plan).toContain('--head-sha ${{ github.event.pull_request.head.sha }}');
   // The whole line: a gate that also skipped on reuse would report a pass for a commit nothing verified.
   expect(gate).toMatch(/^if: always\(\) && needs\.plan\.outputs\.run != 'false'$/m);
+  // The whole line, its failure exit included: an echo of ::error:: alone does not fail the step.
   expect(gate).toContain(
-    `if [ "\${{ needs.plan.result }}" != "success" ] || [ "\${{ needs.plan.outputs.verdict }}" != "success" ]; then`,
+    `if [ "\${{ needs.plan.result }}" != "success" ] || [ "\${{ needs.plan.outputs.verdict }}" != "success" ]; then echo "::error::this head commit has no passed full run to report"; exit 1; fi\n`,
   );
+  // A reuse row reads nothing of its platform, so it runs on Linux and takes no scarce macOS slot.
+  expect(gate).toContain("runs-on: ${{ needs.plan.outputs.run == 'reuse' && 'ubuntu-latest' || matrix.os }}\n");
   // On reuse, every other gate step is off, the refusal loop included, and the report step is the only one that runs.
   const steps = gate.split(/^- /m).slice(1);
   expect(steps[0]).toMatch(
@@ -799,6 +809,8 @@ it("keeps one run's concurrent macOS jobs within the organization's macOS slots"
   const macos = (['static', 'emitted', 'tests'] as const).flatMap((lane) =>
     matrices[lane].include.filter((row) => row.platform === 'macos'),
   );
+  // The organization's limit, stated here rather than read back from the planner's constant.
+  expect(MACOS_CONCURRENT_JOBS).toBe(5);
   expect(macos.length).toBeLessThanOrEqual(MACOS_CONCURRENT_JOBS);
 });
 

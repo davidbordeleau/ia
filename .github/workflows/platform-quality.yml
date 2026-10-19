@@ -138,13 +138,17 @@ jobs:
         id: matrices
         run: pnpm --silent tests:plan --ci-matrix --shards linux=4,windows=8,macos=3 --native-shards linux=0,windows=0,macos=0 --event ${{ github.event_name }} --head-sha ${{ github.sha }} --verified-sha "${{ steps.verified.outputs.sha }}" --action "${{ github.event.action }}" --base-changed ${{ github.event.changes.base && 'true' || 'false' }} >> "$GITHUB_OUTPUT"
       # A reuse run runs no lane. This step fails unless the head commit's last full run of this workflow finished and
-      # passed, so an edit can never turn a failed or unverified commit green. Earlier copies are not full runs.
+      # passed, so an edit can never turn a failed or unverified commit green. Earlier copies are not full runs, and
+      # only runs from this pull request's head repository and branch count. The branch name is the author's text, so
+      # it reaches the shell through env, never through the script.
       - name: Copy the verdict of this commit's last full run
         id: verdict
         if: steps.matrices.outputs.run == 'reuse'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: pnpm --silent tests:verdict --repo ${{ github.repository }} --workflow platform-quality.yml --run-id ${{ github.run_id }} --head-sha ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: pnpm --silent tests:verdict --repo ${{ github.repository }} --workflow platform-quality.yml --run-id ${{ github.run_id }} --head-sha ${{ github.event.pull_request.head.sha }} --head-repo "$HEAD_REPO" --head-branch "$HEAD_BRANCH" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build (${{ matrix.os }})

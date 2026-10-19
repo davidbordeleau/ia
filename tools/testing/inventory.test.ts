@@ -250,9 +250,12 @@ it("shares the task runner with every task, but not the runner's own tests", () 
   };
   const shared = nx.namedInputs.sharedGlobals.filter((input): input is string => typeof input === 'string');
   expect(shared.filter((input) => input.startsWith('!'))).toEqual([]);
-  // The one module no task reaches: the Plan job's verdict copy, a GitHub API script that run.ts never imports.
-  // Editing it must not invalidate every task, so it is no shared input.
+  // The one module the runner never reaches: the Plan job's verdict copy, a GitHub API script that no other module
+  // imports (checked below). Editing it must not invalidate every task, so it is no shared input.
   const outsideRunner = ['tools/testing/verdict.ts'];
+  for (const path of gitFiles(root).filter((file) => /^tools\/testing\/[^/]+\.ts$/.test(file)))
+    if (path !== 'tools/testing/verdict.test.ts')
+      expect(readFileSync(resolve(root, path), 'utf8'), path).not.toMatch(/from '\.\/verdict\.js'/);
   const modules = gitFiles(root).filter(
     (path) => /^tools\/testing\/[^/]+\.ts$/.test(path) && !path.endsWith('.test.ts') && !outsideRunner.includes(path),
   );
@@ -323,6 +326,10 @@ const RESULT_NEUTRAL_WORKFLOW_ENV: Readonly<Record<string, string>> = {
   HOMEBREW_NO_INSTALL_CLEANUP: 'Homebrew smoke step only, outside every Nx task',
   GH_TOKEN:
     "the Plan job's lookups of the last successful scheduled run and of a copied verdict, GitHub API calls outside every Nx task",
+  HEAD_REPO:
+    "the pull request's head repository, which the Plan job's verdict copy matches runs on, outside every Nx task",
+  HEAD_BRANCH:
+    "the pull request's head branch, which the Plan job's verdict copy matches runs on, outside every Nx task",
   IA_REVIEW_RUN_ID: 'selects an upstream run for the uncached advisory review caller, outside every Nx task',
   IA_REVIEW_API: 'API origin for the uncached advisory review caller, outside every Nx task',
   IA_REVIEW_BINDING: 'workload binding for the uncached advisory review caller, outside every Nx task',

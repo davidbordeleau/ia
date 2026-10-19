@@ -29,6 +29,7 @@ import {
 import { bumpVersion, draftNote, inferBump, maxBump, notePaths, releaseBump, validateNote } from './release-notes.mjs';
 import { a, b, c, changeset, refusal, inRepository, git as fixtureGit } from './release-fixtures.js';
 import { pullRequestBody, versionRelease, type VersionResult } from './release-version.mjs';
+import { prepareNativeSelection } from '../release/native-selectors.mjs';
 
 const names = ['@inventarch/a', '@inventarch/b'];
 const note = (bump: string, packages: string[], title: string) => ({
@@ -1185,6 +1186,91 @@ it('regenerates generated cohort prose when an amended release crosses a major, 
     const again = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
     expect(again).toMatchObject({ action: 'amend', version: '4.0.0' });
     expect(read(again.changeset!).packages['@inventarch/session-system'].summary).toBe('Reviewed cohort.');
+  });
+}, 120_000);
+
+it('refuses a prepared release whose coverage misses a version-only change, before the strict check after merge', async () => {
+  await withAlignedRelease(async ({ root, write, commit, projects, note }) => {
+    const natives = (agent: string, session: string) => ({
+      'inventarch/language': '3.0.0',
+      'inventarch/agent-system': agent,
+      'inventarch/session-system': session,
+    });
+    const select = (npm: string, versions: Record<string, string>) => {
+      for (const [path, bytes] of prepareNativeSelection(root, npm, versions)) write(path, bytes);
+    };
+    // Published: a version-only change since the tag waits for the next release and needs no note.
+    select('3.0.0', natives('3.0.1', '3.0.0'));
+    await commit('Select an agent-system native version');
+    expect(releaseStatus(root, projects())).toMatchObject({ state: 'published', pendingNotes: [] });
+    await note(true);
+    expect(await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false })).toMatchObject({
+      action: 'version',
+      version: '3.0.1',
+    });
+    await commit('Prepare 3.0.1');
+    // Prepared and fully covered, including the earlier version-only change.
+    expect(releaseStatus(root, projects())).toMatchObject({ state: 'prepared', pendingNotes: [] });
+    select('3.0.1', natives('3.0.1', '3.0.1'));
+    await commit('Select a session-system native version after preparing');
+    const message =
+      'Prepared release 3.0.1 does not cover 3 version-only file(s): .ia/src/systems/session-system/system.ia, ' +
+      'examples/public-language/contracts/session-system.ia, tools/distribution/system-package-policy.json. ' +
+      'On the release branch, run pnpm release:version --write --refresh. ' +
+      'On any other branch, wait for v3.0.1 to be tagged, then update from main.';
+    expect(() => releaseStatus(root, projects())).toThrow(refusal(message));
+    expect(() => releaseChanges(root, projects())).toThrow(/^Changeset coverage is missing or stale for 3 file/);
+    expect(
+      await versionRelease(root, projects(), { write: true, registry: null, refresh: true, sealInputs: false }),
+    ).toMatchObject({ action: 'refresh', version: '3.0.1' });
+    await commit('Refresh 3.0.1');
+    expect(releaseStatus(root, projects())).toMatchObject({ state: 'prepared', pendingNotes: [] });
+    expect(() => releaseChanges(root, projects())).not.toThrow();
+  });
+}, 120_000);
+
+it('refuses an ordinary branch that moves a version-only field between a release merge and its tag', async () => {
+  await withAlignedRelease(async ({ root, write, commit, projects, note }) => {
+    await note(true);
+    expect(await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false })).toMatchObject({
+      action: 'version',
+      version: '3.0.1',
+    });
+    const merged = await commit('Merge the 3.0.1 release');
+    // A contributor branch from main before the tag: an agent-system edit with its note, and the native version that
+    // `pnpm native:version --write` would select for it. Only the release branch may refresh the changeset.
+    const guide = nativeOwner('agent-system') + '/references/guide.md';
+    write(guide, 'Guide revised after the release merge\n');
+    write('releases/pending/agent-guide-revision.json', {
+      format: 'ia.npm-change-note.v1',
+      bump: 'patch',
+      title: 'Revise the agent guide',
+      summary: 'The guide is revised.',
+      packages: ['@inventarch/agent-system'],
+      paths: [guide],
+    });
+    for (const [path, bytes] of prepareNativeSelection(root, '3.0.1', {
+      'inventarch/language': '3.0.0',
+      'inventarch/agent-system': '3.0.1',
+      'inventarch/session-system': '3.0.0',
+    }))
+      write(path, bytes);
+    await commit('Revise the agent guide');
+    expect(() => releaseStatus(root, projects())).toThrow(
+      refusal(
+        'Prepared release 3.0.1 does not cover 3 version-only file(s): .ia/src/systems/agent-system/system.ia, ' +
+          'examples/public-language/contracts/agent-system.ia, tools/distribution/system-package-policy.json. ' +
+          'On the release branch, run pnpm release:version --write --refresh. ' +
+          'On any other branch, wait for v3.0.1 to be tagged, then update from main.',
+      ),
+    );
+    // Once the release is tagged on main, the same branch needs only its pending note.
+    await fixtureGit(root, 'tag', 'v3.0.1', merged);
+    expect(releaseStatus(root, projects())).toMatchObject({
+      state: 'published',
+      pendingNotes: ['agent-guide-revision'],
+      nextVersion: '3.0.2',
+    });
   });
 }, 120_000);
 

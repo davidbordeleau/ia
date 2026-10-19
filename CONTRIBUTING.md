@@ -40,7 +40,7 @@ Tests run per package with `pnpm --filter <package> test`, and the repository to
 Public npm packages are released together by automation; see the [publishing guide](tools/distribution/NPM-PUBLISHING.md). A pull request never edits package versions, `releases/current.json`, `releases/changesets/` or `CHANGELOG.md` by hand.
 
 - If your change touches a public package, add a release note: `pnpm release:note --bump patch|minor|major --title "…" --summary "…"`. It drafts `releases/pending/<id>.json` from your branch diff. Write the summary for package consumers. Use `--bump none` for a package change consumers cannot observe, such as tests; it does not start a release. Changes outside package directories, such as tooling, workflows and repository docs, need no note.
-- `pnpm release:check` runs in CI and names any changed package that still needs a note.
+- `pnpm release:check` runs in CI and names any changed package that still needs a note. Between a release's merge and its tag, it also refuses a version-only change the prepared release does not cover, such as native versions selected by `pnpm native:version --write`; wait for the release tag, then update your branch from main.
 
 ## Pull requests
 

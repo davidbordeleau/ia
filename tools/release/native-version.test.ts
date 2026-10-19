@@ -38,7 +38,7 @@ import {
   releaseNativeVersions,
   selectedNativeVersions,
 } from './native-selectors.mjs';
-import { releaseChanges } from '../distribution/release-changes.mjs';
+import { releaseChanges, releaseStatus } from '../distribution/release-changes.mjs';
 import { pullRequestBody, versionRelease } from '../distribution/release-version.mjs';
 
 const checkout = resolve(import.meta.dirname, '../..');
@@ -1025,7 +1025,16 @@ describe('native release writer', () => {
     const selection = nativeRelease(root, 'write');
     expect(selection.versions).toEqual(workSystemVersions('3.0.0', '3.0.1', '3.1.0'));
     commit(root, 'Select native versions');
-    // The changeset predates the selection, so strict coverage refuses until the refresh.
+    // The changeset predates the selection. The pull-request check refuses its uncovered version-only files before
+    // merge, as strict coverage does, until the refresh.
+    expect(refusal(() => releaseStatus(root, projects()))).toEqual({
+      code: 'ERR_ASSERTION',
+      message:
+        'Prepared release 3.2.0 does not cover 13 version-only file(s): ' +
+        '.ia/src/systems/agent-composition-system/system.ia, .ia/src/systems/authoring-system/system.ia, ' +
+        '.ia/src/systems/hook-authoring-system/system.ia and 10 more. On the release branch, run pnpm ' +
+        'release:version --write --refresh. On any other branch, wait for v3.2.0 to be tagged, then update from main.',
+    });
     expect(() => releaseChanges(root, projects())).toThrow(
       expect.objectContaining({
         code: 'ERR_ASSERTION',
@@ -1041,6 +1050,7 @@ describe('native release writer', () => {
     });
     expect(refreshed).toMatchObject({ action: 'refresh', version: '3.2.0' });
     commit(root, 'Refresh 3.2.0');
+    expect(releaseStatus(root, projects())).toMatchObject({ state: 'prepared', version: '3.2.0', pendingNotes: [] });
     const { entry } = releaseChanges(root, projects());
     const consumers = WORK_CONSUMERS.map((id) => `.ia/src/systems/${id}/system.ia`);
     expect(entry.changes.find(({ id }) => id === 'cohort-alignment')).toMatchObject({

@@ -80,6 +80,13 @@
 | `ia position` | read | Observation | a seat the workspace does not admit, or a path outside it | `ia position` |
 | `ia next` | read | Observation | no --seat while the workspace authors several `@plan` records, which the message lists | `ia next --seat <plan>` |
 | `ia project` | effect | Execution | a file without the generated marker at a path it writes, which its plan names; --apply writes nothing | `ia project <host>` |
+| `ia kb check` | validate | Verification | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb search` | read | Observation | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb read` | read | Observation | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb resolve` | read | Observation | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb traverse` | read | Observation | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb pack` | validate | Verification | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb pack --apply` | effect | Execution | existing output or unavailable selected knowledge | `ia position` |
 
 ## SPEC lines
 
@@ -87,4 +94,4 @@
 - state intent to the CLI as shape + optional phase + optional primitive + optional seat + optional word; the CLI never receives free text
 - when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation
 
-ia-generated 80af84ff206aa8e5c00d8a32385af7a3c0bbbfffc0c197fcb67f81d2d7b7d763 1f9a007382f01bb1688e8d16ec5bbafc28c9678bc0b83b96d71b29dc6f44be52 ia-claude
+ia-generated 80af84ff206aa8e5c00d8a32385af7a3c0bbbfffc0c197fcb67f81d2d7b7d763 9aed53050459c57dd4d22b6dc5e960d615db032858751fdd47568ee3f9449e33 ia-claude

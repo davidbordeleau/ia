@@ -81,12 +81,14 @@ it('previews valid committed packages, returns unchanged on retry, and refuses p
   expect(JSON.parse(again.stdout).value).toMatchObject({ applied: false, unchanged: true });
   for (const output of ['.ia/src/package.ia', '.ia/output.json', 'README.md', 'selection.json']) {
     const result = await run([...args(output), '--apply', '--yes']);
-    expect(result.exitCode, result.stdout).toBe(1);
+    expect(result.exitCode, result.stdout + result.stderr).toBe(3);
   }
   expect(readFileSync(join(root, 'README.md'))).toEqual(before);
   expect(existsSync(join(root, '.ia/src/package.ia'))).toBe(false);
   writeFileSync(join(root, 'different.json'), 'Keep this.');
-  expect((await run([...args('different.json'), '--apply', '--yes'])).exitCode).toBe(1);
+  const conflict = await run([...args('different.json'), '--apply', '--yes']);
+  expect(conflict.exitCode).toBe(3);
+  expect(JSON.parse(conflict.stdout)).toMatchObject({ code: 'IA-CLI-CONFLICT', next: expect.any(String) });
   expect(readFileSync(join(root, 'different.json'), 'utf8')).toBe('Keep this.');
 });
 function governance(root: string, move: string, scoped = false) {
@@ -103,7 +105,8 @@ it('protects a committed selector addressed by an absolute path even when its wo
   const command = args('selection.json');
   command[command.indexOf('--selection') + 1] = join(root, 'selection.json');
   const result = await run([...command, '--apply', '--yes']);
-  expect(result.exitCode, result.stdout).toBe(1);
+  expect(result.exitCode, result.stdout).toBe(3);
+  expect(JSON.parse(result.stdout).code).toBe('IA-CLI-CONFLICT');
   expect(existsSync(join(root, 'selection.json'))).toBe(false);
 });
 it('enforces path mandates and rejects junction aliases before a pack write', async () => {
@@ -117,7 +120,8 @@ it('enforces path mandates and rejects junction aliases before a pack write', as
   }
   symlinkSync(join(root, 'protected'), join(root, 'alias'), process.platform === 'win32' ? 'junction' : 'dir');
   const result = await run([...args('alias/package.json'), '--apply', '--yes', '--actor', '@agent demo']);
-  expect(result.exitCode, result.stdout).toBe(1);
+  expect(result.exitCode, result.stdout).toBe(3);
+  expect(JSON.parse(result.stdout).code).toBe('IA-CLI-CONFLICT');
   expect(existsSync(join(root, 'protected/package.json'))).toBe(false);
 });
 it('rejudges current authority and destination after interactive confirmation', async () => {
@@ -166,7 +170,7 @@ it.each(['Observation', 'Verification', 'Execution'])(
       const allowed = move === (apply ? 'Execution' : 'Verification'),
         body = JSON.parse(result.stdout);
       if (allowed)
-        expect(body.error, result.stdout).toEqual({
+        expect(body, result.stdout).toMatchObject({
           code: 'IA-KB-INVALID',
           message: 'Installed native foundation required',
         });
@@ -231,8 +235,22 @@ it('searches bound text, reads citations, and refuses changed snapshots without 
   writeFileSync(join(root, 'citation.json'), JSON.stringify(read.value.citation));
   expect((await invoke(['resolve', '--citation', 'citation.json'])).exitCode).toBe(0);
   writeFileSync(join(root, 'README.md'), 'Changed.');
-  expect(JSON.parse((await invoke(['resolve', '--citation', 'citation.json'])).stdout).error.code).toBe(
+  expect(JSON.parse((await invoke(['resolve', '--citation', 'citation.json'])).stdout).code).toBe(
     'IA-KB-SNAPSHOT-UNAVAILABLE',
   );
   expect(existsSync(join(root, '.kb'))).toBe(false);
+});
+
+it('preserves citation path and JSON refusals with actionable consumer output', async () => {
+  const { root } = installedKnowledge();
+  const invoke = (citation: string, json = true) =>
+    run(['kb', 'resolve', '--root', root, '--citation', citation, ...(json ? ['--json'] : [])]);
+  const unsafe = await invoke('../outside.json');
+  expect(unsafe.exitCode).toBe(3);
+  expect(JSON.parse(unsafe.stdout)).toMatchObject({ code: 'IA-DB-PATH-UNSAFE', next: expect.any(String) });
+  writeFileSync(join(root, 'bad-citation.json'), '{');
+  const invalid = await invoke('bad-citation.json', false);
+  expect(invalid.exitCode).toBe(3);
+  expect(invalid.stdout).toBe('');
+  expect(invalid.stderr).toContain('IA-CLI-FAILED');
 });

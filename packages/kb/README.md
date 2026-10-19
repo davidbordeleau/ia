@@ -37,3 +37,7 @@ Hosts construct a foundation from verified retained installation evidence with `
 The `./legacy` entrypoint retains the `iakb.portable.v1` format, bounded decoder/writer and validation hashes. `createLegacyFoundation` is a trusted historical-profile adapter: hosts verify the retained installation and select the retained profile separately. Do not calculate historical pins from an expanded current npm dependency inventory. Historical same-content shadow behavior remains isolated to the legacy reader; new packages reject foundation identity shadowing.
 
 A central service stores immutable packages alongside its own audience, lifecycle, revision and recovery state. It authorizes before constructing a library view. Keep stores for different foundation pins separately configured. The library supplies no tenancy policy, publication, approval, synchronization, automatic foreign graph resolution or external URL fetch.
+
+Local capture without `.ia/knowledge.json` counts every authored native file toward the 100-file selection limit; bound documents share that limit. Large workspaces must provide an explicit selection in `.ia/knowledge.json`. Individual files are limited to 1 MiB and the combined selection to 8 MiB.
+
+Committed exports isolate Git from user/system configuration and `GIT_CONFIG_*` environment settings. In particular, user `safe.directory` exceptions are not inherited; run export from a checkout owned by the executing account.

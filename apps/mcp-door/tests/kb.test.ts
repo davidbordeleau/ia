@@ -22,7 +22,23 @@ it('bounds the complete JSON-RPC knowledge response including escaped text and r
   });
   expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(48 * 1024);
 });
-function fixture() {
+it('truncates search against the complete duplicated MCP envelope', () => {
+  const { server } = fixture(45);
+  const response = server.request({
+    jsonrpc: '2.0',
+    id: 'search',
+    method: 'tools/call',
+    params: { name: 'ia_kb_search', arguments: { query: 'search-bound' } },
+  });
+  expect(Buffer.byteLength(JSON.stringify(response))).toBeLessThanOrEqual(48 * 1024);
+  expect(response?.result).toMatchObject({
+    isError: false,
+    structuredContent: { ok: true, value: { truncated: true } },
+  });
+  const content = response?.result as { structuredContent: { value: { results: unknown[] } } };
+  expect(content.structuredContent.value.results.length).toBeGreaterThan(0);
+});
+function fixture(extra = 0) {
   const root = mkdtempSync(join(tmpdir(), 'ia-kb-mcp-'));
   roots.push(root);
   cpSync(resolve(import.meta.dirname, '../../../examples/conformance/native'), join(root, '.ia/src'), {
@@ -44,6 +60,20 @@ function fixture() {
     );
     writeFileSync(join(root, name + '.md'), name + ' document-only term');
   }
+  if (extra)
+    writeFileSync(
+      join(root, '.ia/src/knowledge/many.ia'),
+      '#! ia 1.0\n' +
+        Array.from(
+          { length: extra },
+          (_, i) =>
+            '@spec match-' +
+            i +
+            '\n  meaning\n    says "search-bound ' +
+            'x'.repeat(220) +
+            '"\n  work\n    title "Match"\n    status draft\n',
+        ).join('\n'),
+    );
   const server = new Protocol(root);
   servers.push(server);
   server.request({

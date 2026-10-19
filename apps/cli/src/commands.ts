@@ -121,7 +121,6 @@ const grammar = (options: readonly OptionSpec[], rest: PositionalSpec = none): G
 });
 
 export const COMMANDS: readonly CommandSpec[] = [
-  knowledgeCommand(COMMON_OPTIONS),
   {
     name: 'init',
     group: 'workspace',
@@ -798,6 +797,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       positionals('host', 1, 1),
     ),
   },
+  knowledgeCommand(COMMON_OPTIONS),
 ];
 
 /**

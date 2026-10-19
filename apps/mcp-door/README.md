@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@inventarch/mcp-door?label=npm)](https://www.npmjs.com/package/@inventarch/mcp-door) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-> `ia-mcp-door` is a local MCP server that gives an agent host read-only access to one IA workspace over stdio. It serves twelve tools: eleven Door operations from [`@inventarch/runtime`](../../packages/runtime/README.md), the same reads the `ia` CLI performs, and `ia_vocabulary`.
+> `ia-mcp-door` is a local MCP server that gives an agent host read-only access to one IA workspace over stdio. It serves seventeen tools: eleven Door operations from [`@inventarch/runtime`](../../packages/runtime/README.md), the same reads the `ia` CLI performs, `ia_vocabulary`, and five scoped `ia_kb_*` knowledge readers.
 >
 > `ia host claude` and `ia host codex` register it for you. Any other MCP client can launch it directly.
 

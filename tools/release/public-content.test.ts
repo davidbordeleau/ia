@@ -143,7 +143,7 @@ function privateReferences(
           text[start - 1] === '@' &&
           !/[\w@.+-]/.test(text[start - 2] ?? '') &&
           !/[\w.-]/.test(text[start + length] ?? '') &&
-          publicPackages.has('@' + spelling);
+          publicPackages.has(text.slice(start - 1).match(/^@[\w.-]+\/[\w./-]+/)?.[0] ?? '');
         if (!publicPackage && hashes?.has(sha256(spelling.toLowerCase()))) found.push(at(start));
       }
   }
@@ -177,14 +177,18 @@ it('allows exact declared scoped npm tokens while retaining bare repository and 
     pin = { words: 2, length: name.length, sha256: sha256(name) },
     files = new Map([
       ['public.ts', `import '@${name}'; import '@${name}/protocol';`],
-      ['private.md', `${name}\nhttps://github.com/${name}\n@${name}-private\nuser@${name}\nuser+@${name}`],
+      [
+        'private.md',
+        `${name}\nhttps://github.com/${name}\n@${name}-private\nuser@${name}\nuser+@${name}\n@${name}/private`,
+      ],
     ]);
-  expect(privateReferences(files, [pin], new Set(['@' + name]))).toEqual([
+  expect(privateReferences(files, [pin], new Set(['@' + name, '@' + name + '/protocol']))).toEqual([
     'private.md:1',
     'private.md:2',
     'private.md:3',
     'private.md:4',
     'private.md:5',
+    'private.md:6',
   ]);
   expect(privateReferences(new Map([['unlisted.ts', `import '@${name}';`]]), [pin])).toEqual(['unlisted.ts:1']);
 });
@@ -236,7 +240,17 @@ it('keeps tracked files free of pointers to private planning material', () => {
   const policy = JSON.parse(readFileSync(resolve(root, 'tools/distribution/public-content-policy.json'), 'utf8'));
   validateContentPolicy(policy);
   const publicPackages = new Set<string>(
-    policy.packageNames.filter((row: { private: boolean }) => !row.private).map((row: { name: string }) => row.name),
+    policy.packageNames
+      .filter((row: { private: boolean }) => !row.private)
+      .flatMap((row: { name: string; root: string }) => {
+        const manifest = JSON.parse(readFileSync(resolve(root, row.root, 'package.json'), 'utf8'));
+        return [
+          row.name,
+          ...Object.keys(manifest.exports ?? {})
+            .filter((key) => key.startsWith('./'))
+            .map((key) => row.name + key.slice(1)),
+        ];
+      }),
   );
   const found = [...privateReferences(files, PRIVATE_REFERENCES, publicPackages), ...planningIds(files)],
     pathOf = (row: string): string => row.slice(0, row.indexOf(':'));

@@ -25,3 +25,9 @@ Read/search/traverse/resolve share source identity, snapshot or commit package d
 ## Adapter effects
 
 CLI read operations require Observation; check and export preview require Verification; export apply requires Execution. Export takes an exact full commit and committed selector. It writes only an explicit new output outside authored/native/selected-body paths, rejects unsafe ancestors and different existing bytes, and returns unchanged for an identical existing package. Apply rechecks current authority after interactive confirmation. MCP exposes the five read operations using its original Door membership and matching native graph revision, with no root or export-path arguments.
+
+## Refusal codes and transport limits
+
+`IA-KB-SNAPSHOT-UNAVAILABLE` rejects closed views or stale citations; `IA-KB-SCOPE-STALE` rejects a changed native revision; `IA-KB-SNAPSHOT-CHANGED` rejects capture-time source/body changes; `IA-KB-REFERENCE-UNAVAILABLE` identifies unavailable closure in check diagnostics. `IA-KB-INVALID` rejects malformed input or selection; `IA-KB-UNAVAILABLE` means the requested knowledge is unavailable in this scope; `IA-KB-RESPONSE-LIMIT` means the serialized response exceeds the bound. The MCP adapter additionally uses `IA-KB-SCOPE-UNAVAILABLE` for a refused Door scope and `IA-KB-SCOPE-LIMIT` for excessive membership. CLI operational failures retain their service code, use exit 3, and supply a next command; human refusals go to stderr.
+
+MCP duplicates the response as text and structured content inside its 48 KiB envelope. Read bodies therefore have an effective ceiling below 24 KiB, reduced by JSON escaping, citations and the request id. There is no ranged-read API in this version: an oversized read refuses `IA-KB-RESPONSE-LIMIT`. Search truncates results against the complete envelope and marks `truncated: true`.

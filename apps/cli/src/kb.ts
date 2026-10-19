@@ -1,7 +1,13 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 import { readWorkspaceBytes } from '@inventarch/db';
-import { captureKnowledge, foundationFromWorkspace, openKnowledgeView, packageFromCommit } from '@inventarch/kb';
-import { executeKnowledge, knowledgeFailure, parseKnowledgeRequest } from '@inventarch/kb/protocol';
+import {
+  captureKnowledge,
+  foundationFromWorkspace,
+  openKnowledgeView,
+  packageFromCommit,
+  KnowledgeError,
+} from '@inventarch/kb';
+import { executeKnowledge, parseKnowledgeRequest } from '@inventarch/kb/protocol';
 import type { KnowledgeOperation } from '@inventarch/kb/protocol';
 import type { Context, Result } from './consumer.js';
 import { confirm, requireRoot, Refusal } from './consumer.js';
@@ -94,7 +100,14 @@ export async function runKnowledge(context: Context): Promise<Result> {
             mode,
             path: destination.path,
           });
-          if (current.reader.revision !== session.reader.revision) throw new Error('Workspace changed before export');
+          if (current.reader.revision !== session.reader.revision)
+            throw new Refusal(
+              'IA-CLI-CONFLICT',
+              'Workspace changed before export',
+              3,
+              null,
+              'Run "ia kb pack --help" and preview the export again',
+            );
           const applied = destination.write();
           return answer(
             { ok: true, ...{ version: 1, value: { applied, unchanged: !applied, digest: pkg.digest, output } } },
@@ -132,13 +145,17 @@ export async function runKnowledge(context: Context): Promise<Result> {
       }
       const view = openKnowledgeView(captureKnowledge(root, { expectedRevision: session.reader.revision }));
       try {
-        return answer(executeKnowledge(view, operation as KnowledgeOperation, input), context);
+        const result = executeKnowledge(view, operation as KnowledgeOperation, input);
+        if (result.error)
+          throw new Refusal(result.error.code, result.error.message, 1, null, 'Run "ia kb ' + operation + ' --help"');
+        return answer(result, context);
       } finally {
         view.close();
       }
     } catch (error) {
-      if (error instanceof UsageError || error instanceof Refusal) throw error;
-      return answer(knowledgeFailure(error), context);
+      if (error instanceof KnowledgeError)
+        throw new Refusal(error.code, error.message, 1, null, 'Run "ia kb ' + operation + ' --help"');
+      throw error;
     }
   } finally {
     session.close();

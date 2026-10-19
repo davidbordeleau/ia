@@ -18,7 +18,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..'),
   pin = '__INVENTORY_DIGEST__';
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 // `child` is `parent` or under it on disk, compared by device and inode from its deepest existing ancestor up, so another
-// spelling a case- or normalization-folding volume opens as the same directory is inside too (crowncodes/ia#315).
+// spelling a case- or normalization-folding volume opens as the same directory is inside too.
 const within = (parent, child) => {
   const target = statSync(parent, { bigint: true });
   let entry = child;

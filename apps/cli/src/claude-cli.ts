@@ -1,8 +1,8 @@
 /**
- * Host plugin distribution spec §6.3 (amended, item 5) and §2.3: Claude's own CLI does the registering and reports its
- * own state through its `--json` lists; Claude's files are never read or written here. `IA_CLAUDE` names a Node
- * script to run instead of `claude`; it exists for tests and is not a user-facing setting. `claude` itself is found on
- * qualified PATH entries and run by absolute path from the home directory (src/program.ts).
+ * Host plugin distribution spec §6.3: Claude's own CLI does the registering and reports its own state through its
+ * `--json` lists; Claude's files are never read or written here. `IA_CLAUDE` names a Node script to run instead of
+ * `claude`; it exists for tests and is not a user-facing setting. `claude` itself is found on qualified PATH entries
+ * and run by absolute path from the home directory (src/program.ts).
  */
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
@@ -43,7 +43,7 @@ function listed(runner: ClaudeRunner, args: readonly string[], match: (row: Row)
   }
 }
 /**
- * §2.3's observed shapes: `plugin marketplace list --json` is an array of `{name, …}` and `plugin list --json` an
+ * The observed shapes: `plugin marketplace list --json` is an array of `{name, …}` and `plugin list --json` an
  * array of `{id, scope, …}`. Only a user-scope install is ours to remove; a row without a scope is taken as one.
  */
 export function observeClaude(runner: ClaudeRunner): ClaudeState {
@@ -61,12 +61,12 @@ export function observeClaude(runner: ClaudeRunner): ClaudeState {
     ),
   };
 }
-/** §2.3: `marketplace add` and `install` are both idempotent, so registration is always the same two commands. */
+/** §6.3: `marketplace add` and `install` are both idempotent, so registration is always the same two commands. */
 export const registrationCommands = (marketplace: string): string[][] => [
   ['plugin', 'marketplace', 'add', marketplace],
   ['plugin', 'install', PLUGIN_ID, '--scope', 'user'],
 ];
-/** §2.3: `uninstall` and `remove` exit 1 when there is nothing to remove, so only what is listed (or unknown) is removed. */
+/** §6.3: `uninstall` and `remove` exit 1 when there is nothing to remove, so only what is listed (or unknown) is removed. */
 export function removalCommands(state: ClaudeState): string[][] {
   return [
     ...(state.installed === false ? [] : [['plugin', 'uninstall', PLUGIN_ID, '--scope', 'user']]),

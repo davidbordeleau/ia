@@ -197,7 +197,7 @@ function saved(content: string | null, root: string, id: string): State | null {
     )
       fail('INPUT-INVALID', 'Invalid owned hook timeout');
     // The recorded Node is kept as written, as the guard's is, so a registration made under another Node (or before the Homebrew
-    // `opt` link was recorded) is still owned and re-applying rewrites it; it must still be an absolute path (crowncodes/ia#323).
+    // `opt` link was recorded) is still owned and re-applying rewrites it; it must still be an absolute path.
     const command = handler['command'];
     if (
       typeof command !== 'string' ||
@@ -310,7 +310,7 @@ export function planLifecycleRegistration(
     const projectHooks = project['hooks'] === undefined ? {} : plain(project['hooks']);
     if (projectHooks[event] !== undefined && collision(projectHooks[event], target))
       fail('LOCAL-MODIFICATION', 'Context binding already appears in project settings');
-    // In place (spec §5.1): replace or append the owned group, or remove it by index; every other byte is kept.
+    // In place: replace or append the owned group, or remove it by index; every other byte is kept.
     edited = editJson(edited, ['hooks', event, prior ? matching[0]! : -1], owned ? owned[event] : undefined, existing);
   }
   const nextConfig = prior?.created && emptyJson(edited!) ? null : edited;

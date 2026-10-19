@@ -54,6 +54,7 @@ Automation should read the exit value together with the diagnostic code:
 | `1` | Validation errors, and refusals such as a mandate refusal or a stale `--digest` |
 | `2` | Usage errors |
 | `3` | Unavailable inputs and local operational refusals |
+| `4` | `install`, `update` or `restore` could not reach or read a remote registry or archive |
 | `130` | Interrupted |
 
 ### ✍️ Authoring and checking

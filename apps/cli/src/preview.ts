@@ -1028,7 +1028,8 @@ function previewWord(run: Invocation, request: Extract<PreviewRequest, { mode: '
         .map((row) => ({ system, predicate: row.predicate, targets: row.targets, sources: row.sources })),
     )
     .sort((a, b) => Number(b.system === registration.system) - Number(a.system === registration.system));
-  // A system has a file of its own, `ia author system <name>` writes it, and it takes no field.
+  // A system has a file of its own, which `ia preview system <name>` shows, and it takes no field. `ia author` refuses
+  // the word: a system is an administrative record, changed in source by its owner.
   if (word === 'system')
     return {
       root: run.root,

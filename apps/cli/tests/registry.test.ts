@@ -198,7 +198,7 @@ it('installs from a directory registry named by --registry, pins sha256 location
   expect(existsSync(join(root, '.ia/distributions.lock.json'))).toBe(true);
   expect(trapped).not.toHaveBeenCalled();
 
-  // §10.1: a repeat install is unchanged.
+  // A repeat install is unchanged.
   const again = json<Envelope>(
     (await run(['install', 'acme/app', '--root', root, '--registry', dir, '--json'])).stdout,
   );

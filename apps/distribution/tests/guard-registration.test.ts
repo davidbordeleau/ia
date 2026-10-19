@@ -292,7 +292,7 @@ it.each(['garbage\n', json({ format: 'ia.guard-registration-state.v1' })])(
   },
 );
 /**
- * Spec §10 item 8 for the guard: an interruption at every checkpoint, then the named recovery and a rerun, ends byte
+ * Spec §6 for the guard: an interruption at every checkpoint, then the named recovery and a rerun, ends byte
  * for byte where an uninterrupted apply ends. The reference is the same workspace's, because the group embeds the root.
  */
 it.each(['pending', 'config', 'state', 'complete'])(

@@ -92,7 +92,7 @@ export function installedDistributionDigest(root = import.meta.dirname): string 
   let current = volume;
   for (const part of relative(volume, root).split(sep).filter(Boolean)) {
     current = resolve(current, part);
-    // Another case or normalization of an existing name is the same directory (crowncodes/ia#315); a link is refused on its own.
+    // Another case or normalization of an existing name is the same directory; a link is refused on its own.
     if (lstatSync(current).isSymbolicLink() || !unaliased(current, realpathSync.native(current))) return refuse();
   }
   if (!lstatSync(root).isDirectory() || lstatSync(root).isSymbolicLink()) return refuse();

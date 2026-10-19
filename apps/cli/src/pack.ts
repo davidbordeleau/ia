@@ -7,7 +7,7 @@
  *
  * The digests are the integrity output: they are what a consumer checks an acquired artifact against. The archive
  * name is its own digest, so re-packing unchanged sources on the same zlib build targets a path that already exists — refused by
- * default with a next action naming --force, exactly as §2.4 refuses a compiled artifact.
+ * default with a next action naming --force.
  *
  * A release descriptor may name no `@distribution`: a default `ia init` authors none, because an application
  * repository releases nothing. Such a descriptor has nothing to pack, so it is refused before the packer reads anything
@@ -26,7 +26,7 @@ import type { Capabilities } from './render.js';
 import { atom, document, entry, fieldRows, headerLine, quote, sectionLabel, truncateDigest, words } from './render.js';
 
 export const DEFAULT_OUT = '.ia/work/dist';
-/** §2.7: the rendered form lists the first 20 members and names the rest rather than printing them. */
+/** The rendered form lists the first 20 members and names the rest rather than printing them. */
 export const LISTED_MEMBERS = 20;
 
 export interface PackView {
@@ -70,7 +70,7 @@ export function renderPack(view: PackView, caps: Capabilities): string {
               label: 'Source',
               value: [atom(`sha256 ${truncateDigest(packed.sourceFingerprint, caps.ascii)}`, null, 0)],
             },
-            // The file name carries the archive digest whole: §6.4 never truncates a digest inside an identifier.
+            // The file name carries the archive digest whole: a digest inside an identifier is never truncated.
             { label: 'File', value: [atom(packed.path, 'cyan', 0)] },
           ],
           { depth: 1 },
@@ -104,7 +104,7 @@ export function renderPack(view: PackView, caps: Capabilities): string {
   );
 }
 
-/** §2.7: the default directory is created by this command; a supplied one that is absent is a refusal. */
+/** The default directory is created by this command; a supplied one that is absent is a refusal. */
 const destination = (root: string, cwd: string, supplied: string | undefined): string => {
   if (supplied === undefined) {
     const path = resolve(root, DEFAULT_OUT);
@@ -216,7 +216,7 @@ export function runPack(context: Context): Result {
     );
   } catch (error) {
     // A descriptor that is not there names the pack with the one value to correct; the code and message are the
-    // service's (§4.1), and `ia doctor`, which reads no descriptor, would be no remedy.
+    // service's (§4), and `ia doctor`, which reads no descriptor, would be no remedy.
     const message = error instanceof Error ? error.message : String(error);
     if (codeOf(error, '') !== 'IA-DIST-INPUT-INVALID' || !message.endsWith(`Missing input ${descriptor}`)) throw error;
     throw new Refusal(
@@ -227,7 +227,7 @@ export function runPack(context: Context): Result {
       `Run "${respell(context, { options: { descriptor: ['<file>'] } })}" naming an existing descriptor.`,
     );
   }
-  // §2.7: packing has no "ran correctly, bad result" state, so this verb never returns 1.
+  // Packing has no "ran correctly, bad result" state, so this verb never returns 1.
   return json
     ? { exitCode: 0, stdout: JSON.stringify(packEnvelope(view)) + '\n', stderr: '' }
     : { exitCode: 0, stdout: renderPack(view, caps), stderr: '' };

@@ -9,7 +9,7 @@ import { packageManagerCommand } from '../../../tools/entry/package-manager.mjs'
  * The environment requests colour in every way the renderer understands; machine routes must still emit none.
  *
  * Installed binaries establish JSON stdout, terminal capability handling, closed-stream handling and cancellation
- * as process bytes. tests/render.test.ts owns renderer layout; tools/docs/cli-examples.ts owns captured examples.
+ * as process bytes. tests/render.test.ts owns renderer layout and its reference blocks.
  * These cases do not assert columns, symbol placement or spacing.
  */
 import { spawn } from 'node:child_process';
@@ -347,7 +347,7 @@ it('resolves colour and symbols from the environment the installed process actua
   expect((await run([...validate, '--color'])).stdout).toMatch(ESCAPE);
   expect((await run(validate, colourful())).stdout).toMatch(ESCAPE);
   expect((await run(validate)).stdout).not.toMatch(ESCAPE);
-  // Rule 1: NO_COLOR outranks both, and an empty value counts as present.
+  // NO_COLOR outranks both, and an empty value counts as present.
   for (const value of ['1', ''])
     expect((await run([...validate, '--color'], { ...colourful(), NO_COLOR: value })).stdout, value).not.toMatch(
       ESCAPE,
@@ -385,7 +385,7 @@ it('treats a closed stdout as the end of output rather than as a crash', async (
           child.on('close', (code) => settle({ code, stderr }));
         }),
     );
-  // §5: the consumer copies apps/mcp-door/src/main.ts:27-30,35 — the handler, the `destroyed` guard, and the
+  // The consumer copies apps/mcp-door/src/main.ts's stdout error handling — the handler, the `destroyed` guard, and the
   // rule that EPIPE never becomes a stack trace. Both a consumer verb and a machine route go through it.
   for (const argv of [
     ['validate', '--root', FIXTURE, '--json'],

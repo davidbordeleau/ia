@@ -33,8 +33,9 @@ import { runBounded } from '@tools/testing/subprocess.js';
 const terminal = (env: Record<string, string | undefined>, isTTY = true, columns?: number): Terminal =>
   ({ env, isTTY, ...(columns === undefined ? {} : { columns }) }) satisfies Terminal;
 /**
- * §6.4's effective width, which §7's blocks are generated at. An earlier revision of §7 was hand-wrapped at 74;
- * §6.4 is the normative half, so the examples were regenerated rather than the rule bent to fit them.
+ * The effective width, which the reference blocks below are generated at. An earlier revision of those blocks was
+ * hand-wrapped at 74; the width rule is the normative half, so the examples were regenerated rather than the rule
+ * bent to fit them.
  */
 const REFERENCE_WIDTH = MAX_WIDTH;
 const plain = (ascii: boolean): Capabilities => ({ color: false, ascii, width: REFERENCE_WIDTH });
@@ -640,7 +641,7 @@ it('rule 6: separates blocks with exactly one blank line and emits no trailing b
   expect(rendered.split('\n').some((line) => line !== line.trimEnd())).toBe(false);
   expect(document([[], []])).toBe('');
   expect(document([['a'], [], ['b']])).toBe('a\n\nb\n');
-  // The §7 fixtures obey the same rule, but the assertions above do not depend on them.
+  // The reference-block fixtures obey the same rule, but the assertions above do not depend on them.
   expect(failingValidate(plain(false))).not.toContain('\n\n\n');
 });
 

@@ -15,7 +15,7 @@
  * The effect is reported apart from validation. Its counts compare each record's digest with the prior capture's
  * `current.json`, so a capture with no edit since the last one reports nothing changed. The admission findings are
  * written into the snapshot and counted in the report, and an error makes the exit class 1. Two cases refuse before
- * anything is written, as §5 and §11 have it, so both files stay as they were: a root with no `@workspace` of its own,
+ * anything is written (SPEC `capture`), so both files stay as they were: a root with no `@workspace` of its own,
  * and a floor or seed input (the floor, an installed or an adopted source) that fails to parse. Every other finding there
  * (unresolved references, colliding identities, unconsented rows, a keyword two systems register) stays a finding, as it
  * does in a source the workspace authors.
@@ -176,7 +176,9 @@ export const SYNTAX_CODES: ReadonlySet<string> = new Set([
   'IA-LANG-REF-MALFORMED',
   'IA-LANG-FIELD-KEY-MISSING',
 ]);
-/** §5: the first error by which a floor or seed input fails to parse, or undefined when every one parsed. */
+/**
+ * SPEC `capture`: the first error by which a floor or seed input fails to parse, or undefined when every one parsed.
+ */
 export const unparsedSeed = (diagnostics: readonly Finding[]): Finding | undefined =>
   diagnostics.find(
     (finding) =>
@@ -232,7 +234,7 @@ function captureRefusal(root: string, given: string | undefined, admitted: Admit
         : `Run "ia init ${quote(root)}" to see what a new workspace there would contain.`,
   );
 }
-/** Admits the workspace at `root` and builds the snapshot to write, unless one of §5's two refusals answers first. */
+/** Admits the workspace at `root` and builds the snapshot to write, unless a SPEC `capture` refusal answers first. */
 function capturable(root: string, given: string | undefined, gate?: SessionGate): Omit<Admitted, 'declared'> {
   const admitted = admit(root, gate);
   const refused = captureRefusal(root, given, admitted);
@@ -241,7 +243,7 @@ function capturable(root: string, given: string | undefined, gate?: SessionGate)
   return built;
 }
 /**
- * Admits the workspace at `root` and writes its snapshot pair through db D08a, unless one of §5's two refusals answers
+ * Admits the workspace at `root` and writes its snapshot pair through db D08a, unless a SPEC `capture` refusal answers
  * first. `given` is the `--root` the invocation typed, which the `ia validate` a refusal names carries. `gate`,
  * when given, judges the admitting session before anything is read from it.
  */

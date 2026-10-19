@@ -1,6 +1,6 @@
 # @inventarch/graph
 
-[![npm](https://img.shields.io/npm/v/@inventarch/graph?label=npm)](https://www.npmjs.com/package/@inventarch/graph) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
+[![npm](https://img.shields.io/npm/v/@inventarch/graph?label=npm)](https://www.npmjs.com/package/@inventarch/graph) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D22.22.0%20%3C23-brightgreen)](package.json)
 
 > The typed graph over compiled IA records. It chooses the winning occurrence of each identity, resolves references, rechecks relationship consent, and lets you traverse relationships, inspect claims, conditions and record digests, and search record text.
 >
@@ -36,20 +36,21 @@ for (const row of directedView(graph, 'floor/contract/head/kernel-phase'))
 // inverse grounded-by floor/definition/system/taxonomy
 ```
 
-`load` reads nothing itself: it takes compiled records, the registry that compiled them and the revision inputs. To read a workspace on disk, use [`@inventarch/db`](../db/README.md), which discovers the sources and builds the graph.
+`load` reads nothing itself: it takes compiled records, the registry that compiled them and the revision inputs. `options` holds the revision inputs (`sources`, `languageVersion`, `kernelDigest`), the view `location` and an optional `phase`. Every record's source must be in `sources` at the same placement and provenance; otherwise `load` throws a `TypeError`. To read a workspace on disk, use [`@inventarch/db`](../db/README.md), which discovers the sources and builds the graph.
 
 ## 🧭 What it does
 
 | Area | Exports |
 | --- | --- |
 | Load | `load(records, registry, options)` returns an immutable `Graph`: one winner per identity (the highest band; a tie at that band refuses every tied occurrence), shadows, resolved and dangling edges, indexes and diagnostics. `serialize(graph)` writes it in a stable order that input order does not affect. |
-| Resolve | `resolve(reference, pool, registry)` returns one identity, `IA-GRAPH-TARGET-MISSING` or `IA-GRAPH-TARGET-AMBIGUOUS`; candidate order never breaks a tie. |
-| Relationships | `directedView(graph, identity)` lists every relationship from that record's side, declared or derived inverse, plus typed field references. `traverse(graph, options)` walks breadth-first from start identities to a depth of 0 to 8, with optional scope, filter and coordinate, and `maxNodes`/`maxEdges` bounds that mark a result `truncated`. |
+| Resolve | `resolve(reference, pool, registry)` returns `{ ok: true, identity, fragment? }`, or `{ ok: false, code }` with `IA-GRAPH-TARGET-MISSING` or `IA-GRAPH-TARGET-AMBIGUOUS`; candidate order never breaks a tie. |
+| Relationships | `directedView(graph, identity)` lists every relationship from that record's side, declared or derived inverse, plus typed field references. `traverse(graph, options)` walks breadth-first from `start` identities. It follows the verbs in `follow` (any kernel spelling), or every edge in `direction` (`out`, `in` or `both`, the default), to a `depth` of 0 to 8 (default 1), with optional `scope`, `filter` and `coordinate`, and `maxNodes`/`maxEdges` bounds that mark a result `truncated`. |
 | Claims | `claimants(graph, path, scope?)` names the records whose path selections in `CLAIM_FIELDS` (`authority.covers`, `subject.covers`, `work.covers`, `hook.paths`, `check.covers`) select a path. `selects(selection, path)` and `isSelection(selection)` implement the one path-selection dialect. |
 | Conditions | `validateCoordinate`, `conditionHolds`, `selectors`, `variants`, `cell`, `effectiveSeverity` and `laneOf` evaluate conditions, selector groups and variant and cell selection for a coordinate. |
 | Search | `search(graph, text, scope?)` ranks decoded record text with BM25, computing its statistics over the allowed scope only. |
 | Revisions and digests | `revisionOf` hashes the sources, registry, language version and kernel digest. `authoredRevisionOf` leaves out sources at runtime placement, so runtime-band evidence does not move it. Each node carries `digest` from `recordDigest(record)`, which covers what a record says, not where it was read. |
 | Canonical JSON | `canonical`, `digest` and `copy` give byte-stable canonical JSON and its SHA-256. Each refusal is a `CodecError` with a stable `code`. |
+| Paths | `canonicalRoot(root)` normalizes a corpus-relative reach or view root, and `reaches(reach, location)` says whether a reach covers a location. |
 
 Load diagnostics use the `GRAPH_CODES` (`IA-GRAPH-*`). Invalid query input, such as an unknown coordinate value or a traversal depth outside 0 to 8, throws `GraphUsageError`. The `./internal/*` subpaths are published for IA's own toolchain; use the root entry point.
 

@@ -1,6 +1,6 @@
 # @inventarch/compliance
 
-[![npm](https://img.shields.io/npm/v/@inventarch/compliance?label=npm)](https://www.npmjs.com/package/@inventarch/compliance) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
+[![npm](https://img.shields.io/npm/v/@inventarch/compliance?label=npm)](https://www.npmjs.com/package/@inventarch/compliance) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D22.22.0%20%3C23-brightgreen)](package.json)
 
 > Checks over compiled IA records and graphs: schema conformance, system admission, fragments, coverage, selectors, variants and contract adoption with supplied evaluators, assembled into one revision report. It also resolves obligations against an optional evaluator catalog and qualifies evidence receipts.
 >
@@ -68,13 +68,21 @@ console.log(verified.conformance.profile); // package-v1
 | Revision report | `evaluate(graph, options?)` returns an immutable report keyed to `graph.revision`: `outcome`, `verdicts`, `findings` and `shadows`. `fail` dominates `not-evaluated`, which dominates `pass`. |
 | Schema checks | `validateSchema(record, registry, pool)` for bootstrap without a graph and `validateGraphSchema` on a graph: sections, fields, value types and narrowings (`matchesType`, `matchesForm`) and relationship cardinality. |
 | System admission | `validateSystems(folders, registry, pool)`: one `@system` per folder, words from systems the folder does not require, steward coverage, schema enrolment and declared consent. |
-| Graph checks | `validateFragments`, `validateCoverage`, `validateSelectors`, `validateVariants`, `validateConsent`, `validateIdentity`, `validateParse`, and `validateCheck` (built-in or catalog evaluator ids) or `validateCheckStructure` (any one named evaluator). |
+| Graph checks | `validateFragments`, `validateCoverage`, `validateSelectors`, `validateVariants`, `validateConsent`, `validateIdentity`, `validateParse`, and `validateCheck` (built-in or catalog evaluator ids) or `validateCheckStructure` (any one named evaluator). `CHECK_IDS` lists the built-in evaluator ids a `@check` may name; `checkRunner(node)` reads `check.implementation`, else `check.runs`. |
 | Contract adoption | `validateAdoption` calls the clause evaluators you supply, keyed by contract and requirement. |
 | Evaluator catalog | `createEvaluatorCatalog`, `selectEvaluator` and `bindEvaluators` register a host's trusted, namespaced evaluators for the id a `@check` names. |
 | Obligations and receipts | `resolveObligations`, `inspectObligations`, `profileOccurrences`, `validateReceipt`, `acceptEvaluatorOutput`, `adaptBuiltinVerdict` and `admitTransition` decide which obligations apply, whether a receipt is valid and current, and whether a transition may be admitted. |
-| Fixtures | `runLanguageFixture` and `fixtureCoverage` run conformance fixtures you read yourself. The package ships its conformance fixtures under `fixtures/`. |
-| Conformance evidence | `verifyKernel`, `verifyFixtures` and `isConformanceEvidence` produce and recognise COMP-KERNEL and COMP-FIXTURES evidence; `evaluate`'s `conformance` option binds it to a graph. Evidence about another graph, floor or toolchain stays `not-evaluated`, and evidence the package did not produce is refused. Results from it carry `basis: 'verified'`; results from the caller's own `evidence` map carry `basis: 'caller-asserted'`. |
+| Fixtures | `runLanguageFixture` runs one conformance fixture you read yourself; `fixtureCoverage` checks that passing failing cases observe every required code. The package ships its conformance fixtures under `fixtures/`. |
+| Conformance evidence | `verifyKernel`, `verifyFixtures` and `isConformanceEvidence` produce and recognise COMP-KERNEL and COMP-FIXTURES evidence; `evaluate`'s `conformance` option binds it to a graph. Evidence about another graph, floor or toolchain stays `not-evaluated`, and evidence the package did not produce is refused. A bound result that passed or failed carries `basis: 'verified'`; one left `not-evaluated` carries none. Results from the caller's own `evidence` map carry `basis: 'caller-asserted'`. |
 | Host plugin | `renderClaudePlugin` returns the files of the user-level Claude Code plugin that `ia host claude --user` installs. |
+
+`evaluate` takes these options:
+
+- `sourceDiagnostics` and `folders`: the language diagnostics and the discovered system folders.
+- `adoptionEvaluators`: clause evaluators keyed by contract identity, then requirement id, with an optional `coordinate` for conditional clauses.
+- `catalog`, and `checks: 'structural'` for the structural COMP-CHECK.
+- `admission`: prior non-pass assessments for subjects no longer in the graph.
+- Either `conformance` or `evidence`, not both. `evidence` maps `COMP-KERNEL` or `COMP-FIXTURES` to a `Verdict` built with `verdict(assessment, graph.revision)`.
 
 Finding codes are `COMP_CODES` and `EVIDENCE_CODES` (`IA-COMP-*`); language and graph findings keep their own codes. The `./internal/*` subpaths are published for IA's own toolchain; use the root entry point.
 
@@ -89,7 +97,7 @@ Finding codes are `COMP_CODES` and `EVIDENCE_CODES` (`IA-COMP-*`); language and 
 
 ## 📚 Learn more
 
-- [SPEC.md](SPEC.md): the package contract, refusal codes, the evaluator catalog, obligation and receipt clauses, and native conformance evidence (C31)
+- [SPEC.md](SPEC.md): the package contract, refusal codes, the evaluator catalog, obligation and receipt clauses, native conformance evidence (C31) and the host plugin renderer (C32)
 - [LANGUAGE.md](LANGUAGE.md): the packaged summary of the words this release ships
 - [Architecture reference](../../docs/reference/architecture/README.md#which-package-to-use) and the [host plugin specification](../../docs/specs/host-plugin-distribution/README.md)
 - Neighbours in the dependency direction: [`@inventarch/language`](../language/README.md) and [`@inventarch/graph`](../graph/README.md) before it; [`@inventarch/db`](../db/README.md) after it

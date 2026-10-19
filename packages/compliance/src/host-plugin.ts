@@ -14,7 +14,7 @@ export interface ClaudePluginInput {
   readonly channel: 'checkout' | 'npm' | 'unknown';
   /** Absolute path of the CLI entry that rendered this plugin; the hook runs it first (§8 “Session hook”). */
   readonly entry: string;
-  /** The update instruction (§11 “Updates and evidence”), which the hook repeats when `ia` cannot be found. */
+  /** The update instruction (§5 “Install channel”), which the hook repeats when `ia` cannot be found. */
   readonly install: string;
   /**
    * The absolute path of the Node executable that runs the hook on macOS and Linux: the Node running `ia host claude

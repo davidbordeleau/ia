@@ -31,7 +31,7 @@ export interface OptionSpec {
   readonly conflicts?: readonly string[];
   /** §2.2: `--schema` and `--example` are meaningless without the word they describe. */
   readonly needsPositional?: boolean;
-  /** §2.8: `--requests` carries the set the positionals would have carried. */
+  /** `--requests` carries the set the positionals would have carried. */
   readonly excludesPositionals?: boolean;
   /** §2.1 rejects the common `--root` for `ia init`; the reason is stated rather than spelled as "unknown". */
   readonly refuse?: string;

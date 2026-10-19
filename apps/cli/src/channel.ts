@@ -44,7 +44,10 @@ const real = (path: string): string => {
   }
 };
 
-/** §5's table, top to bottom: under node_modules is npm; inside this repository's own work tree is a checkout. */
+/**
+ * §5's channels, in the order they are tested: under node_modules is npm; inside this repository's own work tree is a
+ * checkout.
+ */
 export function detectChannel(packageRoot: string, git: Git = runGit): Channel {
   const root = real(packageRoot);
   if (root.split(sep).includes('node_modules')) {

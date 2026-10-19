@@ -13,11 +13,11 @@
  * payload that registration recorded; it registers no MCP server and no hook group of its own, so a hook with no
  * registration to join is reported as not taken. `ia host`'s projection element is this same plan and apply. The packet
  * reads the live admitted revision, so no capture is required. A plan with a conflict is a successful report naming the
- * file, as `ia host`'s is (§4); only `--apply` refuses it, before anything is asked or written, naming the plan to run
- * once the file is out of the way. The `ia project`, `ia validate` and `ia init` commands a next action names carry the
- * root as the invocation typed it; the `ia recover` command a pending host journal or a held host lock names carries
- * the resolved root, because its distribution mechanism takes only an absolute root, and a workspace whose sources
- * cannot be opened names the resolved root, as for every workspace verb (`openSession`).
+ * file, as `ia host`'s is (host registration §5); only `--apply` refuses it, before anything is asked or written,
+ * naming the plan to run once the file is out of the way. The `ia project`, `ia validate` and `ia init` commands a next
+ * action names carry the root as the invocation typed it; the `ia recover` command a pending host journal or a held
+ * host lock names carries the resolved root, because its distribution mechanism takes only an absolute root, and a
+ * workspace whose sources cannot be opened names the resolved root, as for every workspace verb (`openSession`).
  */
 import { workspaceRow } from '@inventarch/distribution/hosts';
 import type { HostOutput, PacketReceipt } from '@inventarch/runtime';
@@ -101,9 +101,9 @@ const conflictRefusal = (view: ProjectView, conflict: Conflict): Refusal =>
   new Refusal(conflict.code, conflict.reason, 3, { path: conflict.path }, conflictNext(view, conflict));
 
 /**
- * The plan. A host outside the adapters is usage, refused before anything is read (§3); then the root is resolved and
- * must be initialized and free of a pending host journal, as for `ia host`, and admit, as `renderProjectionFor`
- * requires. It reads the workspace and writes nothing.
+ * The plan. A host outside the adapters is usage, refused before anything is read (consumer CLI contract §1.2); then
+ * the root is resolved and must be initialized and free of a pending host journal, as for `ia host`, and admit, as
+ * `renderProjectionFor` requires. It reads the workspace and writes nothing.
  */
 export function collectProject(context: Context): ProjectView {
   const { args } = context;
@@ -247,7 +247,7 @@ export function renderProjectPlan(view: ProjectView, caps: Capabilities): string
     { leadingBlank: true },
   );
 }
-/** §2.8 rule 3's summary: the plan without its note or footer, because the question is the action. */
+/** Consumer CLI contract §2.0's summary: the plan without its note or footer, because the question is the action. */
 const renderProjectSummary = (view: ProjectView, caps: Capabilities): string =>
   document([headerBlock('Plan', `project ${view.host}`, view, view.packetDigest, caps), ...planBlocks(view, caps)], {
     leadingBlank: true,
@@ -383,10 +383,11 @@ export async function runProject(context: Context): Promise<Result> {
           stdout: applied === null ? renderProjectPlan(view, caps) : renderProjectApplied(view, applied, caps, host),
           stderr: '',
         };
-  // §4: a plan with a conflict is a successful report; only --apply refuses it, before it asks anything.
+  // Host registration §5: a plan with a conflict is a successful report; only --apply refuses it, before it asks
+  // anything.
   if (!args.flag('apply')) return report(null);
   if (view.projection.conflict !== null) throw conflictRefusal(view, view.projection.conflict);
-  // §2.8 rule 3. Parsing has already refused every --apply whose question cannot be asked or answered.
+  // Contract §2.0. Parsing has already refused every --apply whose question cannot be asked or answered.
   if (!args.flag('yes') && !(await confirm(host.interaction, renderProjectSummary(view, caps), CONFIRMATION)))
     return {
       exitCode: 0,

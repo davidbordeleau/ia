@@ -83,7 +83,8 @@ function read(root: string, path: string, max: number = DISTRIBUTION_LIMITS.meta
     fd = openSync(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    // A link, a socket or, on Windows, a directory may refuse to open: refuse it as an opened one is refused.
+    // A link the open refused, a socket, or anything else whose open fails is judged by its name: refuse it as an
+    // opened one is refused.
     const named = lstatSync(target, { bigint: true });
     if (!named.isFile() || named.nlink !== 1n || named.size > BigInt(max)) unaliased();
     throw error;

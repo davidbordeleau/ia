@@ -481,8 +481,8 @@ function bindings<T = Binding>(root: string, each: (binding: Binding) => T = (bi
     fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    // A link, a socket or, on Windows, a directory may refuse to open: refuse it as an opened one is refused. A
-    // regular manifest that cannot be opened is unreadable, as one that cannot be read is.
+    // A link the open refused, a socket, or anything else whose open fails is judged by its name: refuse it as an
+    // opened one is refused. A regular manifest that cannot be opened is unreadable, as one that cannot be read is.
     const named = lstatSync(path, { bigint: true });
     if (!named.isFile() || named.size > 65_536n) irregular();
     return undecodable();
@@ -757,7 +757,8 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
           try {
             fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
           } catch (error) {
-            // A link, a socket or, on Windows, a directory may refuse to open: judge the name as the opened file would be.
+            // A link the open refused, a socket, or anything else whose open fails: judge the name as the opened file
+            // would be.
             admit(lstatSync(file, { bigint: true }));
             throw error;
           }

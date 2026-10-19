@@ -327,8 +327,8 @@ export async function inspectPublication(
       fd = openSync(marker, READ);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'partial';
-      // A marker that is no regular file within its bound is unknown before any read, as one that opens is; Windows may
-      // refuse to open a directory, and an unreadable marker past the bound is unknown, as it was when read by name.
+      // A marker that is no regular file within its bound is unknown before any read, as one that opens is, whatever
+      // kept it from opening; an unreadable marker past the bound is unknown, as it was when read by name.
       const named = lstatSync(marker);
       if (!named.isFile() || named.size > 2 * 1024 * 1024) return 'unknown';
       throw error;

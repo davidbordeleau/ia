@@ -59,7 +59,9 @@ jobs:
   plan:
     name: Plan
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A copy waits up to 35 minutes for a full run still going (`WAIT_MS` and `GATE_WAIT_MS` in verdict.ts), so an edit
+    # that keeps the base gets 45; every other run keeps 20.
+    timeout-minutes: ${{ github.event.action == 'edited' && !github.event.changes.base && 45 || 20 }}
     # Reading this workflow's earlier runs needs actions: read; only this job reads them.
     permissions:
       contents: read

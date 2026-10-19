@@ -4,7 +4,8 @@ import { isEntry } from '../entry/is-entry.mjs';
  * The verdict a pull request's title or description edit reports instead of re-running every lane: the result of the
  * last full run of this workflow on the same head commit that tested what the pull request merges (`testsMerge`). The
  * verdict is copied, never invented. A copy passes only when that run finished and succeeded. While it is still running the copy waits for it,
- * for a bounded time; no full run, one still running at the bound and any other conclusion all fail.
+ * for a bounded time, and longer once that run's gate rows exist (`gateStarted`); no full run, one still running at the bound and any
+ * other conclusion all fail.
  */
 
 /** The Plan job step that copies a verdict. */
@@ -16,8 +17,16 @@ export const VERDICT_STEP = "Copy the verdict of this commit's last full run";
 export const COPY_MARK = 'Mark this run as a copied verdict';
 /** The Plan job step an experiment run takes (a dispatch with a Windows I/O arm or task parallelism): never a verdict. */
 export const EXPERIMENT_MARK = 'Mark this run as an experiment';
-/** How long a copy waits for a full run that is still going, and how often it looks again; inside the Plan job's 20 minutes. */
+/** How long a copy waits for a full run that is still going, and how often it looks again. */
 export const WAIT_MS = 15 * 60_000;
+/**
+ * How much longer a copy waits once the full run's gate rows exist: the gate job's own 20-minute timeout. Failing then would
+ * create this copy's failed rows after the full run's, and GitHub reports the newest row of a name. Both waits fit in the
+ * Plan job's timeout on reuse.
+ */
+export const GATE_WAIT_MS = 20 * 60_000;
+/** The name every row of the gate job starts with in a full run (`qualify` in the workflow). */
+export const GATE_JOB = 'Emitted platform (';
 export const POLL_MS = 30_000;
 
 export interface WorkflowRun {
@@ -31,6 +40,7 @@ export interface WorkflowRun {
 }
 export interface RunJob {
   readonly name: string;
+  readonly status?: string;
   readonly steps?: readonly { readonly name: string; readonly status: string; readonly conclusion: string | null }[];
 }
 export interface Verdict {
@@ -38,8 +48,12 @@ export interface Verdict {
   readonly reason: string;
   /** The newest full run has not finished: its result may still come. */
   readonly pending?: boolean;
+  /** That unfinished run has created its gate rows, so it is at most the gate job's timeout from its result. */
+  readonly gateStarted?: boolean;
 }
 
+/** Job statuses whose check row exists already. A job still waiting for the jobs it needs has none yet. */
+const CREATED = new Set(['queued', 'in_progress', 'completed']);
 /** A cancelled or skipped run decided nothing; an earlier run on the same commit still did. */
 const UNDECIDED = new Set(['cancelled', 'skipped']);
 /** The branch whose dispatched runs are the release pull request's check (`.github/workflows/release-pr.yml`). */
@@ -76,7 +90,12 @@ export async function copiedVerdict(
     // A copy decided nothing of its own, and an experiment's environment is not the contract's.
     if (isCopy(jobs) || ranStep(jobs, EXPERIMENT_MARK)) continue;
     if (run.status !== 'completed')
-      return { passed: false, pending: true, reason: `${run.html_url} is still ${run.status}` };
+      return {
+        passed: false,
+        pending: true,
+        gateStarted: jobs.some((job) => job.name.startsWith(GATE_JOB) && CREATED.has(job.status ?? '')),
+        reason: `${run.html_url} is still ${run.status}`,
+      };
     return run.conclusion === 'success'
       ? { passed: true, reason: `${run.html_url} passed` }
       : { passed: false, reason: `${run.html_url} finished as ${run.conclusion ?? 'no conclusion'}` };
@@ -112,7 +131,7 @@ if (isEntry(process.argv[1], import.meta.url)) {
     process.exitCode = 2;
   } else
     try {
-      const deadline = Date.now() + WAIT_MS;
+      const start = Date.now();
       let verdict: Verdict;
       for (;;) {
         // Every event's runs; testsMerge keeps the release PR's dispatched runs and drops other dispatches.
@@ -132,6 +151,7 @@ if (isEntry(process.argv[1], import.meta.url)) {
           return jobs;
         });
         // A full run whose gate rows already exist would otherwise be outlived by this copy's failed rows.
+        const deadline = start + WAIT_MS + (verdict.gateStarted ? GATE_WAIT_MS : 0);
         if (!verdict.pending || Date.now() + POLL_MS > deadline) break;
         console.error(`Head commit ${head}: ${verdict.reason}; looking again in ${POLL_MS / 1000} s.`);
         await new Promise((done) => setTimeout(done, POLL_MS));

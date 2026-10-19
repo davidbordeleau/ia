@@ -4,8 +4,11 @@ import { expect, it } from 'vitest';
 import {
   COPY_MARK,
   EXPERIMENT_MARK,
+  GATE_JOB,
+  GATE_WAIT_MS,
   RELEASE_BRANCH,
   VERDICT_STEP,
+  WAIT_MS,
   copiedVerdict,
   type RunJob,
   type WorkflowRun,
@@ -84,8 +87,19 @@ it('fails while the last full run is still running, and names it', async () => {
   expect(result).toEqual({
     passed: false,
     pending: true,
+    gateStarted: false,
     reason: expect.stringContaining('runs/2 is still in_progress'),
   });
+});
+
+it("tells when a running full run's gate rows exist, so the copy waits past them", async () => {
+  // Once they exist, failing would create this copy's failed rows after them, and GitHub reports the newest row of a name.
+  const withGate = (status: string): readonly RunJob[] => [...full, { name: `${GATE_JOB}ubuntu-latest)`, status }];
+  const pendingRuns = [run(2, '2026-10-16T09:00:00Z', 'in_progress', null)];
+  for (const status of ['queued', 'in_progress', 'completed'])
+    expect((await verdict(pendingRuns, { 2: withGate(status) })).gateStarted).toBe(true);
+  // A gate job still waiting for the jobs it needs has no row yet.
+  expect((await verdict(pendingRuns, { 2: withGate('waiting') })).gateStarted).toBe(false);
 });
 
 it('knows a copy that failed before its copy step for a copy, never for a failed full run', async () => {
@@ -195,4 +209,17 @@ it("names the workflow's copy step and copy mark exactly as the classifier reads
       'm',
     ),
   );
+});
+
+it("names the gate rows as the workflow does, and gives a copy's Plan job time for both waits", () => {
+  const text = readFileSync(resolve(import.meta.dirname, '../../.github/workflows/platform-quality.yml'), 'utf8');
+  const jobs = workflowJobs(text);
+  expect(jobs.get('qualify')).toContain(`|| '${GATE_JOB.slice(0, -2)}' }} (\${{ matrix.os }})`);
+  const timeout =
+    /^timeout-minutes: \$\{\{ github\.event\.action == 'edited' && !github\.event\.changes\.base && (\d+) \|\| 20 \}\}$/m.exec(
+      jobs.get('plan')!,
+    );
+  expect(timeout).not.toBeNull();
+  // Ten minutes for the Plan job's other steps.
+  expect(Number(timeout![1]) * 60_000).toBeGreaterThanOrEqual(WAIT_MS + GATE_WAIT_MS + 10 * 60_000);
 });

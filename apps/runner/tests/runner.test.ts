@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { adoptWorkspace } from '@inventarch/workspace-runtime';
-import { INSTALLED_READ } from '@inventarch/agent-composition-system';
+import { INSTALLED_READ, installed } from '@inventarch/agent-composition-system';
 import { open } from '@inventarch/db';
 import type { EngineHost, Grant, ModelAction, ModelRequest } from '@inventarch/agent-system';
 import { replay } from '@inventarch/session-system';
@@ -146,6 +146,23 @@ it('opens, steps, executes the installed read, journals position per model step 
   const resumed = openRunner(options);
   cleanups.push(() => resumed.close());
   expect(await resumed.resume(finished.id)).toEqual(finished);
+});
+
+it('uses the installed context primitive for real model turns', async () => {
+  const options = fixture(),
+    seen: ModelRequest[] = [],
+    catalog = runnerCatalog();
+  const context = catalog.contexts['runner-context-v1']!.value;
+  catalog.contexts['runner-context-v1'] = installed({
+    ...context,
+    coordinate: { ...context.coordinate, primitive: 'Escalation' },
+  });
+  const runner = openRunner({ ...options, catalog, model: scripted([done], seen) });
+  cleanups.push(() => runner.close());
+  await runner.start('Use the declared primitive', 'declared-primitive');
+  await runner.run();
+  expect(seen).toHaveLength(1);
+  expect(seen[0]!.context).toMatchObject({ key: { primitive: 'Escalation' } });
 });
 
 it('refuses an operation beyond the mandate count before a second dispatch', async () => {

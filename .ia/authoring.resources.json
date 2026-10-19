@@ -101,8 +101,8 @@
     },
     {
       "path": ".ia/src/systems/authoring-system/SPEC.md",
-      "bytes": 1585,
-      "sha256": "35c15048518e319be6c1d2bc67e8cde312ba80ccdefb094ac6395c87ddbf655d",
+      "bytes": 1703,
+      "sha256": "b302d848e6b6315b59bbf202ac54b0c1986aa219543fdff9809a994857aed577",
       "mediaType": "text/markdown",
       "encoding": "utf8"
     },

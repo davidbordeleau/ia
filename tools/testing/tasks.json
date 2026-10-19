@@ -3500,7 +3500,7 @@
       "skips": [
         {
           "case": "tools/review/runner.test.ts > omits a report symlink and skips a FIFO named like a report without opening either",
-          "reason": "Windows has no FIFOs and needs a privilege to create a file symbolic link; Linux and macOS run this case, and the junction, bound and nesting cases run on every platform.",
+          "reason": "Windows has no FIFOs, so the fixture cannot make one and runs only on Linux and macOS; the junction, bound and nesting cases run on every platform.",
           "platforms": [
             "windows"
           ]

@@ -873,7 +873,8 @@ describe('system package input reads', () => {
     try {
       const fd = fs.openSync(big, 'r+');
       try {
-        // A sparse file: its size is 2147483648 bytes without that much being written.
+        // A size-only file: its size is 2147483648 bytes with nothing written. Linux and macOS keep it sparse; NTFS
+        // reserves its clusters, so on Windows it takes 2 GiB of disk until the case removes it.
         fs.ftruncateSync(fd, 2147483648);
       } finally {
         fs.closeSync(fd);

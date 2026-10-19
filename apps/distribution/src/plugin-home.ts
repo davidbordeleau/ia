@@ -116,13 +116,15 @@ function isPidAlive(pid: number): boolean {
  * an integer from 1 to 2147483647 and is not running, or, when no such pid parsed (empty, the short window between
  * another run's create and its write, unparseable, 0 or negative, or above 2147483647), once it is older than
  * `LOCK_EMPTY_GRACE_MS`. Such a pid that is running is busy however old the lock is: its age does not show that its
- * owner stopped. A hard link at the lock path names the judged file itself, so it is judged like any other lock, and
- * taking it over removes only that name. A stale lock is removed only after its name is found to still name the judged
- * file, compared while the descriptor is open so that file's inode cannot be reused (on Windows, where a symbolic link
- * is followed, this comparison is what refuses one); the descriptor is closed first, as Windows may keep a removed
- * file's name until its last handle closes. A window between that comparison and the removal remains: Node has no
- * unlink-if-same. The lock path can change in it only if another run takes over the same stale lock at that moment, or
- * a hand replaces or removes it.
+ * owner stopped. Running is judged in this process's own pid namespace, so a run in another namespace sharing the IA
+ * home can take over a live run's lock. A hard link at the lock path names the judged file itself, so it is judged
+ * like any other lock, and taking it over removes only that name. A stale lock is removed only after its name is found
+ * to still name the judged file, compared while the descriptor is open so that file's inode cannot be reused (on
+ * Windows, where a symbolic link is followed, this comparison is what refuses one); the descriptor is closed first, as
+ * Windows may keep a removed file's name until its last handle closes. A window between that comparison and the
+ * removal remains: Node has no unlink-if-same, so the removal takes whatever the name holds by then. When another run
+ * takes over the same stale lock at that moment and has already created its own lock there, this removal deletes that
+ * live lock and both runs go on to hold the lock; a file a hand puts there in the window is removed the same way.
  */
 function takeOverStale(path: string): 'busy' | 'removed' | 'retry' {
   let fd: number;
@@ -142,8 +144,10 @@ function takeOverStale(path: string): 'busy' | 'removed' | 'retry' {
       /* unreadable: pid stays NaN, judged as a pid that did not parse below */
     }
     // Only a pid from 1 to 2147483647 names one owner. On POSIX, process.kill takes 0 or a negative pid for a process
-    // group or for every process, and it refuses a larger one as an invalid argument; isPidAlive reads either as
-    // running, whoever wrote the lock, so those are judged as a pid that did not parse.
+    // group or for every process, so 0, -1 and a live group read as running and any other negative from -2147483648 as
+    // dead; on Windows 0 is the caller itself. Node refuses a pid above 2147483647 or below -2147483648 as an invalid
+    // argument on every platform, which isPidAlive reads as running. None of them names the lock's owner, so each is
+    // judged as a pid that did not parse.
     const owner = Number.isInteger(pid) && pid > 0 && pid <= 2147483647;
     const stale = owner ? !isPidAlive(pid) : ageMs > LOCK_EMPTY_GRACE_MS;
     if (!stale) return 'busy';
@@ -163,18 +167,20 @@ function takeOverStale(path: string): 'busy' | 'removed' | 'retry' {
 }
 /**
  * Held for the lifetime of a materialize's recovery-through-swap, or of a whole `removeMarketplace`, so two
- * concurrent `ia host --user` runs cannot interleave their renames. The lock is created exclusively and holds this
- * run's pid, a space and a random token: the pid first, so a reader that parses a leading pid (an older CLI, and
- * `takeOverStale`'s bounded read) still finds it, and the token, which `releaseLock` checks, tells this run's lock from
- * any other. A held lock is taken over — never trusted blindly — only by `takeOverStale`, once it is a regular file
- * whose pid, from 1 to 2147483647, has died, or whose pid is empty, unparseable, 0 or negative, or above 2147483647
- * (the short window between another run's `openSync` and its write among them) and that is older than
- * `LOCK_EMPTY_GRACE_MS`; otherwise this refuses INSTALL-BUSY. A lock whose pid is running is never taken over however
- * old it is, so a lock whose dead owner's pid another process has reused stays busy until it is removed by hand, as the
- * refusal says to do when no run is active. A symbolic link or any other non-regular file at the lock path is never
- * taken over, so it refuses INSTALL-BUSY too. Bounded at `LOCK_TAKEOVER_ATTEMPTS`, so a lock file that keeps coming
- * back (removal failing, a lock replaced while it was judged, or another process winning the race) fails loudly instead
- * of spinning forever. The sweep functions below must never touch this file.
+ * concurrent `ia host --user` runs cannot interleave their renames, except where `takeOverStale` and `releaseLock` say
+ * a lock can still be replaced (two runs taking over one stale lock at once, a run in another pid namespace, an
+ * earlier CLI, or a hand). The lock is created exclusively and holds this run's pid, a space and a random token: the
+ * pid first, so a reader that parses a leading pid (an older CLI, and `takeOverStale`'s bounded read) still finds it,
+ * and the token, which `releaseLock` checks, tells this run's lock from any other. A held lock is taken over — never
+ * trusted blindly — only by `takeOverStale`, once it is a regular file whose pid, from 1 to 2147483647, has died, or
+ * whose pid is empty, unparseable, 0 or negative, or above 2147483647 (the short window between another run's
+ * `openSync` and its write among them) and that is older than `LOCK_EMPTY_GRACE_MS`; otherwise this refuses
+ * INSTALL-BUSY. A lock whose pid is running is never judged stale however old it is, so a lock whose dead owner's pid
+ * another process has reused stays busy until it is removed by hand, as the refusal says to do when no run is active.
+ * A symbolic link or any other non-regular file at the lock path is never taken over, so it refuses INSTALL-BUSY too.
+ * Bounded at `LOCK_TAKEOVER_ATTEMPTS`, so a lock file that keeps coming back (removal failing, a lock replaced while it
+ * was judged, or another process winning the race) fails loudly instead of spinning forever. The sweep functions below
+ * must never touch this file.
  */
 function acquireLock(parent: string): HeldLock {
   mkdirSync(parent, { recursive: true });
@@ -224,9 +230,10 @@ function holdsLock(lock: HeldLock): boolean {
  * Removes the lock `acquireLock` returned only while `holdsLock` finds it still this run's. Any other lock at its path
  * (another run's token, an older CLI's pid alone, a symbolic link or any other non-regular file) is left in place, as
  * is one that cannot be judged; best effort, it never throws, so it never masks the run's own result. A window between
- * the comparison and the removal remains, as in `takeOverStale`: Node has no unlink-if-same. Since this CLI never takes
- * over a lock whose pid is running, and this run's pid is running while it releases, the lock path can change in it
- * only if a hand, or an older CLI's 10-minute age rule, replaces or removes this run's lock at that moment.
+ * the comparison and the removal remains, as in `takeOverStale`: Node has no unlink-if-same, so the removal takes
+ * whatever the name holds by then. The lock path can change in it when another run's late takeover of an earlier stale
+ * lock (see `takeOverStale`), a run in another pid namespace sharing the IA home, a hand, or an older CLI's 10-minute
+ * age rule replaces or removes this run's lock at that moment; the release then removes the replacement.
  */
 function releaseLock(lock: HeldLock): void {
   try {

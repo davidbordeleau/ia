@@ -38,8 +38,31 @@ import {
 
 vi.setConfig({ testTimeout: 600_000, hookTimeout: 300_000 });
 
-/** A seam on the host set's generation, so a test can make it refuse as workspace-runtime refuses; it passes through. */
-const seams = vi.hoisted(() => ({ refuse: undefined as Error | undefined }));
+/**
+ * Seams, each passing through: the host set's generation, so a test can make it refuse as workspace-runtime refuses;
+ * every verification of a host payload that crosses a module boundary (`scans`, when a test sets it); and the MCP
+ * apply, so a test can change the payload between it and the projection step (`afterMcp`).
+ */
+const seams = vi.hoisted(() => ({
+  refuse: undefined as Error | undefined,
+  scans: undefined as string[] | undefined,
+  afterMcp: undefined as (() => void) | undefined,
+}));
+vi.mock('@inventarch/distribution/host', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@inventarch/distribution/host')>();
+  return {
+    ...actual,
+    verifyHostCache: (...args: Parameters<typeof actual.verifyHostCache>) => {
+      seams.scans?.push(args[0]);
+      return actual.verifyHostCache(...args);
+    },
+    applyHost: (...args: Parameters<typeof actual.applyHost>) => {
+      const applied = actual.applyHost(...args);
+      seams.afterMcp?.();
+      return applied;
+    },
+  };
+});
 vi.mock('@inventarch/workspace-runtime/internal/generate', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@inventarch/workspace-runtime/internal/generate')>();
   return {
@@ -648,6 +671,51 @@ it("falls back to the mandates that bind the fixture profile's agent when the pr
       '  - covers `restricted/`',
     ].join('\n'),
   );
+});
+
+it("verifies the payload once for the apply's plans, through the one verifier the command makes", async () => {
+  const { root, env } = await composed();
+  const release = JSON.parse((await host(root, env, 'claude')).stdout).plan.release as string;
+  const scans: string[] = [];
+  seams.scans = scans;
+  try {
+    await apply(root, env);
+  } finally {
+    seams.scans = undefined;
+  }
+  // Scans of the payload itself, its stage aside. The shared verdict made after the rename is one; the MCP plan and the
+  // projection re-plan read it; the rest are the fresh checks that guard a write. Planning afresh adds a scan.
+  expect(scans.filter((directory) => directory.split(/[\\/]/).at(-1) === release)).toHaveLength(5);
+});
+
+it('refuses the projection step when the payload changed during the MCP apply, before any projection write', async () => {
+  const { root, env } = await composed();
+  const release = JSON.parse((await host(root, env, 'claude')).stdout).plan.release as string;
+  const launcher = resolve(env.IA_HOST_HOME, 'hosts', release, 'scripts/ia.mjs');
+  seams.afterMcp = () => writeFileSync(launcher, `${readFileSync(launcher, 'utf8')}\n// changed\n`);
+  let refused;
+  try {
+    refused = await host(root, env, 'claude', '--apply', '--yes');
+  } finally {
+    seams.afterMcp = undefined;
+  }
+  // The projection step plans its hooks afresh, so the shared verdict made before the change cannot pass it: the step
+  // refuses at its hook plan, before its pending receipt (its evidence) or any projection file is written. Through the
+  // shared verdict, the plan would pass and only the hook registration's own check would refuse, after that receipt.
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  expect(JSON.parse(refused.stdout)).toMatchObject({
+    code: 'IA-DIST-INTEGRITY-MISMATCH',
+    where: { path: SETTINGS },
+  });
+  for (const path of [
+    ...PACKET,
+    AGENT,
+    SKILL,
+    HOOK_STATE,
+    PROJECTION,
+    '.ia/distributions/hosts/claude-receipt-pending.json',
+  ])
+    expect(existsSync(resolve(root, path)), path).toBe(false);
 });
 
 // Kept with its seam: generation reports every record it cannot render as an unsupported row, so

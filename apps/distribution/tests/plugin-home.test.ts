@@ -457,14 +457,14 @@ it('refuses INSTALL-BUSY after bounded takeover attempts, without hanging, when 
   expect((caught as { code?: string } | undefined)?.code).toBe('IA-DIST-INSTALL-BUSY');
   expect((caught as Error).message).toMatch(/Another ia host --user run holds/);
 }, 5000);
-// Each verdict at every age that matters: a dead pid is taken over at any age, a live pid at none (its age does not
-// show that its owner stopped), and an empty or unparseable pid after 10 seconds' grace. So is a pid outside 1 to
-// 2147483647, which names no single owner: on POSIX process.kill takes 0 or a negative pid for a process group or for
-// every process, on Windows 0 is the caller itself, and Node refuses a larger one. A lock an older CLI wrote holds its
-// pid alone; one this CLI writes holds its pid, a space and a token. A live pid is this process's own and also another
-// process's, this process's parent (Vitest's main process), so a check that judges only this process alive fails. Ages
-// are set with utimesSync, never waited out.
-it('takes over a lock whose pid died or that holds no pid from 1 to 2147483647 past 10 seconds, in either format, and refuses INSTALL-BUSY untouched for any other, however old', () => {
+// Each verdict at every age that matters: a dead pid is taken over at any age, a live pid only past a day (a younger
+// age does not show that its owner stopped), and an empty or unparseable pid after 10 seconds' grace. So is a pid
+// outside 1 to 2147483647, which names no single owner: on POSIX process.kill takes 0 or a negative pid for a process
+// group or for every process, on Windows 0 is the caller itself, and Node refuses a larger one. A lock an older CLI
+// wrote holds its pid alone; one this CLI writes holds its pid, a space and a token. A live pid is this process's own
+// and also another process's, this process's parent (Vitest's main process), so a check that judges only this process
+// alive fails. Ages are set with utimesSync, never waited out.
+it('takes over a lock whose pid died or that holds no pid from 1 to 2147483647 past 10 seconds, in either format, a live one past a day, and refuses INSTALL-BUSY untouched for any other', () => {
   const minutes = 60_000,
     live = String(process.pid),
     otherLive = String(process.ppid),
@@ -478,8 +478,10 @@ it('takes over a lock whose pid died or that holds no pid from 1 to 2147483647 p
     'live pid, 9 minutes old': [live, 9 * minutes, false],
     'live pid, 11 minutes old': [live, 11 * minutes, false],
     'live pid and token, 11 minutes old': [live + token, 11 * minutes, false],
-    'live pid and token, 2 days old': [live + token, 2 * 24 * 60 * minutes, false],
-    "another live process's pid and token, 2 days old": [otherLive + token, 2 * 24 * 60 * minutes, false],
+    'live pid and token, 23 hours old': [live + token, 23 * 60 * minutes, false],
+    'live pid and token, 25 hours old': [live + token, 25 * 60 * minutes, true],
+    "another live process's pid and token, 23 hours old": [otherLive + token, 23 * 60 * minutes, false],
+    "another live process's pid and token, 25 hours old": [otherLive + token, 25 * 60 * minutes, true],
     'empty, 5 seconds old': ['', 5_000, false],
     'empty, 20 seconds old': ['', 20_000, true],
     'unparseable, 5 seconds old': ['not a pid', 5_000, false],
@@ -528,14 +530,14 @@ it('takes over a lock whose pid died or that holds no pid from 1 to 2147483647 p
   expect(seen).toEqual(expected);
 });
 // Only ESRCH from process.kill means the pid is not running: any other error, such as the EPERM another user's or a
-// protected process answers, leaves the lock busy however old it is, so a live run is never taken over.
-it('refuses INSTALL-BUSY untouched for a lock whose pid process.kill answers with EPERM, however old', () => {
+// protected process answers, leaves the lock busy until it is a day old, so a live run is not taken over.
+it('refuses INSTALL-BUSY untouched for a lock under a day old whose pid process.kill answers with EPERM', () => {
   const home = join(temp(), '.ia'),
     lockPath = join(home, 'claude', '.lock'),
     text = `${DEAD_PID} ${OTHER_TOKEN}`;
   mkdirSync(join(home, 'claude'), { recursive: true });
   writeFileSync(lockPath, text);
-  const when = new Date(Date.now() - 2 * 24 * 60 * 60_000);
+  const when = new Date(Date.now() - 23 * 60 * 60_000);
   utimesSync(lockPath, when, when);
   const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
     throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' });
@@ -573,7 +575,7 @@ function standing(path: string): string | null {
 // and has held it for eleven minutes. Run B used to take it over by age; A's release then removed B's lock by name, and
 // a run C acquired it while B was still active. B now refuses INSTALL-BUSY, A's lock stays as A wrote it, and A goes on
 // to finish and release it, so a run after A acquires it.
-it('refuses INSTALL-BUSY for the lock of a live run however long it has been held, and leaves that run to release it', () => {
+it('refuses INSTALL-BUSY for the lock of a live run held past the old 10 minutes, and leaves that run to release it', () => {
   const home = join(temp(), '.ia'),
     lockPath = join(home, 'claude', '.lock'),
     stage = join(home, 'claude', '.stage-'),

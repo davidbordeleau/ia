@@ -84,7 +84,7 @@ export function captureResources(capture: Capture, request: ResourceCaptureReque
         source = sourceRevision({ source: row['source'], revision: row['revision'] });
       if (typeof row['root'] !== 'string' || vector.get(source.source) !== source.revision || roots.has(source.source))
         invalid('Unselected or duplicate resource package root');
-      // Two spellings of one root alias where the volume folds names: case on win32, case and normalization on darwin (crowncodes/ia#315).
+      // Two spellings of one root alias where the volume folds names: case on win32, case and normalization on darwin.
       const root = canonicalPackageRoot(row['root']),
         alias = pathKey(root);
       if (rootAliases.has(alias)) invalid('Resource package roots must not alias');

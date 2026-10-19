@@ -86,7 +86,7 @@ it('reports the intentional foreign-record admission failure with exit1', async 
 });
 it('prints usage without opening a corpus and rejects malformed options or JSON', async () => {
   expect((await run(['--help'])).stdout).toContain('Usage: ia');
-  // §1.2 step 1 supersedes main.ts:11's usage-exit for a bare `ia`: no arguments now prints consumer help at
+  // Consumer dispatch supersedes `runCli`'s usage exit in main.ts for a bare `ia`: no arguments now prints consumer help at
   // exit 0. The five remaining cases are genuine legacy syntax errors and keep exit 2 with IA-CLI-USAGE.
   const bare = await run([]);
   expect(bare.status).toBe(0);

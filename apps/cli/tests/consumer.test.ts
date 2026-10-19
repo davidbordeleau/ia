@@ -41,7 +41,8 @@ function makeHost(options: HostOptions = {}): Host {
     env,
     stdout: terminal,
     stderr: terminal,
-    // §2.8 rule 3's interaction. No case in this file answers a question; `distribution-verbs.test.ts` owns those.
+    // §2.0's confirmation interaction. No case in this file answers a question; `distribution-verbs.test.ts`
+    // owns those.
     interaction: { interactive: options.interactive ?? false, write: () => {}, read: () => Promise.resolve(null) },
     version: '9.9.9',
     packageRoot: cli,
@@ -219,7 +220,7 @@ it('routes the seven dispatch steps in order and never shadows a legacy operatio
 it('runs every class-2 check at parse time, before any workspace or network read', async () => {
   const empty = mkdtempSync(resolve(tmpdir(), 'ia-usage-'));
   try {
-    // §2.1: unattended --apply with a host still needs --yes, and that usage refusal precedes every read and write.
+    // §2.0: unattended --apply with a host still needs --yes, and that usage refusal precedes every read and write.
     const bootstrap = await run(['init', '--apply', '--host', 'codex'], { cwd: empty });
     expect(bootstrap.exitCode).toBe(2);
     expect(bootstrap.stderr).toContain('IA-CLI-USAGE');
@@ -297,7 +298,7 @@ it('looks words up from the shipped catalogue with no workspace anywhere above t
     expect(none.exitCode).toBe(1);
     expect(none.stderr).toContain('--search no-such-substring');
     expect(none.stdout).toBe('');
-    // §2.0's exception: this verb resolves no root, so it refuses --root rather than discarding it.
+    // §2.2: this verb resolves no root, so it refuses --root rather than discarding it.
     const rooted = await run(['vocabulary', '--root', '.'], { cwd: empty });
     expect(rooted.exitCode).toBe(2);
     expect(rooted.stderr).toContain('--root is not accepted for this verb');
@@ -305,7 +306,7 @@ it('looks words up from the shipped catalogue with no workspace anywhere above t
     expect(typo.exitCode).toBe(2);
     expect(typo.stderr).toContain('Unknown word @playbok');
     expect(typo.stderr).toContain('Did you mean "ia vocabulary playbook"?');
-    // §2.2: the shipped catalogue carries no example field, and the command says so instead of composing one.
+    // The shipped catalogue carries no example field, and the command says so instead of composing one.
     const example = await run(['vocabulary', 'playbook', '--example'], { cwd: empty });
     expect(example.exitCode).toBe(1);
     expect(example.stderr).toBe('No example is shipped for @playbook.\n');
@@ -328,10 +329,10 @@ it('reports validation findings from the real fixture and keeps path filters out
   expect(human.exitCode).toBe(1);
   expect(human.stdout).toContain('Refused. 158 records, 1 errors, 5 warnings.');
   expect(human.stdout).toContain('IA-COMP-DISCRIMINATOR-FOREIGN');
-  // §6.5: a finding with no location of its own names the check that produced it, never `:1`.
+  // A finding with no location of its own names the check that produced it, never `:1`.
   expect(human.stdout).toContain('(whole workspace)  COMP-FIXTURES');
   expect(human.stdout).not.toContain(':1\n');
-  // §6.5: the duplicated `path:line: identity: ` and `CODE: ` prefixes are stripped before printing.
+  // The duplicated `path:line: identity: ` and `CODE: ` prefixes are stripped before printing.
   expect(human.stdout).not.toContain('IA-COMP-NOT-EVALUATED  COMP-FIXTURES:');
 
   const machine = JSON.parse((await run(['validate', '--root', fixture, '--json'])).stdout);
@@ -344,7 +345,7 @@ it('reports validation findings from the real fixture and keeps path filters out
   expect(severity.stdout).toContain('5 warnings hidden by --severity error.');
   expect(severity.stdout).not.toContain('IA-COMP-NOT-EVALUATED');
 
-  // §6.5's two grouping rules. Five warnings carry one code, so one action closes the run rather than five.
+  // The two grouping rules. Five warnings carry one code, so one action closes the run rather than five.
   expect(human.stdout.match(/→ {2}Supply the evaluator/g)).toHaveLength(1);
   // Three of them share a code, path, line and identity and differ only in the fragment named, so they collapse.
   expect(human.stdout).toContain('2 more on this record: #REQ-FOUNDATION-REFUSE, #REQ-FOUNDATION-VALID');
@@ -382,9 +383,9 @@ it('refuses an unavailable root as a precondition rather than as a finding', asy
     const discovery = await run(['validate'], { cwd: empty });
     expect(discovery.exitCode).toBe(3);
     expect(discovery.stderr).toContain('IA-DB-ROOT-INVALID');
-    // §6.4 wraps at 80 columns with a hanging indent, so this phrase straddles the break for some lengths of
-    // the interpolated path and not others — /tmp/ia-noroot-XXXXXX splits it where the Windows temp path does not.
-    // The property here is what the message says; layout belongs in render.test.ts and §7, not in this file.
+    // The renderer wraps at 80 columns with a hanging indent, so this phrase straddles the break for some lengths
+    // of the interpolated path and not others — /tmp/ia-noroot-XXXXXX splits it where the Windows temp path does
+    // not. The property here is what the message says; layout belongs in render.test.ts, not in this file.
     expect(discovery.stderr.replace(/\s+/g, ' ')).toContain('or in any parent');
     const machine = JSON.parse((await run(['validate', '--json'], { cwd: empty })).stdout);
     expect(machine).toMatchObject({ version: 1, ok: false, code: 'IA-DB-ROOT-INVALID', exit: 3 });
@@ -439,7 +440,7 @@ it('inspects admitted structure only, and never through the private assessment n
   expect(machine.records).toHaveLength(1);
   expect(machine.records[0].identity).toBe(identity);
   expect(machine.records[0].digest).toMatch(/^[0-9a-f]{64}$/);
-  // §2.6: this envelope is not the frozen `ia get` one, which wraps its record in {ok, result}.
+  // This envelope is not the frozen `ia get` one, which wraps its record in {ok, result}.
   expect(machine.ok).toBeUndefined();
   expect(Array.isArray(machine.edges)).toBe(true);
   expect(
@@ -705,7 +706,7 @@ it('preserves the frozen machine protocol and the consumer streams in the built 
   expect(report.status).toBe(0);
   expect(report.stderr).toBe('');
   expect(report.stdout).toContain('Environment');
-  // Contract §2.1: piped with no --yes, the class-2 refusal precedes every read and write, which is why it is safe to
+  // Contract §2.0: piped with no --yes, the class-2 refusal precedes every read and write, which is why it is safe to
   // run with this repository as cwd; the built binary's stdin is not a terminal.
   const refusal = await binary(['init', '--apply', '--host', 'claude']);
   expect(refusal.status).toBe(2);

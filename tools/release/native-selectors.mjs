@@ -141,14 +141,64 @@ const declarationPaths = (owner) => [
   'examples/public-language/contracts/' + owner.native.system + '.ia',
 ];
 
-/** Prepare every exact selector before any effect. Generic npm fixtures may omit the entire native surface. */
-export function prepareNativeSelection(root, target) {
+const LANGUAGE_ID = 'inventarch/language';
+const versionsOf = (selected) =>
+  Object.fromEntries([
+    [LANGUAGE_ID, selected.language.language],
+    ...selected.systems.owners.map((owner) => [owner.native.id, owner.native.version]),
+  ]);
+/** The native version each identity selects now, language included, or undefined without a native surface. */
+export function selectedNativeVersions(root) {
+  const selected = selection(root);
+  return selected ? versionsOf(selected) : undefined;
+}
+/**
+ * The native versions an npm release selects before any archive is rebuilt: every identity at the target of a new
+ * major, otherwise each as currently selected. Within a major, content decides, and only `pnpm native:version` can
+ * judge content, so the npm versioner never moves a native version there.
+ */
+export function releaseNativeVersions(root, published, target) {
+  assert.ok(stable(published) && stable(target), 'Native release requires stable npm versions');
+  const current = selectedNativeVersions(root);
+  if (!current) return undefined;
+  return Number(target.split('.')[0]) > Number(published.split('.')[0])
+    ? Object.fromEntries(Object.keys(current).map((id) => [id, target]))
+    : current;
+}
+/** Whether `releases/native/notes.json` describes native changes against the published `v<published>` tag. */
+export function nativeNotesPending(root, published, commit) {
+  const path = resolve(root, 'releases/native/notes.json');
+  if (!existsSync(path)) return false;
+  const notes = JSON.parse(readFileSync(path, 'utf8'));
+  return (
+    notes?.baseline?.tag === 'v' + published &&
+    (commit === undefined || notes.baseline.commit === commit) &&
+    Array.isArray(notes.changes) &&
+    notes.changes.length > 0
+  );
+}
+
+/**
+ * Prepare every exact selector before any effect. Generic npm fixtures may omit the entire native surface. Every npm
+ * version moves to `target`; each native identity moves to its version in `native`, or stays as selected when it is
+ * omitted, and the composition fixture follows the language. A native version may not fall below the current
+ * selection unless `lowerSelected` is set: the native writer sets it, since an unpublished selection can move back
+ * down with its notes, and it enforces the published floor itself.
+ */
+export function prepareNativeSelection(root, target, native, { lowerSelected = false } = {}) {
   assert.ok(stable(target), 'Native release requires a stable npm target');
   const selected = selection(root),
     writes = new Map();
   if (!selected) return writes;
+  const current = versionsOf(selected),
+    versions = native ?? current;
+  assert.deepEqual(Object.keys(versions).sort(), Object.keys(current).sort(), 'Native identity inventory changed');
+  for (const [id, version] of Object.entries(versions)) {
+    assert.ok(stable(version), id + ': invalid native version');
+    assert.ok(lowerSelected || compare(version, current[id]) >= 0, id + ': native version regressed');
+  }
   for (const owner of selected.systems.owners) {
-    assert.ok(compare(target, owner.native.version) >= 0, owner.native.id + ': native version regressed');
+    assert.ok(compare(target, owner.npmVersion) >= 0, owner.native.id + ': npm version regressed');
     for (const path of declarationPaths(owner)) {
       const text = read(root, path);
       assert.equal(
@@ -156,19 +206,22 @@ export function prepareNativeSelection(root, target) {
         owner.native.version,
         'Native declaration differs from selected policy',
       );
-      writes.set(path, declarationVersion(text, owner.native.version, target));
+      writes.set(path, declarationVersion(text, owner.native.version, versions[owner.native.id]));
     }
-    owner.native.version = target;
+    owner.native.version = versions[owner.native.id];
     owner.npmVersion = target;
   }
-  assert.ok(compare(target, selected.language.language) >= 0, 'Native language version regressed');
+  const language = versions[LANGUAGE_ID];
   if (existsSync(resolve(root, NATIVE_COMPOSITION_FIXTURE))) {
     const fixture = compositionFixture(parse(root, NATIVE_COMPOSITION_FIXTURE), selected.systems);
-    assert.ok(compare(target, fixture.dependencies[0].range.slice(1)) >= 0, 'Composition fixture version regressed');
-    fixture.dependencies[0].range = '^' + target;
+    assert.ok(
+      lowerSelected || compare(language, fixture.dependencies[0].range.slice(1)) >= 0,
+      'Composition fixture version regressed',
+    );
+    fixture.dependencies[0].range = '^' + language;
     writes.set(NATIVE_COMPOSITION_FIXTURE, json(fixture, read(root, NATIVE_COMPOSITION_FIXTURE)));
   }
-  selected.language.language = target;
+  selected.language.language = language;
   writes.set(NATIVE_SYSTEM_POLICY, json(selected.systems, read(root, NATIVE_SYSTEM_POLICY)));
   writes.set(NATIVE_LANGUAGE_POLICY, json(selected.language, read(root, NATIVE_LANGUAGE_POLICY)));
   return writes;

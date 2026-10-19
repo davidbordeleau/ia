@@ -1,6 +1,6 @@
 # @inventarch/language
 
-[![npm](https://img.shields.io/npm/v/@inventarch/language?label=npm)](https://www.npmjs.com/package/@inventarch/language) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
+[![npm](https://img.shields.io/npm/v/@inventarch/language?label=npm)](https://www.npmjs.com/package/@inventarch/language) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D22.22.0%20%3C23-brightgreen)](package.json)
 
 > The `.ia` language in pure TypeScript: one scanner, one parser, an explicit vocabulary registry, a semantic compiler, a loss-checked formatter and the embedded language floor. Use it to parse, register, compile and format IA text, or to edit one record of a source file.
 >
@@ -41,19 +41,23 @@ console.log(format(source, 'decision.ia').text);
 | Export | What it does |
 | --- | --- |
 | `scan(text, path)`, `parse(text, path)` | The token stream with trivia; `{ ast, diagnostics }` with records, typed fields, nesting, comments and line spans |
-| `buildRegistry(sources)` | Joins the `@system` and `@schema` declarations of parsed sources into a frozen registry. Only `system` and `schema` are built in; every other word needs a registration |
-| `compile(ast, registry, location, pool)` | `{ records, diagnostics, sourceMap }`: identities, typed fields, relationship edges with two-sided consent, cells, selectors, variants and contract requirements |
+| `buildRegistry(sources)` | `{ registry, diagnostics }`: a frozen registry joined from the `@system` and `@schema` declarations of parsed sources, and the stage diagnostics. Only `system` and `schema` are built in; every other word needs a registration |
+| `compile(ast, registry, location, pool)` | `{ records, diagnostics, sourceMap }`: identities, typed fields, relationship edges with two-sided consent, cells, selectors, variants and contract requirements. `pool` holds the admitted records of other files; a record from this file's path in `pool` is a `TypeError` |
 | `resolveTarget`, `validatePool`, `requirementCollisions` | Reference resolution and whole-tree requirement uniqueness for callers that assemble many files |
 | `format(source, path)`, `checkFormatPreservation(source, output, path)` | Canonical spacing that keeps comments, blank lines and multiline values; the guard reports `IA-LANG-FORMAT-LOSSY` when a candidate changes them |
 | `references(ast)` | The typed references a file holds; prose is never read as a reference |
 | `identityOf`, `renderIdentity`, `canonicalPath`, taxonomy constants and `is*` guards | Identity, path and closed-value helpers such as `KINDS`, `PHASES`, `PREDICATES`, `INVERSE_OF` and `VERB_PHRASES` |
 | `KERNEL_SOURCES`, `KERNEL_DIGEST` | The validated language floor as frozen path and text sources, and its digest |
+| `LANGUAGE_VERSION`, `SUPPORTED_VERSIONS` | The language version this package reads (`1.0`); graph's `load` and `revisionOf` take it as `languageVersion` |
+| `LANG_CODES`, `consentFor`, `verbOf`, `canonicalValue` | The closed `IA-LANG-*` diagnostic codes, two-sided consent for one edge, and lookups of verb spellings and closed values |
+
+A `Location` is `{ placement: { kind, band, reach }, provenance }`. Give it the band `BAND_OF[kind]`: graph's `load` refuses any other with a `TypeError`. Each `buildRegistry` source is `{ ast, diagnostics, location }`, such as `{ ...parse(text, path), location }`. The [graph quick start](../graph/README.md#-quick-start) compiles `KERNEL_SOURCES` this way.
 
 The `./editor` subpath serves editors and authoring hosts:
 
 | Export | What it does |
 | --- | --- |
-| `projectSource`, `cursorContext`, `lineRange`, `recordsIn` | Zero-based UTF-16 ranges for tokens and references, and presentation-only cursor context |
+| `projectSource`, `cursorContext`, `lineRange`, `recordsIn`, `contains` | Zero-based UTF-16 ranges for tokens and references, and presentation-only cursor context |
 | `appendRecord`, `addRelationship`, `setField`, `annotateRecord` | Return the whole file with exactly one top-level record changed; every other line keeps its bytes and line ending |
 | `draftSource`, `encodeValue`, `draftValue`, `relationshipConsent` | Spell a schema-backed draft or one field value, and judge one relationship row's two-sided consent |
 | `SourceEditError` | Thrown by a refused edit, with a closed `reason` such as `parse`, `identity` or `field` |

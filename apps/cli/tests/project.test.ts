@@ -99,7 +99,7 @@ it('plans the claude projection and writes nothing: the entry count, the packet 
   expect(shown).toContain(`39 entries, digest ${envelope.plan.packetDigest.slice(0, 12)}`);
   expect(shown).toContain(`${RULES} create`);
   expect(shown).toContain('no steward guard to retire');
-  // A long command breaks with a backslash continuation (§6.4); joined, it is the apply of this plan.
+  // A long command breaks with a backslash continuation; joined, it is the apply of this plan.
   expect(shown.replaceAll(' \\ ', ' ')).toContain(`Apply with "${rooted('ia project claude', root)} --apply --yes".`);
   // Neither the workspace nor the IA home was written: no projection, no receipt, no payload.
   expect(tree(root)).toEqual(before);
@@ -465,7 +465,8 @@ it('names ia project for a hand edit to a projection without a registration, and
     detail: `${RULES} changed since the projection apply wrote it; move or delete it, then run the remedy`,
     remedy: `ia project claude --root ${quote(root)} --apply`,
   });
-  // No registration exists, so none is stale: §8.2's briefing says the host is not registered, as it did before.
+  // No registration exists, so none is stale: host plugin distribution spec §8.2's briefing says the host is not
+  // registered, as it did before.
   expect(envelope.session.notice).toBe(
     `IA: this workspace has no Claude host registration; run ia host claude --root ${quote(root)} --apply`,
   );

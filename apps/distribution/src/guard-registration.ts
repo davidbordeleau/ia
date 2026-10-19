@@ -116,7 +116,7 @@ function fixedGroup(matcher: string, launcher: string, args: readonly string[], 
   };
 }
 const GUARD_TIMEOUT = 10;
-/** Spec §5.1: explicit root, not claude-guard's CLAUDE_PROJECT_DIR, so the recorded root is the one run; on POSIX through `/bin/sh`, so a guard that cannot run denies (`FAIL_CLOSED`). */
+/** Explicit root, not claude-guard's CLAUDE_PROJECT_DIR, so the recorded root is the one run; on POSIX through `/bin/sh`, so a guard that cannot run denies (`FAIL_CLOSED`). */
 export function guardGroup(launcher: string, root: string, platform: NodeJS.Platform = process.platform): Group {
   return fixedGroup(GUARD_MATCHER, launcher, ['--root', root], platform);
 }
@@ -369,7 +369,7 @@ function planGuardWith(root: string, cache: HostCacheTarget | null, removeId: st
     remaining = rows.filter((_row, at) => !matching.includes(at));
   if (group && remaining.some((row) => json(row) === json(group)))
     fail('LOCAL-MODIFICATION', 'An unmanaged identical guard group already exists');
-  // In place (spec §5.1): replace or append the owned group, or remove it by index; every other byte is kept.
+  // In place: replace or append the owned group, or remove it by index; every other byte is kept.
   const existing = prior ? keptPaths(prior.existing, containers) : presentJson(before.config, containers),
     owned = ['hooks', 'PreToolUse', prior ? matching[0]! : -1];
   const edited = gone ? before.config : editJson(before.config, owned, group ?? undefined, existing),
@@ -703,7 +703,7 @@ function planHooksWith(
   for (const [hook, group] of wanted)
     if (rows.some((row, index) => !claimed.has(index) && json(row) === json(group)))
       fail('LOCAL-MODIFICATION', `An unmanaged identical hook group already exists for ${hook}`);
-  // In place (spec §5.1): replace each owned group whose derivation changed at its own index, append each new one in
+  // In place: replace each owned group whose derivation changed at its own index, append each new one in
   // identity order, then remove the unwanted ones from the highest index down; every other byte is kept.
   const existing = prior ? keptPaths(prior.existing, containers) : presentJson(before.config, containers);
   let edited = before.config;
@@ -882,7 +882,7 @@ export function recoverGuardRegistration(rootInput: string): { status: 'guard-re
  * and any failure to run the guard at all exits 2, naming the remedy on stderr, which Claude Code shows with the block.
  * Claude Code lets a tool call through when a hook command cannot start or fails any other way, and blocks only on exit 2 or
  * a deny (code.claude.com/docs/en/hooks); the guard's own decisions exit 0 and pass through unchanged. win32 has no
- * `/bin/sh` and keeps the direct form, which still fails open (crowncodes/ia#323).
+ * `/bin/sh` and keeps the direct form, which still fails open.
  */
 export const FAIL_CLOSED =
   '"$0" "$@" || { echo "IA steward guard could not run: run ia doctor, then ia host claude --apply" >&2; exit 2; }';

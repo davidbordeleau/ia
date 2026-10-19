@@ -82,7 +82,7 @@ export function readHostPin(packageRoot: string): {
 /**
  * Host plugin distribution spec §3: the consumer root MUST NOT be inside the host home, and a home inside the
  * workspace would put per-user payload bytes in it; both refuse. Nesting is judged on disk, so another spelling a
- * case- or normalization-folding volume opens as the same directory nests too (crowncodes/ia#315).
+ * case- or normalization-folding volume opens as the same directory nests too.
  */
 export function assertHomeOutsideWorkspace(home: string, root: string): void {
   if (!isAbsolute(home) || !isAbsolute(root)) fail('INPUT-INVALID', 'Host home and workspace root must be absolute');

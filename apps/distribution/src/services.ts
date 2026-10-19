@@ -142,10 +142,10 @@ export interface InstalledState {
   readonly lock?: DistributionLock;
   readonly inputs?: GenerationInputs;
   /**
-   * Spec §7: observed per host, only when the caller opts in via `hosts: true`. Absent — never `[]` — when not
-   * requested, so a caller cannot mistake "didn't ask" for "asked, and none are registered". Observation walks
-   * every managed file under `.ia/distributions/hosts/`, so callers that don't need it (`distribute.ts`, `init.ts`,
-   * the native `list`/`doctor` body) must not pay for it.
+   * Host registration spec §7: observed per host, only when the caller opts in via `hosts: true`. Absent — never
+   * `[]` — when not requested, so a caller cannot mistake "didn't ask" for "asked, and none are registered".
+   * Observation walks every managed file under `.ia/distributions/hosts/`, so callers that don't need it
+   * (`distribute.ts`, `init.ts`, the native `list`/`doctor` body) must not pay for it.
    */
   readonly hosts?: readonly HostObservation[];
 }

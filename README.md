@@ -15,6 +15,8 @@
 - **Open and method-neutral.** Everything here runs locally, and initialization and validation need no network connection. You can define your own words, systems, workspaces and methods with the same public contracts IA uses for its own vocabulary.
 
 > [!NOTE]
+> **IA 3.2** lets a host make every durable session write pass its own admission check, so authority revoked mid-run refuses the write. Registry and archive downloads accept only credential-free HTTPS URLs, and the vocabulary, the shipped guides and `ia doctor` correct several descriptions and repairs. Native archives are now versioned by content within a major: this release moves them to 3.1.2.
+>
 > **IA 3.1** turns a Claude Code, Codex or Grok plugin into a kit workspace (`ia init --from`) and renders the workspace back into the plugin (`ia project --product plugin`), with a check that the round trip is exact. [`@inventarch/compliance`](packages/compliance/README.md) can now produce its own kernel and fixture conformance evidence, on request.
 >
 > **IA 3.0** added a governed write path (`ia preview`, then `ia author`), commands checked against the acting participant's mandates, check bindings whose passes and failures `ia validate` records as evidence, host agents, skills and hook guards generated from authored records, registry kits, source-only workspace adoption (`ia adopt`) and the local `ia-runner`.
@@ -296,7 +298,7 @@ IA is method-neutral. It defines what records mean, how they compose and what a 
 | `apps/` | CLI, MCP server, runner, edit-guard hook, distribution tooling and VS Code extension | [Apps](#%EF%B8%8F-apps) |
 | `.ia/src/floor/` | The closed language kernel: domains, predicate pairs and routing vocabulary | [Kernel README](.ia/src/floor/README.md) · [contract](.ia/src/floor/SPEC.md) |
 | `.ia/src/systems/` | The eleven public vocabulary owners, their canonical schemas and system implementations | [Native systems](#-native-systems) |
-| `docs/` | Language reference, vocabulary catalogue, architecture reference and implemented specifications | [Documentation map](#-documentation-map) |
+| `docs/` | Language reference, vocabulary catalogue, architecture and package references, and implemented specifications | [Documentation map](#-documentation-map) |
 | `examples/` | Authoring examples and executable conformance fixtures | [Public-language examples](examples/public-language/README.md) |
 | `distributions/` | The optional product-structure distribution | [Distribution README](distributions/product-structure/README.md) |
 | `releases/`, `tools/` | Release inputs, and the build, generation, documentation and qualification tools | [Release process](releases/README.md) · [repository contract](SPEC.md) |
@@ -366,7 +368,7 @@ The [language floor](.ia/src/floor/README.md) supplies the kernel. These systems
 | --- | --- |
 | **Language and identity** | [Language guide](docs/reference/language/README.md) · [language contract](docs/reference/language/SPEC.md) |
 | **Words, fields and relationships** | [Vocabulary catalogue](docs/reference/language/vocabulary.md) · [machine-readable catalogue](docs/reference/language/vocabulary.json) |
-| **Packages, ownership and enforcement** | [Architecture reference](docs/reference/architecture/README.md) |
+| **Packages, ownership and enforcement** | [Architecture reference](docs/reference/architecture/README.md) · [package reference](docs/reference/packages/README.md) |
 | **Command and host behavior** | [Implemented specifications](docs/specs/README.md) · [CLI guide](apps/cli/README.md) · [MCP server](apps/mcp-door/README.md) · [runner](apps/runner/README.md) · [VS Code extension](apps/vscode/README.md) |
 | **Worked examples** | [Public-language examples](examples/public-language/README.md) · [conformance fixtures](examples/conformance/SPEC.md) |
 | **Changing this repository** | [Contributing guide](CONTRIBUTING.md) · [repository contract](SPEC.md) and the nearest package or system `SPEC.md` |

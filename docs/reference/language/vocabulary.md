@@ -2,7 +2,7 @@
 
 Generated from the public contract corpus by `pnpm vocabulary:generate`. Required sections and fields are structural obligations; `id` is not an implicit enumeration. See [the language guide](README.md) for shared syntax, allowed values, relationship resolution, domain constraints and evaluator limits. The [JSON catalogue](vocabulary.json) carries the same machine-readable contract.
 
-This catalogue contains 44 words. Source digest: `8ebfaf93977468e42897cf4951025d11fab1297bacce94971a76d484aec43201`.
+This catalogue contains 44 words. Source digest: `c1ca45affdfc693efa6c81991722055ab5db711234d70d3aee151b9d97531d69`.
 
 ## @agent
 
@@ -380,7 +380,7 @@ Closed kernel members: `artifact-set`, `provenance`, `severity`.
 
 ## @distribution
 
-Declares root records from which a distributable closure is selected.
+Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes.
 
 Owner: `workspace-system`. Kind: `definition`. Category: `representation`. Artifact set: `projection`. Primitive: `Attention`. Move: `Observation`. Identity: `workspace-system/definition/<facet>/<name>`.
 
@@ -711,7 +711,7 @@ Required sections: meaning, data. Optional sections: none.
 | meaning.answers | text | yes |
 | data.order | number | yes |
 
-Closed kernel members: `delegation`, `execution`, `observation`, `synthesis`, `verification`.
+Closed kernel members: `Delegation`, `Execution`, `Observation`, `Synthesis`, `Verification`.
 
 ## @observation
 
@@ -877,7 +877,7 @@ Required sections: meaning, cognition. Optional sections: relationships, activat
 
 ## @predicate
 
-Defines a directed relationship and its inverse spelling.
+Defines a directed relationship, its inverse spelling and its present phrase.
 
 Owner: `taxonomy`. Kind: `definition`. Category: `kind`. Artifact set: `contract`. Primitive: `Memory`. Move: `Observation`. Identity: `taxonomy/definition/<facet>/<name>`.
 
@@ -920,7 +920,7 @@ Required sections: meaning, data. Optional sections: none.
 | data.order | number | yes |
 | data.anchor | id | yes |
 
-Closed kernel members: `attention`, `decision`, `escalation`, `inference`, `learning`, `memory`.
+Closed kernel members: `Attention`, `Decision`, `Escalation`, `Inference`, `Learning`, `Memory`.
 
 ## @principle
 

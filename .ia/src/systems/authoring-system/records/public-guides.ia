@@ -240,7 +240,7 @@
 
 @authoring-guide public-workspace-system-distribution
   meaning
-    says "Declares root records from which a distributable closure is selected."
+    says "Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes."
     answers "What does @distribution represent?"
   reference
     owner workspace-system
@@ -249,7 +249,7 @@
     document ".ia/src/systems/authoring-system/reference/distribution.md"
     default-file "distribution.ia"
   guidance
-    select-when "Declares root records from which a distributable closure is selected."
+    select-when "Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes."
     avoid-when "The intended record has a different semantic role."
     consider "Check required fields and references; declaration is not execution evidence."
   relationships
@@ -546,7 +546,7 @@
 
 @authoring-guide public-taxonomy-predicate
   meaning
-    says "Defines a directed relationship and its inverse spelling."
+    says "Defines a directed relationship, its inverse spelling and its present phrase."
     answers "What does @predicate represent?"
   reference
     owner taxonomy
@@ -555,7 +555,7 @@
     document ".ia/src/systems/authoring-system/reference/predicate.md"
     default-file "predicate.ia"
   guidance
-    select-when "Defines a directed relationship and its inverse spelling."
+    select-when "Defines a directed relationship, its inverse spelling and its present phrase."
     avoid-when "The intended record has a different semantic role."
     consider "Check required fields and references; declaration is not execution evidence."
   relationships

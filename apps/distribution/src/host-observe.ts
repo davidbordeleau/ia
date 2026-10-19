@@ -46,7 +46,7 @@ const readOwned = (root: string, path: string): string | null => {
 /**
  * `.mcp.json`, `.codex/config.toml` and `.claude/settings.local.json` are user-owned surfaces this authority only
  * partially controls. Observation must survive a hand-corrupted or non-UTF-8 file: unreadable bytes are reported
- * as drift, never an exception (spec §7/§9: doctor never claims more than it observed, and never crashes on it).
+ * as drift, never an exception (spec §7: doctor never claims more than it observed, and never crashes on it).
  */
 const readUser = (root: string, path: string): string | null => {
   try {
@@ -110,7 +110,7 @@ export function hostVerifier(): HostVerifier {
   minted.add(verify);
   return verify as HostVerifier;
 }
-/** Spec §9: never a guess. A corrupted own state file is reported, not fabricated data for the fields it would have supplied. */
+/** Spec §7: never a guess. A corrupted own state file is reported, not fabricated data for the fields it would have supplied. */
 function invalid(host: Host): HostObservation {
   return {
     host,
@@ -227,7 +227,8 @@ export function observeHosts(
         stale('mcp-modified');
       }
     }
-    // The steward guard is a hooks element, so it is observed only for a host whose row declares hooks (spec §4).
+    // The steward guard is a hooks element, so it is observed only for a host whose row declares hooks (host plugin
+    // distribution spec §4).
     if (workspaceRow(host)?.hooks) {
       const guard = guardRow(root);
       if (guard !== ABSENT) {

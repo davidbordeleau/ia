@@ -1,5 +1,5 @@
 /**
- * Host registration spec §6: a workspace's projection for one host, rendered from its own admitted records.
+ * Host registration spec §4: a workspace's projection for one host, rendered from its own admitted records.
  *
  * The projection is the position packet (`renderPacket`, runtime R19) rendered by the host's adapter for the consumer
  * target (`renderHost`, R20), with the command catalog this CLI tags (`packetCatalog`). One render feeds `ia host`,
@@ -137,7 +137,7 @@ export function renderPluginFor(root: string): readonly PluginFile[] {
 }
 
 /**
- * §6.1: the packet over the whole workspace, through the session's own scope, rendered by `host`'s adapter for the
+ * §4: the packet over the whole workspace, through the session's own scope, rendered by `host`'s adapter for the
  * consumer target, and the host set generated from the workspace's authored records through the same scope: the
  * packet's files, then the generated agent and skill files, each carrying `PACKET_MARKER`; the `@hook` declarations
  * (`hooks`, claude only); and the receipt the render fills, whose `files` list every file with its SHA-256, `generated`
@@ -626,7 +626,7 @@ export function applyHostProjection(
   previous?: PacketReceipt,
   cache: HookCache = null,
 ): HostProjectionApplied {
-  // A pending host journal refuses every host write, as it refuses the plan (§8).
+  // A pending host journal refuses every host write, as it refuses the plan (§6).
   assertHostRegistrationIdle(root);
   const retirement = planRetirement(root, host),
     hooks = planHookStep(root, host, rendered, cache),
@@ -802,7 +802,7 @@ export function preflightProjection(root: string, host: HostName): void {
     rendered = null;
   }
   // Only the populated skill folder refuses here: every other file refusal stays the refresh's after the install
-  // commits, naming the applied install (host registration §6.3), as before.
+  // commits, naming the applied install (host registration §4), as before.
   if (rendered !== null)
     try {
       planFiles(root, host, rendered);

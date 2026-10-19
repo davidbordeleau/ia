@@ -18,6 +18,12 @@ Add explicit primitive selection with protocol-2 compatibility, actionable per-w
 
 Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
 
+### Add reusable knowledge packages and local CLI/MCP readers
+
+Read admitted records and bound documents without a .kb folder. Export explicitly selected committed knowledge, preserve legacy portable validation, and expose bounded reads through ia kb and five MCP tools. Central policy and lifecycle remain host owned.
+
+Packages: `@inventarch/cli`, `@inventarch/kb`, `@inventarch/mcp-door`.
+
 ## 3.2.1
 
 Coordinated 3.2.1 release of the 23 public npm packages: Refuse a coordinate value whose text conversion throws as an unknown value.

@@ -1,6 +1,15 @@
 import '../temp/physical-temp.mjs';
 import { execFileSync } from 'node:child_process';
-import { existsSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  copyFileSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +22,7 @@ import {
   nativeRelease,
   planNativeVersions,
   NATIVE_CURRENT,
+  NATIVE_NOTES,
   type NativeBaseline,
   type NativeNotes,
 } from './native-version.js';
@@ -131,13 +141,16 @@ const allNatives = (version: string) => ({
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
-/** The exact code and message of a refusal; a call that does not refuse fails the test. */
+/**
+ * The exact code and message of a refusal; a call that does not refuse fails the test. Node appends a value diff to a
+ * failed equality assertion's own message, so only its first line, the authored text, is compared.
+ */
 const refusal = (run: () => unknown) => {
   try {
     run();
   } catch (error) {
     const { code, message } = error as { code?: string; message: string };
-    return { code, message };
+    return { code, message: message.split('\n')[0] };
   }
   throw new Error('Expected a refusal');
 };
@@ -148,6 +161,18 @@ const publishedAt = (tag: string, versions: Record<string, string> = {}): Native
 });
 
 describe('content-driven native release selection', () => {
+  it.each([
+    ['3.1.0', '3.2.0'],
+    ['3.14.0', '3.15.0'],
+  ])('keeps every unchanged 3.0.0 archive when npm %s advances only to %s', (tag, target) => {
+    const base = publishedAt(tag),
+      plan = planNativeVersions(base, base.archives, target);
+    expect(plan).toEqual({
+      versions: Object.fromEntries(archives.map((row) => [row.id, '3.0.0'])),
+      direct: [],
+      changed: [],
+    });
+  });
   it.each(['3.0.1', '3.1.0'])('keeps every unchanged archive at its published version for npm target %s', (target) => {
     const plan = planNativeVersions(baseline, archives, target, notes(['core'], 'major'));
     expect(plan.versions).toEqual(Object.fromEntries(archives.map((row) => [row.id, '3.0.0'])));
@@ -624,8 +649,14 @@ describe('published native evidence and candidate ledger', () => {
   });
 });
 
-/** Real packing inputs with a literal historical version, independent of the checkout's future release target. */
-function realNativeReleaseFixture(historicalNotesSha256: string | null = null) {
+/**
+ * Real packing inputs published at a literal npm tag (default 3.0.0), independent of the checkout's release target.
+ * Every native archive is published at 3.0.0 unless `versions` gives a system (or `language`) its own version.
+ */
+function realNativeReleaseFixture(
+  options: { notesSha256?: string | null; tag?: string; versions?: Record<string, string> } = {},
+) {
+  const { notesSha256: historicalNotesSha256 = null, tag = '3.0.0', versions = {} } = options;
   const root = temporary(),
     git = init(root),
     prior = commit(root, 'Earlier published source');
@@ -648,8 +679,11 @@ function realNativeReleaseFixture(historicalNotesSha256: string | null = null) {
   }
   const selected = JSON.parse(readFileSync(resolve(root, NATIVE_SYSTEM_POLICY), 'utf8'));
   for (const owner of selected.owners) {
-    owner.npmVersion = '3.0.0';
-    owner.native.version = '3.0.0';
+    const version = versions[owner.native.system] ?? '3.0.0',
+      manifest = owner.owner + '/package.json';
+    write(root, manifest, { ...JSON.parse(readFileSync(resolve(root, manifest), 'utf8')), version: tag });
+    owner.npmVersion = tag;
+    owner.native.version = version;
     for (const path of [
       owner.owner + '/system.ia',
       'examples/public-language/contracts/' + owner.native.system + '.ia',
@@ -657,16 +691,17 @@ function realNativeReleaseFixture(historicalNotesSha256: string | null = null) {
       write(
         root,
         path,
-        readFileSync(resolve(root, path), 'utf8').replace(/^  version "[^"\r\n]+"/m, '  version "3.0.0"'),
+        readFileSync(resolve(root, path), 'utf8').replace(/^  version "[^"\r\n]+"/m, `  version "${version}"`),
       );
   }
+  const language = versions['language'] ?? '3.0.0';
   write(root, NATIVE_SYSTEM_POLICY, selected);
-  write(root, NATIVE_LANGUAGE_POLICY, { format: 'ia.public-native-versions.v1', language: '3.0.0' });
+  write(root, NATIVE_LANGUAGE_POLICY, { format: 'ia.public-native-versions.v1', language });
   const composition = JSON.parse(readFileSync(resolve(root, NATIVE_COMPOSITION_FIXTURE), 'utf8'));
-  composition.dependencies.find((row: { id: string }) => row.id === 'inventarch/language').range = '^3.0.0';
+  composition.dependencies.find((row: { id: string }) => row.id === 'inventarch/language').range = '^' + language;
   write(root, NATIVE_COMPOSITION_FIXTURE, composition);
-  write(root, 'releases/current.json', releasePolicy('3.0.0', '2.9.0', prior));
-  for (const [path, text] of prepareNativeSelection(root, '3.0.0')) write(root, path, text);
+  write(root, 'releases/current.json', releasePolicy(tag, '2.9.0', prior));
+  for (const [path, text] of prepareNativeSelection(root, tag)) write(root, path, text);
   const retained = {
     format: 'ia.native-release.v1',
     baseline: { tag: 'v2.9.0', commit: prior },
@@ -674,10 +709,46 @@ function realNativeReleaseFixture(historicalNotesSha256: string | null = null) {
     archives: nativeArchives(root),
   };
   write(root, NATIVE_CURRENT, retained);
-  const published = commit(root, 'Publish aligned3 fixture');
-  git('tag', 'v3.0.0');
+  const published = commit(root, 'Publish fixture ' + tag);
+  git('tag', 'v' + tag);
   return { root, git, prior, retained, published };
 }
+
+/** A revised work-system declaration pair changes work-system and the language directly, and these consumers. */
+const WORK_CONSUMERS = [
+  'agent-composition-system',
+  'authoring-system',
+  'hook-authoring-system',
+  'learning-system',
+  'template-system',
+];
+const WORK_CONTROLS = ['agent-system', 'compliance-system', 'governance-system', 'session-system', 'workspace-system'];
+function reviseWorkSystem(root: string) {
+  for (const path of ['.ia/src/systems/work-system/system.ia', 'examples/public-language/contracts/work-system.ia'])
+    write(
+      root,
+      path,
+      readFileSync(resolve(root, path), 'utf8').replace(
+        'describes "Public work-system vocabulary contracts"',
+        'describes "Public work-system vocabulary contracts, revised"',
+      ),
+    );
+}
+const workSystemNotes = (tag: string, commit: string, work: 'patch' | 'minor' = 'minor'): NativeNotes => ({
+  format: 'ia.native-release-notes.v1',
+  baseline: { tag, commit },
+  changes: [
+    { id: 'inventarch/work-system', bump: work, summary: 'The system description is revised.' },
+    { id: 'inventarch/language', bump: 'patch', summary: 'Embeds the revised work-system declaration.' },
+    ...WORK_CONSUMERS.map((id) => ({ id: 'inventarch/' + id, bump: 'patch' as const, summary: 'Dependency moves.' })),
+  ],
+});
+/** The twelve-identity selection for a work-system change: controls, dependency consumers with the language, work. */
+const workSystemVersions = (control: string, consumer: string, work: string) => ({
+  ...Object.fromEntries(WORK_CONTROLS.map((id) => ['inventarch/' + id, control])),
+  ...Object.fromEntries([...WORK_CONSUMERS, 'language'].map((id) => ['inventarch/' + id, consumer])),
+  'inventarch/work-system': work,
+});
 
 /** The complete exact selector surface, derived independently of the production writer's write map. */
 function nativeWriterSnapshot(root: string) {
@@ -698,14 +769,19 @@ function nativeWriterSnapshot(root: string) {
   );
 }
 
-/** The writer's selection: every npm version at `npm`, and each native at `natives(id)` (one version by default). */
+/** The writer's selection: every npm version at `npm`, and each native at `natives` (one version by default). */
 function expectNativeWriterSelection(
   root: string,
   before: Map<string, Buffer | null>,
   npm: string,
-  natives: string | ((id: string) => string) = npm,
+  natives: string | ((id: string) => string) | Readonly<Record<string, string>> = npm,
 ) {
-  const native = typeof natives === 'string' ? () => natives : natives;
+  const native =
+    typeof natives === 'string'
+      ? () => natives
+      : typeof natives === 'function'
+        ? natives
+        : (id: string) => natives[id]!;
   // All eleven owners have paired declarations; both policy files and the composition fixture also move.
   expect(before.size).toBe(26);
   const selected = JSON.parse(before.get(NATIVE_SYSTEM_POLICY)!.toString('utf8'));
@@ -728,7 +804,7 @@ function expectNativeWriterSelection(
         before
           .get(path)!
           .toString('utf8')
-          .replace(/^  version "3\.0\.0"/m, `  version "${owner.native.version}"`),
+          .replace(/^  version "[^"\r\n]+"/m, `  version "${owner.native.version}"`),
       );
   const composition = JSON.parse(before.get(NATIVE_COMPOSITION_FIXTURE)!.toString('utf8'));
   composition.dependencies.find((row: { id: string }) => row.id === 'inventarch/language').range =
@@ -756,6 +832,166 @@ describe('native release writer', () => {
     expect(result.archives.map((row) => row.version)).toEqual(Array(12).fill('3.0.0'));
     expect(readFileSync(resolve(root, NATIVE_CURRENT))).not.toEqual(before.get(NATIVE_CURRENT));
     expect(nativeRelease(root, 'check').archives).toEqual(result.archives);
+  }, 120_000);
+
+  it.each([
+    ['3.0.0', '3.1.0'],
+    ['3.1.0', '3.2.0'],
+    ['3.14.0', '3.15.0'],
+  ])(
+    'keeps unchanged 3.0.0 archives and their published bytes when npm %s advances only to %s',
+    (tag, target) => {
+      const { root, retained, published } = realNativeReleaseFixture({ tag });
+      write(root, 'releases/current.json', releasePolicy(target, tag, published));
+      const before = nativeWriterSnapshot(root),
+        result = nativeRelease(root, 'write');
+      expect(result).toMatchObject({ target, direct: [], changed: [] });
+      expect(result.archives).toEqual(retained.archives);
+      expectNativeWriterSelection(root, before, target, '3.0.0');
+      expect(JSON.parse(readFileSync(resolve(root, NATIVE_CURRENT), 'utf8'))).toEqual({
+        format: 'ia.native-release.v1',
+        baseline: { tag: 'v' + tag, commit: published },
+        notesSha256: null,
+        archives: retained.archives,
+      });
+      expect(nativeRelease(root, 'check').archives).toEqual(retained.archives);
+    },
+    120_000,
+  );
+
+  it('moves a changed archive and its dependency-only consumers on their own lines and refuses a tampered ledger', () => {
+    const { root, retained, published } = realNativeReleaseFixture({ tag: '3.1.0' });
+    reviseWorkSystem(root);
+    write(root, 'releases/current.json', releasePolicy('3.2.0', '3.1.0', published));
+    write(root, NATIVE_NOTES, workSystemNotes('v3.1.0', published));
+    const result = nativeRelease(root, 'write');
+    expect(result.direct).toEqual(['inventarch/language', 'inventarch/work-system']);
+    expect(result.versions).toEqual(workSystemVersions('3.0.0', '3.0.1', '3.1.0'));
+    // The controls keep their published bytes; every other archive was repacked at its own new version.
+    for (const row of result.archives) {
+      const prior = retained.archives.find((entry) => entry.id === row.id)!;
+      if (WORK_CONTROLS.includes(row.id.slice('inventarch/'.length))) expect(row).toEqual(prior);
+      else expect(row.archive).not.toBe(prior.archive);
+    }
+    expect(nativeRelease(root, 'check').versions).toEqual(result.versions);
+    const written = JSON.parse(readFileSync(resolve(root, NATIVE_CURRENT), 'utf8'));
+    const tamper = (id: string, field: Partial<NativeArchive>) => ({
+      ...written,
+      archives: written.archives.map((row: NativeArchive) => (row.id === id ? { ...row, ...field } : row)),
+    });
+    // A changed archive's version, a repacked consumer's archive digest, a control's manifest digest and the ledger
+    // baseline; the published-ledger test above covers the notes digest.
+    for (const wrong of [
+      tamper('inventarch/work-system', { version: '3.0.0' }),
+      tamper('inventarch/authoring-system', { archive: 'f'.repeat(64) }),
+      tamper('inventarch/agent-system', { manifest: 'e'.repeat(64) }),
+      { ...written, baseline: { tag: 'v3.0.0', commit: published } },
+    ]) {
+      write(root, NATIVE_CURRENT, wrong);
+      expect(refusal(() => nativeRelease(root, 'check'))).toEqual({
+        code: 'ERR_ASSERTION',
+        message: 'Native archive ledger is stale; run pnpm native:version --write',
+      });
+    }
+    write(root, NATIVE_CURRENT, written);
+    expect(nativeRelease(root, 'check').versions).toEqual(result.versions);
+  }, 240_000);
+
+  it('aligns a mixed published major-3 ledger to 4.0.0, then keeps the unchanged 4.0.0 archives for npm 4.1.0', () => {
+    const { root, git, retained, published } = realNativeReleaseFixture({
+      tag: '3.2.0',
+      versions: { 'agent-system': '3.1.0', 'workspace-system': '3.0.2', language: '3.2.0' },
+    });
+    expect(nativeBaseline(root)).toEqual({ source: { tag: 'v3.2.0', commit: published }, archives: retained.archives });
+    expect([...new Set(retained.archives.map((row) => row.version))].sort()).toEqual([
+      '3.0.0',
+      '3.0.2',
+      '3.1.0',
+      '3.2.0',
+    ]);
+    // The unchanged post-publication check, over a mixed published ledger.
+    expect(nativeRelease(root, 'check').changed).toEqual([]);
+    write(root, 'releases/current.json', releasePolicy('4.0.0', '3.2.0', published));
+    const before = nativeWriterSnapshot(root),
+      aligned = nativeRelease(root, 'write'),
+      four = Object.fromEntries(retained.archives.map((row) => [row.id, '4.0.0']));
+    expect(aligned).toMatchObject({ direct: [], changed: [], versions: four });
+    expectNativeWriterSelection(root, before, '4.0.0', four);
+    expect(nativeRelease(root, 'check').archives).toEqual(aligned.archives);
+    const tagged = commit(root, 'Publish 4.0.0');
+    git('tag', 'v4.0.0');
+    write(root, 'releases/current.json', releasePolicy('4.1.0', '4.0.0', tagged));
+    const next = nativeRelease(root, 'write');
+    expect(next).toMatchObject({ direct: [], changed: [], versions: four });
+    expect(next.archives).toEqual(aligned.archives);
+    // After the reset a changed archive follows its own cadence; unchanged archives keep 4.0.0 and their bytes.
+    reviseWorkSystem(root);
+    write(root, NATIVE_NOTES, workSystemNotes('v4.0.0', tagged, 'patch'));
+    const changed = nativeRelease(root, 'write');
+    expect(changed.versions).toEqual(workSystemVersions('4.0.0', '4.0.1', '4.0.1'));
+    for (const row of changed.archives)
+      if (WORK_CONTROLS.includes(row.id.slice('inventarch/'.length)))
+        expect(row).toEqual(aligned.archives.find((entry) => entry.id === row.id));
+    expect(nativeRelease(root, 'check').versions).toEqual(changed.versions);
+  }, 360_000);
+
+  it('restores every selector after a failed per-archive write within a major', () => {
+    const { root, git, published } = realNativeReleaseFixture({ tag: '3.1.0' });
+    reviseWorkSystem(root);
+    write(root, NATIVE_NOTES, workSystemNotes('v3.1.0', published));
+    write(root, 'releases/current.json', releasePolicy('3.2.0', '3.1.0', published));
+    const before = nativeWriterSnapshot(root),
+      status = git('status', '--porcelain'),
+      realArchives = nativeArchiveModule.nativeArchives,
+      failure = new Error('Fixture: post-write archive packing failed');
+    let reachedPostWrite = false;
+    const archiveSpy = vi.spyOn(nativeArchiveModule, 'nativeArchives').mockImplementation((candidate, overrides) => {
+      if (candidate === root && overrides === undefined) {
+        reachedPostWrite = true;
+        // Only the changed archives' declarations moved before the failure; the controls kept theirs.
+        expectNativeWriterSelection(root, before, '3.2.0', workSystemVersions('3.0.0', '3.0.1', '3.1.0'));
+        throw failure;
+      }
+      return realArchives(candidate, overrides);
+    });
+    try {
+      expect(() => nativeRelease(root, 'write')).toThrow(failure);
+      expect(reachedPostWrite).toBe(true);
+      expect(nativeWriterSnapshot(root)).toEqual(before);
+      expect(git('status', '--porcelain')).toBe(status);
+    } finally {
+      archiveSpy.mockRestore();
+    }
+  }, 120_000);
+
+  it('restores every changed declaration when a read-only selector refuses a write partway through', () => {
+    const { root, git, published } = realNativeReleaseFixture({ tag: '3.1.0' });
+    reviseWorkSystem(root);
+    write(root, NATIVE_NOTES, workSystemNotes('v3.1.0', published));
+    write(root, 'releases/current.json', releasePolicy('3.2.0', '3.1.0', published));
+    const before = nativeWriterSnapshot(root),
+      status = git('status', '--porcelain');
+    // The writer moves every declaration pair and the composition fixture before the system policy.
+    const locked = resolve(root, NATIVE_SYSTEM_POLICY);
+    chmodSync(locked, 0o444);
+    let thrown: unknown;
+    try {
+      nativeRelease(root, 'write');
+    } catch (error) {
+      thrown = error;
+    } finally {
+      chmodSync(locked, 0o644);
+    }
+    // A user who may write a read-only file, such as root, defeats the fixture: say so instead of failing on undefined.
+    expect(thrown, 'the read-only system policy must refuse the write; run this test as a non-root user').toBeDefined();
+    const { code, syscall, path } = thrown as NodeJS.ErrnoException;
+    expect({ code, syscall, path }).toEqual({
+      code: process.platform === 'win32' ? 'EPERM' : 'EACCES',
+      syscall: 'open',
+      path: locked,
+    });
+    expect(nativeWriterSnapshot(root)).toEqual(before);
+    expect(git('status', '--porcelain')).toBe(status);
   }, 120_000);
 
   it('aligns all twelve archives to an npm-only major 4.0.0', () => {
@@ -813,7 +1049,7 @@ describe('native release writer', () => {
 
   it('preserves the complete historical ledger when writing an unchanged published target', () => {
     const historicalNotes = 'd'.repeat(64),
-      { root, prior, retained } = realNativeReleaseFixture(historicalNotes),
+      { root, prior, retained } = realNativeReleaseFixture({ notesSha256: historicalNotes }),
       before = nativeWriterSnapshot(root),
       result = nativeRelease(root, 'write');
     expect(result.target).toBe('3.0.0');

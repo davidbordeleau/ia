@@ -58,6 +58,8 @@ try {
 | `@inventarch/db/distribution` | Strict decoders and canonical bytes for release descriptors, manifests, locks, generation membership, activation pointers and the installed-implementation catalog, and `readInstalledGeneration`, which verifies the active installed generation. |
 | `@inventarch/db/descriptors` | Pure, bounded compilers for `domain-model`, `storage-binding` and `app-composition` descriptor resources; see [their contract](src/descriptors/SPEC.md). |
 
+When recording D14 validation or runner evidence, bind checks against a reader opened without `conformance: 'verify'`. Verification changes report verdicts, while evidence admission uses the unverified report. The public `Handle` and `EditorSnapshot` do not expose the internal `View.unverified` report: keep the validation session unverified and use a second verifying reader for display. Before combining their results, require matching `authoredRevision` values; retry if the workspace changed between reads.
+
 The `./internal/*` subpaths serve specific toolchain consumers and are not a stable contract.
 
 ## ⚖️ What it does not do

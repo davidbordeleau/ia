@@ -2,25 +2,31 @@ import { existsSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { Report } from '@inventarch/compliance';
-import { KERNEL_SOURCES } from '@inventarch/language';
+import { KERNEL_DIGEST, KERNEL_SOURCES, LANGUAGE_VERSION } from '@inventarch/language';
 import { bindChecks, EVIDENCE_DIRECTORY, evidenceText, open, readEvidence, writeEvidence } from '../src/index.js';
 import { EditorDatabase } from '../src/editor/index.js';
 import { methodId, methodPath, put, workspace } from './workspace.js';
 
 // D10: the conformance producers, wrapped but unchanged, so a test can count the runs a reader starts.
 // The wrapper keeps the count, not mock history, which Vitest 5 clears before every test.
-const produced = vi.hoisted(() => ({ kernel: 0, fixtures: 0 }));
+const produced = vi.hoisted(() => ({ kernel: 0, fixtures: 0, unavailable: false }));
 vi.mock('@inventarch/compliance', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@inventarch/compliance')>();
   return {
     ...actual,
     verifyKernel: (...args: Parameters<typeof actual.verifyKernel>) => {
       produced.kernel += 1;
-      return actual.verifyKernel(...args);
+      const result = actual.verifyKernel(...args);
+      return produced.unavailable
+        ? { ...result, assessment: { ...result.assessment, outcome: 'not-evaluated' as const } }
+        : result;
     },
     verifyFixtures: (...args: Parameters<typeof actual.verifyFixtures>) => {
       produced.fixtures += 1;
-      return actual.verifyFixtures(...args);
+      const result = actual.verifyFixtures(...args);
+      return produced.unavailable
+        ? { ...result, assessment: { ...result.assessment, outcome: 'not-evaluated' as const } }
+        : result;
     },
   };
 });
@@ -106,7 +112,7 @@ describe('cache-free editor capture', () => {
 describe('conformance verification (D10)', () => {
   const draft = { path: '.ia/src/draft.ia', text: '#! ia 1.0\n' };
   /** How many times this process has run each producer. */
-  const runs = () => ({ ...produced });
+  const runs = () => ({ kernel: produced.kernel, fixtures: produced.fixtures });
   /** The report's COMP-KERNEL and COMP-FIXTURES verdicts, with their basis when they carry one. */
   const conformance = (report: Report) =>
     report.verdicts
@@ -210,6 +216,44 @@ describe('conformance verification (D10)', () => {
     editor.close();
     structural.close();
     disk.close();
+  });
+  it('retries unevaluated producers and caches their subsequent evaluated result', async () => {
+    vi.resetModules();
+    const { conformanceOf } = await import('../src/conformance.js');
+    const inputs = {
+      sources: KERNEL_SOURCES.map((source) => ({
+        ...source,
+        location: { placement: { kind: 'floor' as const, band: 10 as const, reach: '' }, provenance: 'bootstrap' as const },
+      })),
+      languageVersion: LANGUAGE_VERSION,
+      kernelDigest: KERNEL_DIGEST,
+    };
+    const before = runs();
+    produced.unavailable = true;
+    try {
+      conformanceOf(inputs);
+      conformanceOf(inputs);
+      expect(runs()).toEqual({ kernel: before.kernel + 2, fixtures: before.fixtures + 2 });
+    } finally {
+      produced.unavailable = false;
+    }
+    conformanceOf(inputs);
+    conformanceOf(inputs);
+    expect(runs()).toEqual({ kernel: before.kernel + 3, fixtures: before.fixtures + 3 });
+  });
+  it('evicts the least recently used floor after sixteen entries and refreshes hits', () => {
+    const roots = Array.from({ length: 17 }, (_, index) => changedFloor(`cache-floor-${index}`));
+    const verify = (root: string) => new EditorDatabase(root, { conformance: 'verify' }).close();
+    const before = runs();
+    for (const root of roots.slice(0, 16)) verify(root);
+    expect(runs().kernel).toBe(before.kernel + 16);
+    verify(roots[0]!); // Refresh the oldest entry before inserting the seventeenth.
+    verify(roots[16]!);
+    expect(runs().kernel).toBe(before.kernel + 17);
+    verify(roots[0]!);
+    expect(runs().kernel).toBe(before.kernel + 17);
+    verify(roots[1]!); // This floor, rather than the refreshed first one, was evicted.
+    expect(runs().kernel).toBe(before.kernel + 18);
   });
   it('runs the fixture profile once per process and the kernel once per floor', () => {
     const embedded = workspace(false);

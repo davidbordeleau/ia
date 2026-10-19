@@ -232,7 +232,8 @@ it('checks the actual repository manifest for shape, coverage and qualification 
     manifest = readManifest(root);
   expect(projects.map((project) => project.id)).toContain('.');
   expect(projects.map((project) => project.id)).toContain('apps/runner');
-  expect(projects.length).toBe(19);
+  expect(projects.map((project) => project.id)).toContain('packages/kb');
+  expect(projects.length).toBe(20);
   // Live discovery spawns Vitest per project and belongs to `pnpm tests:inventory`. Here the
   // manifest's own selections stand in, which still exercises identity, dependency, output,
   // profile and leaf-ownership rules against the real task set.

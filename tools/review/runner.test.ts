@@ -458,7 +458,7 @@ it('refuses unparsable or too many evidence entries and a missing, linked or non
     symlinkSync(resolve(root, 'evidence'), resolve(root, 'linked'), 'junction');
     expect(() => evidenceFiles(resolve(root, 'linked'), [])).toThrow('Evidence must be a real directory');
     writeFileSync(resolve(root, 'evidence/task/evidence.json'), 'not JSON');
-    expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow(SyntaxError);
+    expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow('Invalid JSON in gate evidence');
     rmSync(resolve(root, 'evidence/task/evidence.json'));
     for (let index = 0; index < 1999; index++) writeFileSync(resolve(root, 'evidence/task', `log-${index}.txt`), '');
     // The task directory and 1,999 logs are 2,000 entries: at the bound, with no report to disclose.

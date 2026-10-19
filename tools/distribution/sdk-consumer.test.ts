@@ -96,3 +96,35 @@ it('refuses ordinary qualification and missing or stale release evidence before 
     expect(() => releaseArtifacts(checkout, directory)).toThrow(/Changed/);
   });
 });
+
+it('refuses an archive replaced after release verification before selecting consumer pins', async () => {
+  const directory = mkdtempSync(resolve(realpathSync(tmpdir()), 'ia-sdk-pin-race-'));
+  const archives = archivesFixture(directory);
+  compatibilityFixture(directory);
+  writeReleaseManifest(checkout, directory, receipts(archives), evidence());
+  vi.doMock('./npm-release.mjs', async (original) => {
+    const actual = await original<typeof import('./npm-release.mjs')>();
+    return {
+      ...actual,
+      verifyRelease: (...args: Parameters<typeof actual.verifyRelease>) => {
+        const result = actual.verifyRelease(...args);
+        const path = resolve(directory, result.packages[0]!.filename);
+        const bytes = readFileSync(path);
+        bytes[bytes.length - 1] = bytes[bytes.length - 1]! ^ 1;
+        writeFileSync(path, bytes);
+        return result;
+      },
+    };
+  });
+  vi.resetModules();
+  try {
+    const consumer = await import('./consumer.mjs');
+    expect(() => consumer.releaseArtifacts(checkout, directory, evidence())).toThrow(
+      'Release archive integrity changed before consumer selection',
+    );
+  } finally {
+    vi.doUnmock('./npm-release.mjs');
+    vi.resetModules();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

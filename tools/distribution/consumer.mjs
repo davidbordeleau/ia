@@ -237,13 +237,22 @@ export function releaseArtifacts(root, directory, evidence) {
   const version = JSON.parse(readFileSync(resolve(root, 'releases/current.json'), 'utf8')).version;
   const release = verifyRelease(root, directory, version, { ...evidence, inputs });
   const projects = publicPackages(root);
-  const packed = release.packages.map((row) => ({
-    name: row.name,
-    version: row.version,
-    filename: containedFile(directory, row.filename),
-    owner: projects.find((project) => project.manifest.name === row.name)?.directory ?? '',
-    sha256: sha(readRegular(directory, row.filename, 256 * 1024 * 1024)),
-  }));
+  const packed = release.packages.map((row) => {
+    const bytes = readRegular(directory, row.filename, 256 * 1024 * 1024);
+    assert.equal(bytes.length, row.bytes, 'Release archive size changed before consumer selection');
+    assert.equal(
+      'sha512-' + createHash('sha512').update(bytes).digest('base64'),
+      row.integrity,
+      'Release archive integrity changed before consumer selection',
+    );
+    return {
+      name: row.name,
+      version: row.version,
+      filename: containedFile(directory, row.filename),
+      owner: projects.find((project) => project.manifest.name === row.name)?.directory ?? '',
+      sha256: sha(bytes),
+    };
+  });
   return { release, packed };
 }
 

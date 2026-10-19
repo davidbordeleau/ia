@@ -139,7 +139,10 @@ async function runMain(script: Script) {
       : [];
     const reviewCalls = calls.filter((call) => call.url.startsWith(`${api}/`) && !call.url.endsWith('/exchange'));
     return {
-      subjectDigest: reviewCalls.find((call) => call.method === 'PUT')?.url.split('/').at(-1),
+      subjectDigest: reviewCalls
+        .find((call) => call.method === 'PUT')
+        ?.url.split('/')
+        .at(-1),
       status: run.status,
       stderr: run.stderr,
       calls,

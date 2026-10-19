@@ -82,3 +82,24 @@ export function recipeFiles(inputs) {
   for (const path of selected) if (!seen.has(path)) throw new Error('Missing recipe input: ' + path);
   return rows;
 }
+
+/** Explicit product owner entrypoints; their implementation is bound by the full-source receipt. */
+export const RECIPE_PRODUCT_ENTRYPOINTS = Object.freeze([
+  '.ia/src/systems/agent-composition-system/src/catalog.js',
+  '.ia/src/systems/agent-composition-system/src/compile.js',
+  'apps/distribution/dist/ustar.js',
+  'apps/distribution/src/archive.js',
+  'apps/distribution/src/archive.ts',
+  'apps/distribution/src/files.js',
+  'apps/distribution/src/files.ts',
+  'apps/distribution/src/registry-build.ts',
+  'apps/distribution/src/resolve.ts',
+  'apps/distribution/src/snapshot.js',
+  'apps/distribution/src/snapshot.ts',
+  'apps/distribution/src/system-package.js',
+  'packages/compliance/src/index.js',
+  'packages/db/src/distribution/index.js',
+  'packages/graph/src/index.js',
+  'packages/language/src/index.js',
+  'packages/workspace-runtime/src/corpus.js',
+]);

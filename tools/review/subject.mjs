@@ -52,7 +52,11 @@ export function evidenceFiles(directory, omissions) {
       if (!entry.isFile() || entry.name !== 'evidence.json') continue;
       const report = evidenceReport(resolve(directory, name), name, bytes, omissions, directory);
       if (!report) continue;
-      try { JSON.parse(report.content); } catch { throw new Error('Invalid JSON in gate evidence: ' + name); }
+      try {
+        JSON.parse(report.content);
+      } catch {
+        throw new Error('Invalid JSON in gate evidence: ' + name);
+      }
       reports.push({ name, digest: digest(report.content), content: report.content });
       bytes += report.size;
     }

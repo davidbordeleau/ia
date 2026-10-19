@@ -16,3 +16,5 @@ export const RECIPE_VERSION: 'ia.packing-recipe.v1';
 export const RECIPE_FILES: readonly string[];
 /** Reviewed tooling import closure, including helpers bound by the enclosing full-source descriptor. */
 export const RECIPE_TOOL_MODULES: readonly string[];
+/** Explicit product owner entrypoints; their implementation is bound by the full-source receipt. */
+export const RECIPE_PRODUCT_ENTRYPOINTS: readonly string[];

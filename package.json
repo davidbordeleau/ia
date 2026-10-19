@@ -63,7 +63,6 @@
     "native:version": "node --conditions=development --import tsx tools/release/native-version.ts",
     "native:release:check": "node --conditions=development --import tsx tools/release/native-version.ts --check",
     "tools:typecheck-js": "tsc -p tsconfig.tools-js.json",
-    "kb:qualify": "node tools/distribution/qualify-kb.mjs",
     "packages:pack": "node tools/distribution/consumer.mjs pack",
     "sdk:qualify": "node tools/distribution/qualify-sdk.mjs"
   },

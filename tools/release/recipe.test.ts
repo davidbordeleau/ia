@@ -1,9 +1,16 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
-import { posix, resolve } from 'node:path';
+import { posix, relative, resolve } from 'node:path';
 import ts from 'typescript';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { expect, it } from 'vitest';
-import { RECIPE_VERSION, RECIPE_FILES, RECIPE_TOOL_MODULES, recipeFiles } from './recipe.mjs';
+import {
+  RECIPE_VERSION,
+  RECIPE_FILES,
+  RECIPE_TOOL_MODULES,
+  RECIPE_PRODUCT_ENTRYPOINTS,
+  recipeFiles,
+} from './recipe.mjs';
 import { compatibilityFixture, inQualifiedCohort, checkout, evidence } from '../distribution/release-fixtures.js';
 import { verifyPublicCompatibility } from './public-pack.mjs';
 
@@ -45,11 +52,17 @@ function toolingClosure(overrides = new Map<string, string>()) {
       true,
     );
     const dependency = (specifier: string) => {
+      if (specifier.startsWith('file:'))
+        specifier =
+          './' + posix.relative(posix.dirname(path), relative(root, fileURLToPath(specifier)).replaceAll('\\', '/'));
       if (!specifier.startsWith('.') && !specifier.startsWith('@tools/')) return;
       let target = specifier.startsWith('@tools/')
         ? 'tools/' + specifier.slice('@tools/'.length)
         : posix.normalize(posix.join(posix.dirname(path), specifier));
-      if (!target.startsWith('tools/')) return;
+      if (!target.startsWith('tools/')) {
+        expect(RECIPE_PRODUCT_ENTRYPOINTS, `Unlisted packing implementation: ${target}`).toContain(target);
+        return;
+      }
       if (!existsSync(resolve(root, target)) && target.endsWith('.js')) target = target.slice(0, -3) + '.ts';
       visit(target);
     };
@@ -60,6 +73,13 @@ function toolingClosure(overrides = new Map<string, string>()) {
         ts.isStringLiteral(node.moduleSpecifier)
       )
         dependency(node.moduleSpecifier.text);
+      if (
+        ts.isImportDeclaration(node) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        ['node:module', 'module'].includes(node.moduleSpecifier.text)
+      )
+        throw Error('Packing implementation has an unreviewable module loader: ' + path);
       if (
         ts.isCallExpression(node) &&
         (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
@@ -88,9 +108,21 @@ it('explicitly accounts for the transitive tooling implementation and catches ne
     "import('../shared/unlisted.mjs');",
     "require('../shared/unlisted.mjs');",
     "import '@tools/shared/unlisted.mjs';",
+    "import '../../unlisted.mjs';",
+    `import ${JSON.stringify(pathToFileURL(resolve(root, 'unlisted.mjs')).href)};`,
   ]) {
     expect(() => toolingClosure(new Map([[path, statement]]))).toThrow(/Unlisted packing implementation/);
   }
+  expect(() =>
+    toolingClosure(
+      new Map([
+        [
+          path,
+          "import { createRequire as loader } from 'node:module'; const load = loader(import.meta.url); load('../../unlisted.cjs');",
+        ],
+      ]),
+    ),
+  ).toThrow(/unreviewable module loader/);
   expect(() => toolingClosure(new Map([[path, 'import(process.env.PACK_HELPER);']]))).toThrow(
     /unreviewable dynamic import/,
   );

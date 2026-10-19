@@ -30,10 +30,7 @@ const packages = [
 const selected = releaseArtifacts(candidate, archives);
 const release = selected.release;
 const inventory = {
-  artifacts: release.packages.map((row) => ({
-    ...row,
-    path: row.filename,
-  })),
+  artifacts: selected.packed.map((row) => ({ ...row, path: basename(row.filename) })),
 };
 const pins = [];
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');

@@ -7,6 +7,7 @@ Collect an advisory review subject, call the review service, validate its identi
 ## Modules
 
 - [github.mjs](github.mjs).
+- [main.test.ts](main.test.ts) — offline entrypoint, retained evidence and delivery integration coverage.
 - [render.mjs](render.mjs).
 - [result.mjs](result.mjs).
 - [runner.d.mts](runner.d.mts) — interface declaration; implementation checking is tracked separately.

@@ -2694,7 +2694,8 @@
         "distribution:build",
         "cli:build",
         "mcp-door:build",
-        "steward-hook:build"
+        "steward-hook:build",
+        "host-payload:generate"
       ],
       "outputs": [
         "artifacts/tests/tools-test-installed-views"

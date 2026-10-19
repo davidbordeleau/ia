@@ -1,0 +1,422 @@
+{
+  "format": "ia.npm-changeset.v1",
+  "version": "3.2.2",
+  "state": "consumed",
+  "baseline": {
+    "commit": "59ffc30ae41f02f3acdf5dab4efbe4a00717a471",
+    "version": "3.2.1"
+  },
+  "bump": "patch",
+  "summary": "Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim, so two runs never both hold it.",
+  "packages": {
+    "@inventarch/agent-composition-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/agent-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/authoring-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/cli": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/compliance": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/compliance-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/db": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/distribution": {
+      "previous": "3.2.1",
+      "kind": "changed",
+      "summary": "Judge a held user host lock from one opened file. Take over a live user host lock only after a day, and release only a run's own. Take over a stale user host lock under a claim, so two runs never both hold it."
+    },
+    "@inventarch/governance-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/graph": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/hook-authoring-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/language": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/learning-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/mcp-door": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/runner": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/runtime": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/service-contracts": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/session-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/steward-hook": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/template-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/work-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/workspace-runtime": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    },
+    "@inventarch/workspace-system": {
+      "previous": "3.2.1",
+      "kind": "cohort",
+      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+    }
+  },
+  "changes": [
+    {
+      "id": "judge-a-held-user-host-lock-from-one-opened-file",
+      "title": "Judge a held user host lock from one opened file",
+      "summary": "When `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run, @inventarch/distribution now judges whether that lock is stale from one opened file: its type, age and pid all come from a single descriptor, and a stale lock is removed only after its name is found, while that descriptor is open, to still name the judged file (CodeQL js/file-system-race). A lock that replaced the judged file before that check is therefore no longer removed; a brief window between the check and the removal remains, as Node has no unlink-if-same. A symbolic link or other non-regular file at the lock path now counts as busy and is not taken over, and a FIFO at the lock path no longer hangs the takeover; each refuses IA-DIST-INSTALL-BUSY, as does a lock file the run cannot open. Locks the CLI writes are taken over once their pid has died, or after 10 seconds when their pid is empty or unparseable; a live owner is taken over only once its lock is a day old. The IA-DIST-INSTALL-BUSY message is unchanged.",
+      "packages": [
+        "@inventarch/distribution"
+      ],
+      "paths": [
+        "apps/distribution/"
+      ]
+    },
+    {
+      "id": "live-user-host-lock-one-day-backstop",
+      "title": "Take over a live user host lock only after a day, and release only a run's own",
+      "summary": "A lock held by a live run for more than 10 minutes is no longer taken over at once: when `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run whose pid is still running, @inventarch/distribution now refuses IA-DIST-INSTALL-BUSY until the lock is a day old, since a run holds its lock for milliseconds and a younger age does not show that its owner stopped. A lock whose pid has died is still taken over at any age, and one whose pid is empty or unparseable after 10 seconds; a lock holding 0, a negative number or a number above 2147483647 is now judged the same way, where 0, a number above 2147483647 or below -2147483648 and, on POSIX, -1 or the negative of a live process group used to wait out the 10 minutes, and any other negative number was taken over at once. A stale lock whose pid another process has since reused, or whose pid answers EPERM, now stays busy for up to a day unless it is removed by hand, as the unchanged IA-DIST-INSTALL-BUSY message says to do when no run is active. A run now writes its pid, a space and a random token, and at its end removes the lock only while it is still a regular file holding exactly that text and its name still names that file, so a run whose lock was replaced no longer removes the replacement and lets another run acquire the lock while the replacement's owner is active. A lock in the earlier format, a pid alone, is still judged by its pid, and a run's release leaves it in place. Earlier releases running at the same time still take over a lock older than 10 minutes and, when they finish, remove whatever lock is at the path, so two runs can still overlap until every CLI using that IA home is upgraded. A brief window between a release's check and its removal remains, as Node has no unlink-if-same. Liveness is judged in each run's own pid namespace, so a run in a container or on another host sharing the IA home can still take over a live run's lock.",
+      "packages": [
+        "@inventarch/distribution"
+      ],
+      "paths": [
+        "apps/distribution/",
+        "tools/"
+      ]
+    },
+    {
+      "id": "take-over-a-stale-user-host-lock-under-a-claim-s",
+      "title": "Take over a stale user host lock under a claim, so two runs never both hold it",
+      "summary": "When two `ia host claude --user` runs found the same stale lock, `<IA home>/claude/.lock`, at the same moment, both could take it over and go on to change the marketplace at once. @inventarch/distribution now removes a stale lock only under a claim, an exclusive `.lock.<inode>.claim` directory beside it, and only after finding again that the lock path still names the file it judged, so two runs on one host never both remove it and a lock another run created in the meantime is left in place. A claim older than 10 seconds is abandoned and removed, and a run that acquires the lock sweeps abandoned claims. On Windows the exclusive create now waits up to 250 milliseconds for a lock name another run is still removing, instead of failing with a raw EPERM. A create refused for permissions (on Windows, once that wait passes with nothing at the name; elsewhere at once, where a raw EPERM or EACCES was thrown before) refuses IA-DIST-INPUT-INVALID, naming the directory. Earlier CLIs do not claim, so a run of an earlier release sharing the IA home can still remove a lock without one.",
+      "packages": [
+        "@inventarch/distribution"
+      ],
+      "paths": [
+        "apps/distribution/",
+        "tools/"
+      ]
+    },
+    {
+      "id": "cohort-alignment",
+      "title": "Coordinated version alignment",
+      "summary": "Package and native artifact version metadata follows the coordinated 3.2.2 release.",
+      "packages": [
+        "@inventarch/agent-composition-system",
+        "@inventarch/agent-system",
+        "@inventarch/authoring-system",
+        "@inventarch/cli",
+        "@inventarch/compliance",
+        "@inventarch/compliance-system",
+        "@inventarch/db",
+        "@inventarch/governance-system",
+        "@inventarch/graph",
+        "@inventarch/hook-authoring-system",
+        "@inventarch/language",
+        "@inventarch/learning-system",
+        "@inventarch/mcp-door",
+        "@inventarch/runner",
+        "@inventarch/runtime",
+        "@inventarch/service-contracts",
+        "@inventarch/session-system",
+        "@inventarch/steward-hook",
+        "@inventarch/template-system",
+        "@inventarch/work-system",
+        "@inventarch/workspace-runtime",
+        "@inventarch/workspace-system"
+      ],
+      "paths": [
+        ".ia/src/systems/agent-composition-system/package.json",
+        ".ia/src/systems/agent-system/package.json",
+        ".ia/src/systems/authoring-system/package.json",
+        ".ia/src/systems/compliance-system/package.json",
+        ".ia/src/systems/governance-system/package.json",
+        ".ia/src/systems/hook-authoring-system/package.json",
+        ".ia/src/systems/learning-system/package.json",
+        ".ia/src/systems/session-system/package.json",
+        ".ia/src/systems/template-system/package.json",
+        ".ia/src/systems/work-system/package.json",
+        ".ia/src/systems/workspace-system/package.json",
+        "apps/cli/package.json",
+        "apps/mcp-door/package.json",
+        "apps/runner/package.json",
+        "apps/steward-hook/package.json",
+        "packages/compliance/package.json",
+        "packages/db/package.json",
+        "packages/graph/package.json",
+        "packages/language/package.json",
+        "packages/runtime/package.json",
+        "packages/service-contracts/package.json",
+        "packages/workspace-runtime/package.json"
+      ]
+    },
+    {
+      "id": "repository-maintenance",
+      "title": "Repository maintenance",
+      "summary": "Tooling, workflow, documentation and release bookkeeping outside the published package contents.",
+      "packages": [],
+      "internal": true,
+      "paths": [
+        "apps/vscode/THIRD_PARTY_NOTICES.txt",
+        "apps/vscode/package.json",
+        "releases/"
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "path": ".ia/src/systems/agent-composition-system/package.json",
+      "sha256": "7ed2c0aefa482e0cd128a61bb1a8bbf100ccaa24a7936cce54d4ae7b19df9bdd",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/agent-system/package.json",
+      "sha256": "b0a4147fcf23907307280148700e4256bdd54d34cf9009ce1fb725c521951422",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/authoring-system/package.json",
+      "sha256": "d4c7d03c56baa77db83f0379ad7a0021a2843ff92199c7c256e359dd8f80c395",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/compliance-system/package.json",
+      "sha256": "a7ef147863131766554ae0ab4cbd0a3fa830062bfc35d299816548ffeca45fd2",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/governance-system/package.json",
+      "sha256": "0e91b2ec6d8ea08e95eed1ebfe7dc689233d1716dd9fc41d23e80c43d70cc22b",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/hook-authoring-system/package.json",
+      "sha256": "9e30482d21076eb06b771950d1efe07251e02fc0c64049be077f2fd824ad4573",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/learning-system/package.json",
+      "sha256": "59d45924dccbc99d7cf817fe8b545931442e85aa11691bee335964d8e4d73b3e",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/session-system/package.json",
+      "sha256": "e946275d96e9f3573d86872b3b9d0b5fb8e04c5287d83f3ff74fca5300abfb60",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/template-system/package.json",
+      "sha256": "68a9e5c8f2f27c4b0524737de78134d2e0cb94bc6bc0bf3267c47af519b269f9",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/work-system/package.json",
+      "sha256": "eefe581a572a545b80b83f747a314c5260273444174253144ccd046070c9e9ac",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/workspace-system/package.json",
+      "sha256": "d92e4111765a6d257e2eb7153a5d5737c2c49e9dadcb198bb13afc2e28652672",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/cli/package.json",
+      "sha256": "54a9429761f964c4d8c6cf470e7537918fcdc38fa23cc4fc02c32a472695498c",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/distribution/SPEC.md",
+      "sha256": "fa2405540a7aecb2dc5b3d7da6c417a999d6c06257f40aceba26f622ea780af1",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/package.json",
+      "sha256": "d31dcbf629bf06f459dcff487977a90be7464fde299d316b05bbdb533859b7f2",
+      "cohortOnly": true,
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/src/plugin-home.ts",
+      "sha256": "f1a0d2a20ac785894ff04f4d31ddad9583d77c96e7f33cec0df263509a9c8fe2",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/tests/plugin-home.test.ts",
+      "sha256": "d811c34855d04369fc882b4d4736923309b9b43c296bdf58c32ad1886296d8e6",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/mcp-door/package.json",
+      "sha256": "2c200162a147168af55e12b16fd2f003d2a2a2799b2eeda65988ecfeb9a4d11e",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/runner/package.json",
+      "sha256": "6da3b168f9b02346bc20783ffe78019d1ae32f53448e71f4e14ec1137a35f9e7",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/steward-hook/package.json",
+      "sha256": "f29401f15404718d0d5e1a5a41356b830b3da7b338acf713f6a8283900085e3c",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/vscode/THIRD_PARTY_NOTICES.txt",
+      "sha256": "fde6542f6fd32d84de9313d55bc9cf317ce611f9014eb39df657abbca8295359",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "apps/vscode/package.json",
+      "sha256": "eafc3f5fff2e5301ea4188ac6dc60350cdcc8ee9d447655d5c3485818952badd",
+      "cohortOnly": true,
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "packages/compliance/package.json",
+      "sha256": "d2f63e4e472cb9ad5502d0f30f5bb9549683d99efe4552ad824898ef11da1523",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/db/package.json",
+      "sha256": "473e5104b36f5b586f6ebca42d94e41fa973628e0eb3a04d6407633f3e3c0556",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/graph/package.json",
+      "sha256": "37a0488ad3104739181d00dca8ef2ff498d2fc259dbede0ba6b9c7675263df19",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/language/package.json",
+      "sha256": "74187ec941417fb1706d489ce8a224834e63b4aaef1305636739e03d610721cf",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/runtime/package.json",
+      "sha256": "86814dc2e2769cd937a884fb09a93b7b033869f56c0c435de23e1dbd2a8a04b0",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/service-contracts/package.json",
+      "sha256": "34854c1e5dc9f46dce5fd5166085a6156581eb53481892bec046eeada18d6417",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/workspace-runtime/package.json",
+      "sha256": "8ab2e18b996403f2bf282b28aa5e146206e4bbafd5e9f9e5bca0750e0ccca0ca",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "releases/current.json",
+      "sha256": "4e38f35b1288e619e52caeb54ed75699cc8f4efc7eb3aea59dc015ac25d147a9",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/native/current.json",
+      "sha256": "184f7e525fba8653d11835cea62b7f3a0941db089747b055a988153e8f4df319",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/native/notes.json",
+      "sha256": "bc73b9590f147fa9b4b8ea3586d47e8a99a200cd08fb7955ac1431ee56009c57",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "tools/distribution/system-package-policy.json",
+      "sha256": "558da6c7f7fdd55c418ea3cfb48548caacd5d4c87e7abddb36bbaa2331464421",
+      "cohortOnly": true,
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
+      "path": "tools/testing/tasks.json",
+      "sha256": "0adfe27239b3f78634af4367d601264b6837f5ba6f5e35f6eec0302ea3541dad",
+      "change": "live-user-host-lock-one-day-backstop"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ import {
   NATIVE_COMPOSITION_FIXTURE,
   NATIVE_LANGUAGE_POLICY,
   NATIVE_SYSTEM_POLICY,
+  nativeMajorAlignment,
   nativeNotesPending,
   nativeVersionOnly,
   prepareNativeSelection,
@@ -130,6 +131,21 @@ const allNatives = (version: string) => ({
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
+/** The exact code and message of a refusal; a call that does not refuse fails the test. */
+const refusal = (run: () => unknown) => {
+  try {
+    run();
+  } catch (error) {
+    const { code, message } = error as { code?: string; message: string };
+    return { code, message };
+  }
+  throw new Error('Expected a refusal');
+};
+/** A published npm tag whose native archives carry their own versions (default 3.0.0). */
+const publishedAt = (tag: string, versions: Record<string, string> = {}): NativeBaseline => ({
+  source: { tag: 'v' + tag, commit: 'f'.repeat(40) },
+  archives: archives.map((row) => ({ ...row, version: versions[row.id.slice('inventarch/'.length)] ?? row.version })),
+});
 
 describe('content-driven native release selection', () => {
   it.each(['3.0.1', '3.1.0'])('keeps every unchanged archive at its published version for npm target %s', (target) => {
@@ -141,6 +157,23 @@ describe('content-driven native release selection', () => {
     const plan = planNativeVersions(baseline, archives, '4.0.0');
     expect(plan.versions).toEqual(Object.fromEntries(archives.map((row) => [row.id, '4.0.0'])));
     expect(plan.changed).toEqual([]);
+  });
+  it('aligns a new npm major only at its x.0.0 and refuses a cross-major target past it', () => {
+    const mixed = publishedAt('3.5.0', { core: '3.2.0', consumer: '3.0.1', language: '3.4.0' });
+    expect(nativeMajorAlignment('4.0.0', '3.5.0')).toBe('4.0.0');
+    expect(nativeMajorAlignment('3.6.0', '3.5.0')).toBeNull();
+    expect(Object.values(planNativeVersions(mixed, mixed.archives, '4.0.0').versions)).toEqual(Array(4).fill('4.0.0'));
+    for (const target of ['4.0.1', '4.1.0', '4.2.3'])
+      expect(refusal(() => planNativeVersions(mixed, mixed.archives, target))).toEqual({
+        code: 'ERR_ASSERTION',
+        message: `A new npm major aligns native archives to 4.0.0; target ${target} skips it`,
+      });
+    // Skipping a whole major still lands on the target major's x.0.0.
+    expect(refusal(() => planNativeVersions(mixed, mixed.archives, '5.1.0'))).toEqual({
+      code: 'ERR_ASSERTION',
+      message: 'A new npm major aligns native archives to 5.0.0; target 5.1.0 skips it',
+    });
+    expect(Object.values(planNativeVersions(mixed, mixed.archives, '5.0.0').versions)).toEqual(Array(4).fill('5.0.0'));
   });
   it('aligns the immutable npm2/native1.2 inventory to the upcoming3 target without another note target', () => {
     const initial = {
@@ -332,6 +365,12 @@ describe('dependency-free native selectors', () => {
       'inventarch/session-system': '4.0.0',
     });
     expect(releaseNativeVersions(temporary(), '3.0.0', '4.0.0')).toBeUndefined();
+    // The shared selector the npm versioner uses refuses the same target; a root without a native surface ignores it.
+    expect(refusal(() => releaseNativeVersions(root, '3.2.0', '4.1.0'))).toEqual({
+      code: 'ERR_ASSERTION',
+      message: 'A new npm major aligns native archives to 4.0.0; target 4.1.0 skips it',
+    });
+    expect(releaseNativeVersions(temporary(), '3.2.0', '4.1.0')).toBeUndefined();
     expect(nativeNotesPending(root, '3.0.0')).toBe(false);
     write(root, 'releases/native/notes.json', {
       format: 'ia.native-release-notes.v1',

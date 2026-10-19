@@ -8,7 +8,12 @@ import { fileURLToPath } from 'node:url';
 import { isEntry } from '../entry/is-entry.mjs';
 import { nativeArchives, nativeVersions, readJson, type NativeArchive } from './native-archives.js';
 
-import { prepareNativeSelection, readNativeReleaseTarget, type NativeReleaseTarget } from './native-selectors.mjs';
+import {
+  nativeMajorAlignment,
+  prepareNativeSelection,
+  readNativeReleaseTarget,
+  type NativeReleaseTarget,
+} from './native-selectors.mjs';
 
 export const NATIVE_CURRENT = 'releases/native/current.json';
 export const NATIVE_NOTES = 'releases/native/notes.json';
@@ -115,9 +120,9 @@ export function assertNativeBaseline(root: string, baseline: NativeBaseline, pol
   return publishedCurrent;
 }
 /**
- * Normalized content changes and dependency consumers need impact notes. A new npm major aligns every identity to the
- * npm target; within a major each changed identity moves by its own note from its published version, every unchanged
- * one keeps its published version, and no native version may pass the npm target.
+ * Normalized content changes and dependency consumers need impact notes. A new npm major aligns every identity to its
+ * `x.0.0`, and a target past it refuses; within a major each changed identity moves by its own note from its published
+ * version, every unchanged one keeps its published version, and no native version may pass the npm target.
  */
 export function planNativeVersions(
   baseline: NativeBaseline,
@@ -140,8 +145,7 @@ export function planNativeVersions(
     assert.equal(row.version, prior.get(row.id)!.version, 'Comparison is not normalized to published versions');
     assert.ok(compare(target, row.version) >= 0, row.id + ': native version regressed');
   }
-  const major = (version: string) => Number(version.split('.')[0]),
-    aligned = major(target) > major(baseline.source.tag.slice(1));
+  const alignment = nativeMajorAlignment(target, baseline.source.tag.slice(1));
   const direct = normalized.filter((row) => row.archive !== prior.get(row.id)!.archive).map((row) => row.id);
   const changed = new Set(direct);
   for (let size = -1; size !== changed.size; ) {
@@ -179,7 +183,7 @@ export function planNativeVersions(
     moved.set(id, version);
   }
   const versions = Object.fromEntries(
-    normalized.map((row) => [row.id, aligned ? target : (moved.get(row.id) ?? prior.get(row.id)!.version)]),
+    normalized.map((row) => [row.id, alignment ?? moved.get(row.id) ?? prior.get(row.id)!.version]),
   );
   return { versions, direct: direct.sort(), changed: [...changed].sort() };
 }

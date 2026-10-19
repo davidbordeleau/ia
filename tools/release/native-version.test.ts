@@ -38,6 +38,8 @@ import {
   releaseNativeVersions,
   selectedNativeVersions,
 } from './native-selectors.mjs';
+import { releaseChanges } from '../distribution/release-changes.mjs';
+import { pullRequestBody, versionRelease } from '../distribution/release-version.mjs';
 
 const checkout = resolve(import.meta.dirname, '../..');
 const pin = (name: string, dependencies: string[] = []): NativeArchive => ({
@@ -993,6 +995,69 @@ describe('native release writer', () => {
     expect(nativeWriterSnapshot(root)).toEqual(before);
     expect(git('status', '--porcelain')).toBe(status);
   }, 120_000);
+
+  it('ends the documented flow green: version, select natives by content, commit, then refresh', async () => {
+    const { root, published } = realNativeReleaseFixture({ tag: '3.1.0' });
+    const projects = () =>
+      JSON.parse(readFileSync(resolve(root, NATIVE_SYSTEM_POLICY), 'utf8')).owners.map((owner: { owner: string }) => ({
+        directory: owner.owner,
+        manifest: JSON.parse(readFileSync(resolve(root, owner.owner + '/package.json'), 'utf8')),
+      }));
+    reviseWorkSystem(root);
+    write(root, 'releases/pending/work-system-description.json', {
+      format: 'ia.npm-change-note.v1',
+      bump: 'minor',
+      title: 'Revise the work-system description',
+      summary: 'The work-system declaration describes its contracts more precisely.',
+      packages: ['@inventarch/work-system'],
+      paths: ['.ia/src/systems/work-system/'],
+    });
+    write(root, NATIVE_NOTES, workSystemNotes('v3.1.0', published));
+    mkdirSync(resolve(root, 'releases/changesets'), { recursive: true });
+    commit(root, 'Revise work-system');
+    // 1. The npm versioner moves npm versions only; within a major it leaves native selection to content.
+    const versioned = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    expect(versioned).toMatchObject({ action: 'version', version: '3.2.0', nativeRegenerationRequired: true });
+    expect(pullRequestBody(root, versioned)).toContain('run `pnpm release:version --write --refresh`');
+    expect(selectedNativeVersions(root)).toEqual(workSystemVersions('3.0.0', '3.0.0', '3.0.0'));
+    commit(root, 'Prepare 3.2.0');
+    // 2. The native writer selects each archive's version from its content and notes.
+    const selection = nativeRelease(root, 'write');
+    expect(selection.versions).toEqual(workSystemVersions('3.0.0', '3.0.1', '3.1.0'));
+    commit(root, 'Select native versions');
+    // The changeset predates the selection, so strict coverage refuses until the refresh.
+    expect(() => releaseChanges(root, projects())).toThrow(
+      expect.objectContaining({
+        code: 'ERR_ASSERTION',
+        message: expect.stringMatching(/^Changeset coverage is missing or stale for \d+ file\(s\): /),
+      }),
+    );
+    // 3. The documented refresh re-collects coverage, generating alignment for the moved native version fields.
+    const refreshed = await versionRelease(root, projects(), {
+      write: true,
+      registry: null,
+      refresh: true,
+      sealInputs: false,
+    });
+    expect(refreshed).toMatchObject({ action: 'refresh', version: '3.2.0' });
+    commit(root, 'Refresh 3.2.0');
+    const { entry } = releaseChanges(root, projects());
+    const consumers = WORK_CONSUMERS.map((id) => `.ia/src/systems/${id}/system.ia`);
+    expect(entry.changes.find(({ id }) => id === 'cohort-alignment')).toMatchObject({
+      paths: expect.arrayContaining(consumers),
+      summary:
+        'Package version metadata follows the coordinated 3.2.0 release; each native artifact version follows its own archive content.',
+    });
+    for (const path of consumers)
+      expect(entry.coverage.find((row) => row.path === path)).toMatchObject({
+        cohortOnly: true,
+        change: 'cohort-alignment',
+      });
+    // Controls keep their published version; nothing else moved them.
+    for (const id of WORK_CONTROLS)
+      expect(entry.coverage.some((row) => row.path === `.ia/src/systems/${id}/system.ia`)).toBe(false);
+    expect(nativeRelease(root, 'check').versions).toEqual(selection.versions);
+  }, 240_000);
 
   it('aligns all twelve archives to an npm-only major 4.0.0', () => {
     const { root, published } = realNativeReleaseFixture();

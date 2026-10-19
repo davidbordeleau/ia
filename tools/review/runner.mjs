@@ -10,6 +10,27 @@ export { renderReview } from './render.mjs';
 export { publishReview } from './result.mjs';
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** The form of a review's id: a retained result's, and every receipt's from the review API. */
+const REVIEW_ID = /^[a-f0-9-]{36}$/;
+const VERDICTS = ['APPROVE', 'CONDITIONAL', 'REQUEST_CHANGES', 'INCOMPLETE'];
+/**
+ * The review id a receipt from the review API carries, refused unless it has the review id form; an advance receipt must
+ * also name `started`, the review the first receipt started. The caller requests and reports only this id, and refuses a
+ * retained result that names another.
+ */
+export function receiptId(receipt, started) {
+  const id = receipt?.id;
+  if (typeof id !== 'string' || !REVIEW_ID.test(id) || (started !== undefined && id !== started))
+    throw new Error('Review receipt identity required');
+  return id;
+}
+/** The job summary line for a review: built only from a review id and one of the four advisory verdicts. */
+export function reviewSummary(id, verdict, delivery) {
+  if (typeof id !== 'string' || !REVIEW_ID.test(id) || !VERDICTS.includes(verdict))
+    throw new Error('Invalid retained review result');
+  return `InventArch review ${id}: ${verdict} (advisory). ${delivery.skipped ? 'Stale delivery suppressed.' : 'Review comment delivered.'}\n`;
+}
+
 async function main() {
   const repository = repoName(process.env.GITHUB_REPOSITORY ?? '');
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
@@ -78,26 +99,26 @@ async function main() {
     key: `github:${runId}:${subject.evidence.attempt}:${subject.head}`,
     digest: subjectDigest,
   });
+  const review = receiptId(receipt);
   const deadline = Date.now() + 15 * 60000;
   while (!receipt.result && Date.now() < deadline) {
-    receipt = await api(`/${receipt.id}/advance`);
+    receipt = await api(`/${review}/advance`);
+    receiptId(receipt, review);
     if (receipt.state === 'running') await pause(3000);
   }
   if (!receipt.result) {
-    await api(`/${receipt.id}/cancel`);
+    await api(`/${review}/cancel`);
     throw new Error('Review exceeded CI deadline');
   }
   const expected = { repository, pr: subject.pr, head: subject.head, subject: subjectDigest };
   validateResult(receipt.result, expected);
   mkdirSync('artifacts/review', { recursive: true });
   writeFileSync('artifacts/review/result.json', JSON.stringify(receipt.result, null, 2));
+  if (receipt.result.id !== review) throw new Error('Review result identity required');
   const delivery = await publishReview(gh, repository, receipt.result, expected);
-  if (delivery.reviewId) await api(`/${receipt.id}/delivery`, { reviewId: delivery.reviewId, head: subject.head });
+  if (delivery.reviewId) await api(`/${review}/delivery`, { reviewId: delivery.reviewId, head: subject.head });
   if (process.env.GITHUB_STEP_SUMMARY)
-    appendFileSync(
-      process.env.GITHUB_STEP_SUMMARY,
-      `InventArch review ${receipt.id}: ${receipt.result.verdict} (advisory). ${delivery.skipped ? 'Stale delivery suppressed.' : 'Review comment delivered.'}\n`,
-    );
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, reviewSummary(review, receipt.result.verdict, delivery));
 }
 if (isEntry(process.argv[1], import.meta.url))
   main().catch((error) => {

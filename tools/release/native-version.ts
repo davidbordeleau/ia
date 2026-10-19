@@ -84,6 +84,16 @@ export function nativeBaseline(root: string): NativeBaseline {
     archives = ledger.archives;
   }
   validateArchives(archives);
+  // From npm 3.0.0 on, a tagged ledger's archives sit inside the tag's major, at or below the tag itself.
+  if (tag !== 'v2.0.0') {
+    const released = tag.slice(1),
+      major = released.split('.')[0];
+    for (const row of archives)
+      assert.ok(
+        row.version.split('.')[0] === major && compare(row.version, released) <= 0,
+        `${row.id}@${row.version}: the ${tag} native ledger must stay within major ${major} and at or below ${released}`,
+      );
+  }
   return { source: { tag, commit }, archives };
 }
 function bump(version: string, kind: 'patch' | 'minor' | 'major'): string {

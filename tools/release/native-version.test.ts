@@ -554,6 +554,41 @@ describe('published native evidence and candidate ledger', () => {
       'tagged policy',
     );
   });
+  it('reads a mixed-version tagged ledger and refuses versions outside the tag major or above the tag', () => {
+    const root = temporary(),
+      git = init(root);
+    commit(root, 'Earlier published source');
+    // In bounds on both edges: the tag's own x.0.0 and the tag itself.
+    const mixed = publishedAt('3.2.0', { core: '3.1.0', consumer: '3.0.1', language: '3.2.0' }).archives;
+    write(root, NATIVE_CURRENT, { format: 'ia.native-release.v1', archives: mixed });
+    const published = commit(root, 'Published mixed native versions');
+    git('tag', 'v3.2.0');
+    expect(nativeBaseline(root)).toEqual({ source: { tag: 'v3.2.0', commit: published }, archives: mixed });
+    for (const [tag, version, bound] of [
+      ['v3.2.1', '3.2.2', 'at or below 3.2.1'],
+      ['v3.2.2', '2.9.9', 'at or below 3.2.2'],
+      ['v3.2.3', '4.0.0', 'at or below 3.2.3'],
+    ] as const) {
+      write(root, NATIVE_CURRENT, {
+        format: 'ia.native-release.v1',
+        archives: mixed.map((row) => (row.id === 'inventarch/core' ? { ...row, version } : row)),
+      });
+      commit(root, 'Published ' + tag);
+      git('tag', tag);
+      expect(refusal(() => nativeBaseline(root))).toEqual({
+        code: 'ERR_ASSERTION',
+        message: `inventarch/core@${version}: the ${tag} native ledger must stay within major 3 and ${bound}`,
+      });
+    }
+    // The tag itself is the upper edge.
+    write(root, NATIVE_CURRENT, {
+      format: 'ia.native-release.v1',
+      archives: mixed.map((row) => (row.id === 'inventarch/core' ? { ...row, version: '3.2.4' } : row)),
+    });
+    commit(root, 'Published v3.2.4');
+    git('tag', 'v3.2.4');
+    expect(nativeBaseline(root).archives.find((row) => row.id === 'inventarch/core')!.version).toBe('3.2.4');
+  });
   it('retains the unchanged published ledger but refuses stale baseline and notes on an npm-only future target', () => {
     const { root, retained, published } = realNativeReleaseFixture();
     expect(nativeRelease(root, 'check').changed).toEqual([]);

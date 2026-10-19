@@ -69,7 +69,10 @@ interface Options {
   readonly link?: 'hard' | 'symbolic';
   /** A change to the db archive at the named moment of its reading, as fixtures/qualify-sdk.mjs makes it. */
   readonly race?: { readonly at: 'open' | 'read' | 'tar'; readonly change: string; readonly size?: number };
-  /** Digest the db archive at its name after the run, for a case that asserts it: a sparse archive would be read in full. */
+  /**
+   * Digest the db archive at its name after the run, for a case that asserts it: an extended archive would be read in
+   * full.
+   */
   readonly digestAfter?: boolean;
 }
 interface Pin {
@@ -331,9 +334,9 @@ it.skipIf(process.platform === 'win32')(
 );
 
 // The read by name that digests every archive refuses one over 2147483647 bytes itself, so the read through the descriptor
-// meets a larger archive only if one grows after that: the fixture extends it, as a sparse file, just before its open. It
-// allocates no buffer past that size either: a longer one refuses there, naming its size, and without the bound that
-// refusal, not the script's own, is what these cases would see.
+// meets a larger archive only if one grows after that: the fixture extends it, as a size-only file, just before its
+// open. It allocates no buffer past that size either: a longer one refuses there, naming its size, and without the
+// bound that refusal, not the script's own, is what these cases would see.
 it(
   'refuses an archive over 2147483647 bytes before allocating a buffer for it',
   () =>

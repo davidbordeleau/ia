@@ -4,8 +4,8 @@
 // Every buffer the script hands to tar is recorded in the fixture's log. With `race`, the selected archive at
 // `race.path` is changed once at a named moment: `open` just before the script opens it by descriptor, `read` at the
 // first read through that descriptor, and `tar` when its checked bytes are handed to tar; the `extend` change makes it a
-// sparse file of `race.size` bytes. Built-in functions are replaced on their module objects and published to the
-// script's ES imports with syncBuiltinESMExports.
+// size-only file of `race.size` bytes (sparse on Linux and macOS; NTFS reserves its clusters). Built-in functions are
+// replaced on their module objects and published to the script's ES imports with syncBuiltinESMExports.
 import childProcess from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -49,7 +49,8 @@ const changes = {
   },
   grow: () => fs.appendFileSync(race.path, Buffer.from([0])),
   shrink: () => fs.truncateSync(race.path, fs.statSync(race.path).size - 1),
-  // The archive made a sparse file of `race.size` bytes.
+  // The archive made a size-only file of `race.size` bytes: sparse on Linux and macOS, while NTFS reserves its
+  // clusters.
   extend: () => fs.truncateSync(race.path, race.size),
   // Other bytes at the same size, with an older modification time.
   rewrite: () => {

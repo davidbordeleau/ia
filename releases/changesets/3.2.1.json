@@ -386,6 +386,16 @@
       "change": "repository-maintenance"
     },
     {
+      "path": "releases/native/current.json",
+      "sha256": "5dd89a2545ad72730e5a9850db9836bf9eb13a416f5814f2a5146d5edba40487",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/native/notes.json",
+      "sha256": "a33fd2d7c6379d8153aeb0d73c9b08a4fba5c46e2ec8b433f93000949648fd34",
+      "change": "repository-maintenance"
+    },
+    {
       "path": "tools/distribution/system-package-policy.json",
       "sha256": "388c1210c885ceaeca46eb0f8968f2bd050afdbf3aa222bf57952f379746a0ed",
       "cohortOnly": true,

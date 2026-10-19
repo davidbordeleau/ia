@@ -16,10 +16,11 @@ runs:
       run: |
         $ErrorActionPreference = 'Stop'
         Write-Output 'Windows I/O arm: dev-drive-temp'
-        # diskpart rather than New-VHD: hosted runners need not carry the Hyper-V module.
+        # diskpart rather than New-VHD: hosted runners need not carry the Hyper-V module. 50 GB, the Dev Drive minimum the
+        # Windows settings flow documents; the file is expandable, so it takes only the space the run writes.
         $vhd = Join-Path $env:RUNNER_TEMP 'dev-drive.vhdx'
         $script = Join-Path $env:RUNNER_TEMP 'dev-drive.txt'
-        "create vdisk file=`"$vhd`" maximum=25600 type=expandable", "attach vdisk", "convert gpt",
+        "create vdisk file=`"$vhd`" maximum=51200 type=expandable", "attach vdisk", "convert gpt",
           "create partition primary" | Set-Content -Path $script -Encoding ascii
         diskpart /s $script
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

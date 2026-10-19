@@ -7,10 +7,6 @@
     "@inventarch/cli"
   ],
   "paths": [
-    ".github/",
-    "apps/cli/",
-    "nx.json",
-    "package.json",
-    "tools/"
+    "apps/cli/"
   ]
 }

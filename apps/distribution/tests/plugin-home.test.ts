@@ -550,6 +550,128 @@ it('refuses INSTALL-BUSY untouched for a lock under a day old whose pid process.
   }
   expect(readFileSync(lockPath, 'utf8')).toBe(text);
 });
+// A takeover removes a stale lock only under its claim, made while the judging descriptor still holds the judged file
+// open (so its inode cannot be reused), after finding again that the lock path still names that file: a lock another
+// run created after this run's judgment, here just before the claim, is left in place.
+it('leaves in place a lock another run created after this run judged the stale one, and refuses INSTALL-BUSY', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    lockPath = join(parent, '.lock'),
+    other = `${process.ppid} ${OTHER_TOKEN}`;
+  mkdirSync(parent, { recursive: true });
+  writeFileSync(lockPath, `${DEAD_PID} ${OTHER_TOKEN}`);
+  const staleIno = real.lstatSync(lockPath, { bigint: true }).ino;
+  let judgedFd: number | undefined;
+  vi.mocked(openSync).mockImplementation((path, flags, mode) => {
+    const fd = real.openSync(path, flags, mode);
+    if (String(path) === lockPath && flags !== 'wx') judgedFd = fd;
+    return fd;
+  });
+  let replaced = false,
+    judgedOpenAtClaim = false;
+  vi.mocked(mkdirSync).mockImplementation(((path: never, options: never) => {
+    if (!replaced && String(path).endsWith('.claim')) {
+      try {
+        judgedOpenAtClaim = real.fstatSync(judgedFd as number, { bigint: true }).ino === staleIno;
+      } catch {
+        /* closed already: judgedOpenAtClaim stays false */
+      }
+      replaced = true;
+      real.rmSync(lockPath);
+      real.writeFileSync(lockPath, other);
+    }
+    return real.mkdirSync(path, options);
+  }) as never);
+  expect(materialized(home)).toEqual(heldBy(lockPath));
+  expect(replaced).toBe(true);
+  expect(judgedOpenAtClaim).toBe(true);
+  expect(readFileSync(lockPath, 'utf8')).toBe(other);
+  expect(readdirSync(parent).filter((name) => name.endsWith('.claim'))).toEqual([]);
+});
+// Two runs that judged the same stale lock never both remove it: the claim is exclusive, so a run that finds it held
+// refuses INSTALL-BUSY and leaves the lock, until the claim is older than the 10 seconds' grace and so abandoned.
+it('refuses INSTALL-BUSY for a stale lock another run is claiming, and takes it over once that claim is abandoned', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    lockPath = join(parent, '.lock'),
+    text = `${DEAD_PID} ${OTHER_TOKEN}`;
+  mkdirSync(parent, { recursive: true });
+  writeFileSync(lockPath, text);
+  const judged = real.lstatSync(lockPath, { bigint: true }),
+    claim = `${lockPath}.${judged.ino}.claim`;
+  real.mkdirSync(claim);
+  expect(materialized(home)).toEqual(heldBy(lockPath));
+  expect(readFileSync(lockPath, 'utf8')).toBe(text);
+  expect(existsSync(claim)).toBe(true);
+  const abandoned = new Date(Date.now() - 20_000);
+  utimesSync(claim, abandoned, abandoned);
+  expect(materialized(home)).toBe('materialized');
+  expect(readdirSync(parent)).toEqual(['marketplace']);
+});
+// A run that died after its takeover's removal leaves its claim behind. The next run to acquire the lock removes it
+// once it is older than the grace, and leaves a younger one, which may still be another run's.
+it('sweeps abandoned claims beside the lock once it acquires it, and leaves a young one', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    old = join(parent, '.lock.1-2.claim'),
+    young = join(parent, '.lock.3-4.claim');
+  mkdirSync(old, { recursive: true });
+  mkdirSync(young);
+  const abandoned = new Date(Date.now() - 20_000);
+  utimesSync(old, abandoned, abandoned);
+  expect(materialized(home)).toBe('materialized');
+  expect(readdirSync(parent).sort()).toEqual(['.lock.3-4.claim', 'marketplace']);
+});
+// On Windows a lock name another run is removing stays delete-pending briefly, and the exclusive create refuses it
+// with a busy code; EBUSY is one on every platform, so this pins the wait everywhere.
+it('waits out a lock name the exclusive create finds busy, and then acquires the lock', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    lockPath = join(parent, '.lock');
+  let refused = 0;
+  vi.mocked(openSync).mockImplementation((path, flags, mode) => {
+    if (String(path) === lockPath && flags === 'wx' && refused < 2) {
+      refused++;
+      throw Object.assign(new Error('pending'), { code: 'EBUSY' });
+    }
+    return real.openSync(path, flags, mode);
+  });
+  expect(materialized(home)).toBe('materialized');
+  expect(refused).toBe(2);
+  expect(readdirSync(parent)).toEqual(['marketplace']);
+});
+// A busy code that outlasts the wait while a file still holds the lock's name is judged like any held lock: here a live
+// run's, so the run refuses INSTALL-BUSY rather than INPUT-INVALID.
+it('judges the lock at its name like any held lock when the exclusive create stays busy, and refuses INSTALL-BUSY', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    lockPath = join(parent, '.lock'),
+    other = `${process.ppid} ${OTHER_TOKEN}`;
+  mkdirSync(parent, { recursive: true });
+  writeFileSync(lockPath, other);
+  vi.mocked(openSync).mockImplementation((path, flags, mode) => {
+    if (String(path) === lockPath && flags === 'wx') throw Object.assign(new Error('pending'), { code: 'EBUSY' });
+    return real.openSync(path, flags, mode);
+  });
+  expect(materialized(home)).toEqual(heldBy(lockPath));
+  expect(readFileSync(lockPath, 'utf8')).toBe(other);
+});
+// EACCES is a permission code off Windows and a busy one on it, so on every platform a create it keeps refusing, with
+// nothing at the lock's name, ends in INPUT-INVALID naming the directory rather than a raw error or INSTALL-BUSY.
+it('refuses INPUT-INVALID, naming the directory, when the lock cannot be created and nothing holds its name', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    lockPath = join(parent, '.lock');
+  vi.mocked(openSync).mockImplementation((path, flags, mode) => {
+    if (String(path) === lockPath && flags === 'wx') throw Object.assign(new Error('denied'), { code: 'EACCES' });
+    return real.openSync(path, flags, mode);
+  });
+  expect(materialized(home)).toEqual({
+    code: 'IA-DIST-INPUT-INVALID',
+    message: `${parent} cannot hold the install lock (EACCES); check its permissions`,
+  });
+  expect(existsSync(lockPath)).toBe(false);
+});
 /** What a materialize did: the refusal it raised, as its code and message, or `materialized`. */
 function materialized(home: string): unknown {
   try {

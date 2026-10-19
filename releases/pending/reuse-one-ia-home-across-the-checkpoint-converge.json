@@ -7,6 +7,6 @@
     "@inventarch/cli"
   ],
   "paths": [
-    "apps/cli/"
+    "apps/cli/tests/"
   ]
 }

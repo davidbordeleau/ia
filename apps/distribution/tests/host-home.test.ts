@@ -57,7 +57,8 @@ it("verifies the payload through the command's shared verdict after its last wri
     expect(verify(directory).release).toBe(pin.release);
     expect(() => verifyHostCache(directory)).toThrow(/Host payload changed/);
   }
-  // The stage this call writes is verified directly, never through the shared verdict: a bad archive refuses before the rename.
+  // With a shared verifier, a bad archive still refuses before the rename. (The stage is verified directly in the
+  // source; this case cannot tell that from the shared verifier, because each stage path is new to it.)
   const home = temp(),
     bad = packTree(
       new Map([...unpackTree(archive, HOST_TREE_LIMITS)].filter(([path]) => path !== 'payload.txt')),

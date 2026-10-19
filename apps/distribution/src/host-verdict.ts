@@ -18,3 +18,13 @@ export function mint(verify: (directory: string) => ReturnType<typeof verifyHost
 export function isMinted(verify: unknown): verify is HostVerifier {
   return typeof verify === 'function' && minted.has(verify);
 }
+/**
+ * `verify` when `hostVerifier` made it, so a command's plans share one verification; otherwise `fresh`, so a planner
+ * handed any other function still verifies.
+ */
+export function sharedOr<F extends (directory: string) => ReturnType<typeof verifyHostCache>>(
+  verify: unknown,
+  fresh: F,
+): HostVerifier | F {
+  return isMinted(verify) ? verify : fresh;
+}

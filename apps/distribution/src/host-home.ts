@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { within } from '@inventarch/db';
 import { DistributionError, fail, sha256 } from './files.js';
 import { verifyHostCache } from './host.js';
-import { isMinted } from './host-verdict.js';
+import { sharedOr } from './host-verdict.js';
 import type { HostVerifier } from './host-verdict.js';
 import { ensureIaHome } from './ia-home.js';
 import { HOST_TREE_LIMITS, unpackTree } from './ustar.js';
@@ -106,7 +106,7 @@ export function materializeHostPayload(input: {
   readonly verify?: HostVerifier;
 }): { directory: string; release: string; reused: boolean } {
   const { home, archive, pin } = input,
-    verify = isMinted(input.verify) ? input.verify : verifyHostCache;
+    verify = sharedOr(input.verify, verifyHostCache);
   if (!/^[a-f0-9]{64}$/.test(pin.release) || !/^[a-f0-9]{64}$/.test(pin.archive))
     fail('INPUT-INVALID', 'Invalid host payload pin');
   const target = hostPayloadPath(home, pin.release);

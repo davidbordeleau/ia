@@ -14,7 +14,7 @@ import {
   verifyHostCache,
 } from './host.js';
 import type { HostCacheTarget } from './host.js';
-import { isMinted } from './host-verdict.js';
+import { sharedOr } from './host-verdict.js';
 import type { HostVerifier } from './host-verdict.js';
 import {
   bytes,
@@ -625,7 +625,7 @@ export function planHookRegistration(rootInput: string, request: HookRequest, ve
     return planHooksWith(root, null, [], row['remove']);
   }
   const hooks = hookRows(row['hooks']);
-  return planHooksWith(root, (isMinted(verify) ? verify : verifyHostCache)(row['cache'] as string), hooks, null);
+  return planHooksWith(root, sharedOr(verify, verifyHostCache)(row['cache'] as string), hooks, null);
 }
 /**
  * Explicit removal must not report that protection was lifted while an unowned IA hook still runs. Check both settings

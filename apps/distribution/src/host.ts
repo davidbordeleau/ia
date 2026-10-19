@@ -35,7 +35,7 @@ import type { JsonPath } from './json-edit.js';
 import type { Stats } from 'node:fs';
 import type { WorkspaceHost as Host } from './hosts.js';
 import { asWorkspaceHost } from './hosts.js';
-import { isMinted } from './host-verdict.js';
+import { sharedOr } from './host-verdict.js';
 import type { HostVerifier } from './host-verdict.js';
 
 interface Cache {
@@ -380,12 +380,7 @@ export function planHost(
   const root = workspace(rootInput),
     host = asHost(hostInput);
   assertHostRegistrationIdle(root);
-  return planHostWith(
-    root,
-    host,
-    cacheInput === null ? null : (isMinted(verify) ? verify : verifyHostCache)(cacheInput),
-    removeId,
-  );
+  return planHostWith(root, host, cacheInput === null ? null : sharedOr(verify, verifyHostCache)(cacheInput), removeId);
 }
 /** `planHost` against an expected, unverified cache (`expectedHostCache`), or against none for a removal. Never reads the cache. */
 export function planHostFor(

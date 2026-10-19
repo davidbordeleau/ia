@@ -2621,7 +2621,7 @@
         },
         {
           "case": "tools/compliance/publication-fixtures.test.ts > snapshots a link, a dangling link, a linked directory and a FIFO as null, and the files under the linked directory by their bytes",
-          "reason": "Windows has no FIFO special file, and its file links need a privilege, so the fixture cannot make a FIFO and runs only on POSIX. The snapshot of regular files and a directory runs on every platform in its own case.",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The snapshot of regular files and a directory runs on every platform in its own case.",
           "platforms": [
             "windows"
           ]
@@ -2811,14 +2811,14 @@
         },
         {
           "case": "tools/entry/is-entry.test.ts > throws rather than answering \"not the entry\" when a path fails to resolve for a reason other than absence",
-          "reason": "The case makes a link loop, which needs a privilege on Windows, and an unreadable directory, which a Windows mode cannot make because it keeps only the read-only attribute; the fixture runs only on POSIX.",
+          "reason": "The case makes an unreadable directory, which a Windows mode cannot make because it keeps only the read-only attribute; the fixture runs only on POSIX.",
           "platforms": [
             "windows"
           ]
         },
         {
           "case": "tools/entry/is-entry.test.ts > refuses a dangling launcher with its stat error and a FIFO as not a regular file",
-          "reason": "Windows has no FIFO special file, and its file links need a privilege, so the fixture cannot make a FIFO and runs only on POSIX. The missing launcher and the directory and junction launchers run on every platform in their own case.",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The missing launcher and the directory and junction launchers run on every platform in their own case.",
           "platforms": [
             "windows"
           ]
@@ -2982,7 +2982,7 @@
         },
         {
           "case": "tools/systems/authoring-manifest.test.ts > refuses a FIFO, linked or unreadable selection as before",
-          "reason": "Windows has no FIFO special file, its file links need a privilege, and it keeps only the read-only attribute of a file's mode, so the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case.",
+          "reason": "Windows has no FIFO special file, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case.",
           "platforms": [
             "windows"
           ]
@@ -3975,7 +3975,7 @@
         },
         {
           "case": "tools/release/native-version.test.ts > system package input reads refuses a linked input before reading it and rethrows the open error for one it cannot read",
-          "reason": "File links need a privilege on Windows, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX.",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX.",
           "platforms": [
             "windows"
           ]
@@ -3989,7 +3989,7 @@
         },
         {
           "case": "tools/release/native-version.test.ts > system package input reads refuses a link put in place at the open as aliased, even once it is gone again",
-          "reason": "Windows has no O_NOFOLLOW, so its open follows the link and fails with ENOENT, and its file links need a privilege; the fixture runs only on POSIX.",
+          "reason": "Windows has no O_NOFOLLOW, so its open follows the link and fails with ENOENT; the fixture runs only on POSIX.",
           "platforms": [
             "windows"
           ]

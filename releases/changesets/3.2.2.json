@@ -7,7 +7,7 @@
     "version": "3.2.1"
   },
   "bump": "patch",
-  "summary": "Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim, so two runs never both hold it.",
+  "summary": "Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim, so two runs never both hold it; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.",
   "packages": {
     "@inventarch/agent-composition-system": {
       "previous": "3.2.1",
@@ -26,8 +26,8 @@
     },
     "@inventarch/cli": {
       "previous": "3.2.1",
-      "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "kind": "changed",
+      "summary": "Reuse one IA home across the checkpoint convergence test passes. Verify the host payload once per ia host apply."
     },
     "@inventarch/compliance": {
       "previous": "3.2.1",
@@ -47,7 +47,7 @@
     "@inventarch/distribution": {
       "previous": "3.2.1",
       "kind": "changed",
-      "summary": "Judge a held user host lock from one opened file. Take over a live user host lock only after a day, and release only a run's own. Take over a stale user host lock under a claim, so two runs never both hold it."
+      "summary": "Judge a held user host lock from one opened file. Take over a live user host lock only after a day, and release only a run's own. Take over a stale user host lock under a claim, so two runs never both hold it. Verify the host payload once per ia host apply."
     },
     "@inventarch/governance-system": {
       "previous": "3.2.1",
@@ -162,6 +162,30 @@
       ]
     },
     {
+      "id": "reuse-one-ia-home-across-the-checkpoint-converge",
+      "title": "Reuse one IA home across the checkpoint convergence test passes",
+      "summary": "Test-only: the CLI's checkpoint convergence test writes the host payload once instead of on every pass. No behaviour changes for consumers.",
+      "packages": [
+        "@inventarch/cli"
+      ],
+      "paths": [
+        "apps/cli/tests/"
+      ]
+    },
+    {
+      "id": "verify-the-host-payload-once-per-ia-host-apply",
+      "title": "Verify the host payload once per ia host apply",
+      "summary": "ia host --apply shares one verification of the host payload (about 1,400 files) between its MCP plan and its projection pre-check, so an apply scans the payload fewer times. Each step that writes still verifies afresh, so a payload that changes during the command still refuses the apply. In @inventarch/distribution, planHost, planHookRegistration and materializeHostPayload take an optional verify parameter for that shared verification: only a verifier from hostVerifier (./host-observe) is shared, and any other function is ignored in favour of a fresh check.",
+      "packages": [
+        "@inventarch/cli",
+        "@inventarch/distribution"
+      ],
+      "paths": [
+        "apps/cli/",
+        "apps/distribution/"
+      ]
+    },
+    {
       "id": "cohort-alignment",
       "title": "Coordinated version alignment",
       "summary": "Package and native artifact version metadata follows the coordinated 3.2.2 release.",
@@ -169,7 +193,6 @@
         "@inventarch/agent-composition-system",
         "@inventarch/agent-system",
         "@inventarch/authoring-system",
-        "@inventarch/cli",
         "@inventarch/compliance",
         "@inventarch/compliance-system",
         "@inventarch/db",
@@ -201,7 +224,6 @@
         ".ia/src/systems/template-system/package.json",
         ".ia/src/systems/work-system/package.json",
         ".ia/src/systems/workspace-system/package.json",
-        "apps/cli/package.json",
         "apps/mcp-door/package.json",
         "apps/runner/package.json",
         "apps/steward-hook/package.json",
@@ -221,13 +243,25 @@
       "packages": [],
       "internal": true,
       "paths": [
+        ".github/",
         "apps/vscode/THIRD_PARTY_NOTICES.txt",
         "apps/vscode/package.json",
+        "package.json",
         "releases/"
       ]
     }
   ],
   "coverage": [
+    {
+      "path": ".github/actions/setup/action.yml",
+      "sha256": "955f89377c5d21084d5290c60177af261c30c80b0dd322d7cdbaac330213e755",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": ".github/workflows/platform-quality.yml",
+      "sha256": "23d0c5bb400bdb1b18de16f59bd02ae1da43dfffd7a21a3f37f6ef0ccb9babbb",
+      "change": "repository-maintenance"
+    },
     {
       "path": ".ia/src/systems/agent-composition-system/package.json",
       "sha256": "7ed2c0aefa482e0cd128a61bb1a8bbf100ccaa24a7936cce54d4ae7b19df9bdd",
@@ -295,14 +329,39 @@
       "change": "cohort-alignment"
     },
     {
+      "path": "apps/cli/SPEC.md",
+      "sha256": "103038931c5f6a24dc308ce1d434a386605c17081a8bdfad84eddc2edc78f6a2",
+      "change": "verify-the-host-payload-once-per-ia-host-apply"
+    },
+    {
       "path": "apps/cli/package.json",
       "sha256": "54a9429761f964c4d8c6cf470e7537918fcdc38fa23cc4fc02c32a472695498c",
       "cohortOnly": true,
-      "change": "cohort-alignment"
+      "change": "verify-the-host-payload-once-per-ia-host-apply"
+    },
+    {
+      "path": "apps/cli/src/host-projection.ts",
+      "sha256": "51730b4d1cd3ea9a0e8fc4ec94b5b26c9977dc1d61f17007bed0217bc65eb44a",
+      "change": "verify-the-host-payload-once-per-ia-host-apply"
+    },
+    {
+      "path": "apps/cli/src/host.ts",
+      "sha256": "372dca792158a93c5ef250c43527e6c5d35cac97e8054fa491d806a4f8279b5c",
+      "change": "verify-the-host-payload-once-per-ia-host-apply"
+    },
+    {
+      "path": "apps/cli/tests/host-fixture.ts",
+      "sha256": "b7e4bbf3a0f1e2ecd584a64fade232e9ae9a6f7061375493446772eae22724a0",
+      "change": "reuse-one-ia-home-across-the-checkpoint-converge"
+    },
+    {
+      "path": "apps/cli/tests/host-generated.test.ts",
+      "sha256": "6e8fe91c59243cce8cd175856a929195668bc97abe2deccc1d3c69bf25512316",
+      "change": "reuse-one-ia-home-across-the-checkpoint-converge"
     },
     {
       "path": "apps/distribution/SPEC.md",
-      "sha256": "fa2405540a7aecb2dc5b3d7da6c417a999d6c06257f40aceba26f622ea780af1",
+      "sha256": "59523a1b2a1cc94209fc7091291f09ba370d8d2b070d1cc24e11492619a32051",
       "change": "judge-a-held-user-host-lock-from-one-opened-file"
     },
     {
@@ -312,8 +371,48 @@
       "change": "judge-a-held-user-host-lock-from-one-opened-file"
     },
     {
+      "path": "apps/distribution/src/guard-registration.ts",
+      "sha256": "3efc861e4fac0f4c139bc9843e53c95288238853040515dc4222ce41839648b7",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/src/host-home.ts",
+      "sha256": "fee45d411d04e17068c22ff56b9e31eb1713c534fbd353750b3c62f1611bfcb5",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/src/host-observe.ts",
+      "sha256": "11566b2467b0c08496a3774cd13daa2839baf27a83edfa7dd68fc3f298a9b12d",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/src/host-verdict.ts",
+      "sha256": "574e43238d8e4b2213c8217770029511f5760816fcda8efa871ef5cf38d34723",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/src/host.ts",
+      "sha256": "d8e4adb68336476578571f5f6f79ab4d4e5dadeb15a5176a86eb1463ee09697c",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
       "path": "apps/distribution/src/plugin-home.ts",
       "sha256": "f1a0d2a20ac785894ff04f4d31ddad9583d77c96e7f33cec0df263509a9c8fe2",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/tests/guard-registration.test.ts",
+      "sha256": "065e51bb3f26a4d0bd9b503e68268acbb6276a8d42c3c4d2d587553099718c40",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/tests/host-home.test.ts",
+      "sha256": "b32c49aa3c7abee34bc681f93829d05951dde510846e024eb8da6af6c6770a71",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
+      "path": "apps/distribution/tests/host.test.ts",
+      "sha256": "a7b444b8ab0f69460e93e65d5d57bacbc200cd74d1ccf3350f12d195f5d7541d",
       "change": "judge-a-held-user-host-lock-from-one-opened-file"
     },
     {
@@ -348,6 +447,11 @@
       "path": "apps/vscode/package.json",
       "sha256": "eafc3f5fff2e5301ea4188ac6dc60350cdcc8ee9d447655d5c3485818952badd",
       "cohortOnly": true,
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "package.json",
+      "sha256": "0641d67ac8f71be7872bfcc3a0e8e85fbe2d296aecae7e11326a1069b8565d10",
       "change": "repository-maintenance"
     },
     {
@@ -414,8 +518,48 @@
       "change": "live-user-host-lock-one-day-backstop"
     },
     {
+      "path": "tools/testing/SPEC.md",
+      "sha256": "865c6f8f8f001e2bae266e851fd6cbcb872aeb5554b96e2fb06719b87a47a78c",
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
+      "path": "tools/testing/inventory.test.ts",
+      "sha256": "bfe99958f46a239126f1bfd784f5dce9e7b408f40d6d4cc0b9c2c8e9fabc842a",
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
+      "path": "tools/testing/orchestrate.ts",
+      "sha256": "4cf7f2227276da10ef8e45efab2f7186124fd8ba50313bc4cc25537104bc5137",
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
+      "path": "tools/testing/plan.test.ts",
+      "sha256": "2a384c0ca9b36864177630080d5f912b0441384898a466dbbc35b9a50cff6a31",
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
+      "path": "tools/testing/plan.ts",
+      "sha256": "6e4498c78915ef1a6dbc64de28fb94ae93f46a2a52b8e31dc1738bb01117a23d",
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
+      "path": "tools/testing/schedule.json",
+      "sha256": "005c36f39221d93d86607cb9db525c315be7f57fc46abfb8ca604b9f941df179",
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
       "path": "tools/testing/tasks.json",
-      "sha256": "0adfe27239b3f78634af4367d601264b6837f5ba6f5e35f6eec0302ea3541dad",
+      "sha256": "3b0dbb36e4878236d80c3becac53306f950f5d949512ab2b8a86e48eb46f6f8f",
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
+      "path": "tools/testing/verdict.test.ts",
+      "sha256": "65f36f281f7f25a0a94609def8faa6651240a8ce18cf49351e05b0b786c5a997",
+      "change": "live-user-host-lock-one-day-backstop"
+    },
+    {
+      "path": "tools/testing/verdict.ts",
+      "sha256": "6b8e42d3cbf7a0bdcfb5db799c99d4c6ae1956fb28847d0c6cd42fb6a80f80cd",
       "change": "live-user-host-lock-one-day-backstop"
     }
   ]

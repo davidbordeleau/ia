@@ -2,8 +2,8 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "45c0efa6d3e3c1d6bf23815598e51c28f8eb95cd",
-    "tree": "1978acdfc5d790fe8805b110d5bcb57808e89b06",
+    "commit": "bb7097992fc65b39532eecd0c8a8329249159e94",
+    "tree": "912ae31b6e66414f89e567aca38c74c26d919736",
     "dirty": true
   },
   "membership": {
@@ -75,7 +75,7 @@
     },
     {
       "path": ".github/actions/setup/action.yml",
-      "sha256": "5ebff659843653dfe6bdcaf5a933a424aca60a98f488d7fc043d258b6deeb4e1"
+      "sha256": "955f89377c5d21084d5290c60177af261c30c80b0dd322d7cdbaac330213e755"
     },
     {
       "path": ".github/codeql/codeql-config.yml",
@@ -115,7 +115,7 @@
     },
     {
       "path": ".github/workflows/platform-quality.yml",
-      "sha256": "bdb2215f7793259e8b6ec471cc335dd8aa254a25b38e6d1f7186944765dca9de"
+      "sha256": "23d0c5bb400bdb1b18de16f59bd02ae1da43dfffd7a21a3f37f6ef0ccb9babbb"
     },
     {
       "path": ".github/workflows/release-pr.yml",
@@ -1359,7 +1359,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "2d07ed306f1b74f56210092274b107aa65eea6ba24260155b1ee80625651e68b"
+      "sha256": "2afdfb2b323160f075819acd14b0af3e1edd8853f8ab98dac43c693d4cfe6d92"
     },
     {
       "path": "CLAUDE.md",
@@ -1415,7 +1415,7 @@
     },
     {
       "path": "apps/cli/SPEC.md",
-      "sha256": "3d675387cf84cdc79cb502a09040a86bd8e4135e67aff298efa2d6a00e9e8623"
+      "sha256": "103038931c5f6a24dc308ce1d434a386605c17081a8bdfad84eddc2edc78f6a2"
     },
     {
       "path": "apps/cli/assets/vocabulary.json",
@@ -1503,11 +1503,11 @@
     },
     {
       "path": "apps/cli/src/host-projection.ts",
-      "sha256": "5abffd34f9d59f483a10b5bbbbead4480ba8179f7ca47ccb363fd3bc4754ccf5"
+      "sha256": "51730b4d1cd3ea9a0e8fc4ec94b5b26c9977dc1d61f17007bed0217bc65eb44a"
     },
     {
       "path": "apps/cli/src/host.ts",
-      "sha256": "d638fc6a5102a20da1411528cb385824497b38ddd417ab060e392f6fb12e2144"
+      "sha256": "372dca792158a93c5ef250c43527e6c5d35cac97e8054fa491d806a4f8279b5c"
     },
     {
       "path": "apps/cli/src/init.ts",
@@ -1695,11 +1695,11 @@
     },
     {
       "path": "apps/cli/tests/host-fixture.ts",
-      "sha256": "33fc878eed568c0c86eb65b6e6d59508556b12dd6f9e4efeb956858209df8fb8"
+      "sha256": "b7e4bbf3a0f1e2ecd584a64fade232e9ae9a6f7061375493446772eae22724a0"
     },
     {
       "path": "apps/cli/tests/host-generated.test.ts",
-      "sha256": "d2004f2191cd309c896ae15c944ba92a0d447279cae6550d50a53042f36bab5c"
+      "sha256": "6e8fe91c59243cce8cd175856a929195668bc97abe2deccc1d3c69bf25512316"
     },
     {
       "path": "apps/cli/tests/host-install.test.ts",
@@ -1839,7 +1839,7 @@
     },
     {
       "path": "apps/distribution/SPEC.md",
-      "sha256": "fa2405540a7aecb2dc5b3d7da6c417a999d6c06257f40aceba26f622ea780af1"
+      "sha256": "59523a1b2a1cc94209fc7091291f09ba370d8d2b070d1cc24e11492619a32051"
     },
     {
       "path": "apps/distribution/assets/host-launcher.mjs",
@@ -1899,11 +1899,11 @@
     },
     {
       "path": "apps/distribution/src/guard-registration.ts",
-      "sha256": "f3b1221e227c25d962f42bd3bcc658b473317dffae182e6b891117b4626b6121"
+      "sha256": "3efc861e4fac0f4c139bc9843e53c95288238853040515dc4222ce41839648b7"
     },
     {
       "path": "apps/distribution/src/host-home.ts",
-      "sha256": "40b1c723307e00eeabf38b6f8dd11eb7ffb56b27b2c3f65ff760e6792da98323"
+      "sha256": "fee45d411d04e17068c22ff56b9e31eb1713c534fbd353750b3c62f1611bfcb5"
     },
     {
       "path": "apps/distribution/src/host-modes.ts",
@@ -1911,11 +1911,15 @@
     },
     {
       "path": "apps/distribution/src/host-observe.ts",
-      "sha256": "3120fa4a5f7d1d4d9398a663c98e3f7a6d4a3486e0c066d01c246c359ae5fa77"
+      "sha256": "11566b2467b0c08496a3774cd13daa2839baf27a83edfa7dd68fc3f298a9b12d"
+    },
+    {
+      "path": "apps/distribution/src/host-verdict.ts",
+      "sha256": "574e43238d8e4b2213c8217770029511f5760816fcda8efa871ef5cf38d34723"
     },
     {
       "path": "apps/distribution/src/host.ts",
-      "sha256": "2bf52d08d246f5c9a952472f4041ed745e1e9b327b881af3899fbde793a5f6c7"
+      "sha256": "d8e4adb68336476578571f5f6f79ab4d4e5dadeb15a5176a86eb1463ee09697c"
     },
     {
       "path": "apps/distribution/src/hosts.ts",
@@ -2071,11 +2075,11 @@
     },
     {
       "path": "apps/distribution/tests/guard-registration.test.ts",
-      "sha256": "234b3d1a2c6eede6694eb2767a8137bc3016940e711195691f23df560cafcb08"
+      "sha256": "065e51bb3f26a4d0bd9b503e68268acbb6276a8d42c3c4d2d587553099718c40"
     },
     {
       "path": "apps/distribution/tests/host-home.test.ts",
-      "sha256": "b868036a1f93b058e7b1069e9f50386af106fd3204fc36d29cf92be587877f93"
+      "sha256": "b32c49aa3c7abee34bc681f93829d05951dde510846e024eb8da6af6c6770a71"
     },
     {
       "path": "apps/distribution/tests/host-observe.test.ts",
@@ -2083,7 +2087,7 @@
     },
     {
       "path": "apps/distribution/tests/host.test.ts",
-      "sha256": "6a997b46f038620944c52efc0c3196b907dfc76df405331158b7d8ab64e24e38"
+      "sha256": "a7b444b8ab0f69460e93e65d5d57bacbc200cd74d1ccf3350f12d195f5d7541d"
     },
     {
       "path": "apps/distribution/tests/hosts.test.ts",
@@ -3283,7 +3287,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "a1e9065ba707959578b25bb69fdeae8f06d18df6524a34d0acd4ba500f9cf649"
+      "sha256": "0641d67ac8f71be7872bfcc3a0e8e85fbe2d296aecae7e11326a1069b8565d10"
     },
     {
       "path": "packages/compliance/LANGUAGE.md",
@@ -6811,7 +6815,7 @@
     },
     {
       "path": "releases/changesets/3.2.2.json",
-      "sha256": "2fe5e3a0695ff900cb45fbd26585f2d651d2194072d8d8a0e7055e511a82918b"
+      "sha256": "976fa2c82cd6a52eb5a9ee8882b6d5bf18e8c3c5f1ba7be0126c601e5444d7ed"
     },
     {
       "path": "releases/current.json",
@@ -7647,7 +7651,7 @@
     },
     {
       "path": "tools/testing/SPEC.md",
-      "sha256": "4c26e9334fe2dd9bf02616f159058fb9d08b0b5e934a6f43b247ddb7b3ba6ca1"
+      "sha256": "865c6f8f8f001e2bae266e851fd6cbcb872aeb5554b96e2fb06719b87a47a78c"
     },
     {
       "path": "tools/testing/cache.test.ts",
@@ -7659,7 +7663,7 @@
     },
     {
       "path": "tools/testing/inventory.test.ts",
-      "sha256": "dc987c922d66c664d6e7f7e5a9a4417b26cc87118f162bfaf43167f26476dc2a"
+      "sha256": "bfe99958f46a239126f1bfd784f5dce9e7b408f40d6d4cc0b9c2c8e9fabc842a"
     },
     {
       "path": "tools/testing/inventory.ts",
@@ -7671,15 +7675,15 @@
     },
     {
       "path": "tools/testing/orchestrate.ts",
-      "sha256": "9ad0b3d100c3c57664a66673d14ee4ac4ca5fbe60685789a4d5bf5cf04285892"
+      "sha256": "4cf7f2227276da10ef8e45efab2f7186124fd8ba50313bc4cc25537104bc5137"
     },
     {
       "path": "tools/testing/plan.test.ts",
-      "sha256": "b2483127294efff10bedac745f172a735f2aa49d65944b8bf7a41f828fd5f269"
+      "sha256": "2a384c0ca9b36864177630080d5f912b0441384898a466dbbc35b9a50cff6a31"
     },
     {
       "path": "tools/testing/plan.ts",
-      "sha256": "12ea27c09c40aeb6961323dcf13f07b1bc8072c88fe8e465bc0665111452f313"
+      "sha256": "6e4498c78915ef1a6dbc64de28fb94ae93f46a2a52b8e31dc1738bb01117a23d"
     },
     {
       "path": "tools/testing/report.test.ts",
@@ -7703,7 +7707,7 @@
     },
     {
       "path": "tools/testing/schedule.json",
-      "sha256": "4e6749ae5f67b4fdb217164ad614b2e15952f60e7876b66cf9b466320ddeaa7a"
+      "sha256": "005c36f39221d93d86607cb9db525c315be7f57fc46abfb8ca604b9f941df179"
     },
     {
       "path": "tools/testing/subprocess.test.ts",
@@ -7715,11 +7719,19 @@
     },
     {
       "path": "tools/testing/tasks.json",
-      "sha256": "0adfe27239b3f78634af4367d601264b6837f5ba6f5e35f6eec0302ea3541dad"
+      "sha256": "3b0dbb36e4878236d80c3becac53306f950f5d949512ab2b8a86e48eb46f6f8f"
     },
     {
       "path": "tools/testing/timeouts.ts",
       "sha256": "853c0e70e35754235b2af91c927c1dbfd89fd2e9baecab38afee8868c7770e27"
+    },
+    {
+      "path": "tools/testing/verdict.test.ts",
+      "sha256": "65f36f281f7f25a0a94609def8faa6651240a8ce18cf49351e05b0b786c5a997"
+    },
+    {
+      "path": "tools/testing/verdict.ts",
+      "sha256": "6b8e42d3cbf7a0bdcfb5db799c99d4c6ae1956fb28847d0c6cd42fb6a80f80cd"
     },
     {
       "path": "tools/testing/workflow.ts",
@@ -7738,5 +7750,5 @@
       "sha256": "291a1735a1bdf4a85d3baafef644f0bffe0d9bfbada49d63c648311ff4429ed1"
     }
   ],
-  "inputDigest": "ed944690b7686025ea778ebca3e7d0f003cd1d13c78ca605531d0fc2de267603"
+  "inputDigest": "d01c47636937b59688bbae0a878d1111e2017001d5357a1a0631bee5bd93ec3b"
 }

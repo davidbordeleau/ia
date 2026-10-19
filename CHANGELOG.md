@@ -4,7 +4,7 @@ Generated from reviewed release changesets. Entries describe intended releases; 
 
 ## 3.2.2
 
-Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim, so two runs never both hold it.
+Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim, so two runs never both hold it; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.
 
 ### Judge a held user host lock from one opened file
 
@@ -24,11 +24,23 @@ When two `ia host claude --user` runs found the same stale lock, `<IA home>/clau
 
 Packages: `@inventarch/distribution`.
 
+### Reuse one IA home across the checkpoint convergence test passes
+
+Test-only: the CLI's checkpoint convergence test writes the host payload once instead of on every pass. No behaviour changes for consumers.
+
+Packages: `@inventarch/cli`.
+
+### Verify the host payload once per ia host apply
+
+ia host --apply shares one verification of the host payload (about 1,400 files) between its MCP plan and its projection pre-check, so an apply scans the payload fewer times. Each step that writes still verifies afresh, so a payload that changes during the command still refuses the apply. In @inventarch/distribution, planHost, planHookRegistration and materializeHostPayload take an optional verify parameter for that shared verification: only a verifier from hostVerifier (./host-observe) is shared, and any other function is ignored in favour of a fresh check.
+
+Packages: `@inventarch/cli`, `@inventarch/distribution`.
+
 ### Coordinated version alignment
 
 Package and native artifact version metadata follows the coordinated 3.2.2 release.
 
-Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
 
 ## 3.2.1
 

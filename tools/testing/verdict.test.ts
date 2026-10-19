@@ -238,6 +238,9 @@ it("names the gate rows as the workflow does, and gives a copy's Plan job time f
   expect(timeout).not.toBeNull();
   // Ten minutes for the Plan job's other steps.
   expect(Number(timeout![1]) * 60_000).toBeGreaterThanOrEqual(WAIT_MS + GATE_WAIT_MS + 10 * 60_000);
+  // A full run takes 17 to 23 minutes to its gate; the copy outwaits the slowest of those with room to spare, so an edit
+  // right after a push copies that run's result rather than fail before it exists.
+  expect(WAIT_MS).toBeGreaterThanOrEqual(1.5 * 23 * 60_000);
 });
 
 it('fails on a newer cancelled full run that reached its gate, rather than copy an older pass over its failed rows', async () => {

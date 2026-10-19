@@ -20,8 +20,11 @@ export const VERDICT_STEP = "Copy the verdict of this commit's last full run";
 export const COPY_MARK = 'Mark this run as a copied verdict';
 /** The Plan job step an experiment run takes (a dispatch with a Windows I/O arm or task parallelism): never a verdict. */
 export const EXPERIMENT_MARK = 'Mark this run as an experiment';
-/** How long a copy waits for a full run that is still going, and how often it looks again. */
-export const WAIT_MS = 15 * 60_000;
+/**
+ * How long a copy waits for a full run that is still going: about twice the 17 to 23 minutes a full run takes to its
+ * gate, so an edit made right after a push copies that run's result instead of failing before it exists.
+ */
+export const WAIT_MS = 40 * 60_000;
 /**
  * How much longer a copy waits once the full run's gate rows exist: the gate job's own 20-minute timeout. Failing then would
  * create this copy's failed rows after the full run's, and GitHub reports the newest row of a name. Both waits fit in the

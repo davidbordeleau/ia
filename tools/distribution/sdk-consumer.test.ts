@@ -92,8 +92,10 @@ it('refuses ordinary qualification and missing or stale release evidence before 
     );
     expect(result.status).not.toBe(0);
     expect(existsSync(output)).toBe(false);
-    writeReleaseManifest(checkout, directory, receipts(archives), evidence());
-    expect(() => releaseArtifacts(checkout, directory)).toThrow(/Changed/);
+    const release = writeReleaseManifest(checkout, directory, receipts(archives), evidence());
+    release.changeset.sha256 = '0'.repeat(64);
+    writeFileSync(resolve(directory, 'npm-release.json'), JSON.stringify(release));
+    expect(() => releaseArtifacts(checkout, directory, evidence())).toThrow('Release changeset is stale');
   });
 });
 

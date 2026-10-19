@@ -66,7 +66,9 @@ it('stabilizes source-mutated vocabulary, authoring, selectors and archives with
   roots.push(parent);
   materializeSource(source, root);
   const baseline = nativeBaseline(root),
-    target = baseline.source.tag.slice(1).split('.').map(Number);
+    target = JSON.parse(readFileSync(join(root, 'releases/current.json'), 'utf8'))
+      .version.split('.')
+      .map(Number);
   target[2] = target[2]! + 1;
   const version = target.join('.');
   const json = (path: string, value: unknown) => writeFileSync(join(root, path), JSON.stringify(value, null, 2) + '\n');

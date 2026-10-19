@@ -55,7 +55,9 @@ const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
  * A selected archive's bytes, read once through the descriptor it was opened and judged by (CodeQL js/file-system-race):
  * a regular file, not a link, unchanged while it is read. Its digest, its manifest and its pin all come from these bytes.
  * An archive over 2147483647 bytes, the most the read by name admitted, refuses before a buffer is allocated for it, and no
- * read asks for more than that many bytes.
+ * read asks for more than that many bytes. The same bounded read is in apps/distribution/src/inventory.ts,
+ * apps/distribution/src/system-package.ts, tools/compliance/publication-fixtures.ts and
+ * tools/release/system-packages.ts; keep them alike.
  */
 function archiveBytes(path) {
   let fd;

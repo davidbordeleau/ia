@@ -153,7 +153,8 @@ it('refuses a snapshot entry that grows while it is read instead of recording th
 it('refuses an entry over 2147483647 bytes before allocating a buffer for it', () => {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-publication-snapshot-'));
   try {
-    // A sparse file: its size is 2147483648 bytes without that much being written.
+    // A size-only file: its size is 2147483648 bytes with nothing written (sparse on Linux and macOS; NTFS reserves
+    // its clusters).
     writeFileSync(resolve(root, 'big.bin'), '');
     truncateSync(resolve(root, 'big.bin'), 2147483648);
     // A buffer past the bound is never allocated here: the guard refuses first, and without it this spy refuses instead.
@@ -171,7 +172,7 @@ it('refuses an entry over 2147483647 bytes before allocating a buffer for it', (
 it('admits an entry of exactly 2147483647 bytes and reads at most that many bytes at a time', () => {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-publication-snapshot-'));
   try {
-    // A sparse file of the most the read by name admitted.
+    // A size-only file of the most the read by name admitted (sparse on Linux and macOS; NTFS reserves its clusters).
     writeFileSync(resolve(root, 'edge.bin'), '');
     truncateSync(resolve(root, 'edge.bin'), 0x7fffffff);
     // Its buffer, one byte longer, is 2 ** 31 bytes. None is allocated here: a stand-in of that length is handed back and

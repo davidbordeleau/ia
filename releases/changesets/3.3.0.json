@@ -32,7 +32,7 @@
     "@inventarch/compliance": {
       "previous": "3.2.1",
       "kind": "changed",
-      "summary": "Complete native authoring and consumer contracts."
+      "summary": "Complete native authoring and consumer contracts. Harden tooling and shipped compliance fixtures."
     },
     "@inventarch/compliance-system": {
       "previous": "3.2.1",
@@ -122,7 +122,7 @@
     "@inventarch/workspace-runtime": {
       "previous": "3.2.1",
       "kind": "changed",
-      "summary": "Complete native authoring and consumer contracts."
+      "summary": "Complete native authoring and consumer contracts. Harden tooling and shipped compliance fixtures."
     },
     "@inventarch/workspace-system": {
       "previous": "3.2.1",
@@ -229,6 +229,39 @@
       ]
     },
     {
+      "id": "tools-rewrite",
+      "title": "Harden tooling and shipped compliance fixtures",
+      "summary": "Ship self-contained compliance refusal fixtures and preserve workspace runtime fixture behavior while making generated resources, cold task prerequisites, archive qualification and release ownership checks explicit.",
+      "packages": [
+        "@inventarch/compliance",
+        "@inventarch/workspace-runtime"
+      ],
+      "paths": [
+        ".github/",
+        ".ia/authoring.resources.json",
+        ".ia/src/floor/artifact-set.ia",
+        ".ia/src/floor/axis.ia",
+        ".ia/src/floor/cardinality.ia",
+        ".ia/src/records/npm-release.ia",
+        ".ia/src/records/repository-policy.ia",
+        ".ia/src/releases/language-distribution.ia",
+        "CLAUDE.md",
+        "CONTRIBUTING.md",
+        "apps/vscode/LANGUAGE.md",
+        "docs/",
+        "examples/",
+        "nx.json",
+        "package.json",
+        "packages/compliance/",
+        "packages/workspace-runtime/",
+        "pnpm-lock.yaml",
+        "tools/",
+        "tsconfig.tools-js.json",
+        "tsconfig.tools.json",
+        "vitest.tools.config.mts"
+      ]
+    },
+    {
       "id": "repository-maintenance",
       "title": "Repository maintenance",
       "summary": "Tooling, workflow, documentation and release bookkeeping outside the published package contents.",
@@ -243,6 +276,16 @@
     }
   ],
   "coverage": [
+    {
+      "path": ".github/actions/setup/action.yml",
+      "sha256": "0b7da7ea26c9d69250271855fd5472a7576566f11fd76dfba25944de52be965f",
+      "change": "tools-rewrite"
+    },
+    {
+      "path": ".github/workflows/release-pr.yml",
+      "sha256": "fa54fae2d12184449a698c0b653b1b6303b8fbb9b67309b13c4392537eefe66b",
+      "change": "tools-rewrite"
+    },
     {
       "path": ".ia/authoring.resources.json",
       "sha256": "9f1935eda4d85767927ee971be7ce22e34014f10af35c5274aeb8c5e80d29f19",
@@ -290,6 +333,11 @@
       "change": "native-record-repairs"
     },
     {
+      "path": ".ia/src/systems/agent-composition-system/references/sdk-runtime.md",
+      "sha256": "fb4ac0e7d10cc474d980152f4ea18ab9802cfe5fafb207cf1ae5d66e392e3978",
+      "change": "native-record-repairs"
+    },
+    {
       "path": ".ia/src/systems/agent-composition-system/src/installed-read.ts",
       "sha256": "5049350f9e00d5ae3ae8c81c7e6387218db296f7f53228decf2bc33ebc3e1cfa",
       "change": "native-record-repairs"
@@ -303,6 +351,21 @@
     {
       "path": ".ia/src/systems/agent-composition-system/tests/installed-read.test.ts",
       "sha256": "437e43d6410891767459bc9c7fe5232bb4b3ca40816d1610e9e90884238367fa",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": ".ia/src/systems/agent-composition-system/tests/sdk-runtime/onboarding-case.ts",
+      "sha256": "cce3d69e276bf4075f8394c617a4f826a95b1110cba4759fa7b63c9b9387b7e5",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": ".ia/src/systems/agent-composition-system/tsconfig.tests.json",
+      "sha256": "53d7e2a5fc46d34657f588bc8a4419b1171976b41d311280959d3967b401513e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": ".ia/src/systems/agent-composition-system/vitest.config.mts",
+      "sha256": "d85232ce862dc0a17391a7c7d9f9b537b0d479873a839d4414025fd30502a63d",
       "change": "native-record-repairs"
     },
     {
@@ -345,6 +408,11 @@
     {
       "path": ".ia/src/systems/authoring-system/contracts/draft-authoring.ia",
       "sha256": "fe4777d93e1516431c0e4cf294a067918b88a552d9628d879b2b83cfd0ca734a",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": ".ia/src/systems/authoring-system/execute.ts",
+      "sha256": "3782355253799a10ec20488f8de7d670aefd0bb38d093bb0d2a7eb348db98692",
       "change": "native-record-repairs"
     },
     {
@@ -700,6 +768,11 @@
       "change": "native-record-repairs"
     },
     {
+      "path": ".ia/src/systems/template-system/execute.ts",
+      "sha256": "7c82f3791ed12d6e4fefb1a9377fbfbf053bcce411a8af31dbdba1a85bcee579",
+      "change": "native-record-repairs"
+    },
+    {
       "path": ".ia/src/systems/template-system/package.json",
       "sha256": "7d3e7ce3dc6721ba5ce51dfbd94e48b9e4d60338dbd890b0eec92f0d215d47cb",
       "cohortOnly": true,
@@ -763,6 +836,11 @@
       "path": "CLAUDE.md",
       "sha256": "a47d40f843c76901a526278fa1204ae65f8a243cbe0e8c34273cc44f82e0ea37",
       "change": "native-record-repairs"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "sha256": "a37eaaffd3a9bfd4ae6b4f488e0d63ad21fb5497c1036fb48bfe7a882085561b",
+      "change": "tools-rewrite"
     },
     {
       "path": "README.md",
@@ -892,13 +970,18 @@
       "change": "judge-a-held-user-host-lock-from-one-opened-file"
     },
     {
+      "path": "apps/distribution/tests/command.test.ts",
+      "sha256": "87d9b14c96d5e359592f3143a8776224fa44decc2f675888af1ea872acd3ab59",
+      "change": "judge-a-held-user-host-lock-from-one-opened-file"
+    },
+    {
       "path": "apps/distribution/tests/plugin-home.test.ts",
       "sha256": "47dd8577a95bbc00256e5b82ecfcf7230f9798b4c13599d3e22ab6ede35b56d1",
       "change": "judge-a-held-user-host-lock-from-one-opened-file"
     },
     {
       "path": "apps/distribution/tests/system-partitions.test.ts",
-      "sha256": "551f26098215452a09ba69c8cbb6da4b7e904fc26c9c3df734dd73194f5dfed6",
+      "sha256": "5b5c35fe8526803ef03bf8824d60ede230a9397f65aa0e28053d58aee9415bbf",
       "change": "judge-a-held-user-host-lock-from-one-opened-file"
     },
     {
@@ -1136,8 +1219,13 @@
       "change": "kb-foundation"
     },
     {
+      "path": "nx.json",
+      "sha256": "b41cbe5698d570d87f6685fa71031c54cb5d190b6b375f419f836fe508a1349c",
+      "change": "tools-rewrite"
+    },
+    {
       "path": "package.json",
-      "sha256": "f52d841742872a355bfe67d2ccb2144633a57bb85e971f1444a6304e434a3852",
+      "sha256": "9df9f926acca5186cd1d0c440ba1cc28f0ec78a7e30f3ee5fa3867417eba9bc5",
       "change": "native-record-repairs"
     },
     {
@@ -1152,8 +1240,7 @@
     },
     {
       "path": "packages/compliance/package.json",
-      "sha256": "33e671db3078b5ce3eab8f487d0850dcf786cedb8c30efd34ecf91f1af916b6c",
-      "cohortOnly": true,
+      "sha256": "33a0753b0d89a1afd85345f796d726427f918f67f5161e5f4838ba3436ac41ea",
       "change": "native-record-repairs"
     },
     {
@@ -1493,14 +1580,39 @@
       "change": "native-record-repairs"
     },
     {
+      "path": "packages/workspace-runtime/tests/projections.test.ts",
+      "sha256": "fb4dc5e830f607cda1fb69031e9a49a3434e6103fd2365c1812bf2f116267ebe",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "packages/workspace-runtime/tests/support/live-features.ts",
+      "sha256": "85421c52ee58dc6153bdd673db9969619747380af5e85c039227c594ea41542e",
+      "change": "native-record-repairs"
+    },
+    {
       "path": "packages/workspace-runtime/tests/templates.test.ts",
       "sha256": "0262ff94c9735a1e15cdf7309fdfd13c44c6ce8e6d2b0c0ed64ddc0002cb214f",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "packages/workspace-runtime/tsconfig.tests.json",
+      "sha256": "180c7ce2993dd4843a2ea65aaebcb1bd8d06662641691431a386a19108c35589",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "packages/workspace-runtime/vitest.config.mts",
+      "sha256": "15a9baf3677dc3ebadafe09bd2cd721c287d02f52f47fa59c69f1fe36bce0a9a",
       "change": "native-record-repairs"
     },
     {
       "path": "pnpm-lock.yaml",
       "sha256": "ca6e7d29d7de2c9d08708e4a559ebea6e27adf60d20046367ba6a15ec705545c",
       "change": "kb-foundation"
+    },
+    {
+      "path": "releases/README.md",
+      "sha256": "8593e5a87c807dcfca72b6f974a20040d1a900551ae925bda2f6c734b29307d2",
+      "change": "repository-maintenance"
     },
     {
       "path": "releases/current.json",
@@ -1518,23 +1630,178 @@
       "change": "repository-maintenance"
     },
     {
+      "path": "tools/compliance/SPEC.md",
+      "sha256": "15aaac36d4e21490cae2f8f33422ecfd8ac262d3fd21649ccf908a8194f1f364",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/actor-fixtures.ts",
+      "sha256": "10231eddeea92783237d427fe70b529b8d0247b3505efc95b33456ac69df4421",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/check.test.ts",
+      "sha256": "0b6d930a984cf1536fd13bdbdbefcfdf2b796bfe83a7c205764dcdf1c839b9ea",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/check.ts",
+      "sha256": "cc6bd0fa699ecc5acea3eceb3cc99395f3da22e02bdc5425036003bba809301d",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/corpus.ts",
+      "sha256": "245a7b70f6e1e7a9d8ec305a9a5d232170638d9faff99d335007f97202f2f065",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/door-fixtures.ts",
+      "sha256": "1caa7c9da488c2c483bb9141eb6355cb9215d1035037e36e319d07b903309b1b",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/execution-fixtures.ts",
+      "sha256": "3020a79421ca786151f54e36f0d6f73154cc42ba8df8e2c61df14578ef774749",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/fixture-authoring.ts",
+      "sha256": "249c627c6df9411ab9ff0bdd5849e328c18b2b0ca9a469e4f47be7826c3fe83e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/foundation-adoption.test.ts",
+      "sha256": "dc828bcd2102c6c8e4a5b5d81264c91920348ae30d4bfc9421418fd3e5131e18",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/foundation-adoption.ts",
+      "sha256": "ba70a8e7c331eb5ef8e651b99ac4c588ad6765b78e5f08a71d16b76cb9237b5c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/inventory.ts",
+      "sha256": "a5dfcddd4c60e006c081de1b9b0c85737cc1c1dc686d6af568ff5afe1c28529c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/mandate-fixtures.ts",
+      "sha256": "be01a7f32f3ce2c3e81fa225dd1cd7c7bac85f9d036fb012fc7a4ef41d6f2f16",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/next-fixtures.ts",
+      "sha256": "2f7cf840d8555cb9c4d9a70355c2a04841bc98ee89eea7bc8db5672ae197eea4",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/publication-fixtures.test.ts",
+      "sha256": "4089052a71d206ceb83edf4e673f27697a9f160f39402f372765dcfc3871cf64",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/publication-fixtures.ts",
+      "sha256": "fdbe8045e803521d58103d515bffe8eaa710565d3b77946987b1389e8ccaecfd",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/read-fixtures.ts",
+      "sha256": "9e2841973d9a3d928fe8bb60fab82e4af4ce07657d7bb51f26198f4350128148",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/compliance/runtime-fixtures.ts",
+      "sha256": "682b887bcd2b42ee3afdb392a05abb63ca58c7c886d5aec4e4129d41c986bce8",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/dependencies/SPEC.md",
+      "sha256": "d94756f48097e869d1724054a391283b55fd9fe30f99f49c79cf05c8c6c8269b",
+      "change": "native-record-repairs"
+    },
+    {
       "path": "tools/dependencies/check.ts",
       "sha256": "586aea152c47fe7b4643148c17b229c6d61814cfafbedd049ea6cc58754ef71d",
       "change": "native-record-repairs"
     },
     {
       "path": "tools/distribution/NPM-PUBLISHING.md",
-      "sha256": "08764efabef044fd3c3b2f75ecc3bf2ee024e5673192905d727656b57bcbef76",
+      "sha256": "c741225d7fa475cc4e98e9e2f25dd47c721c7d985281cadb4ced73d391d002d7",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/SETUP.md",
+      "sha256": "d40582fafb60a508d5b0920d62cc02624e11c280637995049865feff9a42c73c",
       "change": "native-record-repairs"
     },
     {
       "path": "tools/distribution/SPEC.md",
-      "sha256": "84eac74b46483882bbc5cf030e5aa09f5aa1574bcf49e7e616594881b8eb146d",
+      "sha256": "43824f6e8594477d6c71b93463f4964e3e8048796062da7e7c77dd798ec62e27",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/authoring-guides.test.ts",
+      "sha256": "a57cd2592014a0dcec008740e6614bc8f112a6ae53cd4bf66e5b93ed2a911dcf",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/authoring-manifest.test.ts",
+      "sha256": "65e023b786f0d75e7092c1b8f14b396d146ab583b198828f781f1ede1a409a01",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/authoring-resources.mjs",
+      "sha256": "9569f1f0234bfc6e89574abb59fd3fb358372e3d70b56caa5cc933aca35073d4",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/consumer.mjs",
+      "sha256": "6bd86f540bd02cbf2f974fea8fe673c053fc9b3b03762f38c76bec9463e5fb0e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/consumer.test.ts",
+      "sha256": "71e94c33bbeb3a3f9ab4803d648b49bba23cc53979e7566f038c8f2c36db43ca",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/generate-authoring.ts",
+      "sha256": "1188c89b9cbc431aa9fdc65b34fec5fd5aae0392ab374ac91f09c0294f836f55",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/generate-public.mjs",
+      "sha256": "2d95306eb2d5e6cf81cf2a298296ea24aa810353de2700243b95a90f84ebbe57",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/generation-order.test.ts",
+      "sha256": "d4191a25490a411e8612870229e1fa82bb58d09c212dc9ead9504d0fec5aef31",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/host-payload.test.ts",
+      "sha256": "22269b7d521f976ab1301618db1bd21d20742eaf8222f109ec0dd528ca6ef8a9",
       "change": "native-record-repairs"
     },
     {
       "path": "tools/distribution/language-guide.test.ts",
-      "sha256": "69b99f61507c025a9e3d96870a69db67491856cc02bc58b7240e331dbf7c171e",
+      "sha256": "a090836e04ff4161a78e545ce1ab09ea227884a2a2b0855724793672ad9ba970",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/npm-release.d.mts",
+      "sha256": "6a1b6b066167c819d341657d8ce546783aa021304356856875532e4048a7c97e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/npm-release.mjs",
+      "sha256": "95e6871f428c20afe03f4783f11a153905c5492a03b5c480de727d0ba91d8dd5",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/npm-release.test.ts",
+      "sha256": "99cffe9f3d391cb0b70e60b2dfde32ddbb81a08ee60d1bc4b9cda203b895228c",
       "change": "native-record-repairs"
     },
     {
@@ -1544,12 +1811,77 @@
     },
     {
       "path": "tools/distribution/qualify-kb.mjs",
-      "sha256": "cda166178b9d08d44bec7974e4c0147d35afea0385573bf1a16738f1bfdf1b65",
+      "sha256": "5238ea4c9ea2a5e1fecf247f6e90d871b206a5c0cc4e31b90000748f418a0ae3",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/qualify-packages.mjs",
+      "sha256": "00290cddfab09d0333c53edd079850ac68a359401e4791031e5a253b7b7151d1",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/qualify-sdk.mjs",
+      "sha256": "6177b83372867770586453f8edb0c82468358c86bcb0d8c86fa6c991afcf66df",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-branch.mjs",
+      "sha256": "9d2ccf7f95e3e79b74ab6616930de81f2bb5589d54e01c43a6345397b7567a28",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-branch.test.ts",
+      "sha256": "52a516b919f7abc730299e9416191b189fbc4665603e86718d59930c6a5f57b3",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-changes.mjs",
+      "sha256": "cc54448d4e3a341b168ec51eed541bcdbe55b54827bb134abee538276ec89104",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-fixtures.ts",
+      "sha256": "e05ae05e49ee41dd76725986ed7fc6303871e1e5e64df90f4433231bc2abfd2b",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-notes.mjs",
+      "sha256": "ba902d61be37f7278a36ec4b1511d177e346dc2314a825b4952b5f8838cc1791",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-refusals.test.ts",
+      "sha256": "cbaf880bac6fb3ab9799d3e62dba10fa4e3f199c04f3fbd5b1dde34019a9737e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-setup.d.mts",
+      "sha256": "dee9dc9d0ef92ae31133a8f89abb242bb9baf5eafe85be0f2839cddd9b7b1fbe",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-setup.mjs",
+      "sha256": "0f1681ae120e2a6e615e78987399f948174fe37fb8d8302c69bf43a4b532f1a6",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-setup.test.ts",
+      "sha256": "7f6c42a959579c6daaac920bacf03cf3b05eb610098dff4afce290603bcbe80e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/release-version.mjs",
+      "sha256": "d963e708dffa0d51b99f88b7315b233fb68da2f12111c2330e3d9330ba0016a7",
       "change": "native-record-repairs"
     },
     {
       "path": "tools/distribution/resources.mjs",
-      "sha256": "49f6ed64f169b408102e5abfbcacf28b40e670a9168b119bd86707ef226321ad",
+      "sha256": "42722e3baeab664a4088ef3f6250ec3823d01e7fda386d7619ecc3fd424088ef",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/distribution/sdk-consumer.test.ts",
+      "sha256": "cff71e117747329228aa33f46d31c48182cfaacdf172d0aa56802ec21c372cfb",
       "change": "native-record-repairs"
     },
     {
@@ -1559,23 +1891,173 @@
       "change": "native-record-repairs"
     },
     {
+      "path": "tools/docs/MARKDOWN.md",
+      "sha256": "4e0a24a3cf39171b6c7124367a262c335f7853ea1c9e3584236bff4478b082d7",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/SPEC.md",
+      "sha256": "7aab3fd076bacea3d14862a7b3a45b93adaf382f7477d29091df74361b4e0103",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/audit.test.ts",
+      "sha256": "63cfa61900196c5b8696324177cc51b92f08ed48e6574cff83713519580c02bf",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/audit.ts",
+      "sha256": "12199a9dd918cc012e7689247d9cc01557f5230a467ecd2c772a1dba645272e5",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/catalog.mjs",
+      "sha256": "732c0412c0ffb26016573fc3f5397a972b2356d09bfa68a5ef89885f479d89e1",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/link-parity.test.ts",
+      "sha256": "ac5d159e0fe6ef9c04250e9d450abb61f484fd59a35f07c4877076de8645cd2a",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/portfolio.d.mts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/portfolio.mjs",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/roadmap-sync-config.mjs",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/docs/teaching-links.mjs",
+      "sha256": "4195e946501051d9d15ecc0e9e5f9f5c70565602ecfba2a920645d605cdf2470",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/entry/SPEC.md",
+      "sha256": "0e69af4cafda6af1e4ba820e573fe67e7eeec5eee60d7615892284d00ed9957c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/entry/is-entry.d.mts",
+      "sha256": "9e83199cba75b1fb06c2ef219cc6a285842f03e39969a86a8ad5f15f8e565bcb",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/entry/is-entry.test.ts",
+      "sha256": "2dedfe656cdd80c4ebd25b5ffb4988f375b3a2e799ffd900932e3f51d114cebc",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/entry/package-manager.d.mts",
+      "sha256": "4c2ce7372387fb8b9df1b62ba166fad3f6791dff53591426a20d5ed8861136b1",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/entry/package-manager.mjs",
+      "sha256": "522c37ab5a488926d82e5ab89282f8717f9b1aba2136c3e93568a826d4275955",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/kernel/SPEC.md",
+      "sha256": "e860cb374cd751ad60efeb0c622460793628f981b83b976edd3cc5c67b7da17e",
+      "change": "native-record-repairs"
+    },
+    {
       "path": "tools/kernel/generate.test.ts",
       "sha256": "918ec2def73bd721127d5d4d8543dee26b124f8e6d6f59426b5e23565d40d4f8",
       "change": "native-record-repairs"
     },
     {
+      "path": "tools/kernel/generate.ts",
+      "sha256": "64c2a57701f56c7f28349c8a6e2f039f4d104d9247ef8b1549902d0417f4ea84",
+      "change": "native-record-repairs"
+    },
+    {
       "path": "tools/native/SPEC.md",
-      "sha256": "0ae5528cc29694d3afea8018a6ab8ba53716aa52c5dfe0d9f849eed039e3d819",
+      "sha256": "598dffc4257d375c192bb2aecf26634fe8f3e7fa8536fdc29ed0778df9ac76e9",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/check.test.ts",
+      "sha256": "2f3911c87c2e052fabd43f34e8f90c3d634e595386229b9b9c7871df5b6d9263",
       "change": "native-record-repairs"
     },
     {
       "path": "tools/native/check.ts",
-      "sha256": "3d38c49137b31ba4a32b918a558e81f9c98ad65ead9dc3584188eb73201358be",
+      "sha256": "e1a71cd7051d397ffd31fc9df386f4599be19444e56e0f529a5ba14cdf099a2c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/fixture-authoring.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/fixture-instances.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/fixtures/instances.ts",
+      "sha256": "bad5760726e0992742795a4db5d7593deb87e83b79934cc63de51a230d94952c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/language-base.test.ts",
+      "sha256": "6f7a6843bca0cd282ecd25c1d764474497cc593ffcb96897ba7c864d9d4d2d8a",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/language-base.ts",
+      "sha256": "ef9341d5034dbd0cacd6cac681a3e41c8fe270539b2492f5e74719f24aab9b82",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/meaning.ts",
+      "sha256": "e96f31f111a061c4cc70412023b1bd903da77a0ed08c8195213083a8c9ed8164",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/public-language.test.ts",
+      "sha256": "ace876307cc367b260c47ed58fa135217399d42b7a956db46441967f2aca5712",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/public-language.ts",
+      "sha256": "c24670be4471270cbb72b364dd5b28c8b75b278ca917f5a177523a1f2c176f74",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/public-manifest.d.mts",
+      "sha256": "ece039f11853c0911a59b425f5821a17cc4196e7215817109b98577bdc8f1d76",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/public-manifest.mjs",
+      "sha256": "d08f7c8fac8b58a551a506db234a01052e6e699c025d2e7179c6acc4af27c772",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/public-systems.mjs",
+      "sha256": "b4bd6ebc142aa7858f97af256250dcffc76b2fcb33d6233e4cdf637d575a96d0",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/native/public-systems.test.ts",
+      "sha256": "3cd60ce659a551ac876f635bfb93a873501a67a29d8fd786de4b677deb6aa932",
       "change": "native-record-repairs"
     },
     {
       "path": "tools/native/public-vocabulary.ts",
-      "sha256": "85665a3ad87f1f7fd2f0d40d1893bde4fcb02c9fe09665f175d6018e578d03e0",
+      "sha256": "9e3fe2ae824a7323838e43104cebfb51e6340e0f9e1484d702928c8f9ed9314f",
       "change": "native-record-repairs"
     },
     {
@@ -1594,8 +2076,58 @@
       "change": "native-record-repairs"
     },
     {
+      "path": "tools/projections/SPEC.md",
+      "sha256": "b988abad25ff59d84a841c3c5d42b03374b8f2a11bf5a36a20c08e962ccf6c73",
+      "change": "native-record-repairs"
+    },
+    {
       "path": "tools/projections/generate.test.ts",
-      "sha256": "c2cbdcae558b816a80eb13eb5cd7cd766ef5570dab0c5809106a999d95da6235",
+      "sha256": "96bdd71a692c9cae6227617d964b259772794405048d2b03a1092f88701e286d",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/projections/generate.ts",
+      "sha256": "78cda437b1ef790293ece4b35d7f18d531cbc361a6668e9c5b0a6a2df5b6e086",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/projections/link-walk.test.ts",
+      "sha256": "90bf637feb305431a4d6ffb8fe98d4b8aec7069b1bb84ce661419887fd1c74c4",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/projections/live-features.d.mts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/projections/live-features.mjs",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/projections/qualify-projections.mjs",
+      "sha256": "e5459205342f790bb1e3a1e413946b41883b9ce0a8e87318b320756c3be3d73a",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/projections/qualify-resources.mjs",
+      "sha256": "59eb240460c8c85becc14656df786b64d2e2fa964069e9c43125dc9b30facf05",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/release/SPEC.md",
+      "sha256": "f6be315750c3fa5e6a60bfe37a7adf6ba7c045b0e945e5629c8588cb369721d1",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/release/fixtures/recipe-v2.json",
+      "sha256": "290c59cacb99c8dda2e0126d5b766cc944348391b46e34e84d1e900af6daf99b",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/release/native-version.test.ts",
+      "sha256": "551b69eaa80e801a1ac211b0e87f855660b8e092506b50dc715be951e6889a2e",
       "change": "native-record-repairs"
     },
     {
@@ -1604,8 +2136,158 @@
       "change": "native-record-repairs"
     },
     {
+      "path": "tools/release/public-pack.mjs",
+      "sha256": "73078207b37903a6f47724169935256227ec3dee0933ac93893586ed4eb1ad7f",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/release/recipe.d.mts",
+      "sha256": "e84e925ea1a972bee34fa073853f1dea9e61b5c868ca373059e78a82ba2a703e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/release/recipe.mjs",
+      "sha256": "4f316a82a748b06e041831eb08a95a6d5b401cc553cedca84dd985b76cd0386e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/release/recipe.test.ts",
+      "sha256": "76481e779bfe04a1ccd0f01ff3c21ab6b1892a7b6a1f6407063374969eaa23fc",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/release/system-packages.ts",
+      "sha256": "76a11e773b6233ddf25322a8db2140a9f8e49970033b22726785ad533e314258",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/SPEC.md",
+      "sha256": "012bc1a8a99d1c8ae9c3a07d6c5d0b83829d23c4db1f80ba88cbdda1f11d8308",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/fixtures/main.mjs",
+      "sha256": "9cad749fbcbe5281997b47bde44bba127a85430850e1b9078e37a3e62a8d779c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/github.mjs",
+      "sha256": "d7508cab1dd32d12577acd0b6321587221f6b94f579ef791d45e2799207c0368",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/main.test.ts",
+      "sha256": "47d7fcd346202d4b105a0881256952f91c48d7207a4e8399ad48e951a732b36d",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/render.mjs",
+      "sha256": "045545360aa307a748607a5c1042b7851664ea4bd5e6bcb53e21bf92c27268d7",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/result.mjs",
+      "sha256": "279ea35c0e5d6130e05fef927de66364516418845ce5f8a2b552cfca6d1c0bf7",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/runner.d.mts",
+      "sha256": "a24c647e7283b1aaccffce396e46125d237253efcf4dbf0b4ad3c5e479b21613",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/runner.mjs",
+      "sha256": "bb0e28b083ce3525b0fa2b444a4c980fb4b5a6f8562d390f7b91a3b501cc7a7c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/runner.test.ts",
+      "sha256": "09fd80c51ff2cc1205a0aac38f94a0390f255c2c570ead9f50cb65ee3fa5aac2",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/review/subject.mjs",
+      "sha256": "c1b5ae540c0ef14dfbd9da272d74e516d8151390bd2e5422479e3d028cab890b",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/runtime/SPEC.md",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/runtime/qualify-sdk.mjs",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/SPEC.md",
+      "sha256": "15868c00535d9ebf067c5b67210c88c548c0120aebdffdaa03dfd962465f017e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/args.d.mts",
+      "sha256": "2de0111a1d6390f823745999f22273f238aeafd61034b3774800d8462f77c24b",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/args.mjs",
+      "sha256": "fd7d69685d4060c9a5d48fac7ab96942791159c254ab43c117e5029203268413",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/check-write.mjs",
+      "sha256": "4eab6a529c2b267b4e2214b8c96eb9b3d9342306dd59bc07d2bde51deda73dc8",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/contracts.test.ts",
+      "sha256": "f2b1bed01994b53bea21918e21755028504fcd4b3317fe329cc4a4dcb06a678b",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/git.mjs",
+      "sha256": "0cf1a29d570cdbe2c02961cea01b4c400113ceab9b916b2f9e8e1ea49e6ce441",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/paths.d.mts",
+      "sha256": "8488ddef175f916443351aae6dbf76562c65dba2da0dd52580a345f59e4170e8",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/paths.mjs",
+      "sha256": "f3ea359b84b7af76db00becabd549db588d7e7fea8c9d48d40748fce36d2770a",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/shared/semver.mjs",
+      "sha256": "77d04b23a28af62436f09e7a935dc535a2a953c05c4cabf257b6386011cfe4c0",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/SPEC.md",
+      "sha256": "27a9e9c3fbb9c65d3cc811fa29edf1f1b91aec96cb66f69bc5fef3267afedf88",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/authoring-guides.test.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/authoring-manifest.test.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
       "path": "tools/systems/execute.test.ts",
-      "sha256": "c86c369033292e5aa2fa091cb330e34f124e2200e0c689d5670d7e91b8352bcc",
+      "sha256": "563ad5812c2bb4b6499ef56cabd45e20918054a789e815859a1956fe0aeeeb91",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/execute.ts",
+      "sha256": "7846da122c5bb0679b649f99b38bb99cc93b30dbcd42be2077f555a60b59b48a",
       "change": "native-record-repairs"
     },
     {
@@ -1614,14 +2296,174 @@
       "change": "native-record-repairs"
     },
     {
+      "path": "tools/systems/generate-authoring.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/publish.ts",
+      "sha256": "148d707a91a2e53548fa074b76aaf5604ca9e1d7ec3787b5669d7d861e1202e7",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/refusal-fixtures.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/run.ts",
+      "sha256": "e4184193a49771b5dc4ffc0dde9351d1cccd227bbfd5b915539ba6c6c1a90c51",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/scenarios.ts",
+      "sha256": "718f1f52b9138c24a4cdf1a0fe93630859cb3cae2adb4d70a2342d3271284b65",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/shared.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/teaching-links.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/systems/types.ts",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/temp/SPEC.md",
+      "sha256": "df4ad9a8ca5630ebb85882e995ad71e9eb85713a0996afe53894ec6af822344f",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/temp/canonical-temp.mjs",
+      "sha256": "a82f5db59341b8c12ecf71d9af223aa206ca87c44318707378e1a419a52e41e8",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/temp/physical-temp.mjs",
+      "sha256": "ef649eb039850b7e243bc8d15bfe820f2e3f3fb0a99f25b7449530f66eafcf61",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/temp/physical-temp.test.ts",
+      "sha256": "4b688f93a213ecd92236c0893d4bd08059466a433657003774b67e335175a96c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/SPEC.md",
+      "sha256": "92d0f1c755ecb10bea4a6920c6c3c0ca0b082b559ed4fffc4af49077f8e0ada3",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/cache.test.ts",
+      "sha256": "a0afd0f943be044bc82c52747d958c6a04d1b7c218eecffebee7ffb9b71daf1e",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/canonical-temp.mjs",
+      "sha256": null,
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/check-declarations.mjs",
+      "sha256": "65e6300dc719783db344d95b6a70582b2922b76255d9d5244efd5b3d34c2dbdd",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/cold-start.test.ts",
+      "sha256": "48de9ebc1c511d6db44e3d531e73a4592c7301bdd5f1931238fbdbd72ed07ad1",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/evidence.ts",
+      "sha256": "3921f7142617751ae079b3d783d50d2e9290531a5888768b3a67482944a21172",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/fixtures/source.ts",
+      "sha256": "53c1e5e6f82775762ec597eb1eac63a0760dd58d139aebdd183958f87eb2f855",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/gate.ts",
+      "sha256": "1cbaf73735a26176d325cbbf2187cd0cc2fe399bb0e9071cac5e8eb42c2ed825",
+      "change": "native-record-repairs"
+    },
+    {
       "path": "tools/testing/inventory.test.ts",
-      "sha256": "c93e209a8f14f863f7d8fb68f994e80680aa8cec50b29de4f9433c17699515bc",
+      "sha256": "1edc19ea84f1b7157b671e3c83a4406c97c790d153359334a512b07c8a40c12c",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/inventory.ts",
+      "sha256": "685d5c89f6d92198e392ba3c9a856adeb5ddf859a617135717cc74721e57b791",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/manifest.test.ts",
+      "sha256": "13dcfe94ab68ea8ec2209b5927b5b7892d75124b6c30fa836f4ad446dbe692f3",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/manifest.ts",
+      "sha256": "540ad603ca661ebe8faff2c93267dfea536b9bd51303e6ca7ebb4f77b0cb3e54",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/orchestrate.ts",
+      "sha256": "971c504da8238a1a940cc1e85bc2b3fbd6deb07a881e9b9a618c58e563d646ca",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/plan.ts",
+      "sha256": "5c8a2031a19a3e1fa59ecb76af1204429b5876e6df2e96c86d8429c775336314",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/prerequisites.ts",
+      "sha256": "a06d48be72356b426e94ae5028a1e6111a43062dace9555b47952170b1cf5c23",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/report.ts",
+      "sha256": "104a3f5241fcc9aef8dff6a4eaeeb8b12622ec85590fa4739c4fcf18c81b9f9d",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/run.ts",
+      "sha256": "543f30e482c35a9129f7e0f94b9b28deb77fb47ac63012e978913e332529d652",
       "change": "native-record-repairs"
     },
     {
       "path": "tools/testing/tasks.json",
-      "sha256": "58a150a52d76dabeb966cb18aa62dfb01332d33f9e8e64d220387b2f0f2b35e8",
+      "sha256": "d77d13dbb63dabf46713ad4945853f42e654040db06fb1ee5e7a986023fea5b3",
       "change": "native-record-repairs"
+    },
+    {
+      "path": "tools/testing/timeouts.ts",
+      "sha256": "e9358c51f1f7ef987f1dcf85b1aff37ca43cfdfe4f616df9c39ab496e3ac87b5",
+      "change": "native-record-repairs"
+    },
+    {
+      "path": "tsconfig.tools-js.json",
+      "sha256": "f39858d195ee791da529184c9c80ca00972d8dfdcb866e0cc7534b669bf531a8",
+      "change": "tools-rewrite"
+    },
+    {
+      "path": "tsconfig.tools.json",
+      "sha256": "a1ed002cc59a0b531f5116f8ebdd561d180607df0281770b20db1607f2567448",
+      "change": "tools-rewrite"
+    },
+    {
+      "path": "vitest.tools.config.mts",
+      "sha256": "b7a2070d0de01d78a2f8dbd4e8c646740a4b9f68810cfda96aafe69ffc7a47f4",
+      "change": "tools-rewrite"
     }
   ]
 }

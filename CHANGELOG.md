@@ -24,6 +24,12 @@ Read admitted records and bound documents without a .kb folder. Export explicitl
 
 Packages: `@inventarch/cli`, `@inventarch/kb`, `@inventarch/mcp-door`.
 
+### Harden tooling and shipped compliance fixtures
+
+Ship self-contained compliance refusal fixtures and preserve workspace runtime fixture behavior while making generated resources, cold task prerequisites, archive qualification and release ownership checks explicit.
+
+Packages: `@inventarch/compliance`, `@inventarch/workspace-runtime`.
+
 ## 3.2.1
 
 Coordinated 3.2.1 release of the 23 public npm packages: Refuse a coordinate value whose text conversion throws as an unknown value.

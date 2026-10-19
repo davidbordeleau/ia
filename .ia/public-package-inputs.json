@@ -2,8 +2,8 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "f1ab271920210a0454bcf6e2a34ef499304e88ec",
-    "tree": "388304735621e5adb428245b91ada0c1afcc0307",
+    "commit": "4895e5c92ba20b47df9f0331a5c0c1df50784b73",
+    "tree": "9e4c06f216abfdcdfb13146424419e24bb38b46b",
     "dirty": true
   },
   "membership": {
@@ -6996,7 +6996,7 @@
     },
     {
       "path": "releases/changesets/3.3.0.json",
-      "sha256": "9c015de0aa112d8eda282341a6bf408c4b72a895b8a0d8078875df910b65fbdd"
+      "sha256": "f37dcd5705403e6a122bdc0d8ecdb79379a88ece20f6674a52d6df134a36f669"
     },
     {
       "path": "releases/current.json",
@@ -7148,7 +7148,7 @@
     },
     {
       "path": "tools/distribution/generation-order.test.ts",
-      "sha256": "d4191a25490a411e8612870229e1fa82bb58d09c212dc9ead9504d0fec5aef31"
+      "sha256": "1bff7a98177696a2028d01edd8719d5c0f918c7b6977ac1bdf0311f3f2499dd4"
     },
     {
       "path": "tools/distribution/github-release.d.mts",
@@ -7344,7 +7344,7 @@
     },
     {
       "path": "tools/distribution/sdk-consumer.test.ts",
-      "sha256": "cff71e117747329228aa33f46d31c48182cfaacdf172d0aa56802ec21c372cfb"
+      "sha256": "8f0009d994c81a2cabf7c25396f5659eb124426ff2b07a04cf82017b70833456"
     },
     {
       "path": "tools/distribution/system-package-policy.json",
@@ -8079,5 +8079,5 @@
       "sha256": "b7a2070d0de01d78a2f8dbd4e8c646740a4b9f68810cfda96aafe69ffc7a47f4"
     }
   ],
-  "inputDigest": "db537cad1cd66f2aee39b6391b8d64e72db0dac9c7860ccdb6ffa2fb672a946a"
+  "inputDigest": "c9bd4447bb1c2b29b243ef721362b69fdac47e18fc14971d6ff5314b92654803"
 }

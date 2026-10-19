@@ -1776,7 +1776,7 @@
     },
     {
       "path": "tools/distribution/generation-order.test.ts",
-      "sha256": "d4191a25490a411e8612870229e1fa82bb58d09c212dc9ead9504d0fec5aef31",
+      "sha256": "1bff7a98177696a2028d01edd8719d5c0f918c7b6977ac1bdf0311f3f2499dd4",
       "change": "native-record-repairs"
     },
     {
@@ -1881,7 +1881,7 @@
     },
     {
       "path": "tools/distribution/sdk-consumer.test.ts",
-      "sha256": "cff71e117747329228aa33f46d31c48182cfaacdf172d0aa56802ec21c372cfb",
+      "sha256": "8f0009d994c81a2cabf7c25396f5659eb124426ff2b07a04cf82017b70833456",
       "change": "native-record-repairs"
     },
     {

@@ -41,8 +41,8 @@ function fileBytes(file: string): string | null {
     // NOFOLLOW refuses a final link; NONBLOCK keeps a FIFO from blocking the open.
     fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   } catch (error) {
-    // A link (ELOOP), a socket, or a directory if the platform refuses to open one, is null. A missing file throws from
-    // this lstat.
+    // A link (ELOOP), a socket, or anything else whose open fails and that is no regular file is null; a regular
+    // file keeps its open's error, and a missing one throws from this lstat. A directory opens and is judged below.
     if (!lstatSync(file).isFile()) return null;
     throw error;
   }

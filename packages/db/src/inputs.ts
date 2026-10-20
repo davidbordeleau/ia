@@ -1,17 +1,5 @@
 import { createHash } from 'node:crypto';
-import {
-  closeSync,
-  constants,
-  existsSync,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-} from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import type { BigIntStats, Stats } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BAND_OF, KERNEL_SOURCES, isPlacementKind, isProvenance } from '@inventarch/language';
@@ -19,7 +7,7 @@ import type { Location } from '@inventarch/language';
 import { canonicalRoot, stableSerialize } from '@inventarch/graph';
 import type { RevisionSource } from '@inventarch/graph';
 import { DbError } from './errors.js';
-import { lstatNamed } from './named.js';
+import { lstatNamed, readOpened } from './named.js';
 import { pathKey, sameFile } from './paths.js';
 import { decodeActivationPointer } from './distribution/contracts.js';
 import type { ActivationPointer, LockedPackage } from './distribution/contracts.js';
@@ -221,59 +209,49 @@ export function readWorkspaceBytes(root: string, path: string, limit: number): U
       throw new DbError('IA-DB-PATH-UNSAFE', `Symlink/junction traversal is not admitted: ${relative}`, relative);
     if (directories.some(({ stat }) => !stat.isDirectory()))
       throw new DbError('IA-DB-SOURCE-UNAVAILABLE', `Missing file ${relative}`, relative);
-    let fd: number;
-    try {
-      // Open before deciding the file's type, link count, size or allocation. NOFOLLOW rejects a final symlink;
-      // NONBLOCK avoids waiting on a FIFO substituted during opening. Unsupported platform flags are zero.
-      fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-    } catch (error) {
-      // Windows may refuse opening a directory. Preserve the same public refusal as an opened non-file.
-      const named = lstatSync(file, { bigint: true });
-      if (!named.isFile() || named.nlink !== 1n) throw unsafe();
-      throw error;
-    }
-    try {
-      const opened = fstatSync(fd, { bigint: true });
-      if (!opened.isFile() || opened.nlink !== 1n) throw unsafe();
-      if (opened.size > BigInt(limit))
-        throw new DbError('IA-DB-SOURCE-UNAVAILABLE', `File exceeds ${limit} bytes: ${relative}`, relative);
-      const assertNamed = () => {
-        try {
-          const named = lstatSync(file, { bigint: true });
-          if (!named.isFile() || named.nlink !== 1n || named.dev !== opened.dev || named.ino !== opened.ino)
-            throw changed();
-          for (const { path, stat } of directories) {
-            const now = lstatSync(path, { bigint: true });
-            if (!now.isDirectory() || now.isSymbolicLink() || now.dev !== stat.dev || now.ino !== stat.ino)
-              throw changed();
-          }
-        } catch {
+    // Still the opened file at its name, under the same directories.
+    const assertNamed = (opened: BigIntStats) => {
+      try {
+        const named = lstatSync(file, { bigint: true });
+        if (!named.isFile() || named.nlink !== 1n || named.dev !== opened.dev || named.ino !== opened.ino)
           throw changed();
+        for (const { path, stat } of directories) {
+          const now = lstatSync(path, { bigint: true });
+          if (!now.isDirectory() || now.isSymbolicLink() || now.dev !== stat.dev || now.ino !== stat.ino)
+            throw changed();
         }
-      };
-      assertNamed();
-      // Bound both allocation and reading to the opened file's size plus one, even if a concurrent writer grows it.
-      const buffer = Buffer.alloc(Number(opened.size) + 1);
-      let length = 0;
-      while (length < buffer.length) {
-        const count = readSync(fd, buffer, length, buffer.length - length, null);
-        if (!count) break;
-        length += count;
-      }
-      const after = fstatSync(fd, { bigint: true });
-      if (
-        BigInt(length) !== opened.size ||
-        after.size !== opened.size ||
-        after.nlink !== 1n ||
-        after.mtimeNs !== opened.mtimeNs ||
-        after.ctimeNs !== opened.ctimeNs
-      )
+      } catch {
         throw changed();
-      assertNamed();
-      return buffer.subarray(0, length);
-    } finally {
-      closeSync(fd);
-    }
+      }
+    };
+    // Open before deciding the file's type, link count, size or allocation; allocation and reading are bounded to the
+    // opened file's size plus one, even if a concurrent writer grows it.
+    return readOpened(file, {
+      unopened: (error) => {
+        // Windows may refuse opening a directory. Preserve the same public refusal as an opened non-file.
+        const named = lstatSync(file, { bigint: true });
+        if (!named.isFile() || named.nlink !== 1n) throw unsafe();
+        throw error;
+      },
+      opened: (opened) => {
+        if (!opened.isFile() || opened.nlink !== 1n) throw unsafe();
+        if (opened.size > BigInt(limit))
+          throw new DbError('IA-DB-SOURCE-UNAVAILABLE', `File exceeds ${limit} bytes: ${relative}`, relative);
+        assertNamed(opened);
+      },
+      read: ({ opened, bytes, after }) => {
+        if (
+          BigInt(bytes.length) !== opened.size ||
+          after.size !== opened.size ||
+          after.nlink !== 1n ||
+          after.mtimeNs !== opened.mtimeNs ||
+          after.ctimeNs !== opened.ctimeNs
+        )
+          throw changed();
+        assertNamed(opened);
+        return bytes;
+      },
+    });
   } catch (error) {
     if (error instanceof DbError) throw error;
     // A path through a file is missing too: ENOENT on Windows, ENOTDIR on POSIX. Only the error code is kept, as a
@@ -474,51 +452,37 @@ function bindings<T = Binding>(root: string, each: (binding: Binding) => T = (bi
     irregular = (): never => invalid('Expected a regular manifest of at most 64 KiB'),
     undecodable = (): never => invalid('Expected UTF-8 JSON');
   // The manifest is opened before it is judged, so the judgment and the bytes are of one file (CodeQL
-  // js/file-system-race). NOFOLLOW refuses a final link put in place after safePath, NONBLOCK keeps a FIFO from
-  // blocking the open; a flag a platform lacks is zero. A missing manifest declares no bindings.
-  let fd: number;
-  try {
-    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    // A link the open refused, a socket, or anything else whose open fails is judged by its name: refuse it as an
-    // opened one is refused. A regular manifest that cannot be opened is unreadable, as one that cannot be read is.
-    const named = lstatSync(path, { bigint: true });
-    if (!named.isFile() || named.size > 65_536n) irregular();
-    return undecodable();
-  }
-  let bytes: Buffer;
-  try {
-    const opened = fstatSync(fd, { bigint: true });
-    if (!opened.isFile() || opened.size > 65_536n) irregular();
-    // Allocate and read the judged size and one byte more, which only a concurrent writer can supply.
-    const buffer = Buffer.alloc(Number(opened.size) + 1);
-    let length = 0;
-    try {
-      while (length < buffer.length) {
-        const count = readSync(fd, buffer, length, buffer.length - length, null);
-        if (!count) break;
-        length += count;
-      }
-    } catch {
-      undecodable();
-    }
-    // The bytes are the manifest's only if it kept its size and still has that name; on Windows, which opens through a
-    // link, the name's identity is the only guard against a link placed after the path check.
-    const after = fstatSync(fd, { bigint: true }),
-      named = lstatNamed(path);
-    if (
-      BigInt(length) !== opened.size ||
-      after.size !== opened.size ||
-      named?.isFile() !== true ||
-      named.dev !== opened.dev ||
-      named.ino !== opened.ino
-    )
-      irregular();
-    bytes = buffer.subarray(0, length);
-  } finally {
-    closeSync(fd);
-  }
+  // js/file-system-race), and a final link put in place after safePath is refused by the open where the platform has
+  // the flag. A missing manifest declares no bindings.
+  const bytes = readOpened(path, {
+    unopened: (error) => {
+      if (error.code === 'ENOENT') return null;
+      // A link the open refused, a socket, or anything else whose open fails is judged by its name: refuse it as an
+      // opened one is refused. A regular manifest that cannot be opened is unreadable, as one that cannot be read is.
+      const named = lstatSync(path, { bigint: true });
+      if (!named.isFile() || named.size > 65_536n) irregular();
+      return undecodable();
+    },
+    opened: (opened) => {
+      if (!opened.isFile() || opened.size > 65_536n) irregular();
+    },
+    unread: undecodable,
+    read: ({ opened, bytes, after }) => {
+      // The bytes are the manifest's only if it kept its size and still has that name; on Windows, which opens through
+      // a link, the name's identity is the only guard against a link placed after the path check.
+      const named = lstatNamed(path);
+      if (
+        BigInt(bytes.length) !== opened.size ||
+        after.size !== opened.size ||
+        named?.isFile() !== true ||
+        named.dev !== opened.dev ||
+        named.ino !== opened.ino
+      )
+        irregular();
+      return bytes;
+    },
+  });
+  if (bytes === null) return [];
   let value: unknown;
   try {
     value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
@@ -751,45 +715,31 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
               throw new DbError('IA-DB-SOURCE-UNAVAILABLE', 'Authored package source capture limit exceeded');
           };
           // The file is opened before it is judged, so the judgment and the bytes are of one file (CodeQL
-          // js/file-system-race). NOFOLLOW refuses a link put in place since the listing and NONBLOCK keeps a FIFO from
-          // blocking the open; a flag a platform lacks is zero.
-          let fd: number;
-          try {
-            fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-          } catch (error) {
-            // A link the open refused, a socket, or anything else whose open fails: judge the name as the opened file
-            // would be.
-            admit(lstatSync(file, { bigint: true }));
-            throw error;
-          }
-          let length = 0,
-            buffer: Buffer;
-          try {
-            const opened = fstatSync(fd, { bigint: true });
-            admit(opened);
-            // Bound allocation and reading even if a concurrent writer grows the file.
-            buffer = Buffer.alloc(Number(opened.size) + 1);
-            while (length < buffer.length) {
-              const count = readSync(fd, buffer, length, buffer.length - length, null);
-              if (!count) break;
-              length += count;
-            }
-            const after = fstatSync(fd, { bigint: true });
-            if (
-              BigInt(length) !== opened.size ||
-              after.size !== opened.size ||
-              after.mtimeNs !== opened.mtimeNs ||
-              after.ctimeNs !== opened.ctimeNs
-            )
-              throw new DbError('IA-DB-SOURCE-CHANGED', `Package source changed during read: ${child}`);
-            // On Windows, which opens through a link, the name's identity is the only guard against a link placed
-            // after the listing.
-            const named = lstatNamed(file);
-            if (named?.isFile() !== true || named.dev !== opened.dev || named.ino !== opened.ino) throw replaced();
-          } finally {
-            closeSync(fd);
-          }
-          const bytes = buffer.subarray(0, length);
+          // js/file-system-race), and a link put in place since the listing is refused by the open where the platform
+          // has the flag. Allocation and reading are bounded even if a concurrent writer grows the file.
+          const bytes = readOpened(file, {
+            unopened: (error) => {
+              // A link the open refused, a socket, or anything else whose open fails: judge the name as the opened
+              // file would be.
+              admit(lstatSync(file, { bigint: true }));
+              throw error;
+            },
+            opened: admit,
+            read: ({ opened, bytes, after }) => {
+              if (
+                BigInt(bytes.length) !== opened.size ||
+                after.size !== opened.size ||
+                after.mtimeNs !== opened.mtimeNs ||
+                after.ctimeNs !== opened.ctimeNs
+              )
+                throw new DbError('IA-DB-SOURCE-CHANGED', `Package source changed during read: ${child}`);
+              // On Windows, which opens through a link, the name's identity is the only guard against a link placed
+              // after the listing.
+              const named = lstatNamed(file);
+              if (named?.isFile() !== true || named.dev !== opened.dev || named.ino !== opened.ino) throw replaced();
+              return bytes;
+            },
+          });
           add({ path: child, text: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) });
         }
       }

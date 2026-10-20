@@ -12,7 +12,7 @@ The authenticated metadata helper uses the existing configuration of pinned npm 
 
 - logged in with `npm login` on an account with 2FA and write access;
 - logged in with `gh auth login` as a repository admin;
-- with Node 22.22.2 or later available, which the pinned npm 12.2.0 needs. The shell's own Node can be older: the command runs npm with the newest compatible Node that fnm has installed (`fnm install 22.22.2`), or with `--node <path>`. It installs the pinned npm into a fresh private temporary directory, validates its physical files and package identity before execution, removes that installation when finished, and uses the existing npm login without printing credentials.
+- with Node 22.22.2 or later available, which the pinned npm 12.2.0 needs. The shell's own Node can be older: the command runs npm with the newest compatible Node that fnm has installed (`fnm install 22.22.2`), or with `--node <path>`. It installs the pinned npm without bin links into a fresh private temporary directory, validates its physical files (no symlinks; on POSIX, owned by the caller, a prefix no other user can enter, and no world-writable entry, so a umask 002 installation is accepted) and package identity before execution, removes that installation when finished, and uses the existing npm login without printing credentials.
 
 Reading a trusted publisher can require 2FA even for a list. Ordinary inspection captures structured output, so npm cannot prompt through it: [npm 12.2.0's authentication helper](https://github.com/npm/cli/blob/v12.2.0/lib/utils/auth.js) requires both standard input and standard output to be terminals. An `EOTP` from trust inspection leaves trust unknown; being logged in does not satisfy a request-specific 2FA challenge.
 

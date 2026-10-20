@@ -1,5 +1,7 @@
 export declare const BOOTSTRAP_VERSION: string;
 export declare const BOOTSTRAP_TAG: string;
+export declare function pinnedNpmInstallArgs(prefix: string): string[];
+export declare function writableInstallationMode(mode: number, isPrefix: boolean): boolean;
 export declare function pinnedNpm(
   override: string | undefined,
   node: string,

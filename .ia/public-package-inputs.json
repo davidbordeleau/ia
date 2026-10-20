@@ -2,9 +2,9 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "bb7097992fc65b39532eecd0c8a8329249159e94",
-    "tree": "912ae31b6e66414f89e567aca38c74c26d919736",
-    "dirty": true
+    "commit": "537426dce6b3c5ce2c28c42681a08e9059a8c439",
+    "tree": "9e8ce2a78b27ae7d6622185aa5dcdff4ef21ccb6",
+    "dirty": false
   },
   "membership": {
     "path": "tools/distribution/public-content-policy.json",
@@ -1359,7 +1359,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "2afdfb2b323160f075819acd14b0af3e1edd8853f8ab98dac43c693d4cfe6d92"
+      "sha256": "d9fa9479084f72a7433ac8c8f5aceb2e0a058080cfd587b4ec19925fc99f5a07"
     },
     {
       "path": "CLAUDE.md",
@@ -6815,7 +6815,7 @@
     },
     {
       "path": "releases/changesets/3.2.2.json",
-      "sha256": "976fa2c82cd6a52eb5a9ee8882b6d5bf18e8c3c5f1ba7be0126c601e5444d7ed"
+      "sha256": "11670f8fff3c9b702956218d19fe48c7f6278886026b1a6ea0a2162cfc3c53d8"
     },
     {
       "path": "releases/current.json",
@@ -7750,5 +7750,5 @@
       "sha256": "291a1735a1bdf4a85d3baafef644f0bffe0d9bfbada49d63c648311ff4429ed1"
     }
   ],
-  "inputDigest": "d01c47636937b59688bbae0a878d1111e2017001d5357a1a0631bee5bd93ec3b"
+  "inputDigest": "209bae8a0c10d695eb00254ad14ed8f507e8c6c52f373fdfb681de3298b67da1"
 }

@@ -3855,7 +3855,8 @@
         "tests/installation.test.ts",
         "tests/package.test.ts",
         "tests/local.test.ts",
-        "tests/protocol.test.ts"
+        "tests/protocol.test.ts",
+        "tests/limits.test.ts"
       ],
       "profile": "installed",
       "platforms": [

@@ -4,6 +4,8 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLegacyFoundation } from '../src/legacy.js';
+import { LIMITS } from '../src/format.js';
+import { committedReader } from '../src/git.js';
 import { packageFromCommit } from '../src/package.js';
 import { packageFromCommit as legacyPackageFromCommit } from '../src/legacy.js';
 const foundation = createLegacyFoundation(
@@ -152,4 +154,28 @@ it('refuses a mixed native file without exporting an unselected sibling', () => 
   expect(() =>
     packageFromCommit({ repository: root, commit: commit(), selection: 'selection.json', foundation }),
   ).toThrow(/mixed|unselected/i);
+});
+it('refuses an unreadable repository as operational, not as invalid input', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ia knowledge no repository '));
+  roots.push(root);
+  expect(() => committedReader(root, '1'.repeat(40))).toThrow(
+    expect.objectContaining({ code: 'IA-KB-SOURCE-UNAVAILABLE' }),
+  );
+});
+it('reads a committed file of exactly the byte limit and refuses larger files by their byte limit', () => {
+  const { root, commit } = repository();
+  for (const [bytes, accepted] of [
+    [LIMITS.fileBytes, true],
+    [LIMITS.fileBytes + 1, false],
+    // Past the Git output buffer: once ENOBUFS, never "unavailable or timed out".
+    [LIMITS.fileBytes + 4096, false],
+  ] as const) {
+    writeFileSync(join(root, 'README.md'), 'x'.repeat(bytes));
+    const reader = committedReader(root, commit());
+    if (accepted) expect(reader.read('README.md').bytes).toBe(bytes);
+    else
+      expect(() => reader.read('README.md')).toThrow(
+        expect.objectContaining({ code: 'IA-KB-INVALID', message: 'Selected file byte limit exceeded' }),
+      );
+  }
 });

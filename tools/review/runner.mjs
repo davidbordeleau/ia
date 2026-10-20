@@ -624,15 +624,23 @@ async function main() {
   const deadline = Date.now() + 15 * 60000;
   while (!receipt.result && Date.now() < deadline) {
     receipt = await api(`/${review}/advance`);
-    receiptId(receipt, review);
+    try {
+      receiptId(receipt, review);
+    } catch (error) {
+      // An advance for another review leaves the started one unfinished: cancel it, as the deadline does. A cancel that
+      // fails never replaces the identity refusal.
+      await api(`/${review}/cancel`).catch(() => {});
+      throw error;
+    }
     if (receipt.state === 'running') await pause(3000);
   }
   if (!receipt.result) {
     await api(`/${review}/cancel`);
     throw new Error('Review exceeded CI deadline');
   }
-  // A result that names another review is retained for inspection, then refused before anything is posted. The refusal
-  // sits in the delivery expression so that the line after the artifact write keeps the text CodeQL keys alert #31 to.
+  // A result that does not name the started review (another id, none, or no object) is retained for inspection, then
+  // refused before anything is posted. The refusal sits in the delivery expression so that the line after the artifact
+  // write keeps the text CodeQL keys alert #31 to.
   mkdirSync('artifacts/review', { recursive: true });
   writeFileSync('artifacts/review/result.json', JSON.stringify(receipt.result, null, 2));
   const delivery = await (receipt.result.id === review

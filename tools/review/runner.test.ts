@@ -4,6 +4,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { expect, it, vi } from 'vitest';
+import { fileSymlinksAvailable } from '../testing/report.js';
 import { runBounded } from '../testing/subprocess.js';
 import {
   collectSubject,
@@ -329,30 +330,43 @@ it('omits linked and too-deep evidence, skips other entries and admits reports u
     rmSync(root, { recursive: true, force: true });
   }
 });
+it('omits a report symlink without opening it', (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
+  if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
+  try {
+    mkdirSync(resolve(root, 'a'));
+    writeFileSync(resolve(root, 'a/evidence.json'), '{"a":1}');
+    mkdirSync(resolve(root, 'e'));
+    if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
+    symlinkSync(resolve(root, 'a/evidence.json'), resolve(root, 'e/evidence.json'), 'file');
+    const omissions: string[] = [];
+    expect(evidenceFiles(root, omissions).map(({ name, content }) => [name, content])).toEqual([
+      ['a/evidence.json', '{"a":1}'],
+    ]);
+    expect(omissions).toEqual(['Evidence symlink omitted: e/evidence.json']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 // Windows has no FIFOs: a declared Windows skip.
-it.skipIf(process.platform === 'win32')(
-  'omits a report symlink and skips a FIFO named like a report without opening either',
-  async () => {
-    const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
-    if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
-    try {
-      mkdirSync(resolve(root, 'a'));
-      writeFileSync(resolve(root, 'a/evidence.json'), '{"a":1}');
-      mkdirSync(resolve(root, 'e'));
-      symlinkSync(resolve(root, 'a/evidence.json'), resolve(root, 'e/evidence.json'));
-      mkdirSync(resolve(root, 'k'));
-      expect((await runBounded('mkfifo', [resolve(root, 'k/evidence.json')], { timeoutMs: 10_000 })).status).toBe(0);
-      const omissions: string[] = [];
-      // A FIFO opened for reading would wait for a writer; listed as no file, it is never opened.
-      expect(evidenceFiles(root, omissions).map(({ name, content }) => [name, content])).toEqual([
-        ['a/evidence.json', '{"a":1}'],
-      ]);
-      expect(omissions).toEqual(['Evidence symlink omitted: e/evidence.json']);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  },
-);
+it.skipIf(process.platform === 'win32')('skips a FIFO named like a report without opening it', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
+  if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
+  try {
+    mkdirSync(resolve(root, 'a'));
+    writeFileSync(resolve(root, 'a/evidence.json'), '{"a":1}');
+    mkdirSync(resolve(root, 'k'));
+    expect((await runBounded('mkfifo', [resolve(root, 'k/evidence.json')], { timeoutMs: 10_000 })).status).toBe(0);
+    const omissions: string[] = [];
+    // A FIFO opened for reading would wait for a writer; listed as no file, it is never opened, and nothing is omitted.
+    expect(evidenceFiles(root, omissions).map(({ name, content }) => [name, content])).toEqual([
+      ['a/evidence.json', '{"a":1}'],
+    ]);
+    expect(omissions).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 it('refuses unparsable or too many evidence entries and a missing, linked or non-directory evidence root', () => {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
   if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');

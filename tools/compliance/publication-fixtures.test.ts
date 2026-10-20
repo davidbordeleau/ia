@@ -43,32 +43,42 @@ it('snapshots each regular file by its bytes and a directory as null', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
-// File links need a privilege on Windows, which has no FIFOs either. Listing descends into a linked directory, whose
-// files are regular files under a link, so they keep their bytes; only a link itself is null.
-it.skipIf(process.platform === 'win32')(
-  'snapshots a link, a dangling link, a linked directory and a FIFO as null, and the files under the linked directory by their bytes',
-  async () => {
-    const root = mkdtempSync(resolve(tmpdir(), 'ia-publication-snapshot-'));
-    try {
-      const expected = regularEntries(root);
-      symlinkSync('file.txt', resolve(root, 'link'));
-      symlinkSync('missing.txt', resolve(root, 'dangling'));
-      symlinkSync('dir', resolve(root, 'dirlink'));
-      expect((await runBounded('mkfifo', [resolve(root, 'fifo')], { timeoutMs: 10_000 })).status).toBe(0);
-      expected.push(
-        ['dangling', null],
-        ['dirlink', null],
-        [join('dirlink', 'inner.txt'), base64('inner bytes')],
-        ['fifo', null],
-        ['link', null],
-      );
-      expected.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-      expect(JSON.parse(contents(root))).toEqual(expected);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  },
-);
+// Listing descends into a linked directory, whose files are regular files under a link, so they keep their bytes; only
+// a link itself is null. Windows runs this case too wherever it grants file links.
+it('snapshots a link, a dangling link and a linked directory as null, and the files under the linked directory by their bytes', (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-publication-snapshot-'));
+  try {
+    const expected = regularEntries(root);
+    if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
+    symlinkSync('file.txt', resolve(root, 'link'), 'file');
+    symlinkSync('missing.txt', resolve(root, 'dangling'), 'file');
+    symlinkSync('dir', resolve(root, 'dirlink'), 'dir');
+    expected.push(
+      ['dangling', null],
+      ['dirlink', null],
+      [join('dirlink', 'inner.txt'), base64('inner bytes')],
+      ['link', null],
+    );
+    expected.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(JSON.parse(contents(root))).toEqual(expected);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Windows has no FIFO special file.
+it.skipIf(process.platform === 'win32')('snapshots a FIFO as null', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-publication-snapshot-'));
+  try {
+    const expected = regularEntries(root);
+    expect((await runBounded('mkfifo', [resolve(root, 'fifo')], { timeoutMs: 10_000 })).status).toBe(0);
+    expected.push(['fifo', null]);
+    expected.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(JSON.parse(contents(root))).toEqual(expected);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 it.skipIf(process.platform === 'win32')(
   'throws what opening an unreadable file throws, as reading it by name did',

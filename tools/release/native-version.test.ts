@@ -16,6 +16,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fileSymlinksAvailable } from '../testing/report.js';
 import { runBounded } from '../testing/subprocess.js';
 import { bundleSystemPackages } from './system-packages.js';
 import * as nativeArchiveModule from './native-archives.js';
@@ -854,22 +855,23 @@ describe('system package input reads', () => {
     );
   });
 
-  // File links need a privilege on Windows, and chmod 0o000 never denies a read there.
-  it.skipIf(process.platform === 'win32')(
-    'refuses a linked input before reading it and rethrows the open error for one it cannot read',
-    () => {
-      const root = temporary();
-      write(root, '.ia/src/a.ia', 'native source');
-      symlinkSync('a.ia', resolve(root, '.ia/src/link.ia'));
-      expect(() => bundle(root, '.ia/src/link.ia', digest('native source'))).toThrow(
-        /^Link\/junction is not allowed: /,
-      );
-      // Root reads a file whatever its mode; the gate has no skip condition for root, so the case returns early instead.
-      if (process.getuid?.() === 0) return;
-      chmodSync(resolve(root, '.ia/src/a.ia'), 0o000);
-      expect(() => bundle(root, '.ia/src/a.ia', digest('native source'))).toThrow(/^EACCES: permission denied, open /);
-    },
-  );
+  it('refuses a linked input before reading it', (context) => {
+    const root = temporary();
+    write(root, '.ia/src/a.ia', 'native source');
+    if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
+    symlinkSync('a.ia', resolve(root, '.ia/src/link.ia'), 'file');
+    expect(() => bundle(root, '.ia/src/link.ia', digest('native source'))).toThrow(/^Link\/junction is not allowed: /);
+  });
+
+  // chmod 0o000 never denies a read on Windows.
+  it.skipIf(process.platform === 'win32')('rethrows the open error for an input it cannot read', () => {
+    const root = temporary();
+    write(root, '.ia/src/a.ia', 'native source');
+    // Root reads a file whatever its mode; the gate has no skip condition for root, so the case returns early instead.
+    if (process.getuid?.() === 0) return;
+    chmodSync(resolve(root, '.ia/src/a.ia'), 0o000);
+    expect(() => bundle(root, '.ia/src/a.ia', digest('native source'))).toThrow(/^EACCES: permission denied, open /);
+  });
 
   it('refuses an input over 2147483647 bytes before allocating a buffer for it', () => {
     const root = temporary(),

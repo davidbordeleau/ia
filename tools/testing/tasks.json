@@ -3058,8 +3058,16 @@
           ]
         },
         {
-          "case": "tools/compliance/publication-fixtures.test.ts > snapshots a link, a dangling link, a linked directory and a FIFO as null, and the files under the linked directory by their bytes",
-          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The snapshot of regular files and a directory runs on every platform in its own case.",
+          "case": "tools/compliance/publication-fixtures.test.ts > snapshots a link, a dangling link and a linked directory as null, and the files under the linked directory by their bytes",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/compliance/publication-fixtures.test.ts > snapshots a FIFO as null",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The snapshot of regular files and a directory runs on every platform in its own case, and the links wherever file-symlink creation is permitted.",
           "platforms": [
             "windows"
           ]
@@ -3248,15 +3256,31 @@
           "when": "file-symlink-unavailable"
         },
         {
-          "case": "tools/entry/is-entry.test.ts > throws rather than answering \"not the entry\" when a path fails to resolve for a reason other than absence",
-          "reason": "The case makes an unreadable directory, which a Windows mode cannot make because it keeps only the read-only attribute; the fixture runs only on POSIX.",
+          "case": "tools/entry/is-entry.test.ts > throws rather than answering \"not the entry\" when a path is a link loop",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The unreadable directory runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/entry/is-entry.test.ts > throws rather than answering \"not the entry\" when a directory on the path cannot be read",
+          "reason": "The case makes an unreadable directory, which a Windows mode cannot make because it keeps only the read-only attribute; the fixture runs only on POSIX. The link loop runs wherever file-symlink creation is permitted, in its own case.",
           "platforms": [
             "windows"
           ]
         },
         {
-          "case": "tools/entry/is-entry.test.ts > refuses a dangling launcher with its stat error and a FIFO as not a regular file",
-          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The missing launcher and the directory and junction launchers run on every platform in their own case.",
+          "case": "tools/entry/is-entry.test.ts > refuses a dangling launcher with its stat error",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO launcher runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/entry/is-entry.test.ts > refuses a FIFO launcher as not a regular file",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The missing launcher and the directory and junction launchers run on every platform in their own case, and the dangling launcher wherever file-symlink creation is permitted.",
           "platforms": [
             "windows"
           ]
@@ -3421,8 +3445,16 @@
           ]
         },
         {
-          "case": "tools/systems/authoring-manifest.test.ts > refuses a FIFO, linked or unreadable selection as before",
-          "reason": "Windows has no FIFO special file, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case.",
+          "case": "tools/systems/authoring-manifest.test.ts > refuses a linked selection as an alias",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO and unreadable selections run on Linux and macOS in their own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/systems/authoring-manifest.test.ts > refuses a FIFO or unreadable selection as before",
+          "reason": "Windows has no FIFO special file, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case, and the linked selection wherever file-symlink creation is permitted.",
           "platforms": [
             "windows"
           ]
@@ -4032,8 +4064,16 @@
       ],
       "skips": [
         {
-          "case": "tools/review/runner.test.ts > omits a report symlink and skips a FIFO named like a report without opening either",
-          "reason": "Windows has no FIFOs, so the fixture cannot make one and runs only on Linux and macOS; the junction, bound and nesting cases run on every platform.",
+          "case": "tools/review/runner.test.ts > omits a report symlink without opening it",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/review/runner.test.ts > skips a FIFO named like a report without opening it",
+          "reason": "Windows has no FIFOs, so the fixture cannot make one and runs only on Linux and macOS; the junction, bound and nesting cases run on every platform, and the report symlink wherever file-symlink creation is permitted.",
           "platforms": [
             "windows"
           ]
@@ -4415,8 +4455,16 @@
           ]
         },
         {
-          "case": "tools/release/native-version.test.ts > system package input reads refuses a linked input before reading it and rethrows the open error for one it cannot read",
-          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX.",
+          "case": "tools/release/native-version.test.ts > system package input reads refuses a linked input before reading it",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The unreadable input runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/release/native-version.test.ts > system package input reads rethrows the open error for an input it cannot read",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The linked input runs wherever file-symlink creation is permitted, in its own case.",
           "platforms": [
             "windows"
           ]

@@ -1021,7 +1021,6 @@
       "project": "apps/cli",
       "files": [
         "tests/adopt.test.ts",
-        "tests/init-migrate.test.ts",
         "tests/init.test.ts"
       ],
       "profile": "installed",
@@ -1039,6 +1038,36 @@
       ],
       "outputs": [
         "artifacts/tests/cli-test-init"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "cli:test-init-migrate",
+      "kind": "vitest",
+      "project": "apps/cli",
+      "files": [
+        "tests/init-migrate.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "selected-tests-workspace-records",
+      "dependsOn": [
+        "cli:build",
+        "host-payload:generate",
+        "language-base:generate"
+      ],
+      "outputs": [
+        "artifacts/tests/cli-test-init-migrate"
       ],
       "cache": true,
       "workerLimit": 1,
@@ -1082,19 +1111,10 @@
       "kind": "vitest",
       "project": "apps/cli",
       "files": [
-        "tests/author.test.ts",
-        "tests/bindings.test.ts",
-        "tests/capture.test.ts",
         "tests/check-admission.test.ts",
-        "tests/consumer.test.ts",
         "tests/decline.test.ts",
-        "tests/distribution-verbs.test.ts",
-        "tests/equivalence.test.ts",
-        "tests/host-plugin.test.ts",
-        "tests/host-projection.test.ts",
         "tests/next.test.ts",
         "tests/position.test.ts",
-        "tests/preview.test.ts",
         "tests/project.test.ts",
         "tests/read.test.ts",
         "tests/refusal-next.test.ts",
@@ -1125,21 +1145,6 @@
       ],
       "skips": [
         {
-          "case": "tests/preview.test.ts > path spelling matches covers as the edit guard does where pathKey folds case: a missing covered directory, a covers in another case, never a longer name",
-          "reason": "db pathKey folds case only on Windows and macOS, as the edit guard keys paths; on Linux each case is its own path, so there is no folding to observe.",
-          "platforms": [
-            "linux"
-          ]
-        },
-        {
-          "case": "tests/capture.test.ts > prints capture preview roots that replay at the same Windows target",
-          "reason": "The fixture replays capture roots with native Windows path semantics and runs only on win32.",
-          "platforms": [
-            "linux",
-            "macos"
-          ]
-        },
-        {
           "case": "tests/refusal-next.test.ts > keeps relative recovery and apply commands in their original directory",
           "reason": "The fixture resolves relative backslash-separated recovery targets on Windows and runs only on win32.",
           "platforms": [
@@ -1163,6 +1168,90 @@
             "macos"
           ]
         }
+      ]
+    },
+    {
+      "id": "cli:test-workspace-authoring",
+      "kind": "vitest",
+      "project": "apps/cli",
+      "files": [
+        "tests/author.test.ts",
+        "tests/capture.test.ts",
+        "tests/preview.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "selected-tests-workspace-records",
+      "dependsOn": [
+        "cli:build",
+        "host-payload:generate",
+        "language-base:generate"
+      ],
+      "outputs": [
+        "artifacts/tests/cli-test-workspace-authoring"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tests/preview.test.ts > path spelling matches covers as the edit guard does where pathKey folds case: a missing covered directory, a covers in another case, never a longer name",
+          "reason": "db pathKey folds case only on Windows and macOS, as the edit guard keys paths; on Linux each case is its own path, so there is no folding to observe.",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "case": "tests/capture.test.ts > prints capture preview roots that replay at the same Windows target",
+          "reason": "The fixture replays capture roots with native Windows path semantics and runs only on win32.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cli:test-workspace-hosts",
+      "kind": "vitest",
+      "project": "apps/cli",
+      "files": [
+        "tests/bindings.test.ts",
+        "tests/consumer.test.ts",
+        "tests/distribution-verbs.test.ts",
+        "tests/equivalence.test.ts",
+        "tests/host-plugin.test.ts",
+        "tests/host-projection.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "selected-tests-workspace-records",
+      "dependsOn": [
+        "cli:build",
+        "host-payload:generate",
+        "language-base:generate"
+      ],
+      "outputs": [
+        "artifacts/tests/cli-test-workspace-hosts"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
       ]
     },
     {
@@ -1319,6 +1408,58 @@
           ]
         },
         {
+          "case": "tests/plugin-home.test.ts > refuses INSTALL-BUSY for a FIFO at the lock path without hanging, and leaves it in place",
+          "reason": "No FIFO can be created in a Windows directory; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/plugin-home.test.ts > closes the descriptor it judged, whether the lock is a FIFO, stale, live or a symbolic link",
+          "reason": "The case counts this process's descriptors in /dev/fd, which Windows does not have; Linux and macOS run it.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/plugin-home.test.ts > refuses INSTALL-BUSY for an old lock it cannot open, leaving it untouched",
+          "reason": "Node's chmod on Windows only sets or clears the read-only attribute, which does not stop the owner opening the lock to read, so no mode makes it unopenable there; Linux and macOS run the case, which returns early as root, whom no mode denies.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/plugin-home.test.ts > refuses INSTALL-BUSY for a symbolic link at the lock path, changing neither the link nor its target",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, and the takeover's other refusal cases remain mandatory.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tests/plugin-home.test.ts > refuses INSTALL-BUSY when a symbolic link to the judged lock replaces it while it is judged, keeping the link",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, and the takeover's other refusal cases remain mandatory.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tests/plugin-home.test.ts > releases only the lock it wrote, leaving a FIFO that replaced it in place without waiting on it",
+          "reason": "No FIFO can be created in a Windows directory; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/plugin-home.test.ts > releases only the lock it wrote, leaving a symbolic link to it that replaced it in place",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, and the release's other refusal cases remain mandatory.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
           "case": "tests/host.test.ts > refuses a file symlink at host cache payload lib/inner.txt",
           "reason": "The fixture skips only when Windows denies file-symlink creation with EPERM; execute this guard where creation is permitted. Junction, hard-link and other refusal cases remain mandatory.",
           "platforms": [
@@ -1442,7 +1583,6 @@
         "tests/context-binding.test.ts",
         "tests/context-guard.test.ts",
         "tests/context-inventory.test.ts",
-        "tests/context.test.ts",
         "tests/hook.test.ts",
         "tests/mandate-guard.test.ts"
       ],
@@ -1578,6 +1718,34 @@
             "windows"
           ]
         }
+      ]
+    },
+    {
+      "id": "steward-hook:test-context",
+      "kind": "vitest",
+      "project": "apps/steward-hook",
+      "files": [
+        "tests/context.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "steward-hook:build"
+      ],
+      "outputs": [
+        "artifacts/tests/steward-hook-test-context"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
       ]
     },
     {
@@ -2912,7 +3080,8 @@
         "tools/testing/plan.test.ts",
         "tools/testing/report.test.ts",
         "tools/testing/resources.test.ts",
-        "tools/testing/subprocess.test.ts"
+        "tools/testing/subprocess.test.ts",
+        "tools/testing/verdict.test.ts"
       ],
       "profile": "installed",
       "platforms": [

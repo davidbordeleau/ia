@@ -1468,6 +1468,135 @@
       ],
       "skips": [
         {
+          "case": "tests/consumer-guard.test.ts > refuses a context ownership marker that is a file link",
+          "reason": "The fixture skips only when Windows denies file-symlink creation with EPERM; execute this guard where creation is permitted. The junction, hard link and directory kinds of the same table run on every platform.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses a context ownership marker that is a FIFO",
+          "reason": "Windows has no FIFO special file, and Node makes a local socket there only as a named pipe, never as a file in the tree, so the fixture cannot make either and runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses a context ownership marker that is a socket",
+          "reason": "Windows has no FIFO special file, and Node makes a local socket there only as a named pipe, never as a file in the tree, so the fixture cannot make either and runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > passes on the error of a context ownership marker it may not open",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > passes on the error of a 2 MiB pending journal it may not open",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses an actor map named by a file link",
+          "reason": "The fixture skips only when Windows denies file-symlink creation with EPERM; execute this guard where creation is permitted. The junction, path-through-a-junction and relative-path kinds of the same table run on every platform.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses an actor map that is a FIFO",
+          "reason": "Windows has no FIFO special file, and Node makes a local socket there only as a named pipe, never as a file in the tree, so the fixture cannot make either and runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses an actor map that is a socket",
+          "reason": "Windows has no FIFO special file, and Node makes a local socket there only as a named pipe, never as a file in the tree, so the fixture cannot make either and runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > passes on the error of an actor map it may not open",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses a context ownership marker it may not open that is past its bound as it refuses a readable one",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses a context ownership marker it may not open that is hard-linked as it refuses a readable one",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses an actor map it may not open that is past its bound as it refuses a readable one",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/consumer-guard.test.ts > refuses an actor map it may not open that is hard-linked as it refuses a readable one",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/context-binding.test.ts > refuses a binding reached through a file link",
+          "reason": "The fixture skips only when Windows denies file-symlink creation with EPERM; execute this guard where creation is permitted. The junction and hosts-directory-junction kinds of the same table run on every platform.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tests/context-binding.test.ts > refuses a binding that is a FIFO",
+          "reason": "Windows has no FIFO special file, and Node makes a local socket there only as a named pipe, never as a file in the tree, so the fixture cannot make either and runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/context-binding.test.ts > refuses a binding that is a socket",
+          "reason": "Windows has no FIFO special file, and Node makes a local socket there only as a named pipe, never as a file in the tree, so the fixture cannot make either and runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/context-binding.test.ts > passes on the error of a binding it may not open",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/context-binding.test.ts > refuses a file link swapped in for the binding after its path check as not a bounded regular file",
+          "reason": "Where the open follows a link, as on Windows, a link swapped in after the path check is refused as a changed identity, not as a file that is not a bounded regular file; the case pins the open that refuses links, so the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
           "case": "tests/context-inventory.test.ts > refuses a junction in place of a module directory, present when its parent is listed, without walking it",
           "reason": "A junction is a Windows reparse point; elsewhere symlinkSync makes a symbolic link, which the cross-platform swap cases cover, so the fixture runs only on win32.",
           "platforms": [
@@ -1866,6 +1995,99 @@
       "resourceClass": "io",
       "covers": [
         "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tests/inputs.test.ts > refuses a FIFO or a socket among package sources by its listed type, opening neither",
+          "reason": "FIFOs and Unix socket files have no Windows equivalent; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > refuses a FIFO or a socket as installation state without waiting for a writer, and throws a path through a file",
+          "reason": "FIFOs and Unix socket files have no Windows equivalent, and Windows reports a path through a file as ENOENT rather than ENOTDIR; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > refuses a package source a FIFO replaces after it is listed, without waiting for a writer",
+          "reason": "FIFOs have no Windows equivalent; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > refuses a package source a link replaces after it is listed, reading nothing through the link",
+          "reason": "Swapping in a file symbolic link needs a privilege on Windows; Linux and macOS run the case, and the cases that pass the name to another file cover the identity recheck that guards a link on Windows.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > refuses a package source whose directory becomes a file while it is read, as replaced",
+          "reason": "Windows does not rename a directory that holds an open file, and reports a path through a file as ENOENT, which the case of a name gone after the read covers; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > refuses an unreadable package source as its open fails, once its link count and bound admit it",
+          "reason": "POSIX file modes have no Windows equivalent, so the case cannot make a file unreadable there; Linux and macOS run it as a non-root user.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > refuses installation state a link replaces after its path is checked, reading nothing through the link",
+          "reason": "Swapping in a file symbolic link needs a privilege on Windows; Linux and macOS run the case, and the cases that pass the name to another file cover the identity recheck that guards a link on Windows.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > refuses installation state whose directory becomes a file while it is read, as a name that no longer names it",
+          "reason": "Windows does not rename a directory that holds an open file, and reports a path through a file as ENOENT, which the case of a name gone after the read covers; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > throws an unreadable installation file as its read fails, once its bound and link count admit it",
+          "reason": "POSIX file modes have no Windows equivalent, so the case cannot make a file unreadable there; Linux and macOS run it as a non-root user.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/workspace-config.test.ts > refuses a FIFO or a socket as the manifest without waiting for a writer",
+          "reason": "FIFOs and Unix socket files have no Windows equivalent; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/workspace-config.test.ts > refuses a manifest a link replaces after its path is checked, reading nothing through the link",
+          "reason": "Swapping in a file symbolic link needs a privilege on Windows; Linux and macOS run the case, and the cases that pass the name to another file cover the identity recheck that guards a link on Windows.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/workspace-config.test.ts > refuses a manifest whose directory becomes a file while it is read, as irregular",
+          "reason": "Windows does not rename a directory that holds an open file, and reports a path through a file as ENOENT, which the case of a name gone after the read covers; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/workspace-config.test.ts > refuses an unreadable manifest as undecodable, unless it is past its bound",
+          "reason": "POSIX file modes have no Windows equivalent, so the case cannot make a file unreadable there; Linux and macOS run it as a non-root user.",
+          "platforms": [
+            "windows"
+          ]
+        }
       ]
     },
     {
@@ -2119,6 +2341,14 @@
           ]
         },
         {
+          "case": "tests/publication.test.ts > qualified local NTFS publication does not take a marker or a file whose name passes to another file while it is read as the published one",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
           "case": "tests/publication.test.ts > qualified local NTFS publication holds destination ownership across processes and releases it on actual process death",
           "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
           "platforms": [
@@ -2127,7 +2357,31 @@
           ]
         },
         {
+          "case": "tests/publication.test.ts > qualified local NTFS publication judges a marker or a file that cannot be opened by its name: unknown past 2 MiB or as a directory, partial at another size",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
           "case": "tests/publication.test.ts > qualified local NTFS publication publishes exact bytes and inventory only after an exclusive final directory claim",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/publication.test.ts > qualified local NTFS publication reads no byte of a marker past 2 MiB, and does not take one cut to the published bytes while read",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/publication.test.ts > qualified local NTFS publication reads the marker as a regular file within 2 MiB and each file at its exact size, of any link count",
           "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
           "platforms": [
             "linux",
@@ -2152,6 +2406,22 @@
         },
         {
           "case": "tests/publication.test.ts > qualified local NTFS publication refuses junction ancestors without touching their destination",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/publication.test.ts > qualified local NTFS publication throws for a file that vanishes after it is listed, with the error of the lstat that finds it gone",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/publication.test.ts > qualified local NTFS publication throws the open error of a marker within 2 MiB, or of a file of its expected size, that cannot be opened",
           "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
           "platforms": [
             "linux",
@@ -2611,6 +2881,28 @@
             "linux",
             "macos"
           ]
+        },
+        {
+          "case": "tools/compliance/publication-fixtures.test.ts > throws what opening an unreadable file throws, as reading it by name did",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/compliance/publication-fixtures.test.ts > snapshots a link, a dangling link, a linked directory and a FIFO as null, and the files under the linked directory by their bytes",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The snapshot of regular files and a directory runs on every platform in its own case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/compliance/publication-fixtures.test.ts > records a link as null even where the open follows links, as it does on Windows",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
         }
       ]
     },
@@ -2734,6 +3026,23 @@
       "resourceClass": "io",
       "covers": [
         "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tools/docs/audit.test.ts > refuses a link to a configuration this adapter wrote as an alias and leaves the configuration as it was",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The directory and unparsable-output refusals run on every platform in their own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/docs/audit.test.ts > refuses a FIFO at the roadmap output as unmanaged instead of waiting to read it",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        }
       ]
     },
     {
@@ -2760,6 +3069,45 @@
       "resourceClass": "io",
       "covers": [
         "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tools/entry/is-entry.test.ts > compares real paths when a file link reaches the tool",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The directory junction case runs on every platform.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/entry/is-entry.test.ts > throws rather than answering \"not the entry\" when a path fails to resolve for a reason other than absence",
+          "reason": "The case makes an unreadable directory, which a Windows mode cannot make because it keeps only the read-only attribute; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/entry/is-entry.test.ts > refuses a dangling launcher with its stat error and a FIFO as not a regular file",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The missing launcher and the directory and junction launchers run on every platform in their own case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/entry/is-entry.test.ts > follows a link to a launcher and judges the file it reaches",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/entry/is-entry.test.ts > rethrows the open error for a launcher it cannot read",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        }
       ]
     },
     {
@@ -2900,6 +3248,20 @@
           "platforms": [
             "linux",
             "macos"
+          ]
+        },
+        {
+          "case": "tools/systems/authoring-manifest.test.ts > refuses a FIFO, linked or unreadable selection as before",
+          "reason": "Windows has no FIFO special file, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/systems/authoring-manifest.test.ts > refuses an unreadable authoring file past either cap as unbounded before reading it, as it always has",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
           ]
         }
       ]
@@ -3872,6 +4234,43 @@
       "resourceClass": "io",
       "covers": [
         "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tools/release/native-version.test.ts > system package input reads refuses a FIFO input as not a regular file, as it always has",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The selected, missing and directory inputs run on every platform in their own case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/release/native-version.test.ts > system package input reads refuses a linked input before reading it and rethrows the open error for one it cannot read",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/release/native-version.test.ts > system package input reads reads at most 2147483647 bytes at a time, so an input reported at that size refuses as changed",
+          "reason": "Its buffer is 2 ** 31 bytes, zeroed lazily on Linux and macOS but committed in full on Windows, so the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/release/native-version.test.ts > system package input reads refuses a link put in place at the open as aliased, even once it is gone again",
+          "reason": "Windows has no O_NOFOLLOW, so its open follows the link and fails with ENOENT; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/release/native-version.test.ts > system package input reads refuses an input replaced by a directory during the read as not a regular file",
+          "reason": "Windows can keep the name of a file that is still open, so the directory may not take its place; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        }
       ]
     }
   ]

@@ -126,12 +126,20 @@ export function nativeOutcome(result: ReturnType<typeof checkNative>) {
     findings: [...result.diagnostics, ...result.assessments.flatMap((a) => a.findings), ...meaning, ...release],
   };
 }
+/** Repository-level findings native:check adds to the evaluated outcome: architecture and release-root drift. */
+export function architectureFindings(
+  records: readonly CompiledRecord[],
+  root: string,
+  read?: Parameters<typeof releaseRootFindings>[1],
+) {
+  return [...checkRepositoryArchitecture(records), ...releaseRootFindings(root, read)];
+}
 if (isEntry(process.argv[1], import.meta.url)) {
   const root = fileURLToPath(new URL('../../', import.meta.url));
   const { inputs, folders } = readNative(root);
   const result = checkNative(inputs, folders);
   const evaluated = nativeOutcome(result);
-  const architecture = [...checkRepositoryArchitecture(result.records), ...releaseRootFindings(root)];
+  const architecture = architectureFindings(result.records, root);
   const ok = evaluated.ok && architecture.length === 0;
   const findings = [...evaluated.findings, ...architecture];
   if (findings.length > 0) process.stdout.write(`${JSON.stringify(findings, null, 2)}\n`);

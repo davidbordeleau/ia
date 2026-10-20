@@ -28,6 +28,7 @@ import type {
   PositionVia,
   ScopeKey,
 } from '@inventarch/runtime';
+import { scopeKeyTextParts } from '@inventarch/runtime/internal/scope-key';
 import type { Context, Result } from './consumer.js';
 import { Refusal, requireRoot, respell } from './consumer.js';
 import type { Capabilities, Token } from './render.js';
@@ -69,6 +70,7 @@ function partialKey(args: Context['args']): Partial<ScopeKey> {
     depth: integer('depth'),
     budget: integer('budget'),
     word: args.value('word'),
+    primitive: args.value('primitive'),
   };
   return Object.fromEntries(Object.entries(parts).filter(([, value]) => value !== undefined)) as Partial<ScopeKey>;
 }
@@ -87,7 +89,7 @@ function positionCommand(key: Partial<ScopeKey>, rooted: string, seat = seatFlag
     [
       'ia position',
       ...(seat === undefined ? [] : [`--seat ${quote(seat)}`]),
-      ...(['shape', 'phase', 'depth', 'budget', 'word'] as const).flatMap((part) =>
+      ...(['shape', 'phase', 'depth', 'budget', 'word', 'primitive'] as const).flatMap((part) =>
         key[part] === undefined ? [] : [`--${part} ${quote(String(key[part]))}`],
       ),
     ].join(' ') + rooted
@@ -159,14 +161,7 @@ const moreFacts = (tally: PointerTally): readonly (readonly Token[])[] => [
 
 /** The key as the note names it: each part, the seat as the caller spelled it or the repository's workspace. */
 function keyText(key: ScopeKey): string {
-  const seat =
-    key.seat === undefined
-      ? "the repository's workspace"
-      : typeof key.seat === 'string'
-        ? key.seat
-        : spelled(key.seat.path);
-  const parts = `seat ${seat}, shape ${key.shape}, phase ${key.phase}, depth ${key.depth}, budget ${key.budget}`;
-  return key.word === undefined ? parts : `${parts}, word ${key.word}`;
+  return scopeKeyTextParts(key).join(', ');
 }
 
 /**
@@ -285,6 +280,8 @@ function positionNext(error: RuntimeError, context: Pick<Context, 'command' | 'a
       return `Run "${respell(context, { options: { shape: [`<${COORDINATE_DOMAINS.shape.join('|')}>`] } })}" with one of the five shapes.`;
     case '--phase':
       return `Run "${respell(context, { options: { phase: [`<${COORDINATE_DOMAINS.phase.join('|')}>`] } })}" with one of the four phases.`;
+    case '--primitive':
+      return `Run "${respell(context, { options: { primitive: [`<${COORDINATE_DOMAINS.primitive.join('|')}>`] } })}" with one of the six primitives.`;
     case '--depth':
       return `Run "${respell(context, { options: { depth: [String(SCOPE_KEY_CAPS.depth)] } })}" for the deepest position a key admits.`;
     case '--budget':

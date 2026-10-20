@@ -900,35 +900,52 @@ describe('system package input reads', () => {
       rmSync(big, { force: true });
     }
   });
-  // Its buffer is 2 ** 31 bytes: zeroed lazily on Linux and macOS, but committed in full on Windows.
-  it.skipIf(process.platform === 'win32')(
-    'reads at most 2147483647 bytes at a time, so an input reported at that size refuses as changed',
-    () => {
-      const root = temporary(),
-        target = resolve(root, '.ia/src/a.ia');
-      write(root, '.ia/src/a.ia', 'native source');
-      const open = fs.openSync,
-        fstat = fs.fstatSync;
-      let selected: number | undefined;
-      vi.spyOn(fs, 'openSync').mockImplementation((...args: Parameters<typeof fs.openSync>) => {
-        const fd = Reflect.apply(open, fs, args) as number;
-        if (String(args[0]) === target) selected = fd;
-        return fd;
-      });
-      // The input's descriptor reports 2147483647 bytes before and after its read: one read may ask for all of them, the
-      // read stops at the real end, and the input refuses as changed. Asking for one byte more throws ERR_OUT_OF_RANGE.
-      vi.spyOn(fs, 'fstatSync').mockImplementation(((...args: Parameters<typeof fs.fstatSync>) => {
-        const stat = Reflect.apply(fstat, fs, args);
-        if (args[0] === selected && typeof stat?.size === 'bigint') (stat as { size: bigint }).size = 0x7fffffffn;
-        return stat;
-      }) as typeof fs.fstatSync);
-      syncBuiltinESMExports();
-      expect(() => bundle(root, '.ia/src/a.ia', digest('native source'))).toThrow(
-        /^System package input changed while it was read: \.ia\/src\/a\.ia$/,
-      );
-      expect(selected).toBeDefined();
-    },
-  );
+  it('reads at most 2147483647 bytes at a time, so an input reported at that size refuses as changed', () => {
+    const root = temporary(),
+      target = resolve(root, '.ia/src/a.ia');
+    write(root, '.ia/src/a.ia', 'native source');
+    const open = fs.openSync,
+      fstat = fs.fstatSync,
+      read = fs.readSync,
+      alloc = Buffer.alloc,
+      allocated: number[] = [],
+      asked: number[] = [];
+    let selected: number | undefined;
+    vi.spyOn(fs, 'openSync').mockImplementation((...args: Parameters<typeof fs.openSync>) => {
+      const fd = Reflect.apply(open, fs, args) as number;
+      if (String(args[0]) === target) selected = fd;
+      return fd;
+    });
+    // The input's descriptor reports 2147483647 bytes before and after its read.
+    vi.spyOn(fs, 'fstatSync').mockImplementation(((...args: Parameters<typeof fs.fstatSync>) => {
+      const stat = Reflect.apply(fstat, fs, args);
+      if (args[0] === selected && typeof stat?.size === 'bigint') (stat as { size: bigint }).size = 0x7fffffffn;
+      return stat;
+    }) as typeof fs.fstatSync);
+    // Its buffer, one byte longer, is 2 ** 31 bytes. None is allocated here: a stand-in of that length is handed back
+    // and the input's reads are recorded instead of made. The first returns no bytes, so the input refuses as changed.
+    vi.spyOn(Buffer, 'alloc').mockImplementation((...args: Parameters<typeof Buffer.alloc>) => {
+      if (args[0] <= 0x7fffffff) return Reflect.apply(alloc, Buffer, args) as ReturnType<typeof Buffer.alloc>;
+      allocated.push(args[0]);
+      const standIn = Reflect.apply(alloc, Buffer, [1]) as ReturnType<typeof Buffer.alloc>;
+      return Object.defineProperty(standIn, 'length', { value: args[0] });
+    });
+    // Parameters<typeof fs.readSync> is the three-argument overload, so the mock takes its arguments untyped: it is called
+    // as readSync(fd, buffer, offset, length, position), and only the input's lengths are recorded.
+    vi.spyOn(fs, 'readSync').mockImplementation((...args: unknown[]) => {
+      if (args[0] !== selected) return Reflect.apply(read, fs, args) as number;
+      asked.push(args[3] as number);
+      return 0;
+    });
+    syncBuiltinESMExports();
+    expect(() => bundle(root, '.ia/src/a.ia', digest('native source'))).toThrow(
+      /^System package input changed while it was read: \.ia\/src\/a\.ia$/,
+    );
+    expect(selected).toBeDefined();
+    // The read asked for 2147483647 bytes, not 2147483648, which Node refuses.
+    expect(allocated).toEqual([2147483648]);
+    expect(asked).toEqual([0x7fffffff]);
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     syncBuiltinESMExports();

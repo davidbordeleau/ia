@@ -4470,13 +4470,6 @@
           ]
         },
         {
-          "case": "tools/release/native-version.test.ts > system package input reads reads at most 2147483647 bytes at a time, so an input reported at that size refuses as changed",
-          "reason": "Its buffer is 2 ** 31 bytes, zeroed lazily on Linux and macOS but committed in full on Windows, so the fixture runs only on POSIX.",
-          "platforms": [
-            "windows"
-          ]
-        },
-        {
           "case": "tools/release/native-version.test.ts > system package input reads refuses a link put in place at the open as aliased, even once it is gone again",
           "reason": "Windows has no O_NOFOLLOW, so its open follows the link and fails with ENOENT; the fixture runs only on POSIX.",
           "platforms": [

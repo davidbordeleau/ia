@@ -13,6 +13,7 @@ Generate repository host projections and retain supported legacy cleanup and ins
 - [membership.test.ts](membership.test.ts) — behavior and refusal coverage.
 - [qualify-projections.mjs](qualify-projections.mjs).
 - [qualify-resources.mjs](qualify-resources.mjs).
+- [fixtures/compile-prose.mjs](fixtures/compile-prose.mjs) and the rest of `fixtures/` — host projection, link-walk, steward-retirement and prose compilation fixtures.
 
 ## Commands
 

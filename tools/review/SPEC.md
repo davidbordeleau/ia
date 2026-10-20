@@ -14,6 +14,7 @@ Collect an advisory review subject, call the review service, validate its identi
 - [runner.mjs](runner.mjs).
 - [runner.test.ts](runner.test.ts) — behavior and refusal coverage.
 - [subject.mjs](subject.mjs).
+- [fixtures/main.mjs](fixtures/main.mjs) — offline entrypoint fixture for main.test.ts.
 
 ## Commands
 

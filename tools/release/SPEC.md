@@ -28,6 +28,8 @@ Select, stage, scan and pack public/native artifacts and maintain their compatib
 - [scan-packed.mjs](scan-packed.mjs).
 - [system-packages.ts](system-packages.ts).
 - [system-partitions.ts](system-partitions.ts).
+- [public/content-scan.mjs](public/content-scan.mjs) and [public/content-scan.d.mts](public/content-scan.d.mts) — public content scanning.
+- [shared/pack-inputs.mjs](shared/pack-inputs.mjs), [shared/paths.mjs](shared/paths.mjs) and [shared/paths.d.mts](shared/paths.d.mts) — shared packing inputs and contained paths.
 
 ## Commands
 

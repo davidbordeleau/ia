@@ -47,12 +47,21 @@ export function toolContractFindings(
   const findings = TOOL_SECTIONS.filter((section) => !source.split(/\r?\n/).includes(`## ${section}`)).map(
     (section) => `${owner}/SPEC.md: missing ${section} contract section`,
   );
-  for (const member of members.filter(
-    (path) => dirname(path).replaceAll('\\', '/') === owner && /\.(?:[cm]?[jt]s|json)$/.test(path),
-  )) {
-    const name = member.slice(owner.length + 1);
-    if (!source.includes(`](${name})`)) findings.push(`${owner}/SPEC.md: module map omits ${name}`);
+  // The module map is the Modules section's links: a direct module by name, a subfolder by any link into it.
+  const modules = source.split(/^## /m).find((section) => /^Modules\r?\n/.test(section)) ?? '';
+  const targets = [...modules.matchAll(/\]\(([^)\s]+)\)/g)].map(([, target]) => target!.replace(/^\.\//, ''));
+  const folders = new Set<string>();
+  for (const member of members.map((path) => path.replaceAll('\\', '/'))) {
+    if (!member.startsWith(owner + '/')) continue;
+    const name = member.slice(owner.length + 1),
+      separator = name.indexOf('/');
+    if (separator > 0) folders.add(name.slice(0, separator));
+    else if (/\.(?:[cm]?[jt]s|json)$/.test(name) && !targets.includes(name))
+      findings.push(`${owner}/SPEC.md: module map omits ${name}`);
   }
+  for (const folder of [...folders].sort())
+    if (!targets.some((target) => target === folder || target.startsWith(folder + '/')))
+      findings.push(`${owner}/SPEC.md: module map omits ${folder}/`);
   // These sections declare executable references. Examples and historical prose elsewhere are not commands.
   const sections = source.split(/^## /m).filter((section) => /^(?:Commands|Validation)\r?\n/.test(section));
   for (const section of sections) {

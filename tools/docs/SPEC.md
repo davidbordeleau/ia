@@ -15,6 +15,7 @@ Parse Markdown once and enforce documentation ownership, links, catalog identity
 - [markdown.d.mts](markdown.d.mts) — interface declaration; implementation checking is tracked separately.
 - [markdown.mjs](markdown.mjs).
 - [teaching-links.mjs](teaching-links.mjs).
+- [fixtures/link-parity.json](fixtures/link-parity.json) and [fixtures/link-conformance.json](fixtures/link-conformance.json) — link-check parity fixtures.
 
 ## Commands
 
@@ -44,7 +45,7 @@ Task ownership: `tools:test-docs`, `docs:audit`. `tools/testing/tasks.json` decl
 
 ## Invariants
 
-Owner Commands and Validation sections declare root pnpm script references. The audit accepts direct and explicit `run` forms with `--silent`/`-s` before the script and arbitrary trailing script arguments; leading directory/filter switches refuse because they change script ownership. Direct `exec`, `install` and `store` are pnpm subcommands; explicit `run` always requires a root script. Task ownership declarations resolve against the task manifest. These checks establish reference existence, not command behavior.
+Owner Commands and Validation sections declare root pnpm script references. The audit accepts direct and explicit `run` forms with `--silent`/`-s` before the script and arbitrary trailing script arguments; leading directory/filter switches refuse because they change script ownership. Direct `exec`, `install` and `store` are pnpm subcommands; explicit `run` always requires a root script. Task ownership declarations resolve against the task manifest. These checks establish reference existence, not command behavior. A tooling owner's module map is the links in its `## Modules` section only: each direct code or JSON module needs a link by name, and each subfolder needs at least one link into it; a link elsewhere in the contract does not map a module, and files inside a mapped subfolder are not listed individually.
 
 Duplicate identities, missing owner contracts, aliases, unsafe local links and stale generated catalogs refuse. catalog accepts no flag, --links or --write; duplicate/conflicting/unknown flags exit 2 before writes.
 

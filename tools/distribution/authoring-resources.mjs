@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { decodeDistributionJson } from '@inventarch/db/distribution';
 import { teachingLinkClasses, teachingLinkFindings } from '../docs/teaching-links.mjs';
@@ -13,9 +13,18 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
  * @param {string} root @param {ReadonlyMap<string, string>} [pending]
  */
 export function authoringResources(root, pending = new Map()) {
-  /** @param {string} path @param {number} limit */
-  const read = (path, limit) => {
+  const TOTAL = 16 * 1024 * 1024;
+  /** @param {string} path @param {number} limit @param {number} [spent] bytes already admitted toward the total */
+  const read = (path, limit, spent) => {
     const target = containedFile(root, path, { allowMissing: pending.has(path) });
+    // An oversized file is refused by its name before it is opened, so one it cannot read is refused past either cap
+    // too; the descriptor read below still bounds whatever is opened.
+    if (existsSync(target)) {
+      const size = lstatSync(target).size;
+      if (size > limit) throw new Error('Unbounded authoring file: ' + path);
+      if (spent !== undefined && !pending.has(path) && spent + size > TOTAL)
+        throw new Error('Authoring files exceed their total byte ceiling');
+    }
     // Existing bytes remain bounded and valid even when this pass replaces their generated content.
     const existing = existsSync(target) ? readRegular(root, path, limit) : undefined;
     if (existing) decoder.decode(existing);
@@ -53,9 +62,9 @@ export function authoringResources(root, pending = new Map()) {
       )
         throw new Error('Unsafe, duplicated or non-Markdown authoring selection');
       seen.add(path.toLowerCase());
-      const bytes = read(path, 1024 * 1024);
+      const bytes = read(path, 1024 * 1024, total);
       total += bytes.length;
-      if (total > 16 * 1024 * 1024) throw new Error('Authoring files exceed their total byte ceiling');
+      if (total > TOTAL) throw new Error('Authoring files exceed their total byte ceiling');
       teaching.push({ path, text: decoder.decode(bytes) });
       return {
         path,

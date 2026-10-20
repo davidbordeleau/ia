@@ -100,11 +100,14 @@ it.each(['explicit', 'orchestration'])(
         await expect(import(entry)).rejects.toThrow('observed adapter installation');
         expect(select).toHaveBeenCalledOnce();
         expect(install).toHaveBeenCalledOnce();
-        const expected =
-          entry === './qualify-packages.mjs'
-            ? selected.packed
-            : selected.packed.filter((row) => resourceNames.has(row.name));
-        expect(install.mock.calls[0]![1]).toEqual(expected);
+        // Every adapter overrides the whole verified cohort: packed system manifests depend on unselected members
+        // at the candidate version, which the registry may not have. The resource adapters select their direct
+        // dependencies by name.
+        expect(install.mock.calls[0]![1]).toEqual(selected.packed);
+        if (entry !== './qualify-packages.mjs')
+          expect(new Set(((install.mock.calls[0] as unknown[])[3] as { names: string[] }).names)).toEqual(
+            resourceNames,
+          );
       }
       writeFileSync(selected.packed[0]!.filename, 'substituted before adapter entry');
       for (const entry of [

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateSchema, validateSystems } from '../../packages/compliance/src/index.js';
+import type { CompiledRecord } from '../../packages/language/src/index.js';
 import { checkMeaning } from './meaning.js';
 export { checkMeaning, CIRCULAR_ANSWERS, type MeaningFinding } from './meaning.js';
 import { compileNative } from './compile.js';
@@ -68,12 +69,20 @@ export function nativeOutcome(result: ReturnType<typeof checkNative>) {
     findings: [...result.diagnostics, ...result.assessments.flatMap((a) => a.findings), ...meaning, ...release],
   };
 }
+/** Repository-level findings native:check adds to the evaluated outcome: architecture and release-root drift. */
+export function architectureFindings(
+  records: readonly CompiledRecord[],
+  root: string,
+  read?: Parameters<typeof releaseRootFindings>[1],
+) {
+  return [...checkRepositoryArchitecture(records), ...releaseRootFindings(root, read)];
+}
 /** The repository entry point has one complete result, including architecture and release-root policy. */
 export function checkRepositoryNative(root: string) {
   const { inputs, folders } = readNative(root),
     result = checkNative(inputs, folders),
     evaluated = nativeOutcome(result);
-  const architecture = [...checkRepositoryArchitecture(result.records), ...releaseRootFindings(root)];
+  const architecture = architectureFindings(result.records, root);
   return {
     ...result,
     ok: evaluated.ok && architecture.length === 0,

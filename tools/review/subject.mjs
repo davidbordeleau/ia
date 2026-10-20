@@ -94,6 +94,11 @@ function evidenceReport(path, name, disclosed, omissions, directory) {
   try {
     const opened = fstatSync(fd, { bigint: true });
     if (!opened.isFile()) return undefined;
+    // A hardlinked report is another name for a file outside the evidence the listing judged: omitted, not read.
+    if (opened.nlink !== 1n) {
+      omissions.push(`Evidence hardlink omitted: ${name}`);
+      return undefined;
+    }
     const size = Number(opened.size);
     if (size > 600000 || disclosed + size > 800000) {
       omissions.push(`Evidence omitted by disclosure bound: ${name}`);
@@ -111,6 +116,10 @@ function evidenceReport(path, name, disclosed, omissions, directory) {
     const named = lstatSync(path, { bigint: true });
     if (named.isSymbolicLink()) {
       omissions.push(`Evidence symlink omitted: ${name}`);
+      return undefined;
+    }
+    if (named.nlink !== 1n) {
+      omissions.push(`Evidence hardlink omitted: ${name}`);
       return undefined;
     }
     // The size and the modification time of the opened file catch a rewrite while it was read, at any size.

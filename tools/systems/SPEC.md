@@ -12,6 +12,7 @@ Host repository authoring operations, publication boundaries and system scenario
 - [publish.ts](publish.ts).
 - [run.ts](run.ts).
 - [scenarios.ts](scenarios.ts).
+- [fixtures/authored-note.ia](fixtures/authored-note.ia) and the native records under `fixtures/native/` — system scenario fixtures.
 
 ## Commands
 

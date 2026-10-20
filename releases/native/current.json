@@ -1,16 +1,16 @@
 {
   "format": "ia.native-release.v1",
   "baseline": {
-    "tag": "v3.2.1",
-    "commit": "59ffc30ae41f02f3acdf5dab4efbe4a00717a471"
+    "tag": "v3.2.2",
+    "commit": "2ed82f0d889cdd060ee6ee3f7dd345ab4d751c2b"
   },
-  "notesSha256": "0bb2ca8c008594280c06eb7a46861fc3debcdc5c8fe1c4d51fa7b16c2ae249aa",
+  "notesSha256": "e7fc047429ca30db907a47cb50d6ccb0b46474d28b0328a9b345261559d5a93e",
   "archives": [
     {
       "id": "inventarch/agent-composition-system",
       "version": "3.1.3",
-      "archive": "ba968f2e4ba59eb9816a77d4ce3161212c46e816593d72fb6807d0c30c83fca7",
-      "manifest": "065ae036f680c90b91c04c5e5a972cc4636896cb10765eb2a7234c69eb34ea0b",
+      "archive": "5b982cd9f33ef96796030b68d9e900f25aea0cc898130118cb01ea0f13aa8bd0",
+      "manifest": "d9a657bfb39b09df282dfd3c38f6d8527c32c11f27c8de446087ab7e2cdafc33",
       "dependencies": [
         "inventarch/agent-system",
         "inventarch/authoring-system",

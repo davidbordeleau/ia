@@ -162,10 +162,18 @@ try {
   );
   console.log(JSON.stringify({ output, nativeFiles, archives: pins.length, paidProviderCalls: 0, passed: true }));
 } catch (error) {
-  noAliases(output);
-  const current = lstatSync(output);
-  if (current.ino !== outputIdentity.ino || current.dev !== outputIdentity.dev)
-    throw new Error('SDK output changed before cleanup', { cause: error });
+  // The checks guard the removal: an output they cannot vouch for is retained, never removed, and the refusal keeps
+  // the qualification failure as its cause.
+  try {
+    noAliases(output);
+    const current = lstatSync(output);
+    if (current.ino !== outputIdentity.ino || current.dev !== outputIdentity.dev)
+      throw new Error('SDK output changed before cleanup');
+  } catch (refusal) {
+    throw new Error(`SDK qualification failed; cleanup refused and ${output} was retained: ${String(refusal)}`, {
+      cause: error,
+    });
+  }
   rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   throw error;
 }

@@ -455,6 +455,9 @@ it(
     for (const [file, affected] of [
       ['apps/vscode/vitest.config.mts', ['tools:test-testing', 'tools:test-temp']],
       ['apps/runner/vitest.config.mts', ['tools:test-testing', 'tools:test-temp']],
+      // tools:test-temp reads the plain-JavaScript scripts beside app and package tests.
+      ['apps/cli/tests/fake-doctor.mjs', ['tools:test-temp']],
+      ['packages/runtime/tests/golden/write.mjs', ['tools:test-temp']],
       ['distributions/product-structure/README.md', ['distribution:test']],
     ] as const) {
       const path = resolve(root, file),

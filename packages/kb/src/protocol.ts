@@ -128,7 +128,7 @@ export function executeKnowledge(
       operation === 'check'
         ? view.check()
         : operation === 'search'
-          ? view.search(args.query!, args.limit)
+          ? view.search(args.query!, args.limit, (value) => ({ version: KB_PROTOCOL_VERSION, ok: true, value }))
           : operation === 'read'
             ? view.read(args.locator!)
             : operation === 'resolve'

@@ -235,9 +235,25 @@ it('searches bound text, reads citations, and refuses changed snapshots without 
   writeFileSync(join(root, 'citation.json'), JSON.stringify(read.value.citation));
   expect((await invoke(['resolve', '--citation', 'citation.json'])).exitCode).toBe(0);
   writeFileSync(join(root, 'README.md'), 'Changed.');
-  expect(JSON.parse((await invoke(['resolve', '--citation', 'citation.json'])).stdout).code).toBe(
-    'IA-KB-SNAPSHOT-UNAVAILABLE',
-  );
+  // A stale citation is operational (exit 3) and names the read that yields a current one.
+  const stale = await invoke(['resolve', '--citation', 'citation.json']);
+  expect(stale.exitCode, stale.stdout).toBe(3);
+  expect(JSON.parse(stale.stdout)).toMatchObject({
+    ok: false,
+    code: 'IA-KB-SNAPSHOT-UNAVAILABLE',
+    exit: 3,
+    next: expect.stringContaining('"ia kb read --help"'),
+  });
+  // Knowledge outside this scope is a request refusal (exit 1) in the same flat consumer envelope.
+  const missing = await invoke(['read', 'work-system/contract/spec/absent']);
+  expect(missing.exitCode, missing.stdout).toBe(1);
+  expect(JSON.parse(missing.stdout)).toMatchObject({
+    ok: false,
+    code: 'IA-KB-UNAVAILABLE',
+    exit: 1,
+    where: null,
+    next: expect.stringContaining('"ia kb search --help"'),
+  });
   expect(existsSync(join(root, '.kb'))).toBe(false);
 });
 
@@ -250,7 +266,59 @@ it('preserves citation path and JSON refusals with actionable consumer output', 
   expect(JSON.parse(unsafe.stdout)).toMatchObject({ code: 'IA-DB-PATH-UNSAFE', next: expect.any(String) });
   writeFileSync(join(root, 'bad-citation.json'), '{');
   const invalid = await invoke('bad-citation.json', false);
-  expect(invalid.exitCode).toBe(3);
+  expect(invalid.exitCode).toBe(1);
   expect(invalid.stdout).toBe('');
-  expect(invalid.stderr).toContain('IA-CLI-FAILED');
+  expect(invalid.stderr).toContain('IA-KB-INVALID');
+  expect(invalid.stderr).not.toContain('IA-CLI-FAILED');
+  const machine = await invoke('bad-citation.json');
+  expect(machine.exitCode).toBe(1);
+  expect(JSON.parse(machine.stdout)).toMatchObject({
+    code: 'IA-KB-INVALID',
+    message: 'Citation file is not valid JSON',
+    next: expect.stringContaining('"ia kb resolve --help"'),
+  });
+});
+it('refuses an output under a missing directory without disclosing the host path, in preview and apply', async () => {
+  const { root, args } = installedKnowledge();
+  for (const apply of [[], ['--apply', '--yes']]) {
+    const result = await run([...args('missing/nested/export.json'), ...apply]);
+    expect(result.exitCode, result.stdout + result.stderr).toBe(3);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      code: 'IA-CLI-CONFLICT',
+      message: 'Knowledge output directory does not exist',
+    });
+    expect(JSON.stringify(JSON.parse(result.stdout))).not.toContain(JSON.stringify(root).slice(1, -1));
+    expect(result.stdout).not.toContain('ENOENT');
+  }
+  expect(existsSync(join(root, 'missing'))).toBe(false);
+});
+it('applies after an unchanged confirmation and refuses when the native revision changed during it', async () => {
+  for (const change of [false, true]) {
+    const { root, args } = installedKnowledge();
+    const host = makeHost({ cwd: root, interactive: true });
+    const result = await dispatch(
+      [...args('export.json').filter((arg) => arg !== '--json'), '--apply'],
+      {
+        ...host,
+        interaction: {
+          ...host.interaction,
+          read: async () => {
+            if (change)
+              writeFileSync(
+                join(root, '.ia/src/later.ia'),
+                '#! ia 1.0\n@spec later\n  meaning\n    says "Later."\n  work\n    title "Later"\n    status draft\n',
+              );
+            return 'y';
+          },
+        },
+      },
+      () => {
+        throw Error('Unexpected machine route');
+      },
+      [],
+    );
+    expect(result.exitCode, result.stdout + result.stderr).toBe(change ? 3 : 0);
+    expect(existsSync(join(root, 'export.json'))).toBe(!change);
+    if (change) expect(result.stderr).toContain('IA-CLI-CONFLICT');
+  }
 });

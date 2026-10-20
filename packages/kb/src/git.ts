@@ -13,17 +13,19 @@ export function committedReader(repository: string, commit: string, timeout = 10
     GIT_NO_LAZY_FETCH: '1',
     GIT_TERMINAL_PROMPT: '0',
   });
-  const git = (args: string[], maxBuffer = LIMITS.fileBytes + 1024): Buffer => {
+  /** A Git failure or timeout is operational; output past the buffer is the caller's byte-limit refusal. */
+  const git = (args: string[], overLimit = 'Repository output byte limit exceeded'): Buffer => {
     try {
       return execFileSync('git', ['--no-replace-objects', '--literal-pathspecs', '-C', repository, ...args], {
-        maxBuffer,
+        maxBuffer: LIMITS.fileBytes + 1024,
         timeout,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
         env,
       });
-    } catch {
-      return fail('Selected committed data unavailable or repository command timed out');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | null)?.code === 'ENOBUFS') return fail(overLimit);
+      return fail('Selected committed data unavailable or repository command timed out', 'IA-KB-SOURCE-UNAVAILABLE');
     }
   };
   const fold = (path: string) => (process.platform === 'win32' ? path.toLowerCase() : path);
@@ -46,7 +48,7 @@ export function committedReader(repository: string, commit: string, timeout = 10
       fail('Selected committed regular non-executable blob unavailable');
     const blob = /^100644 blob ([a-f0-9]{40,64})\t/.exec(rows[0]!)?.[1];
     if (!blob) return fail('Selected committed blob identity unavailable');
-    const raw = git(['cat-file', 'blob', blob]);
+    const raw = git(['cat-file', 'blob', blob], 'Selected file byte limit exceeded');
     if (raw.length > LIMITS.fileBytes) fail('Selected file byte limit exceeded');
     let text: string;
     try {

@@ -1,0 +1,14 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "none",
+  "title": "Declare the platform-only steward-hook tests as skips",
+  "summary": "Tests only. The consumer guard and context binding tests of `@inventarch/steward-hook` that returned early on Windows now declare a skip there (the file-link cases only where Windows denies the link), and a new test covers a code file replaced by a directory after its directory is listed. Nothing changes for consumers: the package's code, behavior and API are the same.",
+  "packages": [
+    "@inventarch/steward-hook"
+  ],
+  "paths": [
+    "apps/steward-hook/tests/consumer-guard.test.ts",
+    "apps/steward-hook/tests/context-binding.test.ts",
+    "apps/steward-hook/tests/context-inventory.test.ts"
+  ]
+}

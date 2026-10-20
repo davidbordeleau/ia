@@ -67,7 +67,10 @@ export function writeEvidence(path: string, evidence: GateEvidence): void {
   writeFileSync(path, JSON.stringify(evidence, null, 2) + '\n');
 }
 
-/** Reads every evidence file under a directory tree. Unreadable or mistyped files are reported, never skipped. */
+/**
+ * Reads every evidence file under a directory tree. Unlistable directories and unreadable or mistyped files are
+ * reported, never skipped.
+ */
 export function readEvidence(directory: string): {
   readonly evidence: readonly GateEvidence[];
   readonly failures: readonly string[];
@@ -78,7 +81,9 @@ export function readEvidence(directory: string): {
     let entries: Dirent[];
     try {
       entries = readdirSync(path, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      // A directory that cannot be listed may hold evidence: a failure, never an empty result.
+      failures.push(`${path}: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
     for (const entry of entries) {

@@ -66,18 +66,30 @@ function toolingClosure(overrides = new Map<string, string>()) {
       if (!existsSync(resolve(root, target)) && target.endsWith('.js')) target = target.slice(0, -3) + '.ts';
       visit(target);
     };
+    // Every module edge, however spelled, passes through here; the module loader module itself is refused.
+    const edge = (specifier: string) => {
+      if (['node:module', 'module'].includes(specifier))
+        throw Error('Packing implementation has an unreviewable module loader: ' + path);
+      dependency(specifier);
+    };
     const walk = (node: ts.Node) => {
       if (
         (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
         node.moduleSpecifier &&
         ts.isStringLiteral(node.moduleSpecifier)
       )
-        dependency(node.moduleSpecifier.text);
+        edge(node.moduleSpecifier.text);
+      // `import x = require('...')` is an import-equals declaration, not a call.
+      if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+        const expression = node.moduleReference.expression;
+        if (!ts.isStringLiteralLike(expression))
+          throw Error('Packing implementation has an unreviewable dynamic import: ' + path);
+        edge(expression.text);
+      }
+      // process.getBuiltinModule loads node:module (or any builtin) without an import edge.
       if (
-        ts.isImportDeclaration(node) &&
-        node.moduleSpecifier &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        ['node:module', 'module'].includes(node.moduleSpecifier.text)
+        (ts.isIdentifier(node) && node.text === 'getBuiltinModule') ||
+        (ts.isStringLiteralLike(node) && node.text === 'getBuiltinModule')
       )
         throw Error('Packing implementation has an unreviewable module loader: ' + path);
       if (
@@ -88,7 +100,7 @@ function toolingClosure(overrides = new Map<string, string>()) {
         const argument = node.arguments[0];
         if (!argument || !ts.isStringLiteralLike(argument))
           throw Error('Packing implementation has an unreviewable dynamic import: ' + path);
-        dependency(argument.text);
+        edge(argument.text);
       }
       ts.forEachChild(node, walk);
     };
@@ -125,6 +137,19 @@ it('explicitly accounts for the transitive tooling implementation and catches ne
   ).toThrow(/unreviewable module loader/);
   expect(() => toolingClosure(new Map([[path, 'import(process.env.PACK_HELPER);']]))).toThrow(
     /unreviewable dynamic import/,
+  );
+  for (const statement of [
+    "export { createRequire } from 'node:module';",
+    "export * from 'module';",
+    "import('node:module');",
+    "require('module');",
+    "import loader = require('node:module');",
+    "const { createRequire } = process.getBuiltinModule('node:module');",
+    "const load = process['getBuiltinModule'];",
+  ])
+    expect(() => toolingClosure(new Map([[path, statement]])), statement).toThrow(/unreviewable module loader/);
+  expect(() => toolingClosure(new Map([[path, "import helper = require('../shared/unlisted.mjs');"]]))).toThrow(
+    /Unlisted packing implementation/,
   );
 });
 

@@ -20,7 +20,18 @@ it('requires semantic contract sections and a complete direct module map for too
   expect(toolContractFindings('tools/example', source, ['tools/example/run.ts'])).toEqual([
     'tools/example/SPEC.md: module map omits run.ts',
   ]);
-  expect(toolContractFindings('tools/example', source + '\n[run.ts](run.ts)', ['tools/example/run.ts'])).toEqual([]);
+  // Only the Modules section is the map: a link appended under Limits does not count.
+  expect(toolContractFindings('tools/example', source + '\n[run.ts](run.ts)', ['tools/example/run.ts'])).toEqual([
+    'tools/example/SPEC.md: module map omits run.ts',
+  ]);
+  const mapped = (links: string) => source.replace('## Modules\nDefined contract.', '## Modules\n' + links);
+  expect(toolContractFindings('tools/example', mapped('[run.ts](run.ts)'), ['tools/example/run.ts'])).toEqual([]);
+  // A subfolder is mapped by any link into it, and only by a link into that subfolder.
+  const nested = ['tools/example/run.ts', 'tools/example/fixtures/a.json', 'tools/example/fixtures/deep/b.mjs'];
+  expect(toolContractFindings('tools/example', mapped('[run.ts](run.ts) [x](fixtures-x/a.json)'), nested)).toEqual([
+    'tools/example/SPEC.md: module map omits fixtures/',
+  ]);
+  expect(toolContractFindings('tools/example', mapped('[run.ts](run.ts) [a](fixtures/a.json)'), nested)).toEqual([]);
 });
 function fixture(files: Record<string, string>): string {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-doc-audit-'));

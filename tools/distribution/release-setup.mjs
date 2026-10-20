@@ -410,28 +410,39 @@ function npmNode(override) {
     }
   return null;
 }
+/**
+ * Arguments for the private pinned npm installation. `--no-bin-links`: npm otherwise links its bundled dependencies'
+ * executables under node_modules/npm/node_modules/.bin, and those symlinks are refused as aliases below.
+ */
+export function pinnedNpmInstallArgs(prefix) {
+  return [
+    'install',
+    '--prefix',
+    prefix,
+    '--no-save',
+    '--package-lock=false',
+    '--ignore-scripts',
+    '--no-bin-links',
+    '--registry',
+    REGISTRY,
+    `npm@${NPM_VERSION}`,
+  ];
+}
+/**
+ * Whether a POSIX mode lets another user change the private npm installation. The private prefix (a fresh mkdtemp)
+ * must admit no other user. Entries npm creates inside it follow the installing umask, so group-writable entries
+ * (umask 002) are accepted: no one else can reach them through the private prefix. World-writable entries are refused.
+ */
+export function writableInstallationMode(mode, isPrefix) {
+  return (mode & (isPrefix ? 0o077 : 0o002)) !== 0;
+}
 /** The pinned publishing CLI. Trust and staged publishing need a newer npm than Node 22 bundles. */
 export function pinnedNpm(
   override,
   node,
   {
     install = (prefix) =>
-      run(
-        process.execPath,
-        [
-          bundledNpm(),
-          'install',
-          '--prefix',
-          prefix,
-          '--no-save',
-          '--package-lock=false',
-          '--ignore-scripts',
-          '--registry',
-          REGISTRY,
-          `npm@${NPM_VERSION}`,
-        ],
-        { timeout: 5 * 60_000 },
-      ),
+      run(process.execPath, [bundledNpm(), ...pinnedNpmInstallArgs(prefix)], { timeout: 5 * 60_000 }),
   } = {},
 ) {
   const parent = realpathSync(tmpdir());
@@ -452,7 +463,7 @@ export function pinnedNpm(
       assert.ok(stat.isFile() || stat.isDirectory(), 'Unexpected npm installation entry');
       if (prefix && process.platform !== 'win32') {
         assert.equal(stat.uid, process.getuid(), 'Foreign npm installation owner');
-        assert.equal(stat.mode & 0o022, 0, 'Writable npm installation refused');
+        assert.ok(!writableInstallationMode(stat.mode, path === prefix), 'Writable npm installation refused');
       }
       if (recursive && stat.isDirectory()) for (const name of readdirSync(path)) inspect(resolve(path, name));
     };

@@ -13,20 +13,11 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PUBLICATION_CODES } from '../../packages/runtime/src/index.js';
+import { fileSymlinksAvailable } from '../testing/report.js';
 import { runBounded } from '../testing/subprocess.js';
 import { contents, publicationFixtureCodes, runPublicationFixtures } from './publication-fixtures.js';
 
 const base64 = (text: string): string => Buffer.from(text).toString('base64');
-/** A denied Windows file-link fixture is an explicit skip; all other setup failures still fail the test. */
-const fileLink = (target: string, path: string): boolean => {
-  try {
-    symlinkSync(target, path, 'file');
-    return true;
-  } catch (error) {
-    if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') return false;
-    throw error;
-  }
-};
 afterEach(() => {
   vi.restoreAllMocks();
   syncBuiltinESMExports();
@@ -137,8 +128,8 @@ it('records a link as null even where the open follows links, as it does on Wind
   const root = mkdtempSync(resolve(tmpdir(), 'ia-publication-snapshot-'));
   try {
     writeFileSync(resolve(root, 'file.txt'), 'file bytes');
-    if (!fileLink('file.txt', resolve(root, 'link')))
-      return context.skip('Windows denied file symlink creation (EPERM)');
+    if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
+    symlinkSync('file.txt', resolve(root, 'link'), 'file');
     const open = fs.openSync;
     const following = vi
       .spyOn(fs, 'openSync')

@@ -986,7 +986,7 @@ describe('system package input reads', () => {
         return () => rmSync(target);
       },
       /^System package input is aliased: \.ia\/src\/a\.ia$/,
-      'Windows has no O_NOFOLLOW, so its open follows the link and fails with ENOENT; its file links need a privilege',
+      'Windows has no O_NOFOLLOW, so its open follows the link and fails with ENOENT',
     ],
     [
       'an input gone before the open with the open error',

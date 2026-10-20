@@ -205,7 +205,7 @@ it('refuses a directory or unparsable roadmap output and leaves it as it was', a
   expect(readFileSync(output, 'utf8')).toBe('not json');
 });
 
-// Even a link to a configuration this adapter wrote is an alias. File links need a privilege on Windows.
+// Even a link to a configuration this adapter wrote is an alias. The case skips only where Windows denies file links.
 it('refuses a link to a configuration this adapter wrote as an alias and leaves the configuration as it was', async (context) => {
   const root = roadmapRepository(),
     output = resolve(root, '.ia/work/roadmap-sync/config.json');

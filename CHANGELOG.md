@@ -4,11 +4,11 @@ Generated from reviewed release changesets. Entries describe intended releases; 
 
 ## 3.2.2
 
-Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim, so two runs never both hold it; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.
+Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.
 
 ### Judge a held user host lock from one opened file
 
-When `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run, @inventarch/distribution now judges whether that lock is stale from one opened file: its type, age and pid all come from a single descriptor, and a stale lock is removed only after its name is found, while that descriptor is open, to still name the judged file (CodeQL js/file-system-race). A lock that replaced the judged file before that check is therefore no longer removed; a brief window between the check and the removal remains, as Node has no unlink-if-same. A symbolic link or other non-regular file at the lock path now counts as busy and is not taken over, and a FIFO at the lock path no longer hangs the takeover; each refuses IA-DIST-INSTALL-BUSY, as does a lock file the run cannot open. Locks the CLI writes are taken over once their pid has died, or after 10 seconds when their pid is empty or unparseable; a live owner is taken over only once its lock is a day old. The IA-DIST-INSTALL-BUSY message is unchanged.
+When `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run, @inventarch/distribution checks that the lock has not been replaced before removing it as stale. This protects a replacement lock found during that check. A brief window just before the removal remains, so a lock replaced at that moment can still be removed. A symbolic link or other non-regular file at the lock path now counts as busy and is not taken over, and a FIFO at the lock path no longer hangs the takeover; each refuses IA-DIST-INSTALL-BUSY, as does a lock file the run cannot open. Locks the CLI writes are taken over once their pid has died, or after 10 seconds when their pid is empty or unparseable; a live owner is taken over only once its lock is a day old. The IA-DIST-INSTALL-BUSY message is unchanged.
 
 Packages: `@inventarch/distribution`.
 
@@ -18,9 +18,9 @@ A lock held by a live run for more than 10 minutes is no longer taken over at on
 
 Packages: `@inventarch/distribution`.
 
-### Take over a stale user host lock under a claim, so two runs never both hold it
+### Take over a stale user host lock under a claim
 
-When two `ia host claude --user` runs found the same stale lock, `<IA home>/claude/.lock`, at the same moment, both could take it over and go on to change the marketplace at once. @inventarch/distribution now removes a stale lock only under a claim, an exclusive `.lock.<inode>.claim` directory beside it, and only after finding again that the lock path still names the file it judged, so two runs on one host never both remove it and a lock another run created in the meantime is left in place. A claim older than 10 seconds is abandoned and removed, and a run that acquires the lock sweeps abandoned claims. On Windows the exclusive create now waits up to 250 milliseconds for a lock name another run is still removing, instead of failing with a raw EPERM. A create refused for permissions (on Windows, once that wait passes with nothing at the name; elsewhere at once, where a raw EPERM or EACCES was thrown before) refuses IA-DIST-INPUT-INVALID, naming the directory. Earlier CLIs do not claim, so a run of an earlier release sharing the IA home can still remove a lock without one.
+When two `ia host claude --user` runs found the same stale lock, `<IA home>/claude/.lock`, at the same moment, both could take it over and go on to change the marketplace at once. @inventarch/distribution now removes a stale lock only under a claim, an exclusive `.lock.<inode>.claim` directory beside it, and only after finding again that the lock path still names the file it judged, serializing takeover while the claim remains exclusively owned. This reduces overlapping runs but does not eliminate them. A run whose claim was removed as abandoned, after it paused inside the claim for more than 10 seconds or because two runs interleaved while removing an abandoned claim, can still remove a newer lock. A claim older than 10 seconds is abandoned and removed, and a run that acquires the lock sweeps abandoned claims. On Windows the exclusive create now waits up to 250 milliseconds for a lock name another run is still removing, instead of failing with a raw EPERM. A create refused for permissions (on Windows, once that wait passes with nothing at the name; elsewhere at once, where a raw EPERM or EACCES was thrown before) refuses IA-DIST-INPUT-INVALID, naming the directory. Earlier CLIs do not claim, so a run of an earlier release sharing the IA home can still remove a lock without one.
 
 Packages: `@inventarch/distribution`.
 
@@ -38,7 +38,7 @@ Packages: `@inventarch/cli`, `@inventarch/distribution`.
 
 ### Coordinated version alignment
 
-Package and native artifact version metadata follows the coordinated 3.2.2 release.
+Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions.
 
 Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
 

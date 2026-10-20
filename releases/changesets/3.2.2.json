@@ -7,22 +7,22 @@
     "version": "3.2.1"
   },
   "bump": "patch",
-  "summary": "Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim, so two runs never both hold it; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.",
+  "summary": "Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.",
   "packages": {
     "@inventarch/agent-composition-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/agent-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/authoring-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/cli": {
       "previous": "3.2.1",
@@ -32,104 +32,104 @@
     "@inventarch/compliance": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/compliance-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/db": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/distribution": {
       "previous": "3.2.1",
       "kind": "changed",
-      "summary": "Judge a held user host lock from one opened file. Take over a live user host lock only after a day, and release only a run's own. Take over a stale user host lock under a claim, so two runs never both hold it. Verify the host payload once per ia host apply."
+      "summary": "Judge a held user host lock from one opened file. Take over a live user host lock only after a day, and release only a run's own. Take over a stale user host lock under a claim. Verify the host payload once per ia host apply."
     },
     "@inventarch/governance-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/graph": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/hook-authoring-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/language": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/learning-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/mcp-door": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/runner": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/runtime": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/service-contracts": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/session-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/steward-hook": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/template-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/work-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/workspace-runtime": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     },
     "@inventarch/workspace-system": {
       "previous": "3.2.1",
       "kind": "cohort",
-      "summary": "Package and native artifact version metadata aligned with the coordinated cohort."
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions."
     }
   },
   "changes": [
     {
       "id": "judge-a-held-user-host-lock-from-one-opened-file",
       "title": "Judge a held user host lock from one opened file",
-      "summary": "When `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run, @inventarch/distribution now judges whether that lock is stale from one opened file: its type, age and pid all come from a single descriptor, and a stale lock is removed only after its name is found, while that descriptor is open, to still name the judged file (CodeQL js/file-system-race). A lock that replaced the judged file before that check is therefore no longer removed; a brief window between the check and the removal remains, as Node has no unlink-if-same. A symbolic link or other non-regular file at the lock path now counts as busy and is not taken over, and a FIFO at the lock path no longer hangs the takeover; each refuses IA-DIST-INSTALL-BUSY, as does a lock file the run cannot open. Locks the CLI writes are taken over once their pid has died, or after 10 seconds when their pid is empty or unparseable; a live owner is taken over only once its lock is a day old. The IA-DIST-INSTALL-BUSY message is unchanged.",
+      "summary": "When `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run, @inventarch/distribution checks that the lock has not been replaced before removing it as stale. This protects a replacement lock found during that check. A brief window just before the removal remains, so a lock replaced at that moment can still be removed. A symbolic link or other non-regular file at the lock path now counts as busy and is not taken over, and a FIFO at the lock path no longer hangs the takeover; each refuses IA-DIST-INSTALL-BUSY, as does a lock file the run cannot open. Locks the CLI writes are taken over once their pid has died, or after 10 seconds when their pid is empty or unparseable; a live owner is taken over only once its lock is a day old. The IA-DIST-INSTALL-BUSY message is unchanged.",
       "packages": [
         "@inventarch/distribution"
       ],
@@ -151,8 +151,8 @@
     },
     {
       "id": "take-over-a-stale-user-host-lock-under-a-claim-s",
-      "title": "Take over a stale user host lock under a claim, so two runs never both hold it",
-      "summary": "When two `ia host claude --user` runs found the same stale lock, `<IA home>/claude/.lock`, at the same moment, both could take it over and go on to change the marketplace at once. @inventarch/distribution now removes a stale lock only under a claim, an exclusive `.lock.<inode>.claim` directory beside it, and only after finding again that the lock path still names the file it judged, so two runs on one host never both remove it and a lock another run created in the meantime is left in place. A claim older than 10 seconds is abandoned and removed, and a run that acquires the lock sweeps abandoned claims. On Windows the exclusive create now waits up to 250 milliseconds for a lock name another run is still removing, instead of failing with a raw EPERM. A create refused for permissions (on Windows, once that wait passes with nothing at the name; elsewhere at once, where a raw EPERM or EACCES was thrown before) refuses IA-DIST-INPUT-INVALID, naming the directory. Earlier CLIs do not claim, so a run of an earlier release sharing the IA home can still remove a lock without one.",
+      "title": "Take over a stale user host lock under a claim",
+      "summary": "When two `ia host claude --user` runs found the same stale lock, `<IA home>/claude/.lock`, at the same moment, both could take it over and go on to change the marketplace at once. @inventarch/distribution now removes a stale lock only under a claim, an exclusive `.lock.<inode>.claim` directory beside it, and only after finding again that the lock path still names the file it judged, serializing takeover while the claim remains exclusively owned. This reduces overlapping runs but does not eliminate them. A run whose claim was removed as abandoned, after it paused inside the claim for more than 10 seconds or because two runs interleaved while removing an abandoned claim, can still remove a newer lock. A claim older than 10 seconds is abandoned and removed, and a run that acquires the lock sweeps abandoned claims. On Windows the exclusive create now waits up to 250 milliseconds for a lock name another run is still removing, instead of failing with a raw EPERM. A create refused for permissions (on Windows, once that wait passes with nothing at the name; elsewhere at once, where a raw EPERM or EACCES was thrown before) refuses IA-DIST-INPUT-INVALID, naming the directory. Earlier CLIs do not claim, so a run of an earlier release sharing the IA home can still remove a lock without one.",
       "packages": [
         "@inventarch/distribution"
       ],
@@ -188,7 +188,7 @@
     {
       "id": "cohort-alignment",
       "title": "Coordinated version alignment",
-      "summary": "Package and native artifact version metadata follows the coordinated 3.2.2 release.",
+      "summary": "Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions.",
       "packages": [
         "@inventarch/agent-composition-system",
         "@inventarch/agent-system",

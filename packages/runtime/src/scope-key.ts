@@ -8,6 +8,19 @@ import type { PreparedCoordinate } from './coordinate.js';
 import { RuntimeError } from './errors.js';
 import { freeze } from './types.js';
 
+/** Ordered display parts shared by host renderers; each host applies its own output escaping. */
+export function scopeKeyTextParts(key: ScopeKey): readonly string[] {
+  return [
+    `seat ${key.seat === undefined ? "the repository's workspace" : typeof key.seat === 'string' ? key.seat : key.seat.path || '.'}`,
+    `shape ${key.shape}`,
+    `phase ${key.phase}`,
+    `depth ${key.depth}`,
+    `budget ${key.budget}`,
+    ...(key.word === undefined ? [] : [`word ${key.word}`]),
+    ...(key.primitive === undefined ? [] : [`primitive ${key.primitive}`]),
+  ];
+}
+
 /**
  * The scope key K = (S, H, P, d, n, w), optionally overriding its cognitive primitive (SPEC R14).
  *

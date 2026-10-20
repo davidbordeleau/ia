@@ -5,6 +5,7 @@ import { RuntimeError } from './errors.js';
 import { entryCount } from './packet.js';
 import type { PacketHostNote, PositionPacket } from './packet.js';
 import type { ScopeKey } from './scope-key.js';
+import { scopeKeyTextParts } from './scope-key.js';
 import { freeze } from './types.js';
 
 /**
@@ -278,16 +279,7 @@ const row = (cells: readonly string[]): string =>
 const table = (head: readonly string[], rows: readonly (readonly string[])[]): readonly string[] =>
   rows.length === 0 ? [] : [row(head), row(head.map(() => '---')), ...rows.map(row)];
 /** The key used, as `ia position` prints it (a location seat `''` as `.`), on one line. */
-const keyText = (key: ScopeKey): string =>
-  [
-    `seat ${key.seat === undefined ? "the repository's workspace" : inline(typeof key.seat === 'string' ? key.seat : key.seat.path || '.')}`,
-    `shape ${key.shape}`,
-    `phase ${key.phase}`,
-    `depth ${key.depth}`,
-    `budget ${key.budget}`,
-    ...(key.word === undefined ? [] : [`word ${key.word}`]),
-    ...(key.primitive === undefined ? [] : [`primitive ${key.primitive}`]),
-  ].join(', ');
+const keyText = (key: ScopeKey): string => scopeKeyTextParts(key).map(inline).join(', ');
 
 /**
  * The packet's sections in its field order: the seat, participants, mandates, system pointer lines, captured-record

@@ -2,6 +2,7 @@ import {
   chmodSync,
   cpSync,
   closeSync,
+  constants,
   fstatSync,
   lstatSync,
   openSync,
@@ -713,6 +714,24 @@ it('refuses installation state that gains a link while it is read, though the li
   await linkedWhileRead(resolve(root, PENDING), resolve(root, 'second.json'));
   expect(installation(root)).toMatchObject(unaliasedState);
 });
+it.skipIf(!constants.O_NOCTTY)(
+  'opens installation state with the no-controlling-terminal flag where the platform has it',
+  () => {
+    const root = workspace(),
+      state = resolve(root, PENDING);
+    put(root, PENDING, '{}');
+    vi.mocked(openSync).mockClear();
+    expect(installation(root)).toMatchObject(
+      distribution('recovery-required', 'Run explicit distribution recovery before reading'),
+    );
+    const flags = vi
+      .mocked(openSync)
+      .mock.calls.filter(([path]) => String(path) === state)
+      .map(([, flags]) => Number(flags));
+    expect(flags).toHaveLength(1);
+    expect(flags[0]! & constants.O_NOCTTY).toBe(constants.O_NOCTTY);
+  },
+);
 it.skipIf(process.platform === 'win32')(
   'refuses installation state a link replaces after its path is checked, reading nothing through the link',
   async () => {

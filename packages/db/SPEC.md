@@ -4,6 +4,8 @@
 
 `safePath` locates a symlink or junction refusal at the first unsafe workspace-relative component it encounters. Evidence writers preserve that location, so recovery can replace the workspace link itself instead of acting on a child through its external target. The walk stops before traversing the refused component; the existing read-only evidence behavior remains unchanged.
 
+Opened reads (2026-10-20): every db reader that opens a name before it judges what is there (the installed-distribution reader, the `.ia/workspace.json` manifest reader, package source capture, `readWorkspaceBytes` and `readEvidence`) opens it so that a terminal device put at the name cannot become the process's controlling terminal (`O_NOCTTY`, where the platform has that flag); the device is then judged as any other entry that is not a regular file.
+
 ## Runner journal evidence
 
 Event IDs are session command IDs: an atomic command may contribute up to 32 contiguous events with the same ID, actor and cause. Noncontiguous reuse, changed command attribution, and oversized command groups are rejected. Sequence and hash chaining identify each distinct event. Exact runner authority and limit refusal waits project refusal; unrelated waits remain inconclusive.

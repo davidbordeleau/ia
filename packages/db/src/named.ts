@@ -39,15 +39,19 @@ export interface OpenedJudgment<Unopened, Read> {
 }
 /**
  * Reads the file at `path` through one descriptor, so a reader's judgment and the bytes are of one file (CodeQL
- * js/file-system-race). The name is opened read-only before the file is judged: NOFOLLOW refuses a final link and
- * NONBLOCK keeps a FIFO from blocking the open; a flag a platform lacks is zero. The read allocates and reads the size the
- * opened file is judged at and one byte more, and the file is stated again after it. The descriptor stays open until
- * `read` returns or anything throws, so a check of the name in `read` compares identities with the file still held.
+ * js/file-system-race). The name is opened read-only before the file is judged: NOFOLLOW refuses a final link, NONBLOCK
+ * keeps a FIFO from blocking the open, and NOCTTY keeps a terminal opened there from becoming the process's controlling
+ * terminal before it is refused; a flag a platform lacks is zero. The read allocates and reads the size the opened file
+ * is judged at and one byte more, and the file is stated again after it. The descriptor stays open until `read` returns
+ * or anything throws, so a check of the name in `read` compares identities with the file still held.
  */
 export function readOpened<Unopened, Read>(path: string, judgment: OpenedJudgment<Unopened, Read>): Unopened | Read {
   let fd: number;
   try {
-    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    fd = openSync(
+      path,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0) | (constants.O_NOCTTY ?? 0),
+    );
   } catch (error) {
     return judgment.unopened(error as NodeJS.ErrnoException);
   }

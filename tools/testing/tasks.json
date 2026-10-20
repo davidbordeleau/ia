@@ -2166,6 +2166,20 @@
       ],
       "skips": [
         {
+          "case": "tests/check-evidence.test.ts > opens an evidence file with the no-controlling-terminal flag where the platform has it",
+          "reason": "Windows defines no O_NOCTTY flag, as it has no controlling terminal; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > opens installation state with the no-controlling-terminal flag where the platform has it",
+          "reason": "Windows defines no O_NOCTTY flag, as it has no controlling terminal; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
           "case": "tests/inputs.test.ts > refuses a FIFO or a socket among package sources by its listed type, opening neither",
           "reason": "FIFOs and Unix socket files have no Windows equivalent; Linux and macOS run the case.",
           "platforms": [

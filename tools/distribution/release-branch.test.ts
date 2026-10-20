@@ -160,3 +160,115 @@ it.each(['update', 'delete'] as const)(
   },
   60000,
 );
+
+const bot = '41898282+github-actions[bot]@users.noreply.github.com';
+/** A remote whose main has two commits, plus a commit factory with explicit author and committer identities. */
+async function clauseFixture(root: string) {
+  const { execFileSync } = await import('node:child_process');
+  const remote = resolve(root, '.git/clause-remote.git');
+  await git(root, 'init', '--bare', '--quiet', remote);
+  writeFileSync(resolve(root, 'version.txt'), 'first\n');
+  await git(root, 'add', 'version.txt');
+  await git(root, 'commit', '--quiet', '-m', 'First');
+  const first = await git(root, 'rev-parse', 'HEAD');
+  writeFileSync(resolve(root, 'version.txt'), 'base\n');
+  await git(root, 'add', 'version.txt');
+  await git(root, 'commit', '--quiet', '-m', 'Base');
+  const base = await git(root, 'rev-parse', 'HEAD');
+  await git(root, 'remote', 'add', 'origin', remote);
+  await git(root, 'push', '--quiet', 'origin', 'main');
+  await git(root, 'fetch', '--quiet', 'origin');
+  const commit = (
+    parents: string[],
+    message: string,
+    { author = bot, committer = bot }: { author?: string; committer?: string } = {},
+  ) =>
+    execFileSync(
+      'git',
+      ['commit-tree', `${base}^{tree}`, ...parents.flatMap((parent) => ['-p', parent]), '-m', message],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 'author',
+          GIT_AUTHOR_EMAIL: author,
+          GIT_COMMITTER_NAME: 'committer',
+          GIT_COMMITTER_EMAIL: committer,
+        },
+      },
+    ).trim();
+  const publish = async (head: string) =>
+    git(root, 'push', '--quiet', '--force', 'origin', `${head}:refs/heads/release/next`);
+  const automation = (parent = base) => `Release 1.1.0\n\nIA-Release-Automation: v1\nIA-Release-Base: ${parent}`;
+  return { first, base, commit, publish, automation };
+}
+
+// One case per recognition clause: each differs from an accepted automation commit in that clause alone.
+it.each([
+  ['a merge parent', 'merge'],
+  ['a declared base other than its parent', 'base'],
+  ['no automation marker', 'marker'],
+  ['a subject that is not a stable release', 'subject'],
+  ['a maintainer author', 'author'],
+  ['a maintainer committer', 'committer'],
+  ['an unmarked commit on top', 'unmarked'],
+  ['a marked preparation merge on top', 'preparation-merge'],
+  ['a preparation commit without the automation commit', 'preparation-only'],
+] as const)(
+  'refuses an automation commit with %s',
+  async (_label, clause) => {
+    const { deleteReleaseBranch } = await import('./release-branch.mjs');
+    await inRepository(async (root) => {
+      const { first, base, commit, publish, automation } = await clauseFixture(root);
+      const valid = () => commit([base], automation());
+      const head = {
+        merge: () => commit([base, first], automation()),
+        base: () => commit([base], automation(first)),
+        marker: () => commit([base], `Release 1.1.0\n\nIA-Release-Base: ${base}`),
+        subject: () => commit([base], automation().replace('1.1.0', '1.1')),
+        author: () => commit([base], automation(), { author: 'maintainer@example.com' }),
+        committer: () => commit([base], automation(), { committer: 'maintainer@example.com' }),
+        unmarked: () => commit([valid()], 'Regenerate assets'),
+        'preparation-merge': () =>
+          commit([valid(), first], 'Regenerate assets\n\nIA-Release-Preparation: v1', {
+            author: 'maintainer@example.com',
+          }),
+        'preparation-only': () => commit([base], 'Regenerate assets\n\nIA-Release-Preparation: v1'),
+      }[clause]();
+      await publish(head);
+      expect(() => deleteReleaseBranch(root)).toThrow('unrecognized release/next commits');
+      expect(await git(root, 'ls-remote', 'origin', 'refs/heads/release/next')).toContain(head);
+      // The same fixture accepts the unmodified automation commit.
+      const accepted = valid();
+      await publish(accepted);
+      expect(deleteReleaseBranch(root).previous).toBe(accepted);
+    });
+  },
+  60_000,
+);
+
+it.each(['update', 'delete'] as const)(
+  'replaces marked maintainer preparation commits on %s',
+  async (operation) => {
+    const { PREPARATION_MARKER, updateReleaseBranch, deleteReleaseBranch } = await import('./release-branch.mjs');
+    await inRepository(async (root) => {
+      const { base, commit, publish, automation } = await clauseFixture(root);
+      const maintainer = { author: 'maintainer@example.com', committer: 'maintainer@example.com' };
+      const prepared = commit([commit([base], automation())], `Regenerate assets\n\n${PREPARATION_MARKER}`, maintainer);
+      const refreshed = commit([prepared], `Refresh coverage\n\n${PREPARATION_MARKER}`, maintainer);
+      await publish(refreshed);
+      if (operation === 'update') {
+        writeFileSync(resolve(root, 'version.txt'), 'next\n');
+        await git(root, 'add', 'version.txt');
+        const result = updateReleaseBranch(root, '1.2.0');
+        expect(result.previous).toBe(refreshed);
+        expect(await git(root, 'ls-remote', 'origin', 'refs/heads/release/next')).toContain(result.head);
+      } else {
+        expect(deleteReleaseBranch(root).previous).toBe(refreshed);
+        expect(await git(root, 'ls-remote', 'origin', 'refs/heads/release/next')).toBe('');
+      }
+    });
+  },
+  60_000,
+);

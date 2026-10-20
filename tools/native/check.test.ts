@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateSystems } from '../../packages/compliance/src/index.js';
 import { open } from '../../packages/db/src/index.js';
 import { position } from '../../packages/runtime/src/index.js';
-import { checkNative, nativeOutcome, readNative } from './check.js';
+import { architectureFindings, checkNative, nativeOutcome, readNative } from './check.js';
+import { RELEASE_ROOTS_PATH } from './release-roots.js';
 import { compileNative } from './compile.js';
 import type { NativeInput } from './compile.js';
 import { observeFoundationAuthoring } from '../compliance/fixture-authoring.js';
@@ -307,6 +310,14 @@ describe("this repository's participant pair", () => {
     // Outside every system folder the file joins no system's assessment and registers nothing.
     const without = compileNative(own.inputs.filter((input) => input.path !== participantFile));
     expect([...corpus.registry.registrations.keys()]).toEqual([...without.registry.registrations.keys()]);
+  });
+  it('adds release-root drift to the architecture findings native:check reports', () => {
+    expect(architectureFindings(corpus.records, root)).toEqual([]);
+    const drifted = (path: string) =>
+      path === RELEASE_ROOTS_PATH ? 'stale' : readFileSync(resolve(root, path), 'utf8');
+    expect(architectureFindings(corpus.records, root, drifted).map((f) => [f.code, f.path])).toEqual([
+      ['IA-NATIVE-RELEASE-ROOTS', RELEASE_ROOTS_PATH],
+    ]);
   });
   it('claims every path under .ia/src and is the mandate of K0, as ia position reads them', () => {
     const db = open(root, { cache: false });

@@ -123,7 +123,8 @@ export function openKnowledgeView(snapshot: KnowledgeSnapshot | ReturnType<typeo
         return fail('Pinned knowledge snapshot unavailable', 'IA-KB-SNAPSHOT-UNAVAILABLE');
       return result;
     },
-    search(query: string, limit: number = LIMITS.results) {
+    /** `envelope` wraps the value as its transport sends it, so truncation counts the complete response. */
+    search(query: string, limit: number = LIMITS.results, envelope: (value: unknown) => unknown = (value) => value) {
       available();
       if (
         typeof query !== 'string' ||
@@ -153,7 +154,7 @@ export function openKnowledgeView(snapshot: KnowledgeSnapshot | ReturnType<typeo
         truncated: hits.length > results.length,
         incomplete: unavailable.length > 0,
       };
-      while (Buffer.byteLength(JSON.stringify(result)) > LIMITS.responseBytes && results.length) {
+      while (Buffer.byteLength(JSON.stringify(envelope(result))) > LIMITS.responseBytes && results.length) {
         results.pop();
         result.truncated = true;
       }

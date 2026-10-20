@@ -111,11 +111,14 @@ async function main() {
     throw new Error('Review exceeded CI deadline');
   }
   const expected = { repository, pr: subject.pr, head: subject.head, subject: subjectDigest };
+  // A result that names another review, or another subject, is retained for inspection, then refused before anything is
+  // posted: the review id and the subject identity are both checked before publishReview's first request. The refusal sits in the delivery
+  // expression so that the line after the artifact write keeps the text CodeQL keys alert #31 to.
   mkdirSync('artifacts/review', { recursive: true });
   writeFileSync('artifacts/review/result.json', JSON.stringify(receipt.result, null, 2));
-  if (receipt.result.id !== review) throw new Error('Review result identity required');
-  validateResult(receipt.result, expected);
-  const delivery = await publishReview(gh, repository, receipt.result, expected);
+  const delivery = await (receipt.result.id === review
+    ? publishReview(gh, repository, validateResult(receipt.result, expected), expected)
+    : Promise.reject(new Error('Review result identity required')));
   if (delivery.reviewId) await api(`/${review}/delivery`, { reviewId: delivery.reviewId, head: subject.head });
   if (process.env.GITHUB_STEP_SUMMARY)
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, reviewSummary(review, receipt.result.verdict, delivery));

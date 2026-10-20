@@ -2,6 +2,9 @@ import { afterEach, expect, it } from 'vitest';
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { Door } from '@inventarch/runtime';
+import { LIMITS } from '@inventarch/kb';
+import { knowledgeTool, MEMBERSHIP } from '../src/kb.js';
 import { Protocol, PROTOCOL_VERSION } from '../src/protocol.js';
 const roots: string[] = [],
   servers: Protocol[] = [];
@@ -134,4 +137,89 @@ it('refuses a stale citation and a native scope whose graph changed', () => {
     '#! ia 1.0\n@spec alpha\n  meaning\n    says "Changed graph."\n  work\n    title "Alpha"\n    status draft\n',
   );
   expect(call('ia_kb_read', { within, locator: ID })).toMatchObject({ ok: false });
+});
+it('answers an id too long for any bounded knowledge response with that id, before reading', () => {
+  const { server } = fixture(),
+    id = 'i'.repeat(60000);
+  const response = server.request({
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: { name: 'ia_kb_check', arguments: {} },
+  });
+  expect(response).toMatchObject({ id, error: { code: -32600 } });
+});
+it('refuses an oversized knowledge response with the bounded refusal and the original id', () => {
+  const { root, server } = fixture();
+  writeFileSync(join(root, 'alpha.md'), 'x'.repeat(30 * 1024));
+  const response = server.request({
+    jsonrpc: '2.0',
+    id: 'over',
+    method: 'tools/call',
+    params: { name: 'ia_kb_read', arguments: { locator: ID } },
+  });
+  expect(response).toMatchObject({
+    id: 'over',
+    result: { isError: true, structuredContent: { error: { code: 'IA-KB-RESPONSE-LIMIT' } } },
+  });
+  expect(Buffer.byteLength(JSON.stringify(response))).toBeLessThanOrEqual(LIMITS.responseBytes);
+});
+/** Membership as the tool sees it: every record in scope, and the authored records capture can select. */
+function membership(root: string) {
+  const door = new Door(root, { cache: false });
+  try {
+    const records = (door.request({ operation: 'records', params: {} }) as { result: { records: any[] } }).result
+      .records;
+    const authored = records.filter(
+      (r) =>
+        r.placement.kind === 'authored' &&
+        r.source.path.startsWith('.ia/src/') &&
+        !r.source.path.startsWith('.ia/src/floor/'),
+    );
+    return { total: records.length, authored };
+  } finally {
+    door.close();
+  }
+}
+it('counts only selectable authored records against the 1000-record membership budget', () => {
+  const { root } = fixture(),
+    { total, authored } = membership(root);
+  // Floor records are in the Door's membership but never selectable, so they spend no budget.
+  expect(total).toBeGreaterThan(authored.length);
+  const write = (count: number) =>
+    writeFileSync(
+      join(root, '.ia/src/knowledge/many.ia'),
+      '#! ia 1.0\n' +
+        Array.from(
+          { length: count },
+          (_, i) => '@spec budget-' + i + '\n  meaning\n    says "Budget."\n  work\n    title "B"\n    status draft\n',
+        ).join('\n'),
+    );
+  const check = () => {
+    const door = new Door(root, { cache: false });
+    try {
+      return knowledgeTool(root, door, 'check', {});
+    } finally {
+      door.close();
+    }
+  };
+  write(MEMBERSHIP.records - authored.length);
+  expect(membership(root).authored).toHaveLength(MEMBERSHIP.records);
+  expect(check()).not.toMatchObject({ error: { code: 'IA-KB-SCOPE-LIMIT' } });
+  write(MEMBERSHIP.records - authored.length + 1);
+  expect(check()).toMatchObject({ ok: false, error: { code: 'IA-KB-SCOPE-LIMIT' } });
+}, 120000);
+it('admits authored membership of exactly the byte budget and refuses one byte less of budget', () => {
+  const { root } = fixture(),
+    bytes = Buffer.byteLength(JSON.stringify(membership(root).authored)),
+    door = new Door(root, { cache: false });
+  try {
+    expect(knowledgeTool(root, door, 'check', {}, { records: MEMBERSHIP.records, bytes })).toMatchObject({ ok: true });
+    expect(knowledgeTool(root, door, 'check', {}, { records: MEMBERSHIP.records, bytes: bytes - 1 })).toMatchObject({
+      ok: false,
+      error: { code: 'IA-KB-SCOPE-LIMIT' },
+    });
+  } finally {
+    door.close();
+  }
 });

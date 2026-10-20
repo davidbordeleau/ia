@@ -6,6 +6,7 @@ import { compactContext } from './presentation.js';
 import { vocabulary } from './vocabulary.js';
 import { knowledgeTool } from './kb.js';
 import type { KnowledgeOperation } from '@inventarch/kb/protocol';
+import { LIMITS } from '@inventarch/kb';
 
 export const PROTOCOL_VERSION = '2025-11-25';
 const PACKAGE_VERSION: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -101,7 +102,25 @@ export class Protocol {
         if (format !== undefined && format !== 'full' && format !== 'compact')
           return rpcError(requestId, -32602, 'context format must be full or compact');
         if (operation === 'context') delete args['format'];
-        const raw = operation.startsWith('kb:')
+        const knowledge = operation.startsWith('kb:'),
+          size = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
+        const refusal = {
+          version: 1,
+          ok: false,
+          error: {
+            code: 'IA-KB-RESPONSE-LIMIT',
+            message: 'Knowledge transport response exceeds 48 KiB; narrow the request',
+          },
+        };
+        const bounded = success({
+          content: [{ type: 'text', text: JSON.stringify(refusal) }],
+          structuredContent: refusal,
+          isError: true,
+        });
+        // An id too long for even the bounded refusal is refused before any work, still answering that id.
+        if (knowledge && size(bounded) > LIMITS.responseBytes)
+          return rpcError(requestId, -32600, 'Knowledge request id exceeds response budget');
+        const raw = knowledge
           ? knowledgeTool(this.#root, this.#door, operation.slice(3) as KnowledgeOperation, args)
           : operation === 'vocabulary'
             ? vocabulary(args)
@@ -117,30 +136,12 @@ export class Protocol {
         if (operation === 'kb:search' && result.ok && 'value' in result) {
           const search = result.value as { results: readonly unknown[]; truncated: boolean };
           const results = [...search.results];
-          while (Buffer.byteLength(JSON.stringify(response)) > 48 * 1024 && results.length) {
+          while (size(response) > LIMITS.responseBytes && results.length) {
             results.pop();
             response = envelope({ ...result, value: { ...search, results, truncated: true } });
           }
         }
-        if (operation.startsWith('kb:') && Buffer.byteLength(JSON.stringify(response)) > 48 * 1024) {
-          const refusal = {
-            version: 1,
-            ok: false,
-            error: {
-              code: 'IA-KB-RESPONSE-LIMIT',
-              message: 'Knowledge transport response exceeds 48 KiB; narrow the request',
-            },
-          };
-          const bounded = success({
-            content: [{ type: 'text', text: JSON.stringify(refusal) }],
-            structuredContent: refusal,
-            isError: true,
-          });
-          return Buffer.byteLength(JSON.stringify(bounded)) <= 48 * 1024
-            ? bounded
-            : rpcError(null, -32600, 'Knowledge request id exceeds response budget');
-        }
-        return response;
+        return knowledge && size(response) > LIMITS.responseBytes ? bounded : response;
       }
       return rpcError(requestId, -32601, `Unknown method '${method}'`);
     } catch {

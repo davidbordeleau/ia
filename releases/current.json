@@ -1,6 +1,6 @@
 {
   "format": "ia.npm-cohort.v1",
-  "version": "3.3.0",
+  "version": "3.2.2",
   "tag": "latest",
   "baseline": {
     "commit": "59ffc30ae41f02f3acdf5dab4efbe4a00717a471",

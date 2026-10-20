@@ -36,8 +36,9 @@ const folders = [
 try {
   const consumer = resolve(temporary, 'consumer with spaces');
   const names = folders.map((folder) => JSON.parse(readFileSync(resolve(root, folder, 'package.json'), 'utf8')).name);
-  const packed = selected.packed.filter((row) => names.includes(row.name));
-  installConsumer(consumer, packed, pnpm, { name: 'independent-projections-consumer', names });
+  // Packed system manifests depend on the whole native cohort at the candidate version, which may be unpublished.
+  // Override every cohort member with its verified local archive; `names` only selects the direct dependencies.
+  installConsumer(consumer, selected.packed, pnpm, { name: 'independent-projections-consumer', names });
 
   const systems = readInputs(root, { adopted: [] }).sources.map((source) => source.path);
   for (const source of readInputs(root, { adopted: [] }).sources) {

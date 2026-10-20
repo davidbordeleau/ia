@@ -2589,6 +2589,14 @@
           ]
         },
         {
+          "case": "tests/publication.test.ts > qualified local NTFS publication throws for a marker or a file whose name is gone after its read, with the error of the lstat that finds it gone",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
           "case": "tests/publication.test.ts > qualified local NTFS publication throws the open error of a marker within 2 MiB, or of a file of its expected size, that cannot be opened",
           "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
           "platforms": [

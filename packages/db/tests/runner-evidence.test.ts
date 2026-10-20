@@ -356,6 +356,30 @@ it('bounds receipt reads and ignores hard-linked or junction receipts while refu
   expect(() => writeRunnerEvidence(other, journal(other))).toThrow();
 });
 
+it('admits the same runner evidence when conformance verification fails the report (D10a)', () => {
+  // The native example corpus keeps a floor of its own, so a verifying reader fails COMP-KERNEL and the report.
+  const root = workspace();
+  writeRunnerEvidence(root, journal(root));
+  const read = (verify: boolean) => {
+    const db = open(root, { cache: false, evidence: true, ...(verify ? { conformance: 'verify' as const } : {}) });
+    try {
+      return {
+        outcome: db.report.outcome,
+        revision: db.revision,
+        records: db.records().map((node) => [node.identity, node.band] as const),
+      };
+    } finally {
+      db.close();
+    }
+  };
+  const plain = read(false),
+    verified = read(true);
+  expect(verified.outcome).toBe('fail');
+  expect(verified.records.some(([, band]) => band === 0)).toBe(true);
+  expect(verified.revision).toBe(plain.revision);
+  expect(verified.records).toEqual(plain.records);
+});
+
 it('refreshes evidence through the normal editor reader and invalidates prior scope tokens', () => {
   const root = workspace(),
     input = journal(root),

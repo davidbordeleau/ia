@@ -177,10 +177,21 @@ describe('conformance verification (D10)', () => {
     const bytes = readFileSync(cache);
     plain.close();
     const disk = open(root, { conformance: 'verify' });
+    expect(disk.cache.state).toBe('hit');
     expect(conformance(disk.report)).toEqual(verified('pass'));
     expect(conformance(disk.preview([draft]).report)).toEqual(verified('pass'));
     expect(readFileSync(cache)).toEqual(bytes);
     disk.close();
+    // A verifying open on a fresh root writes the cache, the same bytes an unverified open writes there.
+    const fresh = workspace(false),
+      freshCache = resolve(fresh, '.ia/.iadb/graph.json'),
+      written = open(fresh, { conformance: 'verify' });
+    expect(written.cache.state).toBe('written');
+    written.close();
+    const verifiedBytes = readFileSync(freshCache);
+    rmSync(freshCache);
+    open(fresh).close();
+    expect(readFileSync(freshCache)).toEqual(verifiedBytes);
   });
   it('fails COMP-KERNEL for a local floor one byte away from the embedded one, instead of leaving it unevaluated', () => {
     const root = changedFloor(),

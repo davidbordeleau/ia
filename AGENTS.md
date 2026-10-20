@@ -32,9 +32,9 @@
 
 - agent 12
 - authoring-guide 44
-- case 13
+- case 6
 - check 1
-- contract 4
+- contract 2
 - decision 2
 - distribution 12
 - execution-binding 1
@@ -84,7 +84,7 @@
 ## SPEC lines
 
 - run ia position; if it refuses, run the command it names
-- state intent to the CLI as shape + optional phase + optional primitive + optional seat + optional word; the CLI never receives free text
+- state intent to the CLI as shape + optional phase + optional seat + optional word; the CLI never receives free text
 - when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation
 
-ia-generated 3d9e3f2e6612118722e64c9005b2a57fb8f0e17c0a97f0f8fb1b21302606a5c9 d26be53b8caa86ada05ba0dc4618cef19e72a9e511e46767e4f360952d30ffe2 ia-codex
+ia-generated b394e7ea973af8f5bbcd429e6aa44c8868c0d96b283addad708fce0f6f444b1a ec72725d8847c2bba3eebd2552338a22ca147856e0783386dbff2700dde45c5a ia-codex

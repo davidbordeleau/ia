@@ -1,4 +1,5 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import { readWorkspaceBytes } from '@inventarch/db';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,7 @@ import { captureKnowledge } from '../src/local.js';
 import type { KnowledgeSelection } from '../src/package.js';
 import { executeKnowledge } from '../src/protocol.js';
 import { openKnowledgeView } from '../src/view.js';
+vi.mock('@inventarch/db', { spy: true });
 const base = JSON.parse(
   readFileSync(new URL('./fixtures/legacy-foundation.json', import.meta.url), 'utf8'),
 ) as Foundation;
@@ -17,6 +19,7 @@ const sources = base.capture.sources
 const input = { adopted: [{ id: 'public-base', revision: digest(sources), sources }] };
 const roots: string[] = [];
 afterEach(() => {
+  vi.clearAllMocks();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 function workspace(): string {
@@ -59,7 +62,10 @@ it('reads a body listed in the selection and leaves an unlisted one unavailable'
     resources,
   });
   expect(outcome(root, { selection: selection(['bodies/k000.md']) })).toEqual({ records: 1, unavailable: [] });
+  expect(readWorkspaceBytes).toHaveBeenCalledWith(root, 'bodies/k000.md', LIMITS.fileBytes);
+  vi.mocked(readWorkspaceBytes).mockClear();
   expect(outcome(root, { selection: selection([]) })).toMatchObject({ records: 0, unavailable: [expect.any(String)] });
+  expect(vi.mocked(readWorkspaceBytes).mock.calls.some(([, path]) => path === 'bodies/k000.md')).toBe(false);
 });
 
 it('reads a body of exactly the file byte limit and refuses one byte more', () => {
@@ -101,7 +107,7 @@ it('reads exactly the selected byte budget and refuses one byte more', () => {
   expect(outcome(root)).toMatchObject({ records: count - 1, unavailable: [expect.any(String)] });
 });
 
-it('truncates search against the complete protocol envelope at the response boundary', () => {
+it.each([10, 1])('truncates search with a bare result %i bytes below the response boundary', (margin) => {
   const root = workspace(),
     count = 100,
     write = (padding: (i: number) => number) =>
@@ -120,9 +126,9 @@ it('truncates search against the complete protocol envelope at the response boun
   const first = measure();
   first.view.close();
   expect(first.results).toBeLessThan(count);
-  // Grow the kept results until the bare value sits 10 bytes under the limit: inside the bound alone, over it
+  // Grow the kept results until the bare value sits just under the limit: inside the bound alone, over it
   // once `{"version":1,"ok":true,"value":…}` wraps it.
-  let gap = LIMITS.responseBytes - 10 - first.bytes;
+  let gap = LIMITS.responseBytes - margin - first.bytes;
   const extra = Array.from({ length: count }, () => 0);
   for (let i = 0; gap > 0 && i < first.results; i++) {
     extra[i] = Math.min(gap, 40);
@@ -131,7 +137,7 @@ it('truncates search against the complete protocol envelope at the response boun
   write((i) => 110 + extra[i]!);
   const edge = measure();
   try {
-    expect(edge).toMatchObject({ results: first.results, bytes: LIMITS.responseBytes - 10 });
+    expect(edge).toMatchObject({ results: first.results, bytes: LIMITS.responseBytes - margin });
     const wrapped = Buffer.byteLength(JSON.stringify({ version: 1, ok: true, value: edge.view.search('needle') }));
     expect(wrapped).toBeGreaterThan(LIMITS.responseBytes);
     const response = executeKnowledge(edge.view, 'search', { query: 'needle' });

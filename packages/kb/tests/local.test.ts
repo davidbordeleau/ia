@@ -1,4 +1,5 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import { readWorkspaceBytes } from '@inventarch/db';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +7,7 @@ import type { Foundation } from '../src/foundation.js';
 import { digest } from '../src/format.js';
 import { captureKnowledge } from '../src/local.js';
 import { openKnowledgeView } from '../src/view.js';
+vi.mock('@inventarch/db', { spy: true });
 const base = JSON.parse(
   readFileSync(new URL('./fixtures/legacy-foundation.json', import.meta.url), 'utf8'),
 ) as Foundation;
@@ -87,6 +89,7 @@ it.each(['cites', 'cited-by'])('preserves cross-file graph direction for %s', (s
 
 const roots: string[] = [];
 afterEach(() => {
+  vi.clearAllMocks();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 function local() {
@@ -138,8 +141,11 @@ it('scope excludes hidden body terms, identities and edges without reading the h
     '#! ia 1.0\n@spec hidden\n  meaning\n    says "Hidden."\n  work\n    title "Hidden"\n    status draft\n    source "hidden.md"\n  relationships\n    cites @spec alpha\n',
   );
   writeFileSync(join(root, 'hidden.md'), 'private-body-term');
+  vi.mocked(readWorkspaceBytes).mockClear();
   const view = openKnowledgeView(captureKnowledge(root, { input, identities: [ID] }));
   try {
+    expect(readWorkspaceBytes).toHaveBeenCalledWith(root, 'README.md', expect.any(Number));
+    expect(vi.mocked(readWorkspaceBytes).mock.calls.some(([, path]) => path === 'hidden.md')).toBe(false);
     expect(view.search('private-body-term')).toMatchObject({ results: [], truncated: false, incomplete: false });
     expect(view.check()).toMatchObject({ records: 1, unavailable: [] });
     expect(view.traverse(ID)).toMatchObject({ identities: [ID], edges: [] });

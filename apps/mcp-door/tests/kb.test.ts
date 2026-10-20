@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -6,9 +6,11 @@ import { Door } from '@inventarch/runtime';
 import { LIMITS } from '@inventarch/kb';
 import { knowledgeTool, MEMBERSHIP } from '../src/kb.js';
 import { Protocol, PROTOCOL_VERSION } from '../src/protocol.js';
+vi.mock('../src/kb.js', { spy: true });
 const roots: string[] = [],
   servers: Protocol[] = [];
 afterEach(() => {
+  vi.clearAllMocks();
   for (const s of servers.splice(0)) s.close();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
@@ -139,8 +141,12 @@ it('refuses a stale citation and a native scope whose graph changed', () => {
   expect(call('ia_kb_read', { within, locator: ID })).toMatchObject({ ok: false });
 });
 it('answers an id too long for any bounded knowledge response with that id, before reading', () => {
-  const { server } = fixture(),
+  const { server, call } = fixture(),
     id = 'i'.repeat(60000);
+  vi.mocked(knowledgeTool).mockClear();
+  expect(call('ia_kb_check')).toMatchObject({ ok: true });
+  expect(knowledgeTool).toHaveBeenCalledTimes(1);
+  vi.mocked(knowledgeTool).mockClear();
   const response = server.request({
     jsonrpc: '2.0',
     id,
@@ -148,6 +154,8 @@ it('answers an id too long for any bounded knowledge response with that id, befo
     params: { name: 'ia_kb_check', arguments: {} },
   });
   expect(response).toMatchObject({ id, error: { code: -32600 } });
+  expect(knowledgeTool).not.toHaveBeenCalled();
+  expect(Buffer.byteLength(JSON.stringify(response))).toBeGreaterThan(LIMITS.responseBytes);
 });
 it('refuses an oversized knowledge response with the bounded refusal and the original id', () => {
   const { root, server } = fixture();

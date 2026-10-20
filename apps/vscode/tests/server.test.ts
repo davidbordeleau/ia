@@ -132,6 +132,58 @@ it('initializes beside package links and answers real stdio editor requests', as
   });
 });
 
+it('stays up for a folder whose installation is refused, names it once, and opens it after a restore', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-vscode-lsp-'));
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+  // A portable lock without an active installation is refused before any source is read, like a drifted lock.
+  const lock = resolve(root, '.ia/distributions.lock.json');
+  mkdirSync(dirname(lock), { recursive: true });
+  writeFileSync(lock, '{}');
+  const scope = createScope(),
+    child = spawnOwned(scope, 'vscode server', process.execPath, [resolve(import.meta.dirname, '../dist/server.cjs')], {
+      timeoutMs: 25_000,
+    });
+  cleanup.push(() => scope.dispose());
+  const connection = createMessageConnection(
+    new StreamMessageReader(child.stdout),
+    new StreamMessageWriter(child.stdin),
+  );
+  cleanup.push(() => connection.dispose());
+  const shown: { type: number; message: string }[] = [],
+    states: string[] = [];
+  connection.onNotification('window/showMessage', (params: { type: number; message: string }) => shown.push(params));
+  connection.onNotification('ia/editor/v1/status', (params: { state: string }) => states.push(params.state));
+  connection.listen();
+  const initialized = await connection.sendRequest<{ capabilities: { definitionProvider: boolean } }>('initialize', {
+    processId: null,
+    capabilities: {},
+    initializationOptions: { protocol: 1, root },
+  });
+  expect(initialized.capabilities.definitionProvider).toBe(true);
+  await connection.sendNotification('initialized', {});
+  await expect(connection.sendRequest('ia/editor/v1/request', { protocol: 1, operation: 'view' })).rejects.toThrow(
+    'Local capture failed',
+  );
+  // MessageType.Error, naming the folder and the reader's reason.
+  expect(shown).toHaveLength(1);
+  expect(shown[0]?.type).toBe(1);
+  expect(shown[0]?.message).toContain(`IA language cannot read ${root}: `);
+  expect(shown[0]?.message).toContain('Portable lock has no active installation');
+  // A retry that fails the same way reports the status again but does not repeat the message.
+  await expect(connection.sendRequest('ia/editor/v1/request', { protocol: 1, operation: 'rebuild' })).rejects.toThrow(
+    'Portable lock has no active installation',
+  );
+  expect(shown).toHaveLength(1);
+  expect(states.at(-1)).toBe('unavailable');
+  rmSync(lock);
+  const view = await connection.sendRequest<EditorView>('ia/editor/v1/request', { protocol: 1, operation: 'rebuild' });
+  expect(view.records.length).toBeGreaterThan(0);
+  expect(states.at(-1)).toBe('ready');
+  expect(shown).toHaveLength(1);
+  await connection.sendRequest('shutdown');
+  await connection.sendNotification('exit');
+});
+
 it('admits project records through a pinned workspace binding and resolves read-only adopted schemas', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-vscode-lsp-'));
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));

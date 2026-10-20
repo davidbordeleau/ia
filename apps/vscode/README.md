@@ -12,7 +12,9 @@
 2. In VS Code 1.138.0 or later, run **Extensions: Install from VSIX…** from the Command Palette and select the file.
 3. Open the project folder that contains `.ia/`, then open a file under `.ia/src/`, such as `.ia/src/decision.ia` from the [root quick start](https://github.com/inventarch/ia#-quick-start).
 
-The extension activates on the first `.ia` file and starts one language server per workspace folder; in a multi-root workspace each folder gets its own.
+The extension activates on the first `.ia` file and starts one language server per workspace folder; in a multi-root workspace each folder gets its own, with an **IA language (*folder*)** output channel.
+
+When a folder's installed distribution cannot be read, for example after a pull changed `.ia/distributions.lock.json` and nobody ran `ia restore`, that folder's server stays up and shows one error naming the folder and the reason. It reads the folder again when `.ia/distributions.lock.json`, `.ia/distributions/active.json` or a `.ia` file changes. The other folders keep working.
 
 ## 🧭 What it does
 

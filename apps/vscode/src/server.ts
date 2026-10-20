@@ -11,6 +11,8 @@ import {
   ErrorCodes,
   CodeActionKind,
   InlayHintKind,
+  MessageType,
+  ShowMessageNotification,
 } from 'vscode-languageserver/node';
 import type { CompletionItem, Diagnostic, Location, TextDocumentPositionParams } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -26,13 +28,16 @@ const documents = new TextDocuments(TextDocument);
 const legend = ['type', 'class', 'namespace', 'variable', 'property', 'keyword', 'enumMember', 'string'];
 let owner: EditorWorkspace | undefined,
   root = '',
+  started = false,
   pending = false,
   refresh = false,
   timer: NodeJS.Timeout | undefined;
 let published = new Set<string>(),
   debounce = 150,
   hints = true,
-  unavailable = false;
+  unavailable = false,
+  startup: unknown,
+  reported: string | undefined;
 const virtual = new Map<string, string>();
 function workspace(): EditorWorkspace {
   if (owner === undefined) throw new EditorError('unavailable', 'No local workspace owner');
@@ -99,11 +104,24 @@ function publish(): void {
     diagnostics: workspace().diagnostics().length,
   });
 }
+// Each workspace folder runs its own server, so the message names the folder; it is shown once per distinct failure.
+function report(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  void connection.sendNotification(METHOD + 'status', { state: 'unavailable', message });
+  if (message === reported) return;
+  reported = message;
+  void connection.sendNotification(ShowMessageNotification.type, {
+    type: MessageType.Error,
+    message: `IA language cannot read ${root}: ${message}`,
+  });
+}
 function flush(): void {
-  if (!pending || owner === undefined) return;
+  if (!pending || !started) return;
   if (timer !== undefined) clearTimeout(timer);
   timer = undefined;
   try {
+    // A folder whose installation was refused at startup is opened again on the next edit or watched-file change.
+    owner ??= new EditorWorkspace(root);
     const overlays = documents.all().flatMap((doc) => {
       const path = sourcePath(doc.uri);
       if (path === undefined || URI.parse(doc.uri).scheme !== 'file') return [];
@@ -116,6 +134,7 @@ function flush(): void {
     unavailable = false;
     pending = false;
     refresh = false;
+    reported = undefined;
     virtual.clear();
     publish();
   } catch (error) {
@@ -125,10 +144,7 @@ function flush(): void {
     // Clear stale problems: retained internal state is unavailable for host actions until rebuilt.
     for (const uri of published) void connection.sendDiagnostics({ uri, diagnostics: [] });
     published.clear();
-    void connection.sendNotification(METHOD + 'status', {
-      state: 'unavailable',
-      message: error instanceof Error ? error.message : String(error),
-    });
+    report(error);
     throw error;
   }
 }
@@ -173,7 +189,15 @@ connection.onInitialize((params) => {
   if (options?.protocol !== 1 || typeof options.root !== 'string')
     throw new ResponseError(ErrorCodes.InvalidParams, 'A local root and editor protocol 1 are required');
   root = options.root;
-  owner = new EditorWorkspace(root);
+  started = true;
+  // A refused installation (lock drift, missing restore) must not fail initialize: the client would restart the
+  // server until it gave up. The server stays up, reports the folder once initialized, and retries on changes.
+  try {
+    owner = new EditorWorkspace(root);
+  } catch (error) {
+    unavailable = true;
+    startup = error;
+  }
   debounce = options.debounce ?? 150;
   hints = options.hints ?? true;
   return {
@@ -195,7 +219,7 @@ connection.onInitialize((params) => {
     serverInfo: { name: 'InventArch', version },
   };
 });
-connection.onInitialized(() => publish());
+connection.onInitialized(() => (owner === undefined ? report(startup) : publish()));
 documents.onDidChangeContent(() => schedule());
 documents.onDidSave(() => schedule(true));
 documents.onDidClose(() => schedule(true));

@@ -228,7 +228,8 @@ export function readWorkspaceBytes(root: string, path: string, limit: number): U
     // opened file's size plus one, even if a concurrent writer grows it.
     return readOpened(file, {
       unopened: (error) => {
-        // Windows may refuse opening a directory. Preserve the same public refusal as an opened non-file.
+        // A link the open refused, a socket, or anything else whose open fails is judged by its name: refuse it as an
+        // opened one is refused.
         const named = lstatSync(file, { bigint: true });
         if (!named.isFile() || named.nlink !== 1n) throw unsafe();
         throw error;

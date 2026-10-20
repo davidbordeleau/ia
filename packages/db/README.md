@@ -58,7 +58,7 @@ try {
 | `@inventarch/db/distribution` | Strict decoders and canonical bytes for release descriptors, manifests, locks, generation membership, activation pointers and the installed-implementation catalog, and `readInstalledGeneration`, which verifies the active installed generation. |
 | `@inventarch/db/descriptors` | Pure, bounded compilers for `domain-model`, `storage-binding` and `app-composition` descriptor resources; see [their contract](src/descriptors/SPEC.md). |
 
-When recording D14 validation or runner evidence, bind checks against a reader opened without `conformance: 'verify'`. Verification changes report verdicts, while evidence admission uses the unverified report. The public `Handle` and `EditorSnapshot` do not expose the internal `View.unverified` report: keep the validation session unverified and use a second verifying reader for display. Before combining their results, require matching `authoredRevision` values; retry if the workspace changed between reads.
+When you record validation evidence (`bindChecks`, then `writeEvidence`), bind the checks from a report without verification: verification changes the COMP-KERNEL and COMP-FIXTURES verdicts, and every reader admits evidence only as an unverified report binds it. `EditorSnapshot.inspect()` returns a `View` carrying both: `report`, verified when asked, and `unverified`, the report without verification. A `Handle` exposes only `report`, so record from a handle opened without `conformance: 'verify'` and use a second, verifying handle for display, requiring matching `authoredRevision` values before combining their results and reading again if the workspace changed between reads.
 
 The `./internal/*` subpaths serve specific toolchain consumers and are not a stable contract.
 

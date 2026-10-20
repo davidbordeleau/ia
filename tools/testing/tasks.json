@@ -3354,7 +3354,9 @@
       ],
       "mode": "source",
       "inputProfile": "workspace-records",
-      "dependsOn": [],
+      "dependsOn": [
+        "workspace-runtime:build"
+      ],
       "outputs": [
         "artifacts/tests/tools-test-projections"
       ],

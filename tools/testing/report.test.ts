@@ -184,6 +184,22 @@ it('reads evidence from a tree and reports unreadable files instead of ignoring 
   }
 });
 
+it('reports a directory it cannot list instead of returning no evidence', () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'ia-evidence-'));
+  try {
+    const missing = resolve(directory, 'missing');
+    const result = readEvidence(missing);
+    expect(result.evidence).toEqual([]);
+    expect(result.failures).toEqual([expect.stringContaining(missing + ': ')]);
+    // A file where a directory is expected cannot be listed either.
+    writeFileSync(resolve(directory, 'file'), '');
+    expect(readEvidence(resolve(directory, 'file')).failures).toHaveLength(1);
+  } finally {
+    if (!directory.startsWith(resolve(tmpdir(), 'ia-evidence-'))) throw new Error('Unexpected temporary cleanup path');
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 it('expands the expected set to one entry per declared platform', () => {
   const entries = expectedTasks({ schemaVersion: 1, profiles: {}, inputProfiles: {}, tasks: [task] });
   expect(entries).toEqual([

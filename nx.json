@@ -120,7 +120,13 @@
       "tooling",
       "{workspaceRoot}/packages/*/vitest.config.*",
       "{workspaceRoot}/apps/*/vitest.config.*",
-      "{workspaceRoot}/.ia/src/systems/*/vitest.config.*"
+      "{workspaceRoot}/.ia/src/systems/*/vitest.config.*",
+      "{workspaceRoot}/apps/*/tests/**/*.js",
+      "{workspaceRoot}/apps/*/tests/**/*.mjs",
+      "{workspaceRoot}/apps/*/tests/**/*.cjs",
+      "{workspaceRoot}/packages/*/tests/**/*.js",
+      "{workspaceRoot}/packages/*/tests/**/*.mjs",
+      "{workspaceRoot}/packages/*/tests/**/*.cjs"
     ],
     "distribution-fixtures": [
       "workspace-records",

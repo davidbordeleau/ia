@@ -101,7 +101,9 @@
       "tools:test-temp": 2,
       "workspace-runtime:build": 3,
       "workspace-runtime:test": 41,
-      "workspace-runtime:typecheck": 7
+      "workspace-runtime:typecheck": 7,
+      "tools:test-sdk-consumer": 12,
+      "tools:test-shared": 2
     },
     "windows": {
       "agent-composition-system:build": 2,
@@ -203,7 +205,9 @@
       "tools:test-temp": 3,
       "workspace-runtime:build": 2,
       "workspace-runtime:test": 149,
-      "workspace-runtime:typecheck": 8
+      "workspace-runtime:typecheck": 8,
+      "tools:test-sdk-consumer": 30,
+      "tools:test-shared": 3
     },
     "macos": {
       "agent-composition-system:build": 2,
@@ -305,7 +309,9 @@
       "tools:test-temp": 2,
       "workspace-runtime:build": 2,
       "workspace-runtime:test": 46,
-      "workspace-runtime:typecheck": 6
+      "workspace-runtime:typecheck": 6,
+      "tools:test-sdk-consumer": 14,
+      "tools:test-shared": 2
     }
   }
 }

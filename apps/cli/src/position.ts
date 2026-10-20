@@ -28,6 +28,7 @@ import type {
   PositionVia,
   ScopeKey,
 } from '@inventarch/runtime';
+import { scopeKeyTextParts } from '@inventarch/runtime/internal/scope-key';
 import type { Context, Result } from './consumer.js';
 import { Refusal, requireRoot, respell } from './consumer.js';
 import type { Capabilities, Token } from './render.js';
@@ -160,18 +161,7 @@ const moreFacts = (tally: PointerTally): readonly (readonly Token[])[] => [
 
 /** The key as the note names it: each part, the seat as the caller spelled it or the repository's workspace. */
 function keyText(key: ScopeKey): string {
-  const seat =
-    key.seat === undefined
-      ? "the repository's workspace"
-      : typeof key.seat === 'string'
-        ? key.seat
-        : spelled(key.seat.path);
-  const parts = `seat ${seat}, shape ${key.shape}, phase ${key.phase}, depth ${key.depth}, budget ${key.budget}`;
-  return (
-    parts +
-    (key.word === undefined ? '' : `, word ${key.word}`) +
-    (key.primitive === undefined ? '' : `, primitive ${key.primitive}`)
-  );
+  return scopeKeyTextParts(key).join(', ');
 }
 
 /**

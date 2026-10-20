@@ -10,11 +10,13 @@ import {
   context,
   normalizeScopeKey,
   prepareCoordinate,
+  position,
   resolveScopeKey,
   rootRelative,
   select,
 } from '../src/index.js';
 import type { ScopeKey, Shape } from '../src/index.js';
+import { scopeKeyTextParts } from '../src/scope-key.js';
 import { database, lawId, lawPath, methodId, put, workspace } from './workspace.js';
 
 // R14: the scope key, its caps, defaults and K0,
@@ -22,6 +24,21 @@ import { database, lawId, lawPath, methodId, put, workspace } from './workspace.
 const foundation = 'workspace-system/definition/workspace/foundation-workspace',
   governanceSystem = 'floor/definition/system/governance-system',
   sampleMandate = 'agent-system/policy/mandate/sample-mandate';
+
+it('retains declared primitive provenance even when the shape derives the same coordinate', () => {
+  const db = database(workspace()),
+    within = db.resolveScope().token,
+    derived = normalizeScopeKey({ shape: 'execution' }),
+    declared = normalizeScopeKey({ shape: 'execution', primitive: 'Decision' }),
+    derivedCoordinate = resolveScopeKey(db, within, derived).coordinate,
+    declaredCoordinate = resolveScopeKey(db, within, declared).coordinate;
+  expect(declaredCoordinate.values).toEqual(derivedCoordinate.values);
+  expect(derivedCoordinate.sources.primitive).toBe('derived');
+  expect(declaredCoordinate.sources.primitive).toBe('declared');
+  expect(position(db, within, declared).digest).not.toBe(position(db, within, derived).digest);
+  expect(position(db, within, declared)).toEqual(position(db, within, { ...derived, primitive: 'Decision' }));
+  expect(scopeKeyTextParts(declared)).toEqual([...scopeKeyTextParts(derived), 'primitive Decision']);
+});
 /** A key refusal, and, when `next` is given, the one command it names. */
 const invalid = (message: string, next?: string) =>
   expect.objectContaining({

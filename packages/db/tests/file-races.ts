@@ -1,5 +1,6 @@
 import { once } from 'node:events';
-import { lstatSync, mkdirSync, openSync, readSync, renameSync } from 'node:fs';
+import { fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync } from 'node:fs';
+import type { BigIntStats } from 'node:fs';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { expect, vi } from 'vitest';
@@ -82,6 +83,60 @@ export const vanishAtRecheck = async (file: string): Promise<void> => {
   vi.mocked(lstatSync).mockImplementation((...args: Parameters<typeof lstatSync>) => {
     if (String(args[0]) === file && fullWidth(args) && actual.existsSync(file)) actual.rmSync(file);
     return actual.lstatSync(...args);
+  });
+};
+/**
+ * Gives `file` the second name `second` at the reader's first read of it, and removes that name just before the
+ * reader's own full-width lstat of `file`, its recheck after the read: the file has two links when its read ends and one
+ * again when its name is checked. Only reads through the descriptor last opened for `file` count.
+ */
+export const linkedWhileRead = async (file: string, second: string): Promise<void> => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs'),
+    opened = await descriptors(file);
+  let calls = 0;
+  vi.mocked(readSync).mockImplementation((...args: Parameters<typeof readSync>) => {
+    const count = actual.readSync(...args);
+    if (args[0] === opened.at(-1) && ++calls === 1) actual.linkSync(file, second);
+    return count;
+  });
+  vi.mocked(lstatSync).mockImplementation((...args: Parameters<typeof lstatSync>) => {
+    if (String(args[0]) === file && fullWidth(args) && actual.existsSync(second)) actual.rmSync(second);
+    return actual.lstatSync(...args);
+  });
+};
+/**
+ * Cuts the last byte off `file` while the reader reads it. `before`: just before the reader's first read of it, and its
+ * bytes are put back once the next read finds the end, so the read comes up short though the file has its size again
+ * when the read ends. `after`: at the read that finds the end once every byte is read, so the file is shorter after the
+ * read than the bytes read. Only reads through the descriptor last opened for `file` count.
+ */
+export const shrinkWhileRead = async (file: string, when: 'before' | 'after'): Promise<void> => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs'),
+    bytes = actual.readFileSync(file),
+    opened = await descriptors(file);
+  let calls = 0;
+  vi.mocked(readSync).mockImplementation((...args: Parameters<typeof readSync>) => {
+    if (args[0] !== opened.at(-1)) return actual.readSync(...args);
+    if (++calls === (when === 'before' ? 1 : 2)) actual.truncateSync(file, bytes.length - 1);
+    const count = actual.readSync(...args);
+    if (when === 'before' && calls === 2) actual.writeFileSync(file, bytes);
+    return count;
+  });
+};
+/**
+ * Every full-width fstat of a descriptor after its first reports the times the first did while it is the same file, as
+ * on a filesystem whose timestamps are too coarse to show a change made in between.
+ */
+export const coarseTimes = async (): Promise<void> => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs'),
+    first = new Map<number, BigIntStats>();
+  vi.mocked(fstatSync).mockImplementation((...args: Parameters<typeof fstatSync>) => {
+    const stat = actual.fstatSync(...args);
+    if (typeof stat.ino !== 'bigint') return stat;
+    const seen = first.get(args[0]);
+    if (seen === undefined || seen.dev !== stat.dev || seen.ino !== stat.ino) first.set(args[0], stat as BigIntStats);
+    else Object.assign(stat, { mtimeNs: seen.mtimeNs, ctimeNs: seen.ctimeNs });
+    return stat;
   });
 };
 /** Reports another device, the inode unchanged, at every full-width lstat of `file`. */

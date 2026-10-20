@@ -39,11 +39,14 @@ import type { InputSnapshot } from '../src/index.js';
 import { readInstalledGeneration } from '../src/distribution/index.js';
 import {
   blockingOpens,
+  coarseTimes,
   descriptors,
   directoryBecomesFile,
   fifo,
+  linkedWhileRead,
   otherDevice,
   outcome,
+  shrinkWhileRead,
   socket,
   vanishAtRecheck,
 } from './file-races.js';
@@ -531,6 +534,30 @@ it('bounds a growing workspace document and refuses bytes modified during readin
   );
   expect(read).toBeLessThanOrEqual(5);
 });
+/** readWorkspaceBytes' refusal of `docs/body.md` as changed while it was read. */
+const changedDocument = {
+  code: 'IA-DB-SOURCE-CHANGED',
+  message: 'IA-DB-SOURCE-CHANGED: File changed during read: docs/body.md',
+  path: 'docs/body.md',
+};
+it('refuses a workspace document that shrinks while it is read, before or after its bytes are read, though its times do not show it', async () => {
+  await coarseTimes();
+  const short = workspace();
+  put(short, 'docs/body.md', 'body');
+  await shrinkWhileRead(resolve(short, 'docs/body.md'), 'before');
+  expect(outcome(() => readWorkspaceBytes(short, 'docs/body.md', 16))).toMatchObject(changedDocument);
+  const cut = workspace();
+  put(cut, 'docs/body.md', 'body');
+  await shrinkWhileRead(resolve(cut, 'docs/body.md'), 'after');
+  expect(outcome(() => readWorkspaceBytes(cut, 'docs/body.md', 16))).toMatchObject(changedDocument);
+});
+it('refuses a workspace document that gains a link while it is read, though the link is gone when its name is checked and its times do not show it', async () => {
+  const root = workspace();
+  put(root, 'docs/body.md', 'body');
+  await coarseTimes();
+  await linkedWhileRead(resolve(root, 'docs/body.md'), resolve(root, 'second.md'));
+  expect(outcome(() => readWorkspaceBytes(root, 'docs/body.md', 16))).toMatchObject(changedDocument);
+});
 
 it('keeps full-width file identities when two inode numbers round to the same JavaScript number', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
@@ -669,6 +696,22 @@ it('reads at most one byte past installation state that grows while it is read, 
   });
   expect(installation(root)).toMatchObject(distribution('corrupt-state', 'Installed file grew beyond limit'));
   expect(read).toBe(3);
+});
+it('refuses installation state that shrinks while it is read, before or after its bytes are read', async () => {
+  const short = workspace();
+  put(short, PENDING, '{}');
+  await shrinkWhileRead(resolve(short, PENDING), 'before');
+  expect(installation(short)).toMatchObject(unaliasedState);
+  const cut = workspace();
+  put(cut, PENDING, '{}');
+  await shrinkWhileRead(resolve(cut, PENDING), 'after');
+  expect(installation(cut)).toMatchObject(unaliasedState);
+});
+it('refuses installation state that gains a link while it is read, though the link is gone when its name is checked', async () => {
+  const root = workspace();
+  put(root, PENDING, '{}');
+  await linkedWhileRead(resolve(root, PENDING), resolve(root, 'second.json'));
+  expect(installation(root)).toMatchObject(unaliasedState);
 });
 it.skipIf(process.platform === 'win32')(
   'refuses installation state a link replaces after its path is checked, reading nothing through the link',
@@ -879,6 +922,19 @@ it('reads at most one byte past a package source that grows while it is read, an
     message: `IA-DB-SOURCE-CHANGED: Package source changed during read: ${SOURCE}`,
   });
   expect(read).toBe('#! ia 1.0\n'.length + 1);
+});
+it('refuses a package source that shrinks while it is read, before or after its bytes are read, though its times do not show it', async () => {
+  const changed = {
+    code: 'IA-DB-SOURCE-CHANGED',
+    message: `IA-DB-SOURCE-CHANGED: Package source changed during read: ${SOURCE}`,
+  };
+  await coarseTimes();
+  const short = packageWorkspace();
+  await shrinkWhileRead(resolve(short, SOURCE), 'before');
+  expect(captured(short)).toMatchObject(changed);
+  const cut = packageWorkspace();
+  await shrinkWhileRead(resolve(cut, SOURCE), 'after');
+  expect(captured(cut)).toMatchObject(changed);
 });
 it('refuses a package source whose name stops naming the file that is read', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');

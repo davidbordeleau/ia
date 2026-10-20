@@ -26,6 +26,7 @@ import {
   fifo,
   otherDevice,
   outcome,
+  shrinkWhileRead,
   socket,
   vanishAtRecheck,
 } from './file-races.js';
@@ -337,6 +338,18 @@ it('reads at most one byte past a manifest that grows while it is read, and refu
   });
   expect(outcome(() => adoptedBindings(root))).toMatchObject(irregular);
   expect(read).toBe(text.length + 1);
+});
+it('refuses a manifest that shrinks while it is read, before or after its bytes are read', async () => {
+  // A trailing space, so the bytes left after the cut are the same JSON.
+  const text = `${JSON.stringify({ version: 1, adopted: [] })} `;
+  const short = workspace(false);
+  put(short, MANIFEST, text);
+  await shrinkWhileRead(resolve(short, MANIFEST), 'before');
+  expect(outcome(() => adoptedBindings(short))).toMatchObject(irregular);
+  const cut = workspace(false);
+  put(cut, MANIFEST, text);
+  await shrinkWhileRead(resolve(cut, MANIFEST), 'after');
+  expect(outcome(() => adoptedBindings(cut))).toMatchObject(irregular);
 });
 it('refuses a manifest that cannot be read once it is opened as undecodable', () => {
   const root = workspace(false);

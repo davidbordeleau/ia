@@ -46,7 +46,6 @@ const temporary = mkdtempSync(join(temporaryRoot, 'ia-kb-installed-')),
   workspace = join(temporary, 'unrelated repository');
 try {
   for (const path of [consumer, home]) mkdirSync(path);
-  const files = selected.packed.map((row) => row.filename);
   const env = {
     ...process.env,
     NODE_OPTIONS: '',
@@ -204,7 +203,7 @@ try {
     workspace,
     consumer,
     package: output,
-    artifacts: files.map((path) => ({ path, sha256: createHash('sha256').update(readFileSync(path)).digest('hex') })),
+    artifacts: selected.packed.map((row) => ({ path: row.filename, sha256: row.sha256 })),
     checks: [
       'non-node repository',
       'no .kb',
@@ -220,11 +219,19 @@ try {
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ ok: true, report: reportPath, temporary }));
 } catch (error) {
-  assert.equal(dirname(temporary), temporaryRoot);
-  assert(basename(temporary).startsWith('ia-kb-installed-'));
-  containedFile(temporary, 'cleanup-probe', { allowMissing: true });
-  const current = lstatSync(temporary);
-  assert(current.ino === identity.ino && current.dev === identity.dev, 'KB output changed before cleanup');
+  // The checks guard the removal: an output they cannot vouch for is retained, never removed, and the refusal keeps
+  // the qualification failure as its cause.
+  try {
+    assert.equal(dirname(temporary), temporaryRoot);
+    assert(basename(temporary).startsWith('ia-kb-installed-'));
+    containedFile(temporary, 'cleanup-probe', { allowMissing: true });
+    const current = lstatSync(temporary);
+    assert(current.ino === identity.ino && current.dev === identity.dev, 'KB output changed before cleanup');
+  } catch (refusal) {
+    throw new Error(`KB qualification failed; cleanup refused and ${temporary} was retained: ${String(refusal)}`, {
+      cause: error,
+    });
+  }
   rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   throw error;
 }

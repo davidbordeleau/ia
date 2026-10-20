@@ -1,6 +1,15 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import fs, { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, {
+  chmodSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
@@ -417,6 +426,23 @@ it('omits linked and too-deep evidence, skips other entries and admits reports u
       'Evidence nesting omitted: g/h/i/j',
       'Evidence symlink omitted: linked',
     ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+it('omits a hardlinked report instead of aborting collection', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
+  if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
+  try {
+    for (const directory of ['a', 'b', 'outside']) mkdirSync(resolve(root, directory));
+    writeFileSync(resolve(root, 'a/evidence.json'), '{"a":1}');
+    writeFileSync(resolve(root, 'outside/report.json'), '{"b":1}');
+    linkSync(resolve(root, 'outside/report.json'), resolve(root, 'b/evidence.json'));
+    const omissions: string[] = [];
+    expect(evidenceFiles(root, omissions).map(({ name, content }) => [name, content])).toEqual([
+      ['a/evidence.json', '{"a":1}'],
+    ]);
+    expect(omissions).toEqual(['Evidence hardlink omitted: b/evidence.json']);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

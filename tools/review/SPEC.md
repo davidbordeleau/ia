@@ -39,7 +39,7 @@ Task ownership: `tools:test-review`. `tools/testing/tasks.json` declares platfor
 
 ## Invariants
 
-All four result identity fields match the original packet before persistence/delivery. Invalid UTF-8 is explicitly omitted; malformed gate evidence refuses. Partial policy reads never imply complete checks.
+All four result identity fields match the original packet before delivery. The returned result is retained first, unverified, so a mismatch stays inspectable. Invalid UTF-8 is explicitly omitted; malformed gate evidence refuses. Partial policy reads never imply complete checks.
 
 ## Limits
 
@@ -61,6 +61,6 @@ The caller exchanges GitHub OIDC identity for a review-only API token using the 
 
 Delivery renders the retained advisory verdict, findings, evidence gaps and provenance as a GitHub review with event `COMMENT` bound to the reviewed commit. A final PR read suppresses closed or stale-head delivery; a bot-authored review with the same commit and stable review marker suppresses duplicate delivery. Review text escapes supplied Markdown/HTML and mentions and refuses bodies over 60,000 bytes. It neither grants approval nor blocks merging. The retained result artifact is distinct from a successful delivery receipt.
 
-Before result persistence or GitHub delivery, the repository, PR number, head commit and SHA-256 subject identity must exactly match the submitted packet. A mismatch refuses before any delivery API call. The original subject remains the authority for delivery even when another PR has a matching current head.
+The caller retains the returned result as `artifacts/review/result.json` before checking it, so a refused result remains available for inspection; retention is not acceptance. Before GitHub delivery, the result id must equal the started review and the repository, PR number, head commit and SHA-256 subject identity must exactly match the submitted packet. A mismatch refuses before any delivery API call. The original subject remains the authority for delivery even when another PR has a matching current head.
 
 `runner.test.ts` qualifies collection, refusal, rendering and delivery with simulated GitHub responses. The `tools:test-review` task owns these tests. Local tests establish caller behavior, not hosted API activation, live-model calibration or production delivery. Hosted deployment owns those broader gates.

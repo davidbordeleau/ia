@@ -150,13 +150,6 @@ it('tags the agent commands for the packet catalog in table order, each naming o
   // The catalog table: each command's mode and the kernel move that mode maps to (CatalogTag holds a row's move to
   // its mode at typecheck; this pins which mode each command is).
   expect(rows.map((row) => [row.command, row.mode, row.move])).toEqual([
-    ['ia kb check', 'validate', 'Verification'],
-    ['ia kb search', 'read', 'Observation'],
-    ['ia kb read', 'read', 'Observation'],
-    ['ia kb resolve', 'read', 'Observation'],
-    ['ia kb traverse', 'read', 'Observation'],
-    ['ia kb pack', 'validate', 'Verification'],
-    ['ia kb pack --apply', 'effect', 'Execution'],
     ['ia init', 'effect', 'Execution'],
     ['ia validate', 'validate', 'Verification'],
     // The eighth row added to the catalog.
@@ -169,6 +162,14 @@ it('tags the agent commands for the packet catalog in table order, each naming o
     ['ia next', 'read', 'Observation'],
     // The seventh row added.
     ['ia project', 'effect', 'Execution'],
+    // The knowledge commands follow the core commands.
+    ['ia kb check', 'validate', 'Verification'],
+    ['ia kb search', 'read', 'Observation'],
+    ['ia kb read', 'read', 'Observation'],
+    ['ia kb resolve', 'read', 'Observation'],
+    ['ia kb traverse', 'read', 'Observation'],
+    ['ia kb pack', 'validate', 'Verification'],
+    ['ia kb pack --apply', 'effect', 'Execution'],
   ]);
   // Each row carries the catalog's five fields only, and its refusal is one line.
   for (const row of rows) {
@@ -190,14 +191,13 @@ it('tags the agent commands for the packet catalog in table order, each naming o
   });
   // A row whose next names a command the table does not hold fails here: the reserved token is no command.
   expect(catalogDefects([...rows, { ...rows[0]!, next: 'ia agent plan' }])).toEqual([
-    'ia kb check: ia agent plan names no command of COMMANDS',
+    'ia init: ia agent plan names no command of COMMANDS',
   ]);
   // The builder reads the rows it is given; KB contributes its nested rows instead of a top-level catalog tag.
   expect(packetCatalog(COMMANDS.filter((command) => command.name !== 'next')).map((row) => row.command)).not.toContain(
     'ia next',
   );
   expect(COMMANDS.filter((command) => command.catalog === undefined).map((command) => command.name)).toEqual([
-    'kb',
     'format',
     'inspect',
     'vocabulary',
@@ -210,5 +210,6 @@ it('tags the agent commands for the packet catalog in table order, each naming o
     'recover',
     'doctor',
     'host',
+    'kb',
   ]);
 });

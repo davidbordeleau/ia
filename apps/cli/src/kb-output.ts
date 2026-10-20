@@ -37,7 +37,16 @@ export function knowledgeOutput(root: string, given: string, protectedPaths: rea
     let parent = root;
     const rows = [];
     for (const part of path.split('/')) {
-      const stat = lstatSync(parent, { bigint: true });
+      const stat = lstatSync(parent, { bigint: true, throwIfNoEntry: false });
+      // A missing parent is refused without its host path: the output must name existing directories.
+      if (stat === undefined)
+        throw new Refusal(
+          'IA-CLI-CONFLICT',
+          'Knowledge output directory does not exist',
+          3,
+          null,
+          'Run "ia kb pack --help" and choose an output inside an existing directory',
+        );
       if (!stat.isDirectory() || stat.isSymbolicLink())
         throw new Refusal(
           'IA-CLI-CONFLICT',

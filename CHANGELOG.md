@@ -2,6 +2,62 @@
 
 Generated from reviewed release changesets. Entries describe intended releases; publication is a separate action.
 
+## 3.2.2
+
+Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.
+
+### Judge a held user host lock from one opened file
+
+When `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run, @inventarch/distribution checks that the lock has not been replaced before removing it as stale. This protects a replacement lock found during that check. A brief window just before the removal remains, so a lock replaced at that moment can still be removed. A symbolic link or other non-regular file at the lock path now counts as busy and is not taken over, and a FIFO at the lock path no longer hangs the takeover; each refuses IA-DIST-INSTALL-BUSY, as does a lock file the run cannot open. Locks the CLI writes are taken over once their pid has died, or after 10 seconds when their pid is empty or unparseable; a live owner is taken over only once its lock is a day old. The IA-DIST-INSTALL-BUSY message is unchanged.
+
+Packages: `@inventarch/distribution`.
+
+### Take over a live user host lock only after a day, and release only a run's own
+
+A lock held by a live run for more than 10 minutes is no longer taken over at once: when `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run whose pid is still running, @inventarch/distribution now refuses IA-DIST-INSTALL-BUSY until the lock is a day old, since a run holds its lock for milliseconds and a younger age does not show that its owner stopped. A lock whose pid has died is still taken over at any age, and one whose pid is empty or unparseable after 10 seconds; a lock holding 0, a negative number or a number above 2147483647 is now judged the same way, where 0, a number above 2147483647 or below -2147483648 and, on POSIX, -1 or the negative of a live process group used to wait out the 10 minutes, and any other negative number was taken over at once. A stale lock whose pid another process has since reused, or whose pid answers EPERM, now stays busy for up to a day unless it is removed by hand, as the unchanged IA-DIST-INSTALL-BUSY message says to do when no run is active. A run now writes its pid, a space and a random token, and at its end removes the lock only while it is still a regular file holding exactly that text and its name still names that file, so a run whose lock was replaced no longer removes the replacement and lets another run acquire the lock while the replacement's owner is active. A lock in the earlier format, a pid alone, is still judged by its pid, and a run's release leaves it in place. Earlier releases running at the same time still take over a lock older than 10 minutes and, when they finish, remove whatever lock is at the path, so two runs can still overlap until every CLI using that IA home is upgraded. A brief window between a release's check and its removal remains, as Node has no unlink-if-same. Liveness is judged in each run's own pid namespace, so a run in a container or on another host sharing the IA home can still take over a live run's lock.
+
+Packages: `@inventarch/distribution`.
+
+### Take over a stale user host lock under a claim
+
+When two `ia host claude --user` runs found the same stale lock, `<IA home>/claude/.lock`, at the same moment, both could take it over and go on to change the marketplace at once. @inventarch/distribution now removes a stale lock only under a claim, an exclusive `.lock.<inode>.claim` directory beside it, and only after finding again that the lock path still names the file it judged, serializing takeover while the claim remains exclusively owned. This reduces overlapping runs but does not eliminate them. A run whose claim was removed as abandoned, after it paused inside the claim for more than 10 seconds or because two runs interleaved while removing an abandoned claim, can still remove a newer lock. A claim older than 10 seconds is abandoned and removed, and a run that acquires the lock sweeps abandoned claims. On Windows the exclusive create now waits up to 250 milliseconds for a lock name another run is still removing, instead of failing with a raw EPERM. A create refused for permissions (on Windows, once that wait passes with nothing at the name; elsewhere at once, where a raw EPERM or EACCES was thrown before) refuses IA-DIST-INPUT-INVALID, naming the directory. Earlier CLIs do not claim, so a run of an earlier release sharing the IA home can still remove a lock without one.
+
+Packages: `@inventarch/distribution`.
+
+### Reuse one IA home across the checkpoint convergence test passes
+
+Test-only: the CLI's checkpoint convergence test writes the host payload once instead of on every pass. No behaviour changes for consumers.
+
+Packages: `@inventarch/cli`.
+
+### Verify the host payload once per ia host apply
+
+ia host --apply shares one verification of the host payload (about 1,400 files) between its MCP plan and its projection pre-check, so an apply scans the payload fewer times. Each step that writes still verifies afresh, so a payload that changes during the command still refuses the apply. In @inventarch/distribution, planHost, planHookRegistration and materializeHostPayload take an optional verify parameter for that shared verification: only a verifier from hostVerifier (./host-observe) is shared, and any other function is ignored in favour of a fresh check.
+
+Packages: `@inventarch/cli`, `@inventarch/distribution`.
+
+### Coordinated version alignment
+
+Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
+## 3.2.1
+
+Coordinated 3.2.1 release of the 23 public npm packages: Refuse a coordinate value whose text conversion throws as an unknown value.
+
+### Refuse a coordinate value whose text conversion throws as an unknown value
+
+`validateCoordinate` now refuses a coordinate value whose conversion to text throws, such as the JSON object `{"toString":1}` or a very deeply nested array, with `IA-GRAPH-COORDINATE-VALUE-UNKNOWN`, and its message shows that value as `<unprintable>`. It used to throw whatever that conversion threw, which the runtime door answered with `IA-RUNTIME-REQUEST-INVALID` for such a value in a `context`, `select` or `traverse` coordinate or in the `phase` parameter of `scope`, `get`, `records`, `resolve`, `search` or `traverse`. The admitted axes, the error order, the output and the message for every other value are unchanged.
+
+Packages: `@inventarch/graph`, `@inventarch/runtime`.
+
+### Coordinated version alignment
+
+Package and native artifact version metadata follows the coordinated 3.2.1 release.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
 ## 3.2.0
 
 Coordinated 3.2.0 release of the 23 public npm packages: Registry and archive downloads refuse URLs that are not credential-free HTTPS; ia doctor names the removal for a hook group changed by hand, and two help lines are corrected; Package guides and contracts corrected against the code; Read the steward hook's ownership markers, actor map, binding and code files through the opened file; Session stores can require host admission before each durable write; Source comments cite the spec sections that state their rules; Verify host cache, runtime and system package files through the file that is read; The vocabulary describes the distribution product section and the predicate phrase; The vocabulary catalogue lists closed kernel members in their authored spelling.

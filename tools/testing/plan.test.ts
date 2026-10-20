@@ -993,7 +993,7 @@ it('selects a Windows I/O arm only through a dispatch input, and keeps the physi
   expect(action).toContain('pnpm_config_store_dir=$drive\\pnpm-store');
   expect(action).not.toMatch(/(?<!p)npm_config_store_dir/);
   // The arms that move the temporary directory run before canonical-temp, which still runs on every Windows job.
-  const select = at('node tools/testing/canonical-temp.mjs');
+  const select = at('node tools/temp/canonical-temp.mjs');
   expect(steps[select]).toMatch(/^\s*if: runner\.os == 'Windows'$/m);
   expect(at("windows-io == 'dev-drive-temp'")).toBeLessThan(select);
   expect(at("windows-io == 'runner-temp'")).toBeLessThan(select);

@@ -413,7 +413,7 @@ if (isEntry(process.argv[1], import.meta.url)) {
       ],
       booleans: ['matrix', 'ci-matrix', 'json'],
       exclusive: [['matrix', 'ci-matrix', 'json']],
-      allowEmpty: ['head-sha', 'verified-sha', 'action'],
+      allowEmpty: ['head-sha', 'verified-sha', 'action', 'base-changed'],
     });
     if (records.length && (options.has('matrix') || options.has('ci-matrix')))
       throw new Error('Conflicting options: --record, --matrix, --ci-matrix');

@@ -210,7 +210,7 @@ Host registration is optional. Preview it, then rerun the same command with `--a
 | **Claude Code** | `ia host claude` registers the MCP server and writes the position packet (`.claude/rules/ia-workspace.md`), the `ia-authoring` skill, and the agents, skills and edit guards generated from your authored `@agent-profile`, playbook and `@hook` records. |
 | **Codex** | `ia host codex` registers the MCP server in `.codex/config.toml` and writes the position packet (`AGENTS.md`), the `ia-authoring` skill and skills generated from authored records. It reports generated agents and hooks as unsupported. |
 | **Packet files only** | `ia project claude` or `ia project codex` writes the position packet and skill without registering an MCP server. |
-| **Any MCP client** | `ia-mcp-door --root .`, from [`@inventarch/mcp-door`](apps/mcp-door/README.md), serves twelve read-only tools over stdio, including `ia_position`, `ia_next` and `ia_read`. |
+| **Any MCP client** | `ia-mcp-door --root .`, from [`@inventarch/mcp-door`](apps/mcp-door/README.md), serves seventeen read-only tools over stdio, including `ia_position`, `ia_next` and `ia_read`. |
 
 Every plan lists the files it will create, update or retire. `ia host` treats the files it writes as machine-local; do not commit them. `ia doctor` compares the installed projection with a fresh render, so an edited record shows up as an outdated projection.
 
@@ -284,7 +284,7 @@ IA keeps declared, checked, executed and authorized apart. Read each result for 
 
 ## 🔓 Open by design
 
-Every IA component is in this repository: the language and its kernel, the vocabulary and canonical schemas, authoring and validation, workspace composition, distribution packing and installation, a generic local runtime and runner, neutral host adapters for Claude Code and Codex, an MCP server and a VS Code extension. Its 23 npm packages and the extension are all licensed under Apache-2.0.
+Every IA component is in this repository: the language and its kernel, the vocabulary and canonical schemas, authoring and validation, workspace composition, distribution packing and installation, a generic local runtime and runner, neutral host adapters for Claude Code and Codex, an MCP server and a VS Code extension. Its 24 npm packages and the extension are all licensed under Apache-2.0.
 
 IA is method-neutral. It defines what records mean, how they compose and what a result does and does not establish. It ships no curated design method, expert agent team or quality rubric. You write those yourself, as words, playbooks, contracts, checks and agent profiles in your own systems, then package them as distributions or kits that can be public or private. IA handles them the same way either way.
 

@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@inventarch/mcp-door?label=npm)](https://www.npmjs.com/package/@inventarch/mcp-door) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-> `ia-mcp-door` is a local MCP server that gives an agent host read-only access to one IA workspace over stdio. It serves twelve tools: eleven Door operations from [`@inventarch/runtime`](../../packages/runtime/README.md), the same reads the `ia` CLI performs, and `ia_vocabulary`.
+> `ia-mcp-door` is a local MCP server that gives an agent host read-only access to one IA workspace over stdio. It serves seventeen tools: eleven Door operations from [`@inventarch/runtime`](../../packages/runtime/README.md), the same reads the `ia` CLI performs, `ia_vocabulary`, and five scoped `ia_kb_*` knowledge readers.
 >
 > `ia host claude` and `ia host codex` register it for you. Any other MCP client can launch it directly.
 
@@ -76,6 +76,8 @@ The `ia_position` body is a pure function of the key and the admitted records. I
 - **Bounded transport.** Stdio only, with no network listener. A line over 4 MiB or invalid UTF-8 ends the session, and `tools/list` issues no pagination cursor.
 
 ## 📚 Learn more
+
+Five additional read tools—`ia_kb_check`, `ia_kb_search`, `ia_kb_read`, `ia_kb_resolve`, and `ia_kb_traverse`—read selected native records and their bound documents through [the knowledge foundation](../../packages/kb/README.md). They accept an optional `within` issued by this server. The original Door validates membership, and a matching graph revision is required before any body read. A stale, foreign or unsupported narrowed scope refuses; there is no workspace fallback. Responses are bounded to 48 KiB. Local citations resolve only while current captured bytes still match. These tools create no index or `.kb` directory.
 
 - [SPEC.md](SPEC.md): the package contract
 - [LANGUAGE.md](LANGUAGE.md): the packaged summary of the words this release ships

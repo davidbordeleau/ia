@@ -197,14 +197,14 @@ A scope token lasts one invocation, and a failed operation prints its own one-li
 
 ## 🪪 Mandates and `--actor`
 
-Eight commands are judged against the acting participant's `@mandate` records before they run:
+Core commands and the KB subcommands are judged against the acting participant's `@mandate` records before they run:
 
 | Move the mandate must grant | Commands |
 | --- | --- |
-| Observation | `ia read`, `ia next` |
-| Verification | `ia validate`, `ia preview` |
+| Observation | `ia read`, `ia next`, `ia kb search/read/resolve/traverse` |
+| Verification | `ia validate`, `ia preview`, `ia kb check` and pack preview |
 | Synthesis | `ia author` |
-| Execution | `ia capture`, `ia project`, and a workspace `ia host <host> --apply` |
+| Execution | `ia capture`, `ia project`, `ia kb pack --apply`, and a workspace `ia host <host> --apply` |
 
 `ia preview` and `ia author` also check the record's word and the target path. Nothing else is judged: `ia position`, `ia inspect`, `ia init`, an `ia host` plan, `ia host --remove`, `ia host claude --user` and the machine protocol run whatever the mandates say, so the position a refusal names always runs. With a mandate that allows only Observation:
 
@@ -232,6 +232,8 @@ Mandates are cooperative restrictions, not authentication or a sandbox. Anyone w
 - **It needs no account or hosted service.** Initialization and validation run offline; `ia read` never fetches a URL.
 
 ## 📚 Learn more
+
+Use `ia kb check|search|read|resolve|traverse` for admitted records and bound documents. `ia kb pack` previews an explicit committed selection; `--apply --yes` creates a package at `--out` without overwriting it. Read commands use Observation, check and pack preview use Verification, and applied pack uses Execution. Every subcommand supports `--actor`. See the [knowledge guide](../../packages/kb/README.md). No `.kb` directory is required.
 
 - [Package contract](SPEC.md): every command's behavior, refusals and JSON shapes
 - [Packaged language summary](LANGUAGE.md): the words this package ships

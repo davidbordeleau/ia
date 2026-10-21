@@ -17,6 +17,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { expect, it } from 'vitest';
+import { fileSymlinksAvailable } from '../testing/report.js';
 import { runBounded } from '../testing/subprocess.js';
 
 // The script runs as a release qualification runs it, against archives built here, with fixtures/qualify-sdk.mjs
@@ -291,33 +292,12 @@ const refusesBeforeTar = async (options: Options, message: string | RegExp) => {
   expect(run.tar).toEqual(handedAll(run, names.slice(0, names.indexOf('db'))));
   expect(run.pins).toBeUndefined();
 };
-/** A denied Windows file-link fixture is an explicit skip; all other setup failures still fail the test. */
-const fileLink = (target: string, path: string): boolean => {
-  try {
-    symlinkSync(target, path, 'file');
-    return true;
-  } catch (error) {
-    if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') return false;
-    throw error;
-  }
-};
-/** Whether a file link can be made here, probed as the task runner probes it: with a disposable link in the temp root. */
-function fileLinks(): boolean {
-  const root = mkdtempSync(resolve(tmpdir(), 'ia-qualify-sdk-link-'));
-  if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
-  try {
-    writeFileSync(resolve(root, 'target'), '');
-    return fileLink(resolve(root, 'target'), resolve(root, 'link'));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-}
 // Both link cases run wherever a file link can be made, Windows included, where the script finds a link by its name
 // after the open. Only a Windows denial (EPERM) skips them: a conditional skip tasks.json declares.
 it(
   'refuses a symbolic link at its selection before tar is handed its bytes',
   async (context) => {
-    if (!fileLinks()) return context.skip('Windows denied file symlink creation (EPERM)');
+    if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
     await refusesBeforeTar({ link: 'symbolic' }, 'Aliased or hardlinked path: ');
   },
   settle,
@@ -325,7 +305,7 @@ it(
 it(
   'refuses a symbolic link put in place after its selection before tar is handed its bytes',
   async (context) => {
-    if (!fileLinks()) return context.skip('Windows denied file symlink creation (EPERM)');
+    if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
     // POSIX refuses to open a final link (ELOOP); Windows opens through it and finds the link by its name.
     await refusesBeforeTar({ race: { at: 'open', change: 'link' } }, /ELOOP|Aliased or changed file: /);
   },

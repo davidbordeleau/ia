@@ -21,6 +21,7 @@ import {
 } from '@inventarch/workspace-runtime/authoring-manifest';
 import { resolveAuthoring } from '@inventarch/workspace-runtime/authoring';
 import { teachingLinkClasses, teachingLinkFindings } from '../docs/teaching-links.mjs';
+import { fileSymlinksAvailable } from '../testing/report.js';
 import { runBounded } from '../testing/subprocess.js';
 import { authoringResources } from './generate-authoring.js';
 
@@ -284,14 +285,18 @@ it('refuses a directory, hard-linked, missing or undecodable selection as before
   expect(() => authoringResources(library({ '.ia/src/guide/bytes.md': Buffer.from([0xff, 0xfe]) }))).toThrow(TypeError);
 });
 
-// Windows has no FIFOs, and file links need a privilege there.
-it.skipIf(process.platform === 'win32')('refuses a FIFO, linked or unreadable selection as before', async () => {
+it('refuses a linked selection as an alias', (context) => {
+  const linked = library({ '.ia/src/guide/README.md': '# Guide\n', '.ia/src/guide/link.md': undefined });
+  if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
+  symlinkSync('README.md', resolve(linked, '.ia/src/guide/link.md'), 'file');
+  expect(() => authoringResources(linked)).toThrow(aliased);
+});
+
+// Windows has no FIFOs, and chmod 0o000 never denies a read there.
+it.skipIf(process.platform === 'win32')('refuses a FIFO or unreadable selection as before', async () => {
   const fifo = library({ '.ia/src/guide/fifo.md': undefined });
   expect((await runBounded('mkfifo', [resolve(fifo, '.ia/src/guide/fifo.md')], { timeoutMs: 10_000 })).status).toBe(0);
   expect(() => authoringResources(fifo)).toThrow(kind);
-  const linked = library({ '.ia/src/guide/README.md': '# Guide\n', '.ia/src/guide/link.md': undefined });
-  symlinkSync('README.md', resolve(linked, '.ia/src/guide/link.md'));
-  expect(() => authoringResources(linked)).toThrow(aliased);
   // Root reads a file whatever its mode; the gate has no skip condition for root, so the case returns early instead.
   if (process.getuid?.() === 0) return;
   const locked = library({ '.ia/src/guide/README.md': '# Guide\n' });

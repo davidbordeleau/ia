@@ -14,6 +14,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { expect, it, vi } from 'vitest';
+import { fileSymlinksAvailable } from '../testing/report.js';
 import { runBounded } from '../testing/subprocess.js';
 import {
   collectSubject,
@@ -456,30 +457,43 @@ it('omits a hardlinked report instead of aborting collection', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
-// Windows has no FIFOs and needs a privilege to create a file symbolic link: a declared Windows skip.
-it.skipIf(process.platform === 'win32')(
-  'omits a report symlink and skips a FIFO named like a report without opening either',
-  async () => {
-    const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
-    if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
-    try {
-      mkdirSync(resolve(root, 'a'));
-      writeFileSync(resolve(root, 'a/evidence.json'), '{"a":1}');
-      mkdirSync(resolve(root, 'e'));
-      symlinkSync(resolve(root, 'a/evidence.json'), resolve(root, 'e/evidence.json'));
-      mkdirSync(resolve(root, 'k'));
-      expect((await runBounded('mkfifo', [resolve(root, 'k/evidence.json')], { timeoutMs: 10_000 })).status).toBe(0);
-      const omissions: string[] = [];
-      // A FIFO opened for reading would wait for a writer; listed as no file, it is never opened.
-      expect(evidenceFiles(root, omissions).map(({ name, content }) => [name, content])).toEqual([
-        ['a/evidence.json', '{"a":1}'],
-      ]);
-      expect(omissions).toEqual(['Evidence symlink omitted: e/evidence.json']);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  },
-);
+it('omits a report symlink without opening it', (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
+  if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
+  try {
+    mkdirSync(resolve(root, 'a'));
+    writeFileSync(resolve(root, 'a/evidence.json'), '{"a":1}');
+    mkdirSync(resolve(root, 'e'));
+    if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
+    symlinkSync(resolve(root, 'a/evidence.json'), resolve(root, 'e/evidence.json'), 'file');
+    const omissions: string[] = [];
+    expect(evidenceFiles(root, omissions).map(({ name, content }) => [name, content])).toEqual([
+      ['a/evidence.json', '{"a":1}'],
+    ]);
+    expect(omissions).toEqual(['Evidence symlink omitted: e/evidence.json']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+// Windows has no FIFOs: a declared Windows skip.
+it.skipIf(process.platform === 'win32')('skips a FIFO named like a report without opening it', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
+  if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
+  try {
+    mkdirSync(resolve(root, 'a'));
+    writeFileSync(resolve(root, 'a/evidence.json'), '{"a":1}');
+    mkdirSync(resolve(root, 'k'));
+    expect((await runBounded('mkfifo', [resolve(root, 'k/evidence.json')], { timeoutMs: 10_000 })).status).toBe(0);
+    const omissions: string[] = [];
+    // A FIFO opened for reading would wait for a writer; listed as no file, it is never opened, and nothing is omitted.
+    expect(evidenceFiles(root, omissions).map(({ name, content }) => [name, content])).toEqual([
+      ['a/evidence.json', '{"a":1}'],
+    ]);
+    expect(omissions).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 it('refuses unparsable or too many evidence entries and a missing, linked or non-directory evidence root', () => {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
   if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
@@ -495,13 +509,32 @@ it('refuses unparsable or too many evidence entries and a missing, linked or non
     writeFileSync(resolve(root, 'evidence/task/evidence.json'), 'not JSON');
     expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow('Invalid JSON in gate evidence');
     rmSync(resolve(root, 'evidence/task/evidence.json'));
-    for (let index = 0; index < 1999; index++) writeFileSync(resolve(root, 'evidence/task', `log-${index}.txt`), '');
-    // The task directory and 1,999 logs are 2,000 entries: at the bound, with no report to disclose.
-    const atBound: string[] = [];
-    expect(evidenceFiles(resolve(root, 'evidence'), atBound)).toEqual([]);
-    expect(atBound).toEqual(['No task-level execution evidence disclosed']);
-    writeFileSync(resolve(root, 'evidence/task/log-1999.txt'), '');
-    expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow('Evidence inventory exceeds disclosure bound');
+    const task = resolve(root, 'evidence/task');
+    writeFileSync(resolve(task, 'log.txt'), '');
+    const list = fs.readdirSync,
+      [log] = list(task, { withFileTypes: true });
+    let count = 1999;
+    // Only the large listing is synthetic: distinct entries retain a real file's Dirent classification. Creating
+    // and deleting 2,000 files made this inventory-bound assertion depend on Windows disk/scanner throughput.
+    const listing = vi.spyOn(fs, 'readdirSync').mockImplementation(((...args: Parameters<typeof fs.readdirSync>) => {
+      if (String(args[0]) !== task) return Reflect.apply(list, fs, args);
+      expect(args[1]).toEqual({ withFileTypes: true });
+      return Array.from({ length: count }, (_, index) =>
+        Object.assign(Object.create(Object.getPrototypeOf(log)), log, { name: `log-${index}.txt` }),
+      );
+    }) as typeof fs.readdirSync);
+    try {
+      syncBuiltinESMExports();
+      // The real task directory and 1,999 logs are exactly 2,000 entries, with no report to disclose.
+      const atBound: string[] = [];
+      expect(evidenceFiles(resolve(root, 'evidence'), atBound)).toEqual([]);
+      expect(atBound).toEqual(['No task-level execution evidence disclosed']);
+      count = 2000;
+      expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow('Evidence inventory exceeds disclosure bound');
+    } finally {
+      listing.mockRestore();
+      syncBuiltinESMExports();
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

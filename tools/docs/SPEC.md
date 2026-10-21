@@ -37,7 +37,7 @@ Audit/check/link commands read only. Catalog --write updates docs/catalog.json a
 
 ## Prerequisites
 
-Pinned yaml/TypeScript dependencies for installed tools. No sibling repository, missing roadmap configuration or private portfolio registry is required.
+Pinned yaml/TypeScript dependencies for installed tools. No sibling repository, missing roadmap configuration or private portfolio registry is required. The repository-local roadmap sync adapter and its tests are retired; its former platform skip declarations are not part of the docs task.
 
 ## Validation
 

@@ -777,6 +777,7 @@
       "kind": "vitest",
       "project": ".ia/src/systems/template-system",
       "files": [
+        "tests/scalar.test.ts",
         "tests/structured.test.ts"
       ],
       "profile": "unit",

@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@inventarch/mcp-door?label=npm)](https://www.npmjs.com/package/@inventarch/mcp-door) [![Public quality](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml/badge.svg?branch=main)](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE) [![Node](https://img.shields.io/badge/node-22.x-brightgreen)](package.json)
 
-> `ia-mcp-door` is a local MCP server that gives an agent host read-only access to one IA workspace over stdio. It serves twelve tools: eleven Door operations from [`@inventarch/runtime`](../../packages/runtime/README.md), the same reads the `ia` CLI performs, and `ia_vocabulary`.
+> `ia-mcp-door` is a local MCP server that gives an agent host read-only access to one IA workspace over stdio. It serves seventeen tools: eleven Door operations from [`@inventarch/runtime`](../../packages/runtime/README.md), the same reads the `ia` CLI performs, `ia_vocabulary`, and five scoped `ia_kb_*` knowledge readers.
 >
 > `ia host claude` and `ia host codex` register it for you. Any other MCP client can launch it directly.
 
@@ -54,10 +54,10 @@ The second response line carries the result as `structuredContent` (shortened he
 | `ia_traverse` | Relationships followed from start records, with typed filters and optional condition gating. |
 | `ia_read` | The body behind a locator (`<identity>`, `<identity>#<phase>/<Primitive>`, `<identity>#<REQ-ID>` or `<path>:<line>`), with the SHA-256 of its UTF-8 bytes and `certified: false`. `includeRuntime: true` reads a record at runtime placement. |
 | `ia_next` | One plan's delivery view, as `ia next` prints it: milestones and tasks in prerequisite order, each task's verdict, and `next`, the command for the first task with no declared blocker. |
-| `ia_position` | `{body, digest, hostNote}` for a scope key: `seat` (an identity or `{path}`), `shape`, `phase`, `depth` (0 to 2), `budget` (0 to 64) and `word`. No key part means the repository's `@workspace` at context, orient, depth 0, budget 0. |
+| `ia_position` | `{body, digest, hostNote}` for a scope key: `seat` (an identity or `{path}`), `shape`, `phase`, `depth` (0 to 2), `budget` (0 to 64) and `word`, plus optional `primitive`. Omitted, primitive is derived from shape; explicit primitive also supplies the default phase. No key part means the repository's `@workspace` at context, orient, depth 0, budget 0. |
 | `ia_vocabulary` | The public words and their schemas, from the catalogue shipped with the server. It reads no workspace and takes no scope token. |
 
-The first eight tools are machine-protocol version 1 and `ia_read`, `ia_next` and `ia_position` are version 2. The protocol's `report` operation has no tool; run `ia report` from the CLI.
+The first eight tools were introduced in machine-protocol version 1 and `ia_read`, `ia_next` and `ia_position` in version 2. The server uses the latest protocol, version 3, whose `ia_position` schema additionally accepts `primitive`. A runtime Door explicitly serving version 2 still refuses that parameter. The protocol's `report` operation has no tool; run `ia report` from the CLI.
 
 Every result carries its JSON as `structuredContent` and as text. A refusal sets `isError: true` and returns `ok: false` with a `code`. Refusals from the three version 2 tools can also carry `next`, the one command to run:
 
@@ -76,6 +76,8 @@ The `ia_position` body is a pure function of the key and the admitted records. I
 - **Bounded transport.** Stdio only, with no network listener. A line over 4 MiB or invalid UTF-8 ends the session, and `tools/list` issues no pagination cursor.
 
 ## 📚 Learn more
+
+Five additional read tools—`ia_kb_check`, `ia_kb_search`, `ia_kb_read`, `ia_kb_resolve`, and `ia_kb_traverse`—read selected native records and their bound documents through [the knowledge foundation](../../packages/kb/README.md). They accept an optional `within` issued by this server. The original Door validates membership, and a matching graph revision is required before any body read. A stale, foreign or unsupported narrowed scope refuses; there is no workspace fallback. Responses are bounded to 48 KiB. Local citations resolve only while current captured bytes still match. These tools create no index or `.kb` directory.
 
 - [SPEC.md](SPEC.md): the package contract
 - [LANGUAGE.md](LANGUAGE.md): the packaged summary of the words this release ships

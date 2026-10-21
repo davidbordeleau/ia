@@ -223,7 +223,8 @@
         "db:build",
         "distribution:build",
         "runtime:build",
-        "workspace-runtime:build"
+        "workspace-runtime:build",
+        "kb:build"
       ],
       "outputs": [
         "apps/cli/dist",
@@ -282,7 +283,8 @@
       "mode": "source",
       "inputProfile": "workspace-records",
       "dependsOn": [
-        "runtime:build"
+        "runtime:build",
+        "kb:build"
       ],
       "outputs": [
         "apps/mcp-door/dist",
@@ -777,6 +779,7 @@
       "kind": "vitest",
       "project": ".ia/src/systems/template-system",
       "files": [
+        "tests/scalar.test.ts",
         "tests/structured.test.ts"
       ],
       "profile": "unit",
@@ -1525,7 +1528,8 @@
       "project": "apps/mcp-door",
       "files": [
         "tests/protocol.test.ts",
-        "tests/stdio.test.ts"
+        "tests/stdio.test.ts",
+        "tests/kb.test.ts"
       ],
       "profile": "installed",
       "platforms": [
@@ -2166,6 +2170,20 @@
       ],
       "skips": [
         {
+          "case": "tests/check-evidence.test.ts > opens an evidence file with the no-controlling-terminal flag where the platform has it",
+          "reason": "Windows defines no O_NOCTTY flag, as it has no controlling terminal; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > opens installation state with the no-controlling-terminal flag where the platform has it",
+          "reason": "Windows defines no O_NOCTTY flag, as it has no controlling terminal; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
           "case": "tests/inputs.test.ts > refuses a FIFO or a socket among package sources by its listed type, opening neither",
           "reason": "FIFOs and Unix socket files have no Windows equivalent; Linux and macOS run the case.",
           "platforms": [
@@ -2582,6 +2600,14 @@
         },
         {
           "case": "tests/publication.test.ts > qualified local NTFS publication throws for a file that vanishes after it is listed, with the error of the lstat that finds it gone",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/publication.test.ts > qualified local NTFS publication throws for a marker or a file whose name is gone after its read, with the error of the lstat that finds it gone",
           "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
           "platforms": [
             "linux",
@@ -3058,8 +3084,16 @@
           ]
         },
         {
-          "case": "tools/compliance/publication-fixtures.test.ts > snapshots a link, a dangling link, a linked directory and a FIFO as null, and the files under the linked directory by their bytes",
-          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The snapshot of regular files and a directory runs on every platform in its own case.",
+          "case": "tools/compliance/publication-fixtures.test.ts > snapshots a link, a dangling link and a linked directory as null, and the files under the linked directory by their bytes",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/compliance/publication-fixtures.test.ts > snapshots a FIFO as null",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The snapshot of regular files and a directory runs on every platform in its own case, and the links wherever file-symlink creation is permitted.",
           "platforms": [
             "windows"
           ]
@@ -3248,15 +3282,31 @@
           "when": "file-symlink-unavailable"
         },
         {
-          "case": "tools/entry/is-entry.test.ts > throws rather than answering \"not the entry\" when a path fails to resolve for a reason other than absence",
-          "reason": "The case makes an unreadable directory, which a Windows mode cannot make because it keeps only the read-only attribute; the fixture runs only on POSIX.",
+          "case": "tools/entry/is-entry.test.ts > throws rather than answering \"not the entry\" when a path is a link loop",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The unreadable directory runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/entry/is-entry.test.ts > throws rather than answering \"not the entry\" when a directory on the path cannot be read",
+          "reason": "The case makes an unreadable directory, which a Windows mode cannot make because it keeps only the read-only attribute; the fixture runs only on POSIX. The link loop runs wherever file-symlink creation is permitted, in its own case.",
           "platforms": [
             "windows"
           ]
         },
         {
-          "case": "tools/entry/is-entry.test.ts > refuses a dangling launcher with its stat error and a FIFO as not a regular file",
-          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The missing launcher and the directory and junction launchers run on every platform in their own case.",
+          "case": "tools/entry/is-entry.test.ts > refuses a dangling launcher with its stat error",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO launcher runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/entry/is-entry.test.ts > refuses a FIFO launcher as not a regular file",
+          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX. The missing launcher and the directory and junction launchers run on every platform in their own case, and the dangling launcher wherever file-symlink creation is permitted.",
           "platforms": [
             "windows"
           ]
@@ -3421,8 +3471,16 @@
           ]
         },
         {
-          "case": "tools/systems/authoring-manifest.test.ts > refuses a FIFO, linked or unreadable selection as before",
-          "reason": "Windows has no FIFO special file, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case.",
+          "case": "tools/systems/authoring-manifest.test.ts > refuses a linked selection as an alias",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO and unreadable selections run on Linux and macOS in their own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/systems/authoring-manifest.test.ts > refuses a FIFO or unreadable selection as before",
+          "reason": "Windows has no FIFO special file, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case, and the linked selection wherever file-symlink creation is permitted.",
           "platforms": [
             "windows"
           ]
@@ -4032,8 +4090,16 @@
       ],
       "skips": [
         {
-          "case": "tools/review/runner.test.ts > omits a report symlink and skips a FIFO named like a report without opening either",
-          "reason": "Windows has no FIFOs, so the fixture cannot make one and runs only on Linux and macOS; the junction, bound and nesting cases run on every platform.",
+          "case": "tools/review/runner.test.ts > omits a report symlink without opening it",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO runs on Linux and macOS in its own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/review/runner.test.ts > skips a FIFO named like a report without opening it",
+          "reason": "Windows has no FIFOs, so the fixture cannot make one and runs only on Linux and macOS; the junction, bound and nesting cases run on every platform, and the report symlink wherever file-symlink creation is permitted.",
           "platforms": [
             "windows"
           ]
@@ -4415,15 +4481,16 @@
           ]
         },
         {
-          "case": "tools/release/native-version.test.ts > system package input reads refuses a linked input before reading it and rethrows the open error for one it cannot read",
-          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX.",
+          "case": "tools/release/native-version.test.ts > system package input reads refuses a linked input before reading it",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The unreadable input runs on Linux and macOS in its own case.",
           "platforms": [
             "windows"
-          ]
+          ],
+          "when": "file-symlink-unavailable"
         },
         {
-          "case": "tools/release/native-version.test.ts > system package input reads reads at most 2147483647 bytes at a time, so an input reported at that size refuses as changed",
-          "reason": "Its buffer is 2 ** 31 bytes, zeroed lazily on Linux and macOS but committed in full on Windows, so the fixture runs only on POSIX.",
+          "case": "tools/release/native-version.test.ts > system package input reads rethrows the open error for an input it cannot read",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The linked input runs wherever file-symlink creation is permitted, in its own case.",
           "platforms": [
             "windows"
           ]
@@ -4442,6 +4509,168 @@
             "windows"
           ]
         }
+      ]
+    },
+    {
+      "id": "kb:build",
+      "kind": "command",
+      "project": "packages/kb",
+      "command": "pnpm build",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "language:build",
+        "graph:build",
+        "db:build",
+        "runtime:build",
+        "workspace-runtime:build",
+        "session-system:build"
+      ],
+      "outputs": [
+        "packages/kb/dist",
+        "artifacts/tests/kb-build"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm -r build"
+      ]
+    },
+    {
+      "id": "kb:typecheck",
+      "kind": "command",
+      "project": "packages/kb",
+      "command": "pnpm typecheck",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "kb:build"
+      ],
+      "outputs": [
+        "artifacts/tests/kb-typecheck"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm -r typecheck"
+      ]
+    },
+    {
+      "id": "kb:test",
+      "kind": "vitest",
+      "project": "packages/kb",
+      "files": [
+        "tests/legacy.test.ts",
+        "tests/foundation.test.ts",
+        "tests/installation.test.ts",
+        "tests/package.test.ts",
+        "tests/local.test.ts",
+        "tests/protocol.test.ts",
+        "tests/limits.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "kb:build"
+      ],
+      "outputs": [
+        "artifacts/tests/kb-test"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "cli:test-kb",
+      "kind": "vitest",
+      "project": "apps/cli",
+      "files": [
+        "tests/kb.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "cli:build"
+      ],
+      "outputs": [
+        "artifacts/tests/cli-test-kb"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "kb:qualify",
+      "kind": "command",
+      "project": ".",
+      "command": "pnpm kb:qualify",
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "emitted",
+      "inputProfile": "emitted",
+      "dependsOn": [
+        "agent-composition-system:build",
+        "agent-system:build",
+        "authoring-system:build",
+        "session-system:build",
+        "template-system:build",
+        "cli:build",
+        "distribution:build",
+        "mcp-door:build",
+        "steward-hook:build",
+        "vscode:build",
+        "compliance:build",
+        "db:build",
+        "graph:build",
+        "language:build",
+        "runtime:build",
+        "service-contracts:build",
+        "kb:build"
+      ],
+      "outputs": [
+        "artifacts/tests/kb-qualify"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "node tools/distribution/qualify-kb.mjs"
       ]
     }
   ]

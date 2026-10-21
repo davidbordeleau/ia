@@ -87,7 +87,7 @@ If the file changed since the preview, `ia author` refuses with `IA-CLI-EDIT-STA
 
 | Command | What it does |
 | --- | --- |
-| `ia position` | Prints the position body for a scope key: `--seat <id\|path>`, `--shape` (`context`, `governance`, `execution`, `sequence` or `learning`), `--phase` (`orient`, `plan`, `act` or `learn`), `--depth` (0 to 2), `--budget` (0 to 64) and `--word`. With no flag it prints the repository's `@workspace` with its pointers only. It needs no capture and writes nothing. |
+| `ia position` | Prints the position body for a scope key: `--seat <id\|path>`, `--shape` (`context`, `governance`, `execution`, `sequence` or `learning`), `--phase` (`orient`, `plan`, `act` or `learn`), `--depth` (0 to 2), `--budget` (0 to 64) and `--word`, plus optional `--primitive` (Memory, Attention, Inference, Decision, Escalation or Learning). The primitive defaults from shape; an explicit primitive supplies the default phase unless `--phase` is given. With no flag it prints the repository's `@workspace` with its pointers only. It needs no capture and writes nothing. |
 | `ia next` | Prints one plan's delivery view: its milestones, then its tasks in prerequisite order, each with a verdict of `exit evidence recorded (…)`, `no declared blocker` or `blocked (…)`. `--seat` names a `@plan`, `@milestone` or `@task`; without it, the workspace's only `@plan`. |
 | `ia read <locator>` | Prints the body behind a locator with its `sha256` and the line `body not certified by this read`. |
 | `ia inspect [<identity>]` | Shows a workspace overview, or one record (by identity or `--path <file>`) with its edges, `--edges in\|out\|both` and `--depth` 0 to 3. |
@@ -197,14 +197,14 @@ A scope token lasts one invocation, and a failed operation prints its own one-li
 
 ## 🪪 Mandates and `--actor`
 
-Eight commands are judged against the acting participant's `@mandate` records before they run:
+Core commands and the KB subcommands are judged against the acting participant's `@mandate` records before they run:
 
 | Move the mandate must grant | Commands |
 | --- | --- |
-| Observation | `ia read`, `ia next` |
-| Verification | `ia validate`, `ia preview` |
+| Observation | `ia read`, `ia next`, `ia kb search/read/resolve/traverse` |
+| Verification | `ia validate`, `ia preview`, `ia kb check` and pack preview |
 | Synthesis | `ia author` |
-| Execution | `ia capture`, `ia project`, and a workspace `ia host <host> --apply` |
+| Execution | `ia capture`, `ia project`, `ia kb pack --apply`, and a workspace `ia host <host> --apply` |
 
 `ia preview` and `ia author` also check the record's word and the target path. Nothing else is judged: `ia position`, `ia inspect`, `ia init`, an `ia host` plan, `ia host --remove`, `ia host claude --user` and the machine protocol run whatever the mandates say, so the position a refusal names always runs. With a mandate that allows only Observation:
 
@@ -232,6 +232,8 @@ Mandates are cooperative restrictions, not authentication or a sandbox. Anyone w
 - **It needs no account or hosted service.** Initialization and validation run offline; `ia read` never fetches a URL.
 
 ## 📚 Learn more
+
+Use `ia kb check|search|read|resolve|traverse` for admitted records and bound documents. `ia kb pack` previews an explicit committed selection; `--apply --yes` creates a package at `--out` without overwriting it. Read commands use Observation, check and pack preview use Verification, and applied pack uses Execution. Every subcommand supports `--actor`. See the [knowledge guide](../../packages/kb/README.md). No `.kb` directory is required.
 
 - [Package contract](SPEC.md): every command's behavior, refusals and JSON shapes
 - [Packaged language summary](LANGUAGE.md): the words this package ships

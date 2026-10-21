@@ -16,21 +16,12 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, resolve, join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
+import { fileSymlinksAvailable } from '../testing/report.js';
 import { runBounded } from '../testing/subprocess.js';
 import { auditRepository } from './audit.js';
 import { checkLinks, gitFiles } from './check.js';
 import { checkStructure, generateCatalog, checkDocumentationLinks, redirectText } from './catalog.mjs';
 
-/** A denied Windows file-link fixture is an explicit skip; all other setup failures still fail the test. */
-const fileLink = (target: string, path: string): boolean => {
-  try {
-    symlinkSync(target, path, 'file');
-    return true;
-  } catch (error) {
-    if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') return false;
-    throw error;
-  }
-};
 const roots: string[] = [];
 function fixture(files: Record<string, string>): string {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-doc-audit-'));
@@ -214,7 +205,7 @@ it('refuses a directory or unparsable roadmap output and leaves it as it was', a
   expect(readFileSync(output, 'utf8')).toBe('not json');
 });
 
-// Even a link to a configuration this adapter wrote is an alias. File links need a privilege on Windows.
+// Even a link to a configuration this adapter wrote is an alias. The case skips only where Windows denies file links.
 it('refuses a link to a configuration this adapter wrote as an alias and leaves the configuration as it was', async (context) => {
   const root = roadmapRepository(),
     output = resolve(root, '.ia/work/roadmap-sync/config.json');
@@ -222,7 +213,8 @@ it('refuses a link to a configuration this adapter wrote as an alias and leaves 
   const outside = resolve(fixture({}), 'config.json'),
     managed = readFileSync(output, 'utf8');
   renameSync(output, outside);
-  if (!fileLink(outside, output)) return context.skip('Windows denied file symlink creation (EPERM)');
+  if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
+  symlinkSync(outside, output, 'file');
   const result = await prepareRoadmap(root);
   expect(result.status).not.toBe(0);
   expect(result.stderr).toContain('Aliased output');

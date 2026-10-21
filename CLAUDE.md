@@ -32,9 +32,9 @@
 
 - agent 12
 - authoring-guide 44
-- case 6
+- case 13
 - check 1
-- contract 2
+- contract 4
 - decision 2
 - distribution 12
 - execution-binding 1
@@ -80,11 +80,18 @@
 | `ia position` | read | Observation | a seat the workspace does not admit, or a path outside it | `ia position` |
 | `ia next` | read | Observation | no --seat while the workspace authors several `@plan` records, which the message lists | `ia next --seat <plan>` |
 | `ia project` | effect | Execution | a file without the generated marker at a path it writes, which its plan names; --apply writes nothing | `ia project <host>` |
+| `ia kb check` | validate | Verification | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb search` | read | Observation | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb read` | read | Observation | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb resolve` | read | Observation | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb traverse` | read | Observation | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb pack` | validate | Verification | unavailable selected knowledge or mandate restriction | `ia position` |
+| `ia kb pack --apply` | effect | Execution | existing output or unavailable selected knowledge | `ia position` |
 
 ## SPEC lines
 
 - run ia position; if it refuses, run the command it names
-- state intent to the CLI as shape + optional phase + optional seat + optional word; the CLI never receives free text
+- state intent to the CLI as shape + optional phase + optional primitive + optional seat + optional word; the CLI never receives free text
 - when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation
 
-ia-generated a8325769035be8ff02b0b7a0bb361a015e2d77cf5362dd1dc176de8d3beb053f be3a0b27ae903adaa64028668409301de5f5f2971b661529eefbe970fdfc710f ia-claude
+ia-generated 3d9e3f2e6612118722e64c9005b2a57fb8f0e17c0a97f0f8fb1b21302606a5c9 4ac456c7e8d00726dd609119eb7a522edb50b1f03d873cbef0c3a857daf81c92 ia-claude

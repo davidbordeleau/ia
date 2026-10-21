@@ -7,6 +7,7 @@
 import type { MODE_MOVES, Mode, PacketCatalogRow } from '@inventarch/runtime';
 import type { Grammar, OptionSpec, PositionalSpec } from './args.js';
 import { none, positionals } from './args.js';
+import { knowledgeCommand, knowledgeCatalog } from './kb-commands.js';
 
 /** The frozen machine routes admitted by `packages/runtime/src/door.ts`; see the contract’s “Exit classes and protocol boundaries”. */
 export const LEGACY_OPERATIONS = [
@@ -399,7 +400,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     },
     syntax: [
       'ia position [--seat <id|path>] [--shape <H>] [--phase <P>] [--depth <d>]',
-      '            [--budget <n>] [--word <w>] [--json]',
+      '            [--budget <n>] [--word <w>] [--primitive <primitive>] [--json]',
     ],
     grammar: grammar([
       option({
@@ -419,7 +420,13 @@ export const COMMANDS: readonly CommandSpec[] = [
         name: 'phase',
         kind: 'value',
         placeholder: '<P>',
-        summary: "orient, plan, act or learn (default: the anchor phase of the shape's primitive)",
+        summary: 'orient, plan, act or learn (default: the anchor of the selected primitive)',
+      }),
+      option({
+        name: 'primitive',
+        kind: 'value',
+        placeholder: '<primitive>',
+        summary: 'Memory, Attention, Inference, Decision, Escalation or Learning (default: derived from shape)',
       }),
       option({
         name: 'depth',
@@ -790,6 +797,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       positionals('host', 1, 1),
     ),
   },
+  knowledgeCommand(COMMON_OPTIONS),
 ];
 
 /**
@@ -816,7 +824,11 @@ export const commandNames: readonly string[] = COMMANDS.map((command) => command
  */
 export const packetCatalog = (commands: readonly CommandSpec[] = COMMANDS): readonly PacketCatalogRow[] =>
   commands.flatMap((command) =>
-    command.catalog === undefined ? [] : [{ command: `ia ${command.name}`, ...command.catalog }],
+    command.name === 'kb'
+      ? knowledgeCatalog()
+      : command.catalog === undefined
+        ? []
+        : [{ command: `ia ${command.name}`, ...command.catalog }],
   );
 export const findCommand = (token: string): CommandSpec | undefined =>
   COMMANDS.find((command) => command.name === token);

@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { adoptWorkspace } from '@inventarch/workspace-runtime';
-import { INSTALLED_READ } from '@inventarch/agent-composition-system';
+import { INSTALLED_READ, installed } from '@inventarch/agent-composition-system';
 import { open } from '@inventarch/db';
 import type { EngineHost, Grant, ModelAction, ModelRequest } from '@inventarch/agent-system';
 import { replay } from '@inventarch/session-system';
 import { openRunner, runnerCatalog } from '../src/index.js';
+import { normalizeScopeKey } from '@inventarch/runtime';
+import { RunnerContext } from '../src/context.js';
 
 const repository = resolve(import.meta.dirname, '../../..');
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -35,6 +37,15 @@ function scripted(actions: ModelAction[], seen: ModelRequest[]) {
     },
   };
 }
+it('delivers explicit Memory and Escalation primitives through the current Door protocol', () => {
+  const options = fixture();
+  const context = new RunnerContext(options.root, { ...options.inputs });
+  cleanups.push(() => context.close());
+  for (const primitive of ['Memory', 'Escalation'] as const) {
+    const key = normalizeScopeKey({ primitive });
+    expect(context.position(key)).toMatchObject({ key: { primitive }, packet: { body: { key: { primitive } } } });
+  }
+});
 const done: ModelAction = { type: 'outcome', kind: 'answer', message: 'Captured source read.', continuation: 'finish' };
 function read(root: ReturnType<typeof openRunner>): ModelAction {
   return {
@@ -135,6 +146,23 @@ it('opens, steps, executes the installed read, journals position per model step 
   const resumed = openRunner(options);
   cleanups.push(() => resumed.close());
   expect(await resumed.resume(finished.id)).toEqual(finished);
+});
+
+it('uses the installed context primitive for real model turns', async () => {
+  const options = fixture(),
+    seen: ModelRequest[] = [],
+    catalog = runnerCatalog();
+  const context = catalog.contexts['runner-context-v1']!.value;
+  catalog.contexts['runner-context-v1'] = installed({
+    ...context,
+    coordinate: { ...context.coordinate, primitive: 'Escalation' },
+  });
+  const runner = openRunner({ ...options, catalog, model: scripted([done], seen) });
+  cleanups.push(() => runner.close());
+  await runner.start('Use the declared primitive', 'declared-primitive');
+  await runner.run();
+  expect(seen).toHaveLength(1);
+  expect(seen[0]!.context).toMatchObject({ key: { primitive: 'Escalation' } });
 });
 
 it('refuses an operation beyond the mandate count before a second dispatch', async () => {

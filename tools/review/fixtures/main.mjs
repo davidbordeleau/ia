@@ -8,6 +8,7 @@ import { appendFileSync, readFileSync } from 'node:fs';
 const fixture = JSON.parse(readFileSync(process.env.IA_REVIEW_MAIN_FIXTURE ?? '', 'utf8'));
 const routes = new Map(Object.entries(fixture.routes));
 let skew = 0;
+let subjectDigest;
 const now = Date.now.bind(Date),
   timer = globalThis.setTimeout;
 Date.now = () => now() + skew;
@@ -28,10 +29,13 @@ globalThis.fetch = async (input, init = {}) => {
       body: typeof init.body === 'string' ? JSON.parse(init.body) : null,
     })}\n`,
   );
+  if (method === 'PUT' && url.pathname.includes('/artifacts/')) subjectDigest = url.pathname.split('/').at(-1);
   const key = `${method} ${url.origin}${url.pathname}`;
   const route = routes.get(key) ?? routes.get(key.replace(/[^/]+$/, '*'));
   const reply = Array.isArray(route) ? route.shift() : route;
-  return new Response(JSON.stringify(reply ? (reply.body ?? {}) : { error: 'No fixture route' }), {
+  const body = reply ? structuredClone(reply.body ?? {}) : { error: 'No fixture route' };
+  if (body.result?.subject === 'digest') body.result.subject = subjectDigest;
+  return new Response(JSON.stringify(body), {
     status: reply ? (reply.status ?? 200) : 599,
     headers: { 'content-type': 'application/json' },
   });

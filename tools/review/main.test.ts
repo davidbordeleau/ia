@@ -141,6 +141,10 @@ async function runMain(script: Script) {
       : [];
     const reviewCalls = calls.filter((call) => call.url.startsWith(`${api}/`) && !call.url.endsWith('/exchange'));
     return {
+      subjectDigest: reviewCalls
+        .find((call) => call.method === 'PUT')
+        ?.url.split('/')
+        .at(-1),
       status: run.status,
       stderr: run.stderr,
       calls,
@@ -194,7 +198,7 @@ it(
     expect(run.comments).toHaveLength(1);
     expect(run.comments[0]?.body).toMatchObject({ commit_id: head, event: 'COMMENT' });
     expect(String(run.comments[0]?.body?.['body'])).toContain(`<!-- inventarch-review:${STARTED} -->`);
-    expect(run.retained).toEqual(result);
+    expect(run.retained).toEqual({ ...result, subject: run.subjectDigest });
     expect(run.summary).toBe(`InventArch review ${STARTED}: CONDITIONAL (advisory). Review comment delivered.\n`);
   },
   settle,
@@ -322,7 +326,7 @@ it.each([
     expect(run.comments).toEqual([]);
     expect(run.summary).toBeUndefined();
     // The refused result stays retained for inspection.
-    expect(run.retained).toEqual({ ...result, id: OTHER });
+    expect(run.retained).toEqual({ ...result, id: OTHER, subject: run.subjectDigest });
     expect(run.status).toBe(1);
     expect(run.stderr).toContain('Review result identity required');
   },
@@ -343,7 +347,7 @@ it.each([
     expect(run.prReads).toBe(2);
     expect(run.comments).toEqual([]);
     expect(run.summary).toBeUndefined();
-    expect(run.retained).toEqual(refused);
+    expect(run.retained).toEqual(typeof refused === 'object' ? { ...refused, subject: run.subjectDigest } : refused);
     expect(run.status).toBe(1);
     expect(run.stderr).toContain('Review result identity required');
   },
@@ -361,7 +365,7 @@ it(
     expect(run.review).toEqual(SETUP);
     expect(run.prReads).toBe(3);
     expect(run.comments).toEqual([]);
-    expect(run.retained).toEqual(result);
+    expect(run.retained).toEqual({ ...result, subject: run.subjectDigest });
     expect(run.summary).toBe(`InventArch review ${STARTED}: CONDITIONAL (advisory). Stale delivery suppressed.\n`);
   },
   settle,

@@ -1,4 +1,54 @@
-# Public projection fixtures
+# projections tooling contract
+
+## Purpose
+
+Generate repository host projections and retain supported legacy cleanup and installed projection/resource qualifiers.
+
+## Modules
+
+- [generate.test.ts](generate.test.ts) — behavior and refusal coverage.
+- [generate.ts](generate.ts).
+- [legacy-stewards.ts](legacy-stewards.ts).
+- [link-walk.test.ts](link-walk.test.ts) — behavior and refusal coverage.
+- [membership.test.ts](membership.test.ts) — behavior and refusal coverage.
+- [qualify-projections.mjs](qualify-projections.mjs).
+- [qualify-resources.mjs](qualify-resources.mjs).
+- [fixtures/compile-prose.mjs](fixtures/compile-prose.mjs) and the rest of `fixtures/` — host projection, link-walk, steward-retirement and prose compilation fixtures.
+
+## Commands
+
+- `pnpm resources:qualify`: `node tools/projections/qualify-resources.mjs`.
+- `pnpm projections:qualify`: `node tools/projections/qualify-projections.mjs`.
+- `pnpm projections:check`: `node --conditions=development --import tsx tools/projections/generate.ts --check`.
+- `pnpm projections:generate`: `node --conditions=development --import tsx tools/projections/generate.ts --write`.
+
+Commands report success as exit 0 and evaluated failure as exit 1. Corrected strict parsers use exit 2 for usage errors. Existing command-specific defaults, flags and refusal behavior are described below; a check never implies a write.
+
+## Inputs
+
+Authored native records, authoring resource manifests, host projection policy and retained compatibility fixtures.
+
+## Outputs
+
+generate --check compares without writes; --write applies admitted managed projections. Qualifiers allocate and clean owned consumer fixtures.
+
+## Prerequisites
+
+Source-aware generator or built-in Node qualification adapters with pinned pnpm; resource generation precedes projection generation.
+
+## Validation
+
+Task ownership: `tools:test-projections`, `projections:check`, `resources:qualify`, `projections:qualify`. `tools/testing/tasks.json` declares platform, timeout, prerequisite, output and input-profile contracts; `nx.json` defines their actual file/runtime inputs. Live discovery and mutation tests validate coverage and caching.
+
+## Invariants
+
+Unknown generator options exit 2 without suggesting mutation. Qualifier arguments are checked before allocation. Legacy marker literals and 1.x retirement fixtures remain supported.
+
+## Limits
+
+Installed qualification is distinct from repository source checks. Exact archive reuse is established by the distribution consumer milestone.
+
+## Detailed behavior
 
 Original synthetic native records and inert resources exercise public host projection, template rendering and distribution commands. Generated output does not establish live agent qualification.
 
@@ -6,4 +56,4 @@ Original synthetic native records and inert resources exercise public host proje
 
 Only those three files are committed. `.gitignore` ignores `/.claude/agents/` and git tracks no file under it, so an agent file there, a 1.x leftover or a developer's own, stays machine-local. `generate.test.ts` pins the tracking: `CLAUDE.md` and both skills are tracked, `.claude/agents/` holds no tracked path, and the repository's tracked ignore files alone, read with no system, global or personal ignore configuration, ignore `.claude/agents/` through the `.gitignore` rule and none of the three files.
 
-Every `generate.ts` refusal names one command to run next. A corpus with admission errors names `pnpm native:check`, which prints the findings. Before even a missing-state return, guard preflight examines both `.claude/settings.local.json` and `.claude/settings.json`: an IA guard group without matching local ownership refuses before any file changes and names removal of only the unmatched group in the actual settings file, then `pnpm projections:generate`. Other steward-guard registrations the generator cannot retire name that command after their ownership state and guard group are deleted. An output set outside the renderer contract, or a path escaping the root, names this directory's tests, which pin that contract. An unmanaged file names `pnpm projections:generate` after the named file is deleted, an aliased root or path names it after the repository is opened at its real path or the link is replaced, and a usage error names it directly. Each of these is checked before any file is written. Files are then published one at a time, each path checked again as it is written, so a projection that changes on disk, or a root or path found aliased, during publication stops the run after the files already published; the changed projection names `pnpm projections:generate` again, and an alias names the repair above. A failure raised beneath the generator, such as a native source the database cannot read or a file the system will not replace, names `pnpm projections:generate` once it is repaired. `--check` names `pnpm projections:generate` when it finds drift.
+Every operational `generate.ts` refusal names one command to run next. Invalid usage prints only the supported arguments and exits 2 before generation; it never recommends writing source. A corpus with admission errors names `pnpm native:check`, which prints the findings. Before even a missing-state return, guard preflight examines both `.claude/settings.local.json` and `.claude/settings.json`: an IA guard group without matching local ownership refuses before any file changes and names removal of only the unmatched group in the actual settings file, then `pnpm projections:generate`. Other steward-guard registrations the generator cannot retire name that command after their ownership state and guard group are deleted. An output set outside the renderer contract, or a path escaping the root, names this directory's tests, which pin that contract. An unmanaged file names `pnpm projections:generate` after the named file is deleted, an aliased root or path names it after the repository is opened at its real path or the link is replaced. Each of these is checked before any file is written. Files are then published one at a time, each path checked again as it is written, so a projection that changes on disk, or a root or path found aliased, during publication stops the run after the files already published; the changed projection names `pnpm projections:generate` again, and an alias names the repair above. A failure raised beneath the generator, such as a native source the database cannot read or a file the system will not replace, names `pnpm projections:generate` once it is repaired. `--check` names `pnpm projections:generate` when it finds drift.

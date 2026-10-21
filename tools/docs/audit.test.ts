@@ -1,28 +1,38 @@
-import {
-  mkdtempSync,
-  mkdirSync,
-  rmSync,
-  writeFileSync,
-  symlinkSync,
-  readFileSync,
-  existsSync,
-  unlinkSync,
-  linkSync,
-  lstatSync,
-  readdirSync,
-  renameSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, symlinkSync, readFileSync, unlinkSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { dirname, resolve, join } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { fileSymlinksAvailable } from '../testing/report.js';
-import { runBounded } from '../testing/subprocess.js';
-import { auditRepository } from './audit.js';
+import { auditRepository, toolContractFindings } from './audit.js';
 import { checkLinks, gitFiles } from './check.js';
 import { checkStructure, generateCatalog, checkDocumentationLinks, redirectText } from './catalog.mjs';
 
 const roots: string[] = [];
+it('requires semantic contract sections and a complete direct module map for tooling owners', () => {
+  expect(toolContractFindings('tools/example', '# Generic contract', ['tools/example/run.ts'])).toContain(
+    'tools/example/SPEC.md: missing Inputs contract section',
+  );
+  const source =
+    '# Example\n' +
+    ['Purpose', 'Modules', 'Commands', 'Inputs', 'Outputs', 'Prerequisites', 'Validation', 'Invariants', 'Limits']
+      .map((section) => '## ' + section + '\nDefined contract.')
+      .join('\n');
+  expect(toolContractFindings('tools/example', source, ['tools/example/run.ts'])).toEqual([
+    'tools/example/SPEC.md: module map omits run.ts',
+  ]);
+  // Only the Modules section is the map: a link appended under Limits does not count.
+  expect(toolContractFindings('tools/example', source + '\n[run.ts](run.ts)', ['tools/example/run.ts'])).toEqual([
+    'tools/example/SPEC.md: module map omits run.ts',
+  ]);
+  const mapped = (links: string) => source.replace('## Modules\nDefined contract.', '## Modules\n' + links);
+  expect(toolContractFindings('tools/example', mapped('[run.ts](run.ts)'), ['tools/example/run.ts'])).toEqual([]);
+  // A subfolder is mapped by any link into it, and only by a link into that subfolder.
+  const nested = ['tools/example/run.ts', 'tools/example/fixtures/a.json', 'tools/example/fixtures/deep/b.mjs'];
+  expect(toolContractFindings('tools/example', mapped('[run.ts](run.ts) [x](fixtures-x/a.json)'), nested)).toEqual([
+    'tools/example/SPEC.md: module map omits fixtures/',
+  ]);
+  expect(toolContractFindings('tools/example', mapped('[run.ts](run.ts) [a](fixtures/a.json)'), nested)).toEqual([]);
+});
 function fixture(files: Record<string, string>): string {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-doc-audit-'));
   roots.push(root);
@@ -32,6 +42,62 @@ function fixture(files: Record<string, string>): string {
   }
   return root;
 }
+
+it('rejects nonexistent documented commands and task ownership against repository manifests', () => {
+  const contract = (commands: string, validation: string, modules = '') =>
+    '# Owner\n' +
+    ['Purpose', 'Modules', 'Commands', 'Inputs', 'Outputs', 'Prerequisites', 'Validation', 'Invariants', 'Limits']
+      .map(
+        (section) =>
+          `## ${section}\n${section === 'Commands' ? commands : section === 'Validation' ? validation : section === 'Modules' ? modules : 'Defined.'}`,
+      )
+      .join('\n');
+  const files = {
+    'SPEC.md': '# Root\n',
+    'package.json': JSON.stringify({ name: 'fixture', scripts: { 'demo:check': 'node demo.mjs' } }),
+    'tools/testing/tasks.json': JSON.stringify({ tasks: [{ id: 'tools:test-demo' }] }),
+    'tools/testing/SPEC.md': contract('None.', 'None.', '[tasks.json](tasks.json)'),
+    'tools/demo/SPEC.md': contract(
+      '`pnpm demo:check --json`',
+      'Task ownership: `tools:test-demo`. `tools/testing/tasks.json` declares it.',
+    ),
+  };
+  const root = fixture(files),
+    inventory = Object.keys(files);
+  expect(auditRepository(root, inventory).failures).toEqual([]);
+  writeFileSync(
+    resolve(root, 'tools/demo/SPEC.md'),
+    contract('`pnpm demo:chekc --json`', 'Task ownership: `tools:test-dmeo`.'),
+  );
+  expect(auditRepository(root, inventory).failures).toEqual([
+    'tools/demo/SPEC.md: unknown pnpm script demo:chekc',
+    'tools/demo/SPEC.md: unknown task tools:test-dmeo',
+  ]);
+  for (const command of ['pnpm --silent demo:check --json', 'pnpm run --silent demo:check --json']) {
+    writeFileSync(
+      resolve(root, 'tools/demo/SPEC.md'),
+      contract('`' + command + '`', 'Task ownership: `tools:test-demo`.'),
+    );
+    expect(auditRepository(root, inventory).failures, command).toEqual([]);
+    writeFileSync(
+      resolve(root, 'tools/demo/SPEC.md'),
+      contract('`' + command.replace('demo:check', 'demo:chekc') + '`', 'Task ownership: `tools:test-demo`.'),
+    );
+    expect(auditRepository(root, inventory).failures, command).toContain(
+      'tools/demo/SPEC.md: unknown pnpm script demo:chekc',
+    );
+  }
+  writeFileSync(resolve(root, 'tools/demo/SPEC.md'), contract('`pnpm --dir child demo:check`', 'None.'));
+  expect(auditRepository(root, inventory).failures).toContain(
+    'tools/demo/SPEC.md: unsupported pnpm root-script reference --dir',
+  );
+  for (const script of ['exec', 'install', 'store']) {
+    writeFileSync(resolve(root, 'tools/demo/SPEC.md'), contract('`pnpm run ' + script + '`', 'None.'));
+    expect(auditRepository(root, inventory).failures).toContain('tools/demo/SPEC.md: unknown pnpm script ' + script);
+    writeFileSync(resolve(root, 'tools/demo/SPEC.md'), contract('`pnpm ' + script + '`', 'None.'));
+    expect(auditRepository(root, inventory).failures).toEqual([]);
+  }
+});
 afterEach(() => {
   for (const root of roots.splice(0)) {
     if (dirname(root) !== resolve(tmpdir()) || !root.startsWith(resolve(tmpdir(), 'ia-doc-audit-')))
@@ -43,7 +109,7 @@ afterEach(() => {
 it('executes the catalog CLI through a linked directory instead of silently skipping validation', () => {
   const root = fixture({
     'tools/docs/catalog.mjs': readFileSync(new URL('./catalog.mjs', import.meta.url), 'utf8'),
-    'tools/docs/portfolio.mjs': readFileSync(new URL('./portfolio.mjs', import.meta.url), 'utf8'),
+    'tools/shared/args.mjs': readFileSync(new URL('../shared/args.mjs', import.meta.url), 'utf8'),
     'tools/docs/markdown.mjs': readFileSync(new URL('./markdown.mjs', import.meta.url), 'utf8'),
     'tools/entry/is-entry.mjs': readFileSync(new URL('../entry/is-entry.mjs', import.meta.url), 'utf8'),
     'docs/documentation.json': JSON.stringify({
@@ -68,6 +134,14 @@ it('executes the catalog CLI through a linked directory instead of silently skip
       const valid = invoke();
       expect(valid.status).toBe(0);
       expect(JSON.parse(valid.stdout)).toEqual({ documents: 0, findings: [] });
+      for (const args of [['--typo'], ['--write', '--links'], ['--write', '--write']]) {
+        const invalid = spawnSync(process.execPath, [resolve(alias, 'tools/docs/catalog.mjs'), ...args], {
+          cwd: root,
+          encoding: 'utf8',
+          windowsHide: true,
+        });
+        expect(invalid.status, invalid.stdout + invalid.stderr).toBe(2);
+      }
       writeFileSync(resolve(root, 'docs/catalog.json'), '{}\n');
       const stale = invoke();
       expect(stale.status).toBe(1);
@@ -78,180 +152,6 @@ it('executes the catalog CLI through a linked directory instead of silently skip
   } finally {
     unlinkSync(modules);
   }
-});
-
-it('adapts the nested roadmap config to the external loader without changing project or task identities', () => {
-  const config = {
-    repositoryRoot: '../..',
-    manifestPath: 'docs/roadmap/github-manifest.json',
-    project: { number: 9 },
-    routing: { fallback: 'fixture/repo' },
-  };
-  const manifest = '{"tasks":[{"id":"DOC-01","repository":"fixture/repo"}]}\n';
-  const root = fixture({
-    'tools/docs/roadmap-sync-config.mjs': readFileSync(new URL('./roadmap-sync-config.mjs', import.meta.url), 'utf8'),
-    'docs/roadmap/config.json': JSON.stringify(config),
-    'docs/roadmap/github-manifest.json': manifest,
-  });
-  const invoke = () =>
-    spawnSync(process.execPath, [resolve(root, 'tools/docs/roadmap-sync-config.mjs')], {
-      cwd: tmpdir(),
-      encoding: 'utf8',
-      windowsHide: true,
-    });
-  expect(invoke().status).toBe(0);
-  const output = resolve(root, '.ia/work/roadmap-sync/config.json');
-  const bytes = readFileSync(output, 'utf8');
-  const prepared = JSON.parse(bytes);
-  // Exact upstream loader semantics: path is relative to the provided config directory.
-  expect(readFileSync(join(dirname(output), prepared.manifestPath), 'utf8')).toBe(manifest);
-  expect(prepared.project).toEqual(config.project);
-  expect(prepared.routing).toEqual(config.routing);
-  expect(resolve(dirname(output), prepared.repositoryRoot)).toBe(root);
-  expect(readFileSync(resolve(root, 'docs/roadmap/config.json'), 'utf8')).toBe(JSON.stringify(config));
-  expect(invoke().status).toBe(0);
-  expect(readFileSync(output, 'utf8')).toBe(bytes);
-  writeFileSync(output, '{"operatorOwned":true}\n');
-  expect(invoke().stderr).toContain('unmanaged');
-  expect(readFileSync(output, 'utf8')).toBe('{"operatorOwned":true}\n');
-});
-
-it('refuses a roadmap manifest escape before creating output', () => {
-  const root = fixture({
-    'tools/docs/roadmap-sync-config.mjs': readFileSync(new URL('./roadmap-sync-config.mjs', import.meta.url), 'utf8'),
-    'docs/roadmap/config.json': JSON.stringify({ repositoryRoot: '../..', manifestPath: '../outside.json' }),
-  });
-  const result = spawnSync(process.execPath, [resolve(root, 'tools/docs/roadmap-sync-config.mjs')], {
-    encoding: 'utf8',
-    windowsHide: true,
-  });
-  expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain('Manifest must remain inside');
-  expect(existsSync(resolve(root, '.ia/work/roadmap-sync/config.json'))).toBe(false);
-});
-
-it('refuses an aliased roadmap output directory without writing through it', () => {
-  const root = fixture({
-    'tools/docs/roadmap-sync-config.mjs': readFileSync(new URL('./roadmap-sync-config.mjs', import.meta.url), 'utf8'),
-    'docs/roadmap/config.json': JSON.stringify({
-      repositoryRoot: '../..',
-      manifestPath: 'docs/roadmap/github-manifest.json',
-    }),
-    'docs/roadmap/github-manifest.json': '{"tasks":[]}',
-  });
-  const outside = fixture({ 'keep.txt': 'operator-owned' });
-  mkdirSync(resolve(root, '.ia/work'), { recursive: true });
-  symlinkSync(outside, resolve(root, '.ia/work/roadmap-sync'), 'junction');
-  const result = spawnSync(process.execPath, [resolve(root, 'tools/docs/roadmap-sync-config.mjs')], {
-    encoding: 'utf8',
-    windowsHide: true,
-  });
-  expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain('Aliased output');
-  expect(existsSync(resolve(outside, 'config.json'))).toBe(false);
-  expect(readFileSync(resolve(outside, 'keep.txt'), 'utf8')).toBe('operator-owned');
-});
-
-/** A repository holding the roadmap adapter beside its config and a manifest. */
-function roadmapRepository(): string {
-  return fixture({
-    'tools/docs/roadmap-sync-config.mjs': readFileSync(new URL('./roadmap-sync-config.mjs', import.meta.url), 'utf8'),
-    'docs/roadmap/config.json': JSON.stringify({
-      repositoryRoot: '../..',
-      manifestPath: 'docs/roadmap/github-manifest.json',
-    }),
-    'docs/roadmap/github-manifest.json': '{"tasks":[]}',
-  });
-}
-const prepareRoadmap = (root: string) =>
-  runBounded(process.execPath, [resolve(root, 'tools/docs/roadmap-sync-config.mjs')], {
-    cwd: tmpdir(),
-    timeoutMs: 20_000,
-  });
-
-it('replaces its own roadmap output on every run and leaves nothing else beside it', async () => {
-  const root = roadmapRepository(),
-    output = resolve(root, '.ia/work/roadmap-sync/config.json');
-  const first = await prepareRoadmap(root);
-  expect(first.status, first.stderr).toBe(0);
-  const before = JSON.parse(readFileSync(output, 'utf8'));
-  writeFileSync(resolve(root, 'docs/roadmap/github-manifest.json'), '{"tasks":[{"id":"DOC-02"}]}');
-  const rerun = await prepareRoadmap(root);
-  expect(rerun.status, rerun.stderr).toBe(0);
-  const after = JSON.parse(readFileSync(output, 'utf8'));
-  expect(after.syncAdapter.manifestSha256).not.toBe(before.syncAdapter.manifestSha256);
-  expect(JSON.parse(rerun.stdout)).toEqual({
-    output: '.ia/work/roadmap-sync/config.json',
-    manifestSha256: after.syncAdapter.manifestSha256,
-    remoteActions: 0,
-  });
-  expect(readdirSync(dirname(output))).toEqual(['config.json']);
-});
-
-it('refuses a directory or unparsable roadmap output and leaves it as it was', async () => {
-  const root = roadmapRepository(),
-    output = resolve(root, '.ia/work/roadmap-sync/config.json');
-  mkdirSync(output, { recursive: true });
-  writeFileSync(resolve(output, 'keep.txt'), 'operator-owned');
-  let result = await prepareRoadmap(root);
-  expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain('EISDIR: illegal operation on a directory');
-  expect(readdirSync(output)).toEqual(['keep.txt']);
-  rmSync(output, { recursive: true });
-  writeFileSync(output, 'not json');
-  result = await prepareRoadmap(root);
-  expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain('SyntaxError');
-  expect(readFileSync(output, 'utf8')).toBe('not json');
-});
-
-// Even a link to a configuration this adapter wrote is an alias. The case skips only where Windows denies file links.
-it('refuses a link to a configuration this adapter wrote as an alias and leaves the configuration as it was', async (context) => {
-  const root = roadmapRepository(),
-    output = resolve(root, '.ia/work/roadmap-sync/config.json');
-  expect((await prepareRoadmap(root)).status).toBe(0);
-  const outside = resolve(fixture({}), 'config.json'),
-    managed = readFileSync(output, 'utf8');
-  renameSync(output, outside);
-  if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
-  symlinkSync(outside, output, 'file');
-  const result = await prepareRoadmap(root);
-  expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain('Aliased output');
-  expect(readFileSync(outside, 'utf8')).toBe(managed);
-  expect(lstatSync(output).isSymbolicLink()).toBe(true);
-});
-
-// Windows has no FIFOs.
-it.skipIf(process.platform === 'win32')(
-  'refuses a FIFO at the roadmap output as unmanaged instead of waiting to read it',
-  async () => {
-    const root = roadmapRepository(),
-      output = resolve(root, '.ia/work/roadmap-sync/config.json');
-    mkdirSync(dirname(output), { recursive: true });
-    expect((await runBounded('mkfifo', [output], { timeoutMs: 10_000 })).status).toBe(0);
-    const result = await prepareRoadmap(root);
-    expect(result.timedOut).toBe(false);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Refusing to overwrite an unmanaged sync configuration');
-    expect(lstatSync(output).isFIFO()).toBe(true);
-    expect(readdirSync(dirname(output))).toEqual(['config.json']);
-  },
-);
-
-it('gives the roadmap output a new file rather than writing into one another name shares', async () => {
-  const root = roadmapRepository(),
-    output = resolve(root, '.ia/work/roadmap-sync/config.json'),
-    shared = resolve(root, 'shared.json');
-  expect((await prepareRoadmap(root)).status).toBe(0);
-  const before = readFileSync(output, 'utf8');
-  linkSync(output, shared);
-  writeFileSync(resolve(root, 'docs/roadmap/github-manifest.json'), '{"tasks":[{"id":"DOC-03"}]}');
-  const rerun = await prepareRoadmap(root);
-  expect(rerun.status, rerun.stderr).toBe(0);
-  expect(readFileSync(output, 'utf8')).not.toBe(before);
-  expect(readFileSync(shared, 'utf8')).toBe(before);
-  expect(lstatSync(output).nlink).toBe(1);
 });
 
 it('preserves bundle coverage, refuses duplicate identities and cannot regenerate an omitted spec away', () => {

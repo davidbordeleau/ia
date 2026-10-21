@@ -1,9 +1,54 @@
-# Public language contract
+# docs tooling contract
 
-This owner supplies the public language definitions or their structural checking mechanism. See the root language reference for schemas, identity and evaluation limits. Private design and assessment methods are not part of this owner.
+## Purpose
 
-## Roadmap sync adapter
+Parse Markdown once and enforce documentation ownership, links, catalog identity and installed teaching-link policy.
 
-`roadmap-sync-config.mjs` prepares the external roadmap sync tool's configuration at `.ia/work/roadmap-sync/config.json` from `docs/roadmap/config.json`. It reads and writes local files only and never invokes that tool. It judges an existing output through a descriptor opened without following a final link: a link at the output refuses rather than being followed, and a FIFO or device refuses as unmanaged rather than blocking the read.
+## Modules
 
-Maintenance notes: the adapter writes the new configuration to a file it creates beside the output, `.config.json.<uuid>.tmp`, and renames that file over the output instead of writing in place. An output hard-linked elsewhere is therefore given a new file, and its other names keep the old bytes. On POSIX systems the new file takes a new file's default mode (0644 under the default umask), so a read-only managed output in a writable directory is replaced, and a writable output in a directory that is not writable is left as it was, because the temporary file cannot be created. On Windows, the rename can fail with `EPERM`, `EACCES` or `EBUSY` while another process holds the output open; the temporary file is then removed and the output is left as it was. Every thrown error removes the temporary file, but a process killed between creating it and the rename, by `SIGKILL` for example, leaves it beside the output as residue to delete by hand.
+- [audit.test.ts](audit.test.ts) — behavior and refusal coverage.
+- [audit.ts](audit.ts).
+- [catalog.d.mts](catalog.d.mts) — interface declaration; implementation checking is tracked separately.
+- [catalog.mjs](catalog.mjs).
+- [check.ts](check.ts).
+- [link-parity.test.ts](link-parity.test.ts) — behavior and refusal coverage.
+- [markdown.d.mts](markdown.d.mts) — interface declaration; implementation checking is tracked separately.
+- [markdown.mjs](markdown.mjs).
+- [teaching-links.mjs](teaching-links.mjs).
+- [fixtures/link-parity.json](fixtures/link-parity.json) and [fixtures/link-conformance.json](fixtures/link-conformance.json) — link-check parity fixtures.
+
+## Commands
+
+- `pnpm docs:structure`: `node tools/docs/catalog.mjs`.
+- `pnpm docs:links`: `node tools/docs/catalog.mjs --links`.
+- `pnpm docs:catalog`: `node tools/docs/catalog.mjs --write`.
+- `pnpm docs:audit`: `pnpm docs:structure && pnpm docs:links && node --import tsx tools/docs/audit.ts`.
+- `pnpm docs:check`: `node --import tsx tools/docs/check.ts`.
+
+Commands report success as exit 0 and evaluated failure as exit 1. Corrected strict parsers use exit 2 for usage errors. Existing command-specific defaults, flags and refusal behavior are described below; a check never implies a write.
+
+## Inputs
+
+Tracked and nonignored files, docs/documentation.json, Markdown/frontmatter, source package manifests and selected installed teaching closure.
+
+## Outputs
+
+Audit/check/link commands read only. Catalog --write updates docs/catalog.json and applicable genre indexes after structural validation.
+
+## Prerequisites
+
+Pinned yaml/TypeScript dependencies for installed tools. No sibling repository, missing roadmap configuration or private portfolio registry is required. The repository-local roadmap sync adapter and its tests are retired; its former platform skip declarations are not part of the docs task.
+
+## Validation
+
+Task ownership: `tools:test-docs`, `docs:audit`. `tools/testing/tasks.json` declares platform, timeout, prerequisite, output and input-profile contracts; `nx.json` defines their actual file/runtime inputs. Live discovery and mutation tests validate coverage and caching.
+
+## Invariants
+
+Owner Commands and Validation sections declare root pnpm script references. The audit accepts direct and explicit `run` forms with `--silent`/`-s` before the script and arbitrary trailing script arguments; leading directory/filter switches refuse because they change script ownership. Direct `exec`, `install` and `store` are pnpm subcommands; explicit `run` always requires a root script. Task ownership declarations resolve against the task manifest. These checks establish reference existence, not command behavior. A tooling owner's module map is the links in its `## Modules` section only: each direct code or JSON module needs a link by name, and each subfolder needs at least one link into it; a link elsewhere in the contract does not map a module, and files inside a mapped subfolder are not listed individually.
+
+Duplicate identities, missing owner contracts, aliases, unsafe local links and stale generated catalogs refuse. catalog accepts no flag, --links or --write; duplicate/conflicting/unknown flags exit 2 before writes.
+
+## Limits
+
+Structural checks cannot establish prose accuracy. External links are classified without treating remote availability as source truth.

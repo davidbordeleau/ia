@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { fieldTypeText } from '../../packages/language/dist/index.js';
 
 /** Self-contained installed contract; package documentation must not depend on repository-relative links. */
@@ -288,14 +287,7 @@ export function publicResources({ outputs, text, put, json, manifest }) {
     files = [],
     associations = [];
   const pin = (path) => {
-    const bytes = Buffer.from(outputs.get(path).bytes);
-    files.push({
-      path,
-      bytes: bytes.length,
-      sha256: createHash('sha256').update(bytes).digest('hex'),
-      mediaType: 'text/markdown',
-      encoding: 'utf8',
-    });
+    files.push({ path });
   };
   for (const word of words) {
     const advice = authoringGuidanceFor(word.word);
@@ -443,5 +435,4 @@ export function publicResources({ outputs, text, put, json, manifest }) {
     associations,
     index,
   });
-  json('.ia/authoring.resources.json', { format: 'ia.authoring-resources.v1', files, associations, index });
 }

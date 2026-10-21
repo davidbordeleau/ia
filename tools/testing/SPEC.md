@@ -1,8 +1,87 @@
-# Modular test execution tooling
+# testing tooling contract
+
+## Purpose
+
+Own the explicit task inventory, scheduling, execution, evidence and resource lifecycle.
+
+## Modules
+
+- [check-declarations.mjs](check-declarations.mjs) — checks package-facing entry, argument, path, public-manifest and packing-recipe JavaScript and emits declarations in memory; explicit `--write` validates all output paths and replaces changed declarations atomically.
+- [cache.test.ts](cache.test.ts) — behavior and refusal coverage.
+- [cold-start.test.ts](cold-start.test.ts) — behavior and refusal coverage.
+- [inventory.test.ts](inventory.test.ts) — behavior and refusal coverage.
+- [inventory.ts](inventory.ts) — repository/project discovery and inventory checks; retained export compatibility.
+- [manifest.ts](manifest.ts) — built-in-only contract types, strict decoding and graph/coverage rules.
+- [manifest.test.ts](manifest.test.ts) — malformed contracts, options and isolated imports.
+- [prerequisites.ts](prerequisites.ts) — compiler import analysis and workspace prerequisites.
+- [evidence.ts](evidence.ts) — versioned evidence types and persistence.
+- [gate.ts](gate.ts) — expected-set evaluation and aggregation.
+- [fixtures/source.ts](fixtures/source.ts) — test-only candidate source plus additions/deletions without ignored products; hashed by its test readers, outside shared runner globals.
+- [nx-plugin.mjs](nx-plugin.mjs).
+- [orchestrate.ts](orchestrate.ts).
+- [plan.test.ts](plan.test.ts) — behavior and refusal coverage.
+- [plan.ts](plan.ts).
+- [report.test.ts](report.test.ts) — behavior and refusal coverage.
+- [report.ts](report.ts) — report construction, runtime provenance and stable gate CLI adapter.
+- [resources.test.ts](resources.test.ts) — behavior and refusal coverage.
+- [resources.ts](resources.ts).
+- [run.ts](run.ts).
+- [schedule.json](schedule.json) — explicit policy or execution data.
+- [subprocess.test.ts](subprocess.test.ts) — behavior and refusal coverage.
+- [subprocess.ts](subprocess.ts).
+- [tasks.json](tasks.json) — explicit policy or execution data.
+- [timeouts.ts](timeouts.ts).
+- [verdict.test.ts](verdict.test.ts) — behavior and refusal coverage.
+- [verdict.ts](verdict.ts) — copies an earlier full run's verdict for an edit that keeps the base; never imported by the runner.
+- [workflow.ts](workflow.ts).
+
+## Commands
+
+- `pnpm tests:inventory`: `node --import tsx tools/testing/inventory.ts`.
+- `pnpm tests:plan`: `node --import tsx tools/testing/plan.ts`.
+- `pnpm tests:run`: `node --import tsx tools/testing/run.ts`.
+- `pnpm tests:orchestrate`: `node --import tsx tools/testing/orchestrate.ts`.
+- `pnpm tests:gate`: `node --import tsx tools/testing/report.ts`.
+
+Commands report success as exit 0 and evaluated failure as exit 1. Corrected strict parsers use exit 2 for usage errors. Existing command-specific defaults, flags and refusal behavior are described below; a check never implies a write.
+
+## Inputs
+
+tasks.json, schedule.json, workspace package and Vitest configurations, actual Vitest discovery, Nx named inputs, runtime/environment coordinates and evidence files.
+
+## Outputs
+
+Inventory/planning read source. Execution writes only declared products/evidence and owned temporary fixtures. Schedule recording writes its explicit output.
+
+## Prerequisites
+
+Pinned pnpm dependencies; inventory and planning work without built output. Selected orchestration produces declared build and payload prerequisites.
+
+## Validation
+
+Task ownership: `tools:test-testing`, `tools:test-cache`. `tools/testing/tasks.json` declares platform, timeout, prerequisite, output and input-profile contracts; `nx.json` defines their actual file/runtime inputs. Live discovery and mutation tests validate coverage and caching.
+
+## Invariants
+
+Every test belongs to one task; IDs, timeout profiles, dependencies, input profiles and output ownership are validated. Restored evidence is labelled and a missing task cannot count as a pass.
+
+## Limits
+
+Scheduling history estimates cost, not correctness. Cache validity depends on complete inputs; cache bypass is not a clean checkout.
+
+## Detailed behavior
+
+Manifest readers do not load inventory, compiler discovery or Markdown parsing. Each execution consumer receives shape and graph validation before using tasks and timeouts. Inventory retains old exports while lightweight readers import manifest directly. Evidence I/O, gate evaluation and report construction have one-way dependencies; report retains its public API. Inventory/planner/gate share strict options with runners; empty CI SHA coordinates remain supported.
+
+Workspace-glob and workflow readers retain distinct supported grammars. Existing fixtures characterize quotes/comments/CRLF and unsupported forms; neither is broadened to another YAML interpretation without parity evidence. Cold and generation fixtures share candidate materialization, retaining additions/deletions and excluding ignored products.
 
 Owns the task manifest, the inventory and planning commands, the report and gate schema, and the reusable execution primitives named in the modular test execution contract. These are read-only developer tools plus one runner; they schedule and report work, and they neither weaken an assertion nor establish that a cached result was computed from complete inputs.
 
 `tasks.json` is the manifest. It declares `schemaVersion`, the timeout `profiles`, the named `inputProfiles` and every task. A task carries a stable identity of the form `<owner>:<behaviour>`, its owning project, its Vitest file selection or its command, a timeout profile, the platforms and mode it applies to, an input profile, dependencies, disjoint outputs, a cache decision, a worker limit, a resource class and the qualification leaves it takes over. Shard number, runner hostname, run identifier and commit are execution metadata and never appear here. Measured durations live in `schedule.json`, which is scheduling metadata: changing it moves a task between shards and must never change what the task is.
+
+Inventory checks those profile names against the actual `nx.json` definitions, including nested references and cycles. Descriptions alone do not establish a cache contract. The `dependency-policy` profile covers package manifests and source trees discovered under packages, apps and native systems; import-graph edges cannot represent the dependency checker's filesystem scan. The `test-configuration` profile covers workspace Vitest configurations read by inventory and temp-policy tests, and the plain-JavaScript scripts (`.js`, `.mjs`, `.cjs`) under app and package `tests` directories that the temp-policy test scans. The `distribution-fixtures` profile includes the distributions tree read by distribution tests. These inputs are specific to their readers and do not broaden ordinary package build hashes.
+
+The cache suite mutates existing component source, newly discovered source, component manifests, app/native-system source, external test configurations and distribution fixtures. It queries the installed Nx hasher, verifies the forbidden-import checker actually fails, and requires exact restoration of every baseline hash. An unrelated language build and schedule edit provide negative controls.
 
 `nx-plugin.mjs` contributes each task as an Nx target. A task's hash is its input profile plus the files of the projects Nx's import graph says its owner depends on, excluding their test files; a root task whose entries all lie in one `tools/<dir>` is owned by a `tools-<dir>` project that also depends on the root project. The task's manifest entry and timeout profile are target options, so editing one task's entry does not invalidate other projects' results. A dependency task's hash and outputs never enter a dependent's hash.
 

@@ -61,7 +61,7 @@ runs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        node tools/testing/canonical-temp.mjs
+        node tools/temp/canonical-temp.mjs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     # Defender arm: real-time scanning skips the workspace, the temporary directory and the pnpm store. Its status is
     # logged first, so a run shows whether scanning was on to begin with.

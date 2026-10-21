@@ -27,9 +27,7 @@ export function publicationFixtureCodes(): readonly string[] {
  * A snapshot of every entry under `root`: a regular file's bytes in base64, null for anything else, a link included. Each
  * file is opened before it is judged, so the judgment and the read are of one file (CodeQL js/file-system-race), and its
  * name is checked again after the read. A file over 2147483647 bytes, the most the read by name admitted, refuses before a
- * buffer is allocated for it, and no read asks for more than that many bytes. The same bounded read is in
- * apps/distribution/src/inventory.ts, apps/distribution/src/system-package.ts, tools/release/system-packages.ts and
- * tools/runtime/qualify-sdk.mjs; keep them alike.
+ * buffer is allocated for it, and no read asks for more than that many bytes.
  */
 export function contents(root: string): string {
   return JSON.stringify(

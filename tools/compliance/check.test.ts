@@ -1,6 +1,17 @@
-import { appendFileSync, cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  appendFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { checkCompliance, readFixtures } from './check.js';
 import { checkInventory } from './inventory.js';
@@ -11,6 +22,88 @@ import { inputs, records, registry } from '../../packages/compliance/tests/nativ
 import { runEvidenceFixtures } from './evidence-fixtures.js';
 
 const root = resolve(import.meta.dirname, '../..');
+it('binds kernel evidence to the floor used by the evaluated graph', () => {
+  const { report } = checkCompliance(root);
+  expect(report.verdicts.find((v) => v.check === 'COMP-KERNEL')).toMatchObject({ outcome: 'pass', basis: 'verified' });
+  expect(report.conformance?.kernel?.floorDigest).toBe(KERNEL_DIGEST);
+});
+it('cannot reuse a kernel PASS after changing the evaluated repository floor', async () => {
+  const candidate = mkdtempSync(join(tmpdir(), 'ia-compliance-floor-'));
+  try {
+    const sources = execFileSync('git', ['ls-files', '-z', '.ia'], { cwd: root, encoding: 'utf8' })
+      .split('\0')
+      .filter(Boolean);
+    for (const path of sources) {
+      mkdirSync(dirname(resolve(candidate, path)), { recursive: true });
+      cpSync(resolve(root, path), resolve(candidate, path));
+    }
+    for (const directory of ['packages', 'apps', 'tools', 'releases'])
+      symlinkSync(resolve(root, directory), resolve(candidate, directory), 'junction');
+    cpSync(resolve(root, 'examples'), resolve(candidate, 'examples'), { recursive: true });
+    appendFileSync(resolve(candidate, '.ia/src/floor/move.ia'), '\n');
+    const { report } = checkCompliance(candidate);
+    expect(report.verdicts.find((v) => v.check === 'COMP-KERNEL')?.outcome).not.toBe('pass');
+    expect(report.conformance?.kernel?.floorDigest).not.toBe(KERNEL_DIGEST);
+    expect(report.outcome).toBe('fail');
+  } finally {
+    await rm(candidate, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+}, 120_000);
+it('exits nonzero for a covered requirement whose structural evaluator is unavailable', async () => {
+  const candidate = mkdtempSync(join(tmpdir(), 'ia-compliance-unevaluated-'));
+  try {
+    execFileSync('git', ['clone', '--quiet', '--no-local', root, candidate], { timeout: 120_000, windowsHide: true });
+    cpSync(resolve(root, 'tools'), resolve(candidate, 'tools'), { recursive: true });
+    // Keep the emitted host in its original dependency context: copying dist loses package-local workspace links.
+    // The hook still evaluates the candidate workspace supplied by its explicit --root argument.
+    symlinkSync(resolve(root, 'apps/steward-hook/dist'), resolve(candidate, 'apps/steward-hook/dist'), 'junction');
+    // Before linking candidate dependencies, prove the host uses its original build context. A copied dist cannot
+    // rely on the candidate workspace-link layout to conceal its missing dependency context.
+    execFileSync(process.execPath, ['--input-type=module', '-e', "await import('./apps/steward-hook/dist/main.js')"], {
+      cwd: candidate,
+      encoding: 'utf8',
+      timeout: 30000,
+      windowsHide: true,
+    });
+    symlinkSync(resolve(root, 'node_modules'), resolve(candidate, 'node_modules'), 'junction');
+    const files = execFileSync('git', ['grep', '-l', 'REQ-FOUNDATION-VALID', '--', 'examples/conformance/native'], {
+      cwd: candidate,
+      encoding: 'utf8',
+    })
+      .trim()
+      .split(/\r?\n/);
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const path = resolve(candidate, file);
+      writeFileSync(path, readFileSync(path, 'utf8').replaceAll('REQ-FOUNDATION-VALID', 'REQ-FOUNDATION-ADDITIONAL'));
+    }
+    const args = ['--conditions=development', '--import', 'tsx'];
+    const invoke = (script: string, flag: string) =>
+      spawnSync(process.execPath, [...args, script, flag], {
+        cwd: candidate,
+        encoding: 'utf8',
+        timeout: 120_000,
+        windowsHide: true,
+        maxBuffer: 16 * 1024 * 1024,
+      });
+    const inventory = invoke('tools/compliance/inventory.ts', '--write');
+    expect(inventory.status, inventory.stderr).toBe(0);
+    const checked = invoke('tools/compliance/check.ts', '--json');
+    const report = JSON.parse(checked.stdout);
+    expect(
+      report.outcome,
+      JSON.stringify(
+        report.verdicts.filter((v: { outcome: string }) => v.outcome !== 'pass'),
+        null,
+        2,
+      ),
+    ).toBe('not-evaluated');
+    expect(report.verdicts.filter((v: { outcome: string }) => v.outcome === 'fail')).toEqual([]);
+    expect(checked.status, checked.stderr).toBe(1);
+  } finally {
+    await rm(candidate, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+}, 180_000);
 it('discovers the actual conformance tree without stray entries', () => {
   const listing = readFixtures(root);
   expect(listing.strays).toEqual([]);

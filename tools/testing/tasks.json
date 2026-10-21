@@ -56,7 +56,11 @@
     "selected-tests-workspace-records": "selected-tests plus authored workspace records, teaching resources and native fixture inventories read through the filesystem.",
     "language-conformance": "workspace-records plus the compliance language fixtures read by the language formatter and conformance suites.",
     "host-adapters": "workspace-records plus this repository's committed ia-authoring skills under .claude/skills and .agents/skills, the pending mandate-resolution note and consumed changeset history read by runtime tests through the filesystem, since no import edge names them.",
-    "composition-fixture": "workspace-records plus apps/cli's composition workspace fixture, whose authored records the workspace-runtime generator tests render through the filesystem, since no import edge names them."
+    "composition-fixture": "workspace-records plus apps/cli's composition workspace fixture, whose authored records the workspace-runtime generator tests render through the filesystem, since no import edge names them.",
+    "dependency-policy": "Component package manifests and src trees scanned through filesystem discovery, including additions/removals, plus the dependency checker and execution inputs.",
+    "test-configuration": "Tooling plus each workspace project Vitest configuration read by inventory and temporary-directory policy tests.",
+    "distribution-fixtures": "Workspace records plus the distribution assets and fixtures used by distribution tests.",
+    "qualification-source": "The complete tracked source selection used by public package receipts, toolchain and source revision. Ordinary receipts and archives are verified during every consumer execution."
   },
   "tasks": [
     {
@@ -1374,7 +1378,7 @@
         "macos"
       ],
       "mode": "source",
-      "inputProfile": "workspace-records",
+      "inputProfile": "distribution-fixtures",
       "dependsOn": [
         "distribution:build"
       ],
@@ -2065,7 +2069,7 @@
         },
         {
           "case": "tests/host-plugin-node.test.ts > a node planted in the project or behind a relative PATH entry never starts the hook, and sh runs the recorded Node as written (crowncodes/ia#436)",
-          "reason": "On Windows the plugin hook keeps the earlier node command, which looks node up on PATH (host plugin distribution spec §6.1); the injected-platform Windows rendering case checks that command byte for byte on every platform.",
+          "reason": "On Windows the plugin hook keeps the earlier node command, which looks node up on PATH (host plugin distribution spec \u00a76.1); the injected-platform Windows rendering case checks that command byte for byte on every platform.",
           "platforms": [
             "windows"
           ]
@@ -3122,7 +3126,7 @@
         "macos"
       ],
       "mode": "source",
-      "inputProfile": "tooling",
+      "inputProfile": "dependency-policy",
       "dependsOn": [],
       "outputs": [
         "artifacts/tests/tools-test-dependencies"
@@ -3140,7 +3144,11 @@
       "project": ".",
       "files": [
         "tools/distribution/host-payload.test.ts",
-        "tools/distribution/language-guide.test.ts"
+        "tools/distribution/language-guide.test.ts",
+        "tools/distribution/consumer.test.ts",
+        "tools/distribution/authoring-manifest.test.ts",
+        "tools/distribution/authoring-guides.test.ts",
+        "tools/distribution/generation-order.test.ts"
       ],
       "profile": "corpus",
       "platforms": [
@@ -3149,7 +3157,7 @@
         "macos"
       ],
       "mode": "source",
-      "inputProfile": "workspace-records",
+      "inputProfile": "repository-inventory",
       "dependsOn": [
         "agent-composition-system:build",
         "language-base:generate",
@@ -3166,6 +3174,30 @@
       "resourceClass": "io",
       "covers": [
         "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tools/distribution/authoring-manifest.test.ts > refuses a linked selection as an alias",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO and unreadable selections run on Linux and macOS in their own case.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/distribution/authoring-manifest.test.ts > refuses a FIFO or unreadable selection as before",
+          "reason": "Windows has no FIFO special file, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case, and the linked selection wherever file-symlink creation is permitted.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/distribution/authoring-manifest.test.ts > refuses an unreadable authoring file past either cap as unbounded before reading it, as it always has",
+          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
+          "platforms": [
+            "windows"
+          ]
+        }
       ]
     },
     {
@@ -3184,12 +3216,12 @@
       "mode": "source",
       "inputProfile": "installed-cli",
       "dependsOn": [
-        "language-base:generate",
-        "distribution:build",
         "cli:build",
+        "distribution:build",
+        "host-payload:generate",
+        "language-base:generate",
         "mcp-door:build",
-        "steward-hook:build",
-        "host-payload:generate"
+        "steward-hook:build"
       ],
       "outputs": [
         "artifacts/tests/tools-test-installed-views"
@@ -3229,23 +3261,7 @@
       "covers": [
         "vitest run --config vitest.tools.config.mts --maxWorkers=1"
       ],
-      "skips": [
-        {
-          "case": "tools/docs/audit.test.ts > refuses a link to a configuration this adapter wrote as an alias and leaves the configuration as it was",
-          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The directory and unparsable-output refusals run on every platform in their own case.",
-          "platforms": [
-            "windows"
-          ],
-          "when": "file-symlink-unavailable"
-        },
-        {
-          "case": "tools/docs/audit.test.ts > refuses a FIFO at the roadmap output as unmanaged instead of waiting to read it",
-          "reason": "Windows has no FIFO special file, so the fixture cannot make one and runs only on POSIX.",
-          "platforms": [
-            "windows"
-          ]
-        }
-      ]
+      "skips": []
     },
     {
       "id": "tools:test-entry",
@@ -3422,8 +3438,6 @@
       "kind": "vitest",
       "project": ".",
       "files": [
-        "tools/systems/authoring-manifest.test.ts",
-        "tools/systems/authoring-guides.test.ts",
         "tools/systems/execute.test.ts"
       ],
       "profile": "installed",
@@ -3469,28 +3483,6 @@
             "linux",
             "macos"
           ]
-        },
-        {
-          "case": "tools/systems/authoring-manifest.test.ts > refuses a linked selection as an alias",
-          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included. The FIFO and unreadable selections run on Linux and macOS in their own case.",
-          "platforms": [
-            "windows"
-          ],
-          "when": "file-symlink-unavailable"
-        },
-        {
-          "case": "tools/systems/authoring-manifest.test.ts > refuses a FIFO or unreadable selection as before",
-          "reason": "Windows has no FIFO special file, and it keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read; the fixture runs only on POSIX. The directory, hard-linked, missing and undecodable selections run on every platform in their own case, and the linked selection wherever file-symlink creation is permitted.",
-          "platforms": [
-            "windows"
-          ]
-        },
-        {
-          "case": "tools/systems/authoring-manifest.test.ts > refuses an unreadable authoring file past either cap as unbounded before reading it, as it always has",
-          "reason": "Windows keeps only the read-only attribute of a file's mode, so chmod 0o000 never denies a read and there is no refused open to observe; the fixture runs only on POSIX.",
-          "platforms": [
-            "windows"
-          ]
         }
       ]
     },
@@ -3504,6 +3496,8 @@
         "tools/testing/report.test.ts",
         "tools/testing/resources.test.ts",
         "tools/testing/subprocess.test.ts",
+        "tools/testing/cold-start.test.ts",
+        "tools/testing/manifest.test.ts",
         "tools/testing/verdict.test.ts"
       ],
       "profile": "installed",
@@ -3513,7 +3507,7 @@
         "macos"
       ],
       "mode": "source",
-      "inputProfile": "tooling",
+      "inputProfile": "test-configuration",
       "dependsOn": [
         "runtime:build"
       ],
@@ -3541,7 +3535,7 @@
         "macos"
       ],
       "mode": "source",
-      "inputProfile": "tooling",
+      "inputProfile": "test-configuration",
       "dependsOn": [],
       "outputs": [
         "artifacts/tests/tools-test-temp"
@@ -3642,7 +3636,7 @@
         "macos"
       ],
       "mode": "source",
-      "inputProfile": "tooling",
+      "inputProfile": "dependency-policy",
       "dependsOn": [],
       "outputs": [
         "artifacts/tests/dependencies-check"
@@ -3699,7 +3693,7 @@
       "workerLimit": 1,
       "resourceClass": "io",
       "covers": [
-        "node --conditions=development --import tsx tools/systems/generate-authoring.ts --check"
+        "node --conditions=development --import tsx tools/distribution/generate-authoring.ts --check"
       ]
     },
     {
@@ -3885,7 +3879,7 @@
         "macos"
       ],
       "mode": "emitted",
-      "inputProfile": "emitted",
+      "inputProfile": "qualification-source",
       "dependsOn": [
         "agent-composition-system:build",
         "agent-system:build",
@@ -3902,17 +3896,19 @@
         "graph:build",
         "language:build",
         "runtime:build",
-        "service-contracts:build"
+        "service-contracts:build",
+        "packages:pack"
       ],
       "outputs": [
         "artifacts/tests/resources-qualify"
       ],
-      "cache": true,
+      "cache": false,
       "workerLimit": 1,
       "resourceClass": "subprocess",
       "covers": [
         "node tools/projections/qualify-resources.mjs"
-      ]
+      ],
+      "reason": "Exact archive provenance is rechecked on every run; restored test evidence cannot replace this verification."
     },
     {
       "id": "projections:qualify",
@@ -3926,7 +3922,7 @@
         "macos"
       ],
       "mode": "emitted",
-      "inputProfile": "emitted",
+      "inputProfile": "qualification-source",
       "dependsOn": [
         "agent-composition-system:build",
         "agent-system:build",
@@ -3943,17 +3939,19 @@
         "graph:build",
         "language:build",
         "runtime:build",
-        "service-contracts:build"
+        "service-contracts:build",
+        "packages:pack"
       ],
       "outputs": [
         "artifacts/tests/projections-qualify"
       ],
-      "cache": true,
+      "cache": false,
       "workerLimit": 1,
       "resourceClass": "subprocess",
       "covers": [
         "node tools/projections/qualify-projections.mjs"
-      ]
+      ],
+      "reason": "Exact archive provenance is rechecked on every run; restored test evidence cannot replace this verification."
     },
     {
       "id": "public-language:check",
@@ -4128,64 +4126,6 @@
       ]
     },
     {
-      "id": "tools:test-runtime",
-      "kind": "vitest",
-      "project": ".",
-      "files": [
-        "tools/runtime/qualify-sdk.test.ts"
-      ],
-      "profile": "installed",
-      "platforms": [
-        "linux",
-        "windows",
-        "macos"
-      ],
-      "mode": "source",
-      "inputProfile": "tooling",
-      "dependsOn": [],
-      "outputs": [
-        "artifacts/tests/tools-test-runtime"
-      ],
-      "cache": true,
-      "workerLimit": 1,
-      "resourceClass": "subprocess",
-      "covers": [
-        "vitest run --config vitest.tools.config.mts --maxWorkers=1"
-      ],
-      "skips": [
-        {
-          "case": "tools/runtime/qualify-sdk.test.ts > refuses a symbolic link at its selection before tar is handed its bytes",
-          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included, to qualify the check by name that catches a link Windows followed on open.",
-          "platforms": [
-            "windows"
-          ],
-          "when": "file-symlink-unavailable"
-        },
-        {
-          "case": "tools/runtime/qualify-sdk.test.ts > refuses a symbolic link put in place after its selection before tar is handed its bytes",
-          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included, to qualify the check by name that catches a link Windows followed on open.",
-          "platforms": [
-            "windows"
-          ],
-          "when": "file-symlink-unavailable"
-        },
-        {
-          "case": "tools/runtime/qualify-sdk.test.ts > refuses the same bytes under a new identity once it is open before tar is handed its bytes",
-          "reason": "The case renames a file over a name the script holds open, which is not exercised on Windows; Linux and macOS run this identity refusal.",
-          "platforms": [
-            "windows"
-          ]
-        },
-        {
-          "case": "tools/runtime/qualify-sdk.test.ts > refuses a FIFO put in place after its selection before tar is handed its bytes",
-          "reason": "Windows has no FIFOs; Linux and macOS run this refusal.",
-          "platforms": [
-            "windows"
-          ]
-        }
-      ]
-    },
-    {
       "id": "public:qualify",
       "kind": "command",
       "project": ".",
@@ -4197,7 +4137,7 @@
         "macos"
       ],
       "mode": "emitted",
-      "inputProfile": "repository-inventory",
+      "inputProfile": "qualification-source",
       "dependsOn": [
         "agent-composition-system:build",
         "agent-system:build",
@@ -4214,19 +4154,21 @@
         "session-system:build",
         "steward-hook:build",
         "template-system:build",
-        "vscode:build"
+        "vscode:build",
+        "packages:pack"
       ],
       "outputs": [
         "artifacts/tests/public-qualify"
       ],
-      "cache": true,
+      "cache": false,
       "workerLimit": 1,
       "resourceClass": "subprocess",
       "covers": [
         "node tools/distribution/generate-public.mjs --check",
         "node tools/distribution/qualify-public.mjs",
         "node tools/distribution/qualify-packages.mjs"
-      ]
+      ],
+      "reason": "Exact archive provenance is rechecked on every run; restored test evidence cannot replace this verification."
     },
     {
       "id": "source:lint",
@@ -4288,7 +4230,8 @@
         "tools/distribution/release-setup-auth.test.ts",
         "tools/distribution/release-setup-metadata.test.ts",
         "tools/distribution/release-setup.test.ts",
-        "tools/distribution/release-versioning.test.ts"
+        "tools/distribution/release-versioning.test.ts",
+        "tools/distribution/release-branch.test.ts"
       ],
       "profile": "corpus",
       "platforms": [
@@ -4426,7 +4369,8 @@
       "kind": "vitest",
       "project": ".",
       "files": [
-        "tools/release/public-content.test.ts"
+        "tools/release/public-content.test.ts",
+        "tools/release/recipe.test.ts"
       ],
       "profile": "corpus",
       "platforms": [
@@ -4643,7 +4587,7 @@
         "macos"
       ],
       "mode": "emitted",
-      "inputProfile": "emitted",
+      "inputProfile": "qualification-source",
       "dependsOn": [
         "agent-composition-system:build",
         "agent-system:build",
@@ -4661,16 +4605,150 @@
         "language:build",
         "runtime:build",
         "service-contracts:build",
-        "kb:build"
+        "kb:build",
+        "packages:pack"
       ],
       "outputs": [
         "artifacts/tests/kb-qualify"
+      ],
+      "cache": false,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "node tools/distribution/qualify-kb.mjs"
+      ],
+      "reason": "Exact archive provenance is rechecked on every run; restored test evidence cannot replace this verification."
+    },
+    {
+      "id": "tools:test-shared",
+      "kind": "vitest",
+      "project": ".",
+      "files": [
+        "tools/shared/contracts.test.ts"
+      ],
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "repository-inventory",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/tools-test-shared"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "tools:typecheck-js",
+      "kind": "command",
+      "project": ".",
+      "command": "pnpm tools:typecheck-js",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "tooling",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/tools-typecheck-js"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "pure",
+      "covers": [
+        "tsc -p tsconfig.tools-js.json"
+      ]
+    },
+    {
+      "id": "packages:pack",
+      "kind": "command",
+      "project": ".",
+      "command": "pnpm packages:pack",
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "emitted",
+      "inputProfile": "qualification-source",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/qualification/packed",
+        "artifacts/tests/packages-pack"
+      ],
+      "cache": false,
+      "reason": "Produces a manifest for the current orchestration identity; every consumer revalidates exact archives.",
+      "workerLimit": 1,
+      "resourceClass": "subprocess"
+    },
+    {
+      "id": "tools:test-sdk-consumer",
+      "kind": "vitest",
+      "project": ".",
+      "files": [
+        "tools/distribution/sdk-consumer.test.ts",
+        "tools/distribution/qualify-sdk.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "repository-inventory",
+      "dependsOn": [],
+      "outputs": [
+        "artifacts/tests/tools-test-sdk-consumer"
       ],
       "cache": true,
       "workerLimit": 1,
       "resourceClass": "subprocess",
       "covers": [
-        "node tools/distribution/qualify-kb.mjs"
+        "vitest run --config vitest.tools.config.mts --maxWorkers=1"
+      ],
+      "skips": [
+        {
+          "case": "tools/distribution/qualify-sdk.test.ts > refuses a symbolic link at its selection before tar is handed its bytes",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included, to qualify the check by name that catches a link Windows followed on open.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/distribution/qualify-sdk.test.ts > refuses a symbolic link put in place after its selection before tar is handed its bytes",
+          "reason": "The case skips only when Windows denies file-symlink creation with EPERM; it runs wherever creation is permitted, Windows included, to qualify the check by name that catches a link Windows followed on open.",
+          "platforms": [
+            "windows"
+          ],
+          "when": "file-symlink-unavailable"
+        },
+        {
+          "case": "tools/distribution/qualify-sdk.test.ts > refuses the same bytes under a new identity once it is open before tar is handed its bytes",
+          "reason": "The case renames a file over a name the script holds open, which is not exercised on Windows; Linux and macOS run this identity refusal.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tools/distribution/qualify-sdk.test.ts > refuses a FIFO put in place after its selection before tar is handed its bytes",
+          "reason": "Windows has no FIFOs; Linux and macOS run this refusal.",
+          "platforms": [
+            "windows"
+          ]
+        }
       ]
     }
   ]

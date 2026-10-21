@@ -1,8 +1,10 @@
+import { qualificationPath } from '../shared/qualification-path.mjs';
+import { parseOptions } from '../shared/args.mjs';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isEntry } from '../entry/is-entry.mjs';
 import { randomUUID } from 'node:crypto';
-import { readManifest, type TaskRecord } from './inventory.js';
+import { readManifest, type TaskRecord } from './manifest.js';
 import { currentPlatform, headCommit, type EvidenceSource, type GateEvidence } from './report.js';
 import { runBounded } from './subprocess.js';
 import { artifactDirectory } from './run.js';
@@ -147,6 +149,7 @@ export async function orchestrate(root: string, options: OrchestrationOptions): 
       ...process.env,
       CI: process.env['CI'] ?? '1',
       IA_TEST_ORCHESTRATION: orchestration,
+      IA_QUALIFICATION_MANIFEST: qualificationPath(root, orchestration),
     };
     if (!withRemote) {
       delete env[CACHE_SERVER_VARIABLE];
@@ -238,44 +241,45 @@ export async function orchestrate(root: string, options: OrchestrationOptions): 
 }
 
 if (isEntry(process.argv[1], import.meta.url)) {
-  const args = process.argv.slice(2),
-    root = resolve(import.meta.dirname, '../..');
-  const flag = (name: string): string | undefined => {
-    const position = args.indexOf(name);
-    return position < 0 ? undefined : args[position + 1];
-  };
-  const listed = flag('--tasks'),
-    out = flag('--evidence-out');
-  const known = ['--tasks', '--evidence-out', '--full', '--remote', '--json', '--parallel'];
-  const valued = ['--tasks', '--evidence-out', '--parallel'];
-  const stray = args.filter((arg, position) =>
-    arg.startsWith('--') ? !known.includes(arg) : !(position > 0 && valued.includes(args[position - 1] ?? '')),
-  );
-  let parallel: number | undefined, invalidParallel: string | undefined;
+  const root = resolve(import.meta.dirname, '../..'),
+    argv = process.argv.slice(2);
+  let options: ReturnType<typeof parseOptions> | undefined,
+    parallel: number | undefined,
+    invalidParallel: string | undefined;
   try {
     // A trailing --parallel with no value is refused like a wrong one, never read as absent.
-    parallel = parallelOf(args.includes('--parallel') ? (flag('--parallel') ?? '') : undefined);
+    if (argv.at(-1) === '--parallel') parallelOf('');
+    options = parseOptions(argv, {
+      values: ['tasks', 'evidence-out', 'parallel'],
+      booleans: ['full', 'remote', 'json'],
+      required: ['tasks'],
+    });
+    parallel = parallelOf(options.value('parallel'));
   } catch (error) {
-    invalidParallel = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith('--parallel ')) invalidParallel = message;
+    /* any other refusal is the usage below */
   }
-  if (!listed || stray.length) {
+  const listed = options?.value('tasks'),
+    out = options?.value('evidence-out');
+  if (invalidParallel === undefined && (!options || !listed)) {
     console.error(
       `Usage: pnpm tests:orchestrate --tasks "<id> <id>" [--evidence-out <directory>] [--remote] [--full] [--parallel 1-${MAX_PARALLEL}] [--json]`,
     );
     process.exitCode = 2;
-  } else if (invalidParallel !== undefined) {
+  } else if (invalidParallel !== undefined || !options || !listed) {
     console.error(invalidParallel);
     process.exitCode = 2;
   } else {
     orchestrate(root, {
       tasks: listed.split(/\s+/).filter(Boolean),
-      full: args.includes('--full'),
-      remote: args.includes('--remote'),
+      full: options.has('full'),
+      remote: options.has('remote'),
       ...(out === undefined ? {} : { evidenceOut: out }),
       ...(parallel === undefined ? {} : { parallel }),
     })
       .then((result) => {
-        if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
+        if (options.has('json')) console.log(JSON.stringify(result, null, 2));
         else
           console.log(
             `Orchestration ${result.status}: ${result.executed.length} executed, ${result.restored.length} restored, remote ${result.remote}.${result.missing.length ? ` Missing: ${result.missing.join(', ')}` : ''}`,

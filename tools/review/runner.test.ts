@@ -1,5 +1,15 @@
 import { createHash } from 'node:crypto';
-import fs, { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import fs, {
+  chmodSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
@@ -34,9 +44,81 @@ const result = {
   gaps: ['Missing source'],
   method: 'method',
   model: 'fixture',
-  subject: 'digest',
+  subject: 'd'.repeat(64),
   coverage: { stages: ['grounding'], filesRead: 1, fullUnchangedFiles: [] },
 };
+const expected = { repository: result.repository, pr: result.pr, head: result.head, subject: result.subject };
+it.each(['listing', 'recheck'])(
+  'refuses a parent-directory junction swap at %s without admitting evidence',
+  (phase) => {
+    const root = mkdtempSync(resolve(tmpdir(), 'ia-review-race-'));
+    if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
+    try {
+      const probe = `import fs from 'node:fs'; import assert from 'node:assert/strict'; import {syncBuiltinESMExports} from 'node:module'; import {resolve} from 'node:path';
+const root=process.argv[2], task=resolve(root,'task'), outside=resolve(root,'outside'), target=resolve(task,'evidence.json');
+fs.mkdirSync(task); fs.mkdirSync(outside); fs.writeFileSync(target,'{}'); fs.writeFileSync(resolve(outside,'evidence.json'),'{"outside":true}');
+const phase=process.argv[3], method=phase==='listing'?'readdirSync':'lstatSync';
+const original=fs[method]; let attempted=false, changed=false;
+fs[method]=function(path,...args){const value=original.call(fs,path,...args); if(!attempted&&resolve(String(path))===(phase==='listing'?task:target)){attempted=true;fs.renameSync(task,resolve(root,'retained'));fs.symlinkSync(outside,task,'junction');changed=true;}return value;};
+syncBuiltinESMExports(); const {evidenceFiles}=await import(process.argv[1]);
+const blockedByOpenHandle=phase==='recheck'&&process.platform==='win32';
+assert.throws(()=>evidenceFiles(root,[]),blockedByOpenHandle?{code:'EPERM'}:/alias|link|changed/i);
+assert.equal(attempted,true); assert.equal(changed,!blockedByOpenHandle);
+// The reader closes its descriptor even when the filesystem refuses the injected swap.
+if(blockedByOpenHandle)fs.renameSync(task,resolve(root,'retained'));
+console.log('race refused');`;
+      const child = spawnSync(
+        process.execPath,
+        ['--input-type=module', '-e', probe, new URL('./subject.mjs', import.meta.url).href, root, phase],
+        { encoding: 'utf8', timeout: 30000, windowsHide: true },
+      );
+      expect(child.status, child.stdout + child.stderr).toBe(0);
+      expect(child.stdout).toContain('race refused');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+it.each([{ repository: 'other/repo' }, { pr: 8 }, { head: 'f'.repeat(40) }, { subject: 'f'.repeat(64) }])(
+  'refuses a returned result bound to another subject: %j',
+  async (replacement) => {
+    const calls: string[] = [];
+    const gh = async (path: string) => {
+      calls.push(path);
+      return { id: 88, state: 'open', head: { sha: replacement.head ?? head } };
+    };
+    await expect(publishReview(gh, 'test/repo', { ...result, ...replacement }, expected)).rejects.toThrow(
+      'does not match the submitted subject',
+    );
+    expect(calls).toEqual([]);
+  },
+);
+it('labels corrupt gate evidence without disclosing its content', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-review-corrupt-'));
+  try {
+    writeFileSync(resolve(root, 'evidence.json'), '{sensitive malformed input');
+    expect(() => evidenceFiles(root, [])).toThrow('Invalid JSON in gate evidence: evidence.json');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+it('runs its linked executable entry exactly once', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-review-entry-'));
+  try {
+    symlinkSync(import.meta.dirname, resolve(root, 'linked'), 'junction');
+    const run = spawnSync(process.execPath, [resolve(root, 'linked/runner.mjs'), '--prepare'], {
+      encoding: 'utf8',
+      timeout: 15_000,
+      windowsHide: true,
+      env: { ...process.env, GITHUB_REPOSITORY: '', GH_TOKEN: '', NODE_OPTIONS: '' },
+    });
+    expect(run.status, run.stderr).toBe(1);
+    expect(run.stderr.match(/InventArch review could not complete/g)).toHaveLength(1);
+    expect(run.stderr).toContain('Repository required');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 it('refuses stale or unrelated upstream runs before collecting any source', async () => {
   const run = {
     repository: { full_name: 'test/repo' },
@@ -87,11 +169,11 @@ it('suppresses stale-head delivery and retries the same retained result without 
         : [];
     return { state: 'open', head: { sha: current } };
   };
-  expect(await publishReview(gh, 'test/repo', result)).toMatchObject({ reviewId: '88', duplicate: false });
-  expect(await publishReview(gh, 'test/repo', result)).toMatchObject({ reviewId: '88', duplicate: true });
+  expect(await publishReview(gh, 'test/repo', result, expected)).toMatchObject({ reviewId: '88', duplicate: false });
+  expect(await publishReview(gh, 'test/repo', result, expected)).toMatchObject({ reviewId: '88', duplicate: true });
   expect(writes).toEqual([{ commit_id: head, event: 'COMMENT', body: renderReview(result) }]);
   current = 'c'.repeat(40);
-  expect(await publishReview(gh, 'test/repo', result)).toEqual({ skipped: 'stale-head' });
+  expect(await publishReview(gh, 'test/repo', result, expected)).toEqual({ skipped: 'stale-head' });
   expect(writes).toHaveLength(1);
 });
 it('recovers an empty GitHub run association only from a unique current commit, repository and branch match', async () => {
@@ -160,7 +242,7 @@ it('rejects redirecting GitHub fetches and keeps the privileged workflow on trus
   expect(workflow).not.toContain('pnpm install');
   expect(workflow).not.toContain('pull_request_target');
 });
-it.each(['valid', 'tampered-blob', 'moving-head', 'truncated-tree'])(
+it.each(['valid', 'tampered-blob', 'moving-head', 'truncated-tree', 'denied-protection', 'invalid-utf8'])(
   'collects immutable source with %s boundary evidence',
   async (mode) => {
     const mergeBase = 'c'.repeat(40),
@@ -177,6 +259,11 @@ it.each(['valid', 'tampered-blob', 'moving-head', 'truncated-tree'])(
     });
     const before = blob('export const allowed = false;\n', 'src/auth.ts');
     const after = blob('export const allowed = true;\n', 'src/auth.ts');
+    const invalid = Buffer.from([0xc3, 0x28]);
+    if (mode === 'invalid-utf8') {
+      after.size = invalid.length;
+      after.sha = createHash('sha1').update(`blob ${invalid.length}\0`).update(invalid).digest('hex');
+    }
     const consumer = blob('import { allowed } from "./auth.js";\n', 'src/consumer.ts');
     const secret = blob('never disclose', 'secrets.json');
     const pr = {
@@ -221,18 +308,27 @@ it.each(['valid', 'tampered-blob', 'moving-head', 'truncated-tree'])(
         if (!found) throw new Error('Unexpected blob');
         return {
           encoding: 'base64',
-          content: Buffer.from(mode === 'tampered-blob' ? 'x'.repeat(found.size) : found.content).toString('base64'),
+          content: (mode === 'invalid-utf8' && found === after
+            ? invalid
+            : Buffer.from(mode === 'tampered-blob' ? 'x'.repeat(found.size) : found.content)
+          ).toString('base64'),
         };
       }
       if (path.endsWith('/issues/8')) return { title: 'Acceptance', body: 'Preserve authorization.' };
       if (path.includes('/jobs?'))
         return { jobs: [{ name: 'quality', conclusion: 'success', steps: [{ name: 'test', conclusion: 'success' }] }] };
-      if (path.endsWith('/protection')) return { required_status_checks: { contexts: ['quality'] } };
-      if (path.includes('/rules/branches/')) return [];
+      if (path.endsWith('/protection')) {
+        if (mode === 'denied-protection') throw Object.assign(new Error('Denied'), { status: 403 });
+        return { required_status_checks: { contexts: ['quality'] } };
+      }
+      if (path.includes('/rules/branches/'))
+        return [
+          { type: 'required_status_checks', parameters: { required_status_checks: [{ context: 'ruleset-check' }] } },
+        ];
       throw new Error(`Unexpected fixture endpoint ${path}`);
     };
     const collecting = collectSubject(gh, 'test/repo', '123');
-    if (mode !== 'valid') {
+    if (['tampered-blob', 'moving-head', 'truncated-tree'].includes(mode)) {
       await expect(collecting).rejects.toThrow(
         mode === 'tampered-blob'
           ? 'identity mismatch'
@@ -243,6 +339,20 @@ it.each(['valid', 'tampered-blob', 'moving-head', 'truncated-tree'])(
       return;
     }
     const subject = await collecting;
+    if (mode === 'denied-protection') {
+      expect(calls.some((path) => path.includes('/rules/branches/'))).toBe(true);
+      expect(subject['environment']).toMatchObject({
+        protection: 'unknown',
+        checks: 'unknown',
+        requiredChecks: ['ruleset-check'],
+      });
+      return;
+    }
+    if (mode === 'invalid-utf8') {
+      expect(subject['omissions']).toContain('head:src/auth.ts: invalid UTF-8 source omitted');
+      expect(subject['files']).not.toContainEqual(expect.objectContaining({ side: 'head', path: after.path }));
+      return;
+    }
     expect(subject).toMatchObject({
       base: mergeBase,
       head,
@@ -330,6 +440,23 @@ it('omits linked and too-deep evidence, skips other entries and admits reports u
     rmSync(root, { recursive: true, force: true });
   }
 });
+it('omits a hardlinked report instead of aborting collection', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
+  if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
+  try {
+    for (const directory of ['a', 'b', 'outside']) mkdirSync(resolve(root, directory));
+    writeFileSync(resolve(root, 'a/evidence.json'), '{"a":1}');
+    writeFileSync(resolve(root, 'outside/report.json'), '{"b":1}');
+    linkSync(resolve(root, 'outside/report.json'), resolve(root, 'b/evidence.json'));
+    const omissions: string[] = [];
+    expect(evidenceFiles(root, omissions).map(({ name, content }) => [name, content])).toEqual([
+      ['a/evidence.json', '{"a":1}'],
+    ]);
+    expect(omissions).toEqual(['Evidence hardlink omitted: b/evidence.json']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 it('omits a report symlink without opening it', (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'ia-review-evidence-'));
   if (dirname(root) !== resolve(tmpdir())) throw new Error('Unsafe fixture cleanup');
@@ -380,7 +507,7 @@ it('refuses unparsable or too many evidence entries and a missing, linked or non
     symlinkSync(resolve(root, 'evidence'), resolve(root, 'linked'), 'junction');
     expect(() => evidenceFiles(resolve(root, 'linked'), [])).toThrow('Evidence must be a real directory');
     writeFileSync(resolve(root, 'evidence/task/evidence.json'), 'not JSON');
-    expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow(SyntaxError);
+    expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow('Invalid JSON in gate evidence');
     rmSync(resolve(root, 'evidence/task/evidence.json'));
     const task = resolve(root, 'evidence/task');
     writeFileSync(resolve(task, 'log.txt'), '');

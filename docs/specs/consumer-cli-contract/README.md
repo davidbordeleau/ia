@@ -74,10 +74,10 @@ These commands are judged against the acting participant's governing mandates be
 
 | Move | Commands |
 | --- | --- |
-| Observation | `read`, `next` |
-| Verification | `validate`, `preview` |
+| Observation | `read`, `next`, `kb search/read/resolve/traverse` |
+| Verification | `validate`, `preview`, `kb check` and `kb pack` preview |
 | Synthesis | `author` |
-| Execution | `capture`, `project` and a workspace `host --apply` |
+| Execution | `capture`, `project`, `kb pack --apply` and a workspace `host --apply` |
 
 A capture or project plan is judged as the effect it plans. No other command is judged, including `position`, `inspect`, `init`, `doctor`, the distribution commands, the machine protocol, and a `host` plan, `--remove` or `--user`. Each judged command takes `--actor <agent>` to name which authored participant is acting.
 
@@ -103,6 +103,18 @@ A refusal is `{version: 1, ok: false, code, message, exit, where, next}`. `where
 
 Human output is rendered from structured tokens, with terminal capability and width handling. `--no-color` (or `NO_COLOR`), `--color`, `--ascii` and `--quiet` adjust it. `NO_COLOR` disables color even with `--color`, and `--json` never prints color. `FORCE_COLOR` and `--color` force it, `IA_ASCII` or a non-UTF-8 locale selects ASCII symbols, and `--color` with `--no-color` is a usage error. Every command prints a terminal state line; progress output is optional. Severity and rendering limits do not change admission.
 
-## 7 Qualification
+## 7 Knowledge commands
+
+`ia kb check|search|read|resolve|traverse` opens an immutable, in-memory knowledge view. It reads authored records under `.ia/src` and their explicitly bound UTF-8 Markdown/text bodies. A selector at `.ia/knowledge.json` is optional for local reads. No `.kb`, persistent index or database is created.
+
+`check` reports selected-record admission, reference closure and body availability. Workspace compliance checks are explicitly not evaluated by this scoped view; use native validation for the whole workspace. Missing references and excluded targets are unavailable without disclosing excluded identities or diagnostics. Local citations pin the snapshot and body and refuse after a change.
+
+`ia kb pack --commit <full-sha> --selection <committed-path> --out <workspace-file>` previews a validated immutable package. `--apply` writes it; noninteractive and JSON apply require `--yes`. The output must have existing, unlinked parents within the repository and be outside `.ia`, `.git`, selected inputs and the selector. Identical existing bytes return unchanged; different bytes refuse. Current authority and native revision are checked again after interactive confirmation.
+
+Read operations require Observation; check and pack preview require Verification; pack apply requires Execution. Nested parsing drives both enforcement and retry advice, including explicit `--actor`. The nine existing machine routes retain their protocol. Knowledge results use `{version: 1, ok, value}`; a `check` report that is not ok exits 1. A knowledge refusal uses the §5 refusal envelope with its `IA-KB-*` code and one next command for its cause: malformed input, knowledge outside the scope and an oversized response exit 1; a stale citation, a changed scope or source and an unreadable repository are operational and exit 3. Grammar, workspace, output-path and mandate refusals keep their established codes and exit classes.
+
+The public [KB library](../../../packages/kb/README.md) owns selection, packaging and citations. The application host owns audiences, storage, lifecycle and approval.
+
+## 8 Qualification
 
 [CLI tests](../../../apps/cli/tests) cover parsing, JSON envelopes, exit classes and command outcomes. Installed-consumer checks also exercise the packed binaries. Neither establishes that a host loaded or activated anything.

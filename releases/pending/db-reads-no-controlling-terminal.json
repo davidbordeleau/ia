@@ -1,0 +1,15 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "patch",
+  "title": "Keep a terminal at a name `@inventarch/db` reads from becoming the controlling terminal",
+  "summary": "`@inventarch/db` opens installed distribution files, `.ia/workspace.json`, authored package sources, the workspace file `readWorkspaceBytes` reads and the check evidence file `.ia/work/evidence/<authored revision>.ia` before it judges them. A terminal device put at one of those names could, on some POSIX systems, become the process's controlling terminal when it was opened. It now cannot; the device is still refused, or for evidence ignored, as before.",
+  "packages": [
+    "@inventarch/db"
+  ],
+  "paths": [
+    "packages/db/",
+    "packages/db/SPEC.md",
+    "packages/db/src/evidence.ts",
+    "packages/db/src/named.ts"
+  ]
+}

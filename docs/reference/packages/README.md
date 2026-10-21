@@ -22,6 +22,7 @@ Use the entry points listed here. The `./internal/*` subpaths are published for 
 | `@inventarch/db` | [README](../../../packages/db/README.md) | [SPEC](../../../packages/db/SPEC.md) | Root; `./editor`, `./distribution`, `./descriptors` |
 | `@inventarch/runtime` | [README](../../../packages/runtime/README.md) | [SPEC](../../../packages/runtime/SPEC.md) | Root; `./editor`, `./authoring`, `./authoring-execution`, `./entry` |
 | `@inventarch/workspace-runtime` | [README](../../../packages/workspace-runtime/README.md) | [SPEC](../../../packages/workspace-runtime/SPEC.md) | Root and twenty subpaths, which its README lists |
+| `@inventarch/kb` | [README](../../../packages/kb/README.md) | [SPEC](../../../packages/kb/SPEC.md) | Root; `./legacy`, `./protocol` |
 | `@inventarch/service-contracts` | [README](../../../packages/service-contracts/README.md) | [SPEC](../../../packages/service-contracts/SPEC.md) | Root; `./sources`, `./tenancy`, `./session-lifecycle`, `./source-apply`, `./marketplace`, `./installation` |
 
 ### `@inventarch/language`

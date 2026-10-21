@@ -44,7 +44,7 @@ afterEach(() => {
     }
   }
 });
-// Every busy/failure test overrides renameSync and/or rmSync, and the lock tests openSync, readFileSync, statSync or mkdirSync; put each back to a plain passthrough so later tests see the real filesystem.
+// Every busy/failure test overrides renameSync and/or rmSync, and the lock tests openSync, readFileSync, statSync, lstatSync or mkdirSync; put each back to a plain passthrough so later tests see the real filesystem.
 afterEach(() => {
   vi.mocked(renameSync).mockImplementation((from, to) => real.renameSync(from as never, to as never));
   vi.mocked(rmSync).mockImplementation((path, options) => real.rmSync(path as never, options as never));
@@ -53,6 +53,7 @@ afterEach(() => {
   vi.mocked(readFileSync).mockImplementation(((path: never, options: never) =>
     real.readFileSync(path, options)) as never);
   vi.mocked(statSync).mockImplementation(((path: never, options: never) => real.statSync(path, options)) as never);
+  vi.mocked(lstatSync).mockImplementation(((path: never, options: never) => real.lstatSync(path, options)) as never);
 });
 const SUBPROCESS = Number(process.env['IA_TEST_SUBPROCESS_TIMEOUT_MS']) || 10_000;
 /** Never a live pid here: Linux pids stay below 4194304, the largest pid_max, and macOS pids below 100000. */
@@ -460,10 +461,11 @@ it('refuses INSTALL-BUSY after bounded takeover attempts, without hanging, when 
 // Each verdict at every age that matters: a dead pid is taken over at any age, a live pid only past a day (a younger
 // age does not show that its owner stopped), and an empty or unparseable pid after 10 seconds' grace. So is a pid
 // outside 1 to 2147483647, which names no single owner: on POSIX process.kill takes 0 or a negative pid for a process
-// group or for every process, on Windows 0 is the caller itself, and Node refuses a larger one. A lock an older CLI
-// wrote holds its pid alone; one this CLI writes holds its pid, a space and a token. A live pid is this process's own
-// and also another process's, this process's parent (Vitest's main process), so a check that judges only this process
-// alive fails. Ages are set with utimesSync, never waited out.
+// group or for every process, on Windows 0 is the caller itself, and Node refuses a larger one. 2147483647, the largest
+// pid that names one, is judged by whether it runs, and as no process has it, it is taken over at 5 seconds, when
+// 2147483648 is not. A lock an older CLI wrote holds its pid alone; one this CLI writes holds its pid, a space and a
+// token. A live pid is this process's own and also another process's, this process's parent (Vitest's main process), so
+// a check that judges only this process alive fails. Ages are set with utimesSync, never waited out.
 it('takes over a lock whose pid died or that holds no pid from 1 to 2147483647 past 10 seconds, in either format, a live one past a day, and refuses INSTALL-BUSY untouched for any other', () => {
   const minutes = 60_000,
     live = String(process.pid),
@@ -490,6 +492,7 @@ it('takes over a lock whose pid died or that holds no pid from 1 to 2147483647 p
     'pid 0, 20 seconds old': ['0', 20_000, true],
     'pid -1, 5 seconds old': ['-1', 5_000, false],
     'pid -1, 20 seconds old': ['-1', 20_000, true],
+    'pid 2147483647, 5 seconds old': ['2147483647', 5_000, true],
     'pid 2147483648, 5 seconds old': ['2147483648', 5_000, false],
     'pid 2147483648, 20 seconds old': ['2147483648', 20_000, true],
     'pid 99999999999, 5 seconds old': ['99999999999', 5_000, false],
@@ -504,46 +507,39 @@ it('takes over a lock whose pid died or that holds no pid from 1 to 2147483647 p
     writeFileSync(lockPath, text);
     const when = new Date(Date.now() - ageMs);
     utimesSync(lockPath, when, when);
-    let outcome: unknown = 'materialized';
-    try {
-      materializeMarketplace(home, files('0.1.0+aaa'));
-    } catch (error) {
-      outcome = { code: (error as { code?: unknown }).code, message: (error as Error).message };
-    }
     seen[name] = {
-      outcome,
+      outcome: materialized(home),
       lock: existsSync(lockPath) ? readFileSync(lockPath, 'utf8') : null,
       version: readMaterializedPlugin(home)?.version ?? null,
     };
     expected[name] = takenOver
       ? { outcome: 'materialized', lock: null, version: '0.1.0+aaa' }
-      : {
-          outcome: {
-            code: 'IA-DIST-INSTALL-BUSY',
-            message: `Another ia host --user run holds ${lockPath}; wait for it or delete the file if no run is active`,
-          },
-          lock: text,
-          version: null,
-        };
+      : { outcome: heldBy(lockPath), lock: text, version: null };
   }
   // One comparison, so a changed verdict shows every case it moves, not only the first.
   expect(seen).toEqual(expected);
 });
-it('checks liveness at the inclusive maximum owner pid before taking over a young lock', () => {
-  const home = join(temp(), '.ia'),
-    lockPath = join(home, 'claude', '.lock');
-  mkdirSync(join(home, 'claude'), { recursive: true });
-  writeFileSync(lockPath, `2147483647 ${OTHER_TOKEN}`);
-  const when = new Date(Date.now() - 20_000);
-  utimesSync(lockPath, when, when);
-  const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
-  try {
-    expect(materialized(home)).toEqual(heldBy(lockPath));
-    expect(kill).toHaveBeenCalledWith(2147483647, 0);
-  } finally {
-    kill.mockRestore();
-  }
-});
+// Both ends of the owner range name one owner, so a lock holding either is judged by whether that pid runs (here it does,
+// as process.kill answers), not taken over at 20 seconds by its age alone, as a lock past 10 seconds whose pid is outside
+// the range is.
+it.each([1, 2147483647])(
+  'checks liveness at pid %i, an inclusive end of the owner range, before taking over a young lock',
+  (pid) => {
+    const home = join(temp(), '.ia'),
+      lockPath = join(home, 'claude', '.lock');
+    mkdirSync(join(home, 'claude'), { recursive: true });
+    writeFileSync(lockPath, `${pid} ${OTHER_TOKEN}`);
+    const when = new Date(Date.now() - 20_000);
+    utimesSync(lockPath, when, when);
+    const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+    try {
+      expect(materialized(home)).toEqual(heldBy(lockPath));
+      expect(kill).toHaveBeenCalledWith(pid, 0);
+    } finally {
+      kill.mockRestore();
+    }
+  },
+);
 // Only ESRCH from process.kill means the pid is not running: any other error, such as the EPERM another user's or a
 // protected process answers, leaves the lock busy until it is a day old, so a live run is not taken over.
 it('refuses INSTALL-BUSY untouched for a lock under a day old whose pid process.kill answers with EPERM', () => {
@@ -637,6 +633,102 @@ it('sweeps abandoned claims beside the lock once it acquires it, and leaves a yo
   expect(materialized(home)).toBe('materialized');
   expect(readdirSync(parent).sort()).toEqual(['.lock.3-4.claim', 'marketplace']);
 });
+// The claim lasts until the stale lock is gone. Released before the removal, it would let a second run that judged the
+// same lock claim it, find the lock's name still on the judged file, and remove the lock this run creates next.
+it('removes a stale lock while it still holds its claim, and has released the claim by the time it releases its own lock', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    lockPath = join(parent, '.lock'),
+    text = `${DEAD_PID} ${OTHER_TOKEN}`;
+  mkdirSync(parent, { recursive: true });
+  writeFileSync(lockPath, text);
+  const claim = `${lockPath}.${real.lstatSync(lockPath, { bigint: true }).ino}.claim`,
+    removals: unknown[] = [];
+  vi.mocked(rmSync).mockImplementation((path, options) => {
+    if (String(path) === lockPath) removals.push({ removing: standing(lockPath), claimed: real.existsSync(claim) });
+    return real.rmSync(path as never, options as never);
+  });
+  expect(materialized(home)).toBe('materialized');
+  expect(removals).toEqual([
+    { removing: `file holding ${text}`, claimed: true }, // the takeover
+    { removing: expect.stringMatching(new RegExp(`^file holding ${process.pid} `)), claimed: false }, // the release
+  ]);
+  expect(readdirSync(parent)).toEqual(['marketplace']);
+});
+// The lock's name is compared with the judged file before the claim and again under it, and the judging descriptor holds
+// that file open at both, so its inode cannot pass to a lock another run creates in between and pass the comparison.
+it('compares the lock name with the judged file before and again under its claim, holding the judged file open at each', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    lockPath = join(parent, '.lock');
+  mkdirSync(parent, { recursive: true });
+  writeFileSync(lockPath, `${DEAD_PID} ${OTHER_TOKEN}`);
+  const judged = real.lstatSync(lockPath, { bigint: true }).ino,
+    claim = `${lockPath}.${judged}.claim`,
+    comparisons: unknown[] = [];
+  let judging: number | undefined,
+    removed = false;
+  vi.mocked(openSync).mockImplementation((path, flags, mode) => {
+    const fd = real.openSync(path, flags, mode);
+    if (judging === undefined && String(path) === lockPath && flags !== 'wx') judging = fd;
+    return fd;
+  });
+  vi.mocked(lstatSync).mockImplementation(((path: never, options: never) => {
+    if (judging !== undefined && !removed && String(path) === lockPath) {
+      let open = false;
+      try {
+        open = real.fstatSync(judging, { bigint: true }).ino === judged;
+      } catch {
+        /* closed: open stays false */
+      }
+      comparisons.push({ open, claimed: real.existsSync(claim) });
+    }
+    return real.lstatSync(path, options);
+  }) as never);
+  vi.mocked(rmSync).mockImplementation((path, options) => {
+    if (String(path) === lockPath) removed = true;
+    return real.rmSync(path as never, options as never);
+  });
+  expect(materialized(home)).toBe('materialized');
+  expect(removed).toBe(true);
+  expect(comparisons).toEqual([
+    { open: true, claimed: false },
+    { open: true, claimed: true },
+  ]);
+});
+// A claim is abandoned once it is older than 10 seconds, on either side of which these claims lie. The clock stands still
+// while each materialize runs, so their ages are exact.
+it('removes a claim 11 seconds old as abandoned and takes the stale lock over, and leaves one 9 seconds old with the lock, refusing INSTALL-BUSY', () => {
+  const rows: Record<string, readonly [ageMs: number, abandoned: boolean]> = {
+    '9 seconds old': [9_000, false],
+    '11 seconds old': [11_000, true],
+  };
+  const text = `${DEAD_PID} ${OTHER_TOKEN}`,
+    now = Date.now(),
+    seen: Record<string, unknown> = {},
+    expected: Record<string, unknown> = {};
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+  try {
+    for (const [name, [ageMs, abandoned]] of Object.entries(rows)) {
+      const home = join(temp(), '.ia'),
+        parent = join(home, 'claude'),
+        lockPath = join(parent, '.lock');
+      mkdirSync(parent, { recursive: true });
+      writeFileSync(lockPath, text);
+      const claim = `.lock.${real.lstatSync(lockPath, { bigint: true }).ino}.claim`,
+        claimedAt = new Date(now - ageMs);
+      real.mkdirSync(join(parent, claim));
+      utimesSync(join(parent, claim), claimedAt, claimedAt);
+      seen[name] = { outcome: materialized(home), left: readdirSync(parent).sort(), lock: standing(lockPath) };
+      expected[name] = abandoned
+        ? { outcome: 'materialized', left: ['marketplace'], lock: null }
+        : { outcome: heldBy(lockPath), left: ['.lock', claim], lock: `file holding ${text}` };
+    }
+  } finally {
+    clock.mockRestore();
+  }
+  expect(seen).toEqual(expected);
+});
 // On Windows a lock name another run is removing stays delete-pending briefly, and the exclusive create refuses it
 // with a busy code; EBUSY is one on every platform, so this pins the wait everywhere.
 it('waits out a lock name the exclusive create finds busy, and then acquires the lock', () => {
@@ -687,10 +779,112 @@ it('refuses INPUT-INVALID, naming the directory, when the lock cannot be created
   });
   expect(existsSync(lockPath)).toBe(false);
 });
-/** What a materialize did: the refusal it raised, as its code and message, or `materialized`. */
-function materialized(home: string): unknown {
+// The wait for a busy name, on a clock that moves only while the create waits, and only for a wait that blocks: as the
+// real Atomics.wait, the fake returns at once when the value it watches no longer matches. The create backs off from
+// 1 ms, doubling to at most 50 ms, while less than 250 ms have passed, so its last wait ends at 263 ms; it then finds
+// nothing at the name, creates once more, and refuses INPUT-INVALID with the code the create kept answering.
+// watchOpens bounds the creates, so a wait that never ends, or never blocks, fails instead of spinning.
+it('backs off a create that stays busy from 1 to 50 ms until 250 ms have passed, creates twice more, and refuses INPUT-INVALID naming the directory', () => {
+  const home = join(temp(), '.ia'),
+    parent = join(home, 'claude'),
+    lockPath = join(parent, '.lock'),
+    start = Date.now(),
+    waits: { readonly ms: number; readonly blocks: boolean }[] = [],
+    creates: number[] = [];
+  let clock = start;
+  watchOpens(lockPath, {
+    before: (exclusive) => {
+      if (!exclusive) return;
+      creates.push(clock - start);
+      throw Object.assign(new Error('pending'), { code: 'EBUSY' });
+    },
+  });
+  const now = vi.spyOn(Date, 'now').mockImplementation(() => clock),
+    wait = vi.spyOn(Atomics, 'wait').mockImplementation(((
+      array: Int32Array,
+      index: number,
+      value: number,
+      ms?: number,
+    ) => {
+      const blocks = Atomics.load(array, index) === value,
+        timeout = ms ?? Number.POSITIVE_INFINITY;
+      waits.push({ ms: timeout, blocks });
+      if (!blocks) return 'not-equal';
+      clock += timeout;
+      return 'timed-out';
+    }) as never);
+  let outcome: unknown;
   try {
-    materializeMarketplace(home, files('0.1.0+aaa'));
+    outcome = materialized(home);
+  } finally {
+    now.mockRestore();
+    wait.mockRestore();
+  }
+  expect({ outcome, waits, creates, left: readdirSync(parent) }).toEqual({
+    outcome: {
+      code: 'IA-DIST-INPUT-INVALID',
+      message: `${parent} cannot hold the install lock (EBUSY); check its permissions`,
+    },
+    waits: [1, 2, 4, 8, 16, 32, 50, 50, 50, 50].map((ms) => ({ ms, blocks: true })),
+    creates: [0, 1, 3, 7, 15, 31, 63, 113, 163, 213, 263, 263],
+    left: [],
+  });
+});
+/** plugin-home loaded afresh as it loads on `platform`, where it settles which codes it waits out as busy. */
+async function loadedOn(platform: NodeJS.Platform): Promise<typeof import('../src/plugin-home.js')> {
+  const actual = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
+  vi.resetModules();
+  Object.defineProperty(process, 'platform', { ...actual, value: platform });
+  try {
+    return await import('../src/plugin-home.js');
+  } finally {
+    Object.defineProperty(process, 'platform', actual);
+  }
+}
+// EPERM and EACCES are codes with which Windows refuses an exclusive create at a name another run is still removing, and
+// permission problems elsewhere. The module settles which codes are which as it loads, so it is loaded as it loads on each
+// platform, wherever this runs: as on Windows, two refusals with either code are waited out and the lock is acquired; as
+// on Linux, the first refuses INPUT-INVALID at once.
+it('waits out EPERM and EACCES from the exclusive create as on Windows, and refuses each INPUT-INVALID at once as on Linux, wherever it runs', async () => {
+  const rows: Record<string, readonly [platform: NodeJS.Platform, code: string, waitedOut: boolean]> = {
+    'EPERM, loaded as on Windows': ['win32', 'EPERM', true],
+    'EACCES, loaded as on Windows': ['win32', 'EACCES', true],
+    'EPERM, loaded as on Linux': ['linux', 'EPERM', false],
+    'EACCES, loaded as on Linux': ['linux', 'EACCES', false],
+  };
+  const seen: Record<string, unknown> = {},
+    expected: Record<string, unknown> = {};
+  for (const [name, [platform, code, waitedOut]] of Object.entries(rows)) {
+    const { materializeMarketplace: materialize } = await loadedOn(platform),
+      home = join(temp(), '.ia'),
+      parent = join(home, 'claude'),
+      lockPath = join(parent, '.lock');
+    let refused = 0;
+    watchOpens(lockPath, {
+      before: (exclusive) => {
+        if (!exclusive || refused >= 2) return;
+        refused++;
+        throw Object.assign(new Error('pending'), { code });
+      },
+    });
+    seen[name] = { outcome: materialized(home, materialize), refused, left: readdirSync(parent) };
+    expected[name] = waitedOut
+      ? { outcome: 'materialized', refused: 2, left: ['marketplace'] }
+      : {
+          outcome: {
+            code: 'IA-DIST-INPUT-INVALID',
+            message: `${parent} cannot hold the install lock (${code}); check its permissions`,
+          },
+          refused: 1,
+          left: [],
+        };
+  }
+  expect(seen).toEqual(expected);
+});
+/** What a materialize (by default this file's import of it) did: the refusal it raised, as its code and message, or `materialized`. */
+function materialized(home: string, materialize = materializeMarketplace): unknown {
+  try {
+    materialize(home, files('0.1.0+aaa'));
   } catch (error) {
     return { code: (error as { code?: unknown }).code, message: (error as Error).message };
   }

@@ -79,7 +79,7 @@ function reading(): { readonly root: string; readonly target: string } {
   symlinkSync(target, resolve(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
   return { root, target: realpathSync(target) };
 }
-it('negotiates the pinned profile, discovers twelve tools and enforces initialization order', () => {
+it('negotiates the pinned profile, preserves twelve tools and adds five knowledge tools', () => {
   const value = protocol();
   expect(value.request(message(1, 'tools/list'))?.error?.code).toBe(-32000);
   expect(value.request(message(1, 'initialize', {}))?.error?.code).toBe(-32602);
@@ -107,11 +107,10 @@ it('negotiates the pinned profile, discovers twelve tools and enforces initializ
   const listed = value.request(message(3, 'tools/list'))?.result as {
     tools: { name: string; annotations: { readOnlyHint: boolean } }[];
   };
-  // Plan amendment A3: the eight version 1 door tools, ia_read, ia_next and ia_position from protocol version 2, and
-  // ia_vocabulary.
-  expect(listed.tools).toHaveLength(12);
+  // The eight version 1 door tools, ia_read, ia_next and ia_position from protocol version 2, and ia_vocabulary.
+  expect(listed.tools).toHaveLength(17);
   expect(listed.tools.map((tool) => tool.name).slice(8, 11)).toEqual(['ia_read', 'ia_next', 'ia_position']);
-  expect(listed.tools.at(-1)?.name).toBe('ia_vocabulary');
+  expect(listed.tools[11]?.name).toBe('ia_vocabulary');
   expect(listed.tools.every((tool) => tool.annotations.readOnlyHint)).toBe(true);
   expect(listed.tools.some((t) => t.name === 'ia_report')).toBe(false);
   expect(value.request(message(4, 'initialize'))?.error?.code).toBe(-32600);
@@ -234,6 +233,8 @@ it('serves ia_position through the door: body(K) as runtime position reads it, a
     for (const [id, key] of [
       [2, {}],
       [3, { seat: PROCEDURE, shape: 'governance' }],
+      [30, { seat: PROCEDURE, primitive: 'Memory' }],
+      [31, { seat: PROCEDURE, primitive: 'Escalation' }],
     ] as const) {
       const got = call(id, key);
       expect(got.isError).toBe(false);
@@ -267,7 +268,7 @@ it('serves ia_position through the door: body(K) as runtime position reads it, a
     ok: false,
     code: 'IA-RUNTIME-REQUEST-INVALID',
     message:
-      "IA-RUNTIME-REQUEST-INVALID: Unknown parameter 'text'; admitted: within, seat, shape, phase, depth, budget, word",
+      "IA-RUNTIME-REQUEST-INVALID: Unknown parameter 'text'; admitted: within, seat, shape, phase, depth, budget, word, primitive",
   });
 });
 it("serves ia_next through the door: one plan's delivery view inside the scope, and a refusal naming its next command", () => {
@@ -317,7 +318,7 @@ it("serves ia_next through the door: one plan's delivery view inside the scope, 
     structuredContent: { ok: false, code: 'IA-RUNTIME-REQUEST-INVALID' },
   });
 });
-// Decision conditional-relations-in-delivery: ia_next reads a conditional row against the phase its token binds, and
+// Runtime R18's conditional rows: ia_next reads a conditional row against the phase its token binds, and
 // ia_position against its key's phase, as the Door does.
 it('reads a conditional row through ia_next and ia_position at the phase the token or the key binds', () => {
   const root = delivery(),
@@ -478,7 +479,7 @@ it('answers ia_vocabulary from the shipped catalogue with door-shaped successes 
       structuredContent: { ok: false, code: 'IA-RUNTIME-REQUEST-INVALID' },
     });
 });
-// spec-0012 DRF-04: tools/list is the table's projection, plus only the documented MCP parts.
+// tools/list is the table's projection, plus only the documented MCP parts.
 it('serves the door operations as the machine protocol table describes them', () => {
   const value = protocol();
   initialize(value);
@@ -487,7 +488,15 @@ it('serves the door operations as the machine protocol table describes them', ()
   };
   const tools = listed.tools;
   const served = MACHINE_PROTOCOL.operations.filter((operation) => operation.mcp !== null);
-  expect(tools.map((tool) => tool.name)).toEqual([...served.map((operation) => operation.mcp), 'ia_vocabulary']);
+  expect(tools.map((tool) => tool.name)).toEqual([
+    ...served.map((operation) => operation.mcp),
+    'ia_vocabulary',
+    'ia_kb_check',
+    'ia_kb_search',
+    'ia_kb_read',
+    'ia_kb_resolve',
+    'ia_kb_traverse',
+  ]);
   expect(
     MACHINE_PROTOCOL.operations.filter((operation) => operation.mcp === null).map((operation) => operation.name),
   ).toEqual(['report']);

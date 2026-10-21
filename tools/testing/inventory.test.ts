@@ -1,9 +1,13 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { gitFiles } from '../docs/check.js';
 import {
   discoverProjects,
+  takeInventory,
   qualificationLeaves,
   readManifest,
   scriptLeaves,
@@ -133,6 +137,73 @@ it('fails unknown profiles, a worker limit above the profile ceiling and an unre
   expect(check([task({ cache: true, outputs: [] })]).join('\n')).toContain('a cacheable task must declare its outputs');
 });
 
+it('refuses input profiles whose Nx definition is missing, cyclic or refers to an unknown profile', () => {
+  expect(check([task()], { namedInputs: {} }).join('\n')).toContain('owner-source: missing Nx input profile');
+  expect(check([task()], { namedInputs: { 'owner-source': ['missing'] } }).join('\n')).toContain(
+    'unknown Nx input profile missing',
+  );
+  expect(
+    check([task()], { namedInputs: { 'owner-source': ['nested'], nested: ['owner-source'] } }).join('\n'),
+  ).toContain('cyclic Nx input profile');
+  expect(check([task()], { namedInputs: { 'owner-source': ['{projectRoot}/**/*', { env: 'CI' }] } })).toEqual([]);
+});
+it('checks actual Nx definitions through repository inventory while manifest loading stays independent', async () => {
+  const parent = realpathSync(tmpdir()),
+    candidate = mkdtempSync(resolve(parent, 'ia-inventory-inputs-'));
+  try {
+    execFileSync('git', ['init', '--quiet'], { cwd: candidate, windowsHide: true });
+    writeFileSync(resolve(candidate, '.gitignore'), 'node_modules/\n');
+    symlinkSync(resolve(root, 'node_modules'), resolve(candidate, 'node_modules'), 'junction');
+    mkdirSync(resolve(candidate, 'tools/testing'), { recursive: true });
+    writeFileSync(resolve(candidate, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+    writeFileSync(resolve(candidate, 'package.json'), JSON.stringify({ scripts: { 'platform:qualify': LEAVES[0] } }));
+    writeFileSync(
+      resolve(candidate, 'vitest.tools.config.mts'),
+      "export default { test: { include: ['probe.test.ts'] } };\n",
+    );
+    writeFileSync(resolve(candidate, 'probe.test.ts'), "import { it } from 'vitest'; it('probe', () => {});\n");
+    const declared = manifest([task({ project: '.', files: ['probe.test.ts'] })]);
+    writeFileSync(resolve(candidate, 'tools/testing/tasks.json'), JSON.stringify(declared));
+    const nx = resolve(candidate, 'nx.json');
+    writeFileSync(nx, JSON.stringify({ namedInputs: { 'owner-source': ['{projectRoot}/**/*'] } }));
+    expect(takeInventory(candidate).findings).toEqual([]);
+    writeFileSync(nx, JSON.stringify({ namedInputs: {} }));
+    expect(readManifest(candidate)).toEqual(declared);
+    expect(takeInventory(candidate).findings).toEqual(['owner-source: missing Nx input profile']);
+  } finally {
+    if (dirname(candidate) !== parent) throw new Error('Unsafe inventory fixture cleanup');
+    await rm(candidate, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  }
+}, 30_000);
+it('validates object references using the same project boundary as Nx named inputs', () => {
+  expect(check([task()], { namedInputs: { 'owner-source': [{ input: 'missing' }] } }).join('\n')).toContain(
+    'unknown Nx input profile missing',
+  );
+  expect(
+    check([task()], {
+      namedInputs: { 'owner-source': [{ input: 'nested' }], nested: [{ input: 'owner-source' }] },
+    }).join('\n'),
+  ).toContain('cyclic Nx input profile');
+  expect(
+    check([task()], { namedInputs: { 'owner-source': ['^nested'], nested: ['{projectRoot}/**/*'] } }).join('\n'),
+  ).toContain('cannot start with ^');
+  for (const entry of [
+    { input: 'nested', dependencies: true },
+    { input: 'nested', projects: ['other'] },
+  ])
+    expect(
+      check([task()], { namedInputs: { 'owner-source': [entry], nested: ['{projectRoot}/**/*'] } }).join('\n'),
+    ).toContain('within the same project');
+  expect(
+    check([task()], {
+      namedInputs: {
+        'owner-source': [{ input: 'nested' }],
+        nested: [{ fileset: '{projectRoot}/**/*' }, { env: 'CI' }],
+      },
+    }),
+  ).toEqual([]);
+});
+
 it('fails overlapping outputs, unknown and cyclic dependencies, and a duplicate identity', () => {
   const nested = check([
     task(),
@@ -193,7 +264,8 @@ it('checks the actual repository manifest for shape, coverage and qualification 
     manifest = readManifest(root);
   expect(projects.map((project) => project.id)).toContain('.');
   expect(projects.map((project) => project.id)).toContain('apps/runner');
-  expect(projects.length).toBe(19);
+  expect(projects.map((project) => project.id)).toContain('packages/kb');
+  expect(projects.length).toBe(20);
   // Live discovery spawns Vitest per project and belongs to `pnpm tests:inventory`. Here the
   // manifest's own selections stand in, which still exercises identity, dependency, output,
   // profile and leaf-ownership rules against the real task set.
@@ -204,7 +276,14 @@ it('checks the actual repository manifest for shape, coverage and qualification 
   expect(validateManifest({ manifest, projects, discovery, leaves: qualificationLeaves(root), tracked: [] })).toEqual(
     [],
   );
-  expect(trackedTestFiles(root).length).toBe(284);
+  // The test files Git sees must be exactly the files the manifest assigns. Both lists are kept separately, so this
+  // catches discovery that silently shrinks as well as an unassigned test, without a count every new test must edit.
+  const assigned = new Set(
+    discovery.flatMap((entry) =>
+      entry.files.map((file) => (entry.project === '.' ? file : `${entry.project}/${file}`)),
+    ),
+  );
+  expect([...trackedTestFiles(root)].sort()).toEqual([...assigned].sort());
 });
 
 it('exposes the declared timeout profiles and refuses a worker limit above a ceiling', () => {
@@ -243,8 +322,14 @@ it("shares the task runner with every task, but not the runner's own tests", () 
   };
   const shared = nx.namedInputs.sharedGlobals.filter((input): input is string => typeof input === 'string');
   expect(shared.filter((input) => input.startsWith('!'))).toEqual([]);
+  // The one module the runner never reaches: the Plan job's verdict copy, a GitHub API script that no other module
+  // imports (checked below). Editing it must not invalidate every task, so it is no shared input.
+  const outsideRunner = ['tools/testing/verdict.ts'];
+  for (const path of gitFiles(root).filter((file) => /^tools\/testing\/[^/]+\.ts$/.test(file)))
+    if (path !== 'tools/testing/verdict.test.ts')
+      expect(readFileSync(resolve(root, path), 'utf8'), path).not.toMatch(/from '\.\/verdict\.js'/);
   const modules = gitFiles(root).filter(
-    (path) => /^tools\/testing\/[^/]+\.ts$/.test(path) && !path.endsWith('.test.ts'),
+    (path) => /^tools\/testing\/[^/]+\.ts$/.test(path) && !path.endsWith('.test.ts') && !outsideRunner.includes(path),
   );
   expect(modules).toContain('tools/testing/run.ts');
   const runner = shared
@@ -306,9 +391,17 @@ const RESULT_NEUTRAL_WORKFLOW_ENV: Readonly<Record<string, string>> = {
   RELEASE_VERSION: 'Requested publication version, outside every Nx task',
   REVIEWED_CHANGESET: 'Maintainer publication acknowledgement, outside every Nx task',
   IA_FULL: 'selects --full, which bypasses reuse; it never reaches a task',
+  IA_REMOTE: 'selects --remote, which changes only where results are restored from; it never reaches a task',
+  NX_SELF_HOSTED_REMOTE_CACHE_SERVER: 'the remote cache Nx restores and stores results through; no task reads it',
+  NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN: 'the credential Nx sends to that remote cache; no task reads it',
   HOMEBREW_NO_AUTO_UPDATE: 'Homebrew smoke step only, outside every Nx task',
   HOMEBREW_NO_INSTALL_CLEANUP: 'Homebrew smoke step only, outside every Nx task',
-  GH_TOKEN: "the Plan job's lookup of the last successful scheduled run, a gh call outside every Nx task",
+  GH_TOKEN:
+    "the Plan job's lookups of the last successful scheduled run and of a copied verdict, GitHub API calls outside every Nx task",
+  HEAD_REPO:
+    "the pull request's head repository, which the Plan job's verdict copy matches runs on, outside every Nx task",
+  HEAD_BRANCH:
+    "the pull request's head branch, which the Plan job's verdict copy matches runs on, outside every Nx task",
   IA_REVIEW_RUN_ID: 'selects an upstream run for the uncached advisory review caller, outside every Nx task',
   IA_REVIEW_API: 'API origin for the uncached advisory review caller, outside every Nx task',
   IA_REVIEW_BINDING: 'workload binding for the uncached advisory review caller, outside every Nx task',

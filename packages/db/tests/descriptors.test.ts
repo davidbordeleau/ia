@@ -23,7 +23,7 @@ import type {
   DescriptorResult,
 } from '../src/descriptors/index.js';
 
-// OS09 (packages/db/src/descriptors/SPEC.md) pure producer: DESC-Q02, DESC-Q03, DESC-Q08.
+// The pure descriptor producer (packages/db/src/descriptors/SPEC.md): DESC-Q02, DESC-Q03, DESC-Q08.
 const repository = resolve(import.meta.dirname, '../../..');
 const fixtures = resolve(import.meta.dirname, '../fixtures/descriptors');
 const read = (path: string): string => readFileSync(resolve(fixtures, path), 'utf8');
@@ -41,7 +41,7 @@ const walk = (dir: string): string[] =>
     .filter((name) => !['node_modules', 'dist', '.git'].includes(name))
     .flatMap((name) => (statSync(resolve(dir, name)).isDirectory() ? walk(resolve(dir, name)) : [resolve(dir, name)]));
 const native = resolve(fixtures, 'native');
-/** Candidate sources stay isolated: they enter admission only through the in-memory preview overlay (ALIGN-06). */
+/** Candidate sources stay isolated: they enter admission only through the in-memory preview overlay. */
 const drafts = walk(native).map((file) => {
   const local = relative(native, file).replaceAll('\\', '/');
   return {
@@ -1069,7 +1069,7 @@ describe('model evolution classification (DOM-02 producer contribution)', () => 
   });
 });
 
-describe('LK-17 repair: review findings', () => {
+describe('descriptor repair: review findings', () => {
   const evolve = (change: (value: Json) => void): CompiledDomainModel => {
     const text = edit('orders.domain.json', (value) => {
       value['version'] = '1.1.0';
@@ -1357,7 +1357,7 @@ describe('LK-17 repair: review findings', () => {
   });
 });
 
-describe('LK-17 repair round 2: snapshot guard', () => {
+describe('descriptor repair round 2: snapshot guard', () => {
   it('refuses an own __proto__ key in envelopes, resource maps, allowlists and registry data', () => {
     const fields = JSON.parse(
       `{"__proto__":{"evil":"x"},${JSON.stringify(emitted['orders']!.fields).slice(1)}`,

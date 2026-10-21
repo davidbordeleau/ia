@@ -9,13 +9,13 @@ import { encodeItem, encodeValue, refuse } from './values.js';
 import type { DraftSchema } from './values.js';
 
 /**
- * Schema-aware source edits (milestone generation-binding plan amendment C18). Each takes one whole `.ia` file's text and
- * returns the whole new text with exactly one top-level record changed: a record appended, one relationship row added,
- * one field set, or one comment put above it. The edit is spliced into the file as it is: every other line keeps its
- * bytes, line endings, comments and spacing included, and a byte-order mark stays. Only the edited record is formatted
- * (`format()`), and its lines take the file's line ending, so only its digest can change. The file must parse; it need
- * not be formatted. Admission is not judged here: the caller compiles the result (db's draft overlay) and reads its
- * findings. A refused edit throws SourceEditError and returns no text.
+ * Schema-aware source edits (language E04). Each takes one whole `.ia` file's text and returns the whole new text with
+ * exactly one top-level record changed: a record appended, one relationship row added, one field set, or one comment
+ * put above it. The edit is spliced into the file as it is: every other line keeps its bytes, line endings, comments
+ * and spacing included, and a byte-order mark stays. Only the edited record is formatted (`format()`), and its lines
+ * take the file's line ending, so only its digest can change. The file must parse; it need not be formatted.
+ * Admission is not judged here: the caller compiles the result (db's draft overlay) and reads its findings. A refused
+ * edit throws SourceEditError and returns no text.
  */
 
 const PATH = 'edit.ia';
@@ -160,8 +160,8 @@ export function appendRecord(text: string, draft: string): string {
   )
     refuse('duplicate', `This file already declares @${record!.discriminator} ${record!.name}`);
   const end = raw.texts.length - 1;
-  // The file keeps its bytes, the last line its own ending (review C-RC3), gaining the file's only if it had none; one
-  // blank line separates the record, and only the new lines take the file's ending.
+  // The file keeps its bytes, the last line its own ending, gaining the file's only if it had none; one blank line
+  // separates the record, and only the new lines take the file's ending.
   const blank = raw.texts[end]!.trim() === '' ? [] : [''];
   return `${text}${raw.endings[end] === '' ? raw.eol : ''}${[...blank, ...body].map((line) => `${line}${raw.eol}`).join('')}`;
 }

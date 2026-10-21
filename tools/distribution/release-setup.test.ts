@@ -1,4 +1,16 @@
-import { readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  chmodSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ENVIRONMENT, NPM_VERSION, publicationPlan, REPOSITORY, WORKFLOW } from './npm-release.mjs';
@@ -14,14 +26,148 @@ import {
   declaresPermissions,
   githubSetupPlan,
   inspectNpm,
+  interactiveTrustResult,
   npmEngineSupported,
+  pinnedNpm,
+  pinnedNpmInstallArgs,
   npmSetupPlan,
+  npmWithInteractiveAuth,
   stageState,
   trustArgs,
   trustState,
+  writableInstallationMode,
 } from './release-setup.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
+it('ignores a preseeded shared npm executable and uses an owned private installation', () => {
+  const temporary = realpathSync(mkdtempSync(resolve(tmpdir(), 'ia-private-npm-test-')));
+  const marker = resolve(temporary, 'executed-untrusted');
+  const legacy = resolve(temporary, `ia-npm-cli-${NPM_VERSION}/node_modules/npm/bin/npm-cli.js`);
+  mkdirSync(resolve(legacy, '..'), { recursive: true });
+  writeFileSync(
+    legacy,
+    `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed'); console.log('${NPM_VERSION}');`,
+  );
+  for (const name of ['TMP', 'TEMP', 'TMPDIR']) vi.stubEnv(name, temporary);
+  const install = (prefix: string) => {
+    const npm = resolve(prefix, 'node_modules/npm');
+    mkdirSync(resolve(npm, 'bin'), { recursive: true });
+    writeFileSync(resolve(npm, 'package.json'), JSON.stringify({ name: 'npm', version: NPM_VERSION }));
+    writeFileSync(resolve(npm, 'bin/npm-cli.js'), `console.log('${NPM_VERSION}');`);
+  };
+  try {
+    const prepared = pinnedNpm(undefined, process.execPath, { install });
+    expect(existsSync(marker)).toBe(false);
+    expect(prepared.cli).not.toBe(legacy);
+    expect(existsSync(prepared.cli)).toBe(true);
+    prepared.dispose();
+    expect(existsSync(prepared.cli)).toBe(false);
+    expect(existsSync(legacy)).toBe(true);
+  } finally {
+    vi.unstubAllEnvs();
+    rmSync(temporary, { recursive: true, force: true });
+  }
+});
+it.each(['alias', 'wrong-package'])(
+  'refuses an npm %s before executing it and cleans only its own installation',
+  (mode) => {
+    const temporary = realpathSync(mkdtempSync(resolve(tmpdir(), 'ia-private-npm-refusal-')));
+    const foreign = resolve(temporary, 'foreign'),
+      marker = resolve(temporary, 'executed');
+    let allocated = '';
+    mkdirSync(resolve(foreign, 'bin'), { recursive: true });
+    writeFileSync(resolve(foreign, 'package.json'), JSON.stringify({ name: 'npm', version: NPM_VERSION }));
+    writeFileSync(
+      resolve(foreign, 'bin/npm-cli.js'),
+      `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed'); console.log('${NPM_VERSION}');`,
+    );
+    for (const name of ['TMP', 'TEMP', 'TMPDIR']) vi.stubEnv(name, temporary);
+    try {
+      expect(() =>
+        pinnedNpm(undefined, process.execPath, {
+          install(prefix) {
+            allocated = prefix;
+            mkdirSync(resolve(prefix, 'node_modules'));
+            const npm = resolve(prefix, 'node_modules/npm');
+            if (mode === 'alias') symlinkSync(foreign, npm, 'junction');
+            else {
+              mkdirSync(resolve(npm, 'bin'), { recursive: true });
+              writeFileSync(resolve(npm, 'package.json'), JSON.stringify({ name: 'foreign', version: NPM_VERSION }));
+              writeFileSync(resolve(npm, 'bin/npm-cli.js'), readFileSync(resolve(foreign, 'bin/npm-cli.js')));
+            }
+          },
+        }),
+      ).toThrow(mode === 'alias' ? 'Aliased npm installation refused' : 'Expected an npm installation');
+      expect(existsSync(marker)).toBe(false);
+      expect(existsSync(allocated)).toBe(false);
+      expect(existsSync(resolve(foreign, 'bin/npm-cli.js'))).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  },
+);
+it('installs the pinned npm without bin links and accepts umask 002 entries inside the private prefix', () => {
+  expect(pinnedNpmInstallArgs('/prefix')).toContain('--no-bin-links');
+  expect(pinnedNpmInstallArgs('/prefix').at(-1)).toBe(`npm@${NPM_VERSION}`);
+  // The prefix is a fresh mkdtemp (0700); entries follow the installing umask.
+  expect(writableInstallationMode(0o40700, true)).toBe(false);
+  for (const mode of [0o40750, 0o40770, 0o40705]) expect(writableInstallationMode(mode, true)).toBe(true);
+  for (const mode of [0o40775, 0o100664, 0o100755, 0o40755, 0o100644])
+    expect(writableInstallationMode(mode, false)).toBe(false);
+  for (const mode of [0o40777, 0o100666, 0o100646]) expect(writableInstallationMode(mode, false)).toBe(true);
+});
+it.each([true, false])(
+  'qualifies a realistic npm layout installed under umask 002 (with npm bin links: %s)',
+  (binLinks) => {
+    const temporary = realpathSync(mkdtempSync(resolve(tmpdir(), 'ia-npm-layout-test-')));
+    for (const variable of ['TMP', 'TEMP', 'TMPDIR']) vi.stubEnv(variable, temporary);
+    const posix = process.platform !== 'win32';
+    // What npm 12 lays down: bundled dependencies with their own bins, group-writable under umask 002, and (unless
+    // --no-bin-links) symlinks to those bins in node_modules/npm/node_modules/.bin.
+    const install = (prefix: string) => {
+      const npm = resolve(prefix, 'node_modules/npm');
+      const dependency = resolve(npm, 'node_modules/semver');
+      for (const directory of [resolve(npm, 'bin'), resolve(dependency, 'bin'), resolve(npm, 'lib/commands')])
+        mkdirSync(directory, { recursive: true });
+      writeFileSync(resolve(npm, 'package.json'), JSON.stringify({ name: 'npm', version: NPM_VERSION }));
+      writeFileSync(resolve(npm, 'bin/npm-cli.js'), `console.log('${NPM_VERSION}');`);
+      writeFileSync(resolve(npm, 'lib/commands/trust.js'), '');
+      writeFileSync(resolve(dependency, 'package.json'), JSON.stringify({ name: 'semver', bin: 'bin/semver.js' }));
+      writeFileSync(resolve(dependency, 'bin/semver.js'), '');
+      // npm creates these only without --no-bin-links; pinnedNpmInstallArgs always passes it.
+      if (binLinks) {
+        mkdirSync(resolve(npm, 'node_modules/.bin'));
+        if (posix) symlinkSync('../semver/bin/semver.js', resolve(npm, 'node_modules/.bin/semver'));
+        else symlinkSync(resolve(dependency, 'bin'), resolve(npm, 'node_modules/.bin/semver'), 'junction');
+      }
+      if (posix) {
+        const walk = (path: string) => {
+          for (const entry of readdirSync(path, { withFileTypes: true })) {
+            const child = resolve(path, entry.name);
+            if (entry.isSymbolicLink()) continue;
+            chmodSync(child, entry.isDirectory() ? 0o775 : 0o664);
+            if (entry.isDirectory()) walk(child);
+          }
+        };
+        walk(resolve(prefix, 'node_modules'));
+        chmodSync(resolve(prefix, 'node_modules'), 0o775);
+      }
+    };
+    try {
+      if (binLinks)
+        expect(() => pinnedNpm(undefined, process.execPath, { install })).toThrow('Aliased npm installation refused');
+      else {
+        const prepared = pinnedNpm(undefined, process.execPath, { install });
+        expect(existsSync(prepared.cli)).toBe(true);
+        prepared.dispose();
+      }
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  },
+);
 const name = '@inventarch/runner';
 const stageId = '13816920-8c62-4e6e-ae8f-cfc61f12fb71';
 const otherStageId = 'bc61464c-63ad-48de-a66e-f42c0143b626';
@@ -36,10 +182,17 @@ const publisher = {
 const stage = { id: stageId, packageName: name, version: BOOTSTRAP_VERSION, status: 'staged' };
 const packument = { name, versions: { '0.0.0-stage': {} }, 'dist-tags': { latest: '0.0.0-stage' } };
 const staged = { [name]: { id: `${name}@${BOOTSTRAP_VERSION}`, name, version: BOOTSTRAP_VERSION, stageId } };
-type Observation = { access: unknown; stages: unknown; trust: unknown; public: unknown };
-const ready: Observation = { access: { [name]: 'public' }, stages: [], trust: publisher, public: packument };
+type Observation = { access: unknown; metadata: unknown; stages: unknown; trust: unknown; public: unknown };
+const ready: Observation = {
+  access: { [name]: 'public' },
+  metadata: { ok: true, name },
+  stages: [],
+  trust: publisher,
+  public: packument,
+};
 const absent: Observation = {
   access: new Error('E404'),
+  metadata: { ok: false, code: 'E404' },
   stages: [],
   trust: new Error('E404'),
   public: null,
@@ -68,6 +221,12 @@ function registryFixture(observations: Observation[], write = (_args: string[]) 
     if (result instanceof Error) throw result;
     return typeof result === 'string' ? result : JSON.stringify(result);
   });
+  const readMetadata = vi.fn(async (requested: string) => {
+    expect(requested).toBe(name);
+    const value = observations[Math.min(inspection, observations.length - 1)]!.metadata;
+    if (value instanceof Error) throw value;
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  });
   const readPublic = vi.fn(async (requested: string) => {
     expect(requested).toBe(name);
     const value = observations[Math.min(inspection++, observations.length - 1)]!.public;
@@ -75,7 +234,7 @@ function registryFixture(observations: Observation[], write = (_args: string[]) 
     return value;
   });
   const log = vi.fn();
-  return { npm, readPublic, log, writes };
+  return { npm, readMetadata, readPublic, log, writes };
 }
 
 beforeEach(() => {
@@ -83,6 +242,130 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 afterEach(() => vi.restoreAllMocks());
+
+const terminalAuth = { enabled: true, stdinIsTTY: true, stdoutIsTTY: true, log: vi.fn() };
+
+it('keeps default EOTP inspection read-only and gives a pinned terminal recovery command', async () => {
+  const fixture = registryFixture([{ ...ready, trust: new Error('EOTP token=fixture-secret') }]);
+  const recover = vi.fn();
+  const npm = npmWithInteractiveAuth(fixture.npm, recover);
+  const state = await inspectNpm(npm, [name], fixture.readPublic, fixture.readMetadata);
+  expect(state[name]!.trust.state).toBe('unknown');
+  expect(state[name]!.errors.join(' ')).toContain('pnpm npm:setup --interactive-auth --skip-github');
+  expect(state[name]!.errors.join(' ')).toContain('pinned npm 12.2.0');
+  expect(JSON.stringify(state)).not.toContain('fixture-secret');
+  expect(npmSetupPlan([name], state)[0]!.ready).toBe(false);
+  expect(recover).not.toHaveBeenCalled();
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each([
+  [false, false],
+  [false, true],
+  [true, false],
+])('refuses interactive recovery with stdin TTY %s and stdout TTY %s', (stdinIsTTY, stdoutIsTTY) => {
+  const npm = vi.fn();
+  const recover = vi.fn();
+  expect(() => npmWithInteractiveAuth(npm, recover, { ...terminalAuth, stdinIsTTY, stdoutIsTTY })).toThrow(
+    /ENOTTY.*terminal/,
+  );
+  expect(npm).not.toHaveBeenCalled();
+  expect(recover).not.toHaveBeenCalled();
+});
+
+it('uses the authenticated structured result in each fresh inspection without assuming a cached OTP', async () => {
+  const fixture = registryFixture([{ ...ready, trust: new Error('EOTP') }]);
+  const recover = vi.fn(() => JSON.stringify(publisher));
+  const npm = npmWithInteractiveAuth(fixture.npm, recover, terminalAuth);
+  const result = await applyNpm(npm, [name], fixture);
+  expect(result[0]!.ready).toBe(true);
+  expect(recover.mock.calls).toEqual([[name], [name]]);
+  expect(fixture.npm.mock.calls.filter(([args]) => args[0] === 'trust')).toHaveLength(2);
+  expect(fixture.readPublic).toHaveBeenCalledTimes(2);
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each(['ECANCELED', 'EAUTHFAILED', 'EOTP'])(
+  'blocks after %s without leaking errors or repeatedly prompting',
+  async (code) => {
+    const fixture = registryFixture([{ ...ready, trust: new Error('EOTP') }]);
+    const recover = vi.fn(() => {
+      throw new Error(code + ' token=fixture-secret');
+    });
+    const npm = npmWithInteractiveAuth(fixture.npm, recover, terminalAuth);
+    const state = await inspectNpm(npm, [name], fixture.readPublic, fixture.readMetadata);
+    expect(state[name]!.trust.state).toBe('unknown');
+    expect(JSON.stringify(state)).not.toContain('fixture-secret');
+    await expect(applyNpm(npm, [name], fixture)).rejects.toThrow(/inspection failed/);
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(fixture.writes).toEqual([]);
+    expect(fixture.log).not.toHaveBeenCalledWith(expect.stringContaining('readiness verified'));
+  },
+);
+
+it.each(['not-json', JSON.stringify({ ...publisher, environment: 'other' })])(
+  'does not accept an unverified resumed trust result: %s',
+  async (listing) => {
+    const fixture = registryFixture([{ ...ready, trust: new Error('EOTP') }]);
+    const npm = npmWithInteractiveAuth(fixture.npm, () => listing, terminalAuth);
+    await expect(applyNpm(npm, [name], fixture)).rejects.toThrow();
+    expect(fixture.writes).toEqual([]);
+  },
+);
+
+it('keeps private/public-404 state blocked after successful authentication', async () => {
+  const fixture = registryFixture([
+    { ...ready, access: { [name]: 'private' }, public: null, trust: new Error('EOTP') },
+  ]);
+  const npm = npmWithInteractiveAuth(fixture.npm, () => JSON.stringify(publisher), terminalAuth);
+  await expect(applyNpm(npm, [name], fixture)).rejects.toThrow(/exists but is non-public/);
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each([
+  [['trust', 'github', name], 'EOTP'],
+  [['stage', 'publish', 'placeholder'], 'EOTP'],
+  [['access', 'get', 'status', name, '--json'], 'EOTP'],
+  [['trust', 'list', name, '--json'], 'E401'],
+  [['trust', 'list', name, '--json'], 'E403'],
+] as [string[], string][])('never uses auth recovery to retry writes or unrelated failures: %j %s', (args, code) => {
+  const original = vi.fn(() => {
+    throw new Error(code);
+  });
+  const recover = vi.fn();
+  const npm = npmWithInteractiveAuth(original, recover, terminalAuth);
+  expect(() => npm(args, { stdio: 'pipe' })).toThrow(code);
+  expect(original).toHaveBeenCalledTimes(1);
+  expect(recover).not.toHaveBeenCalled();
+});
+
+it('requires a successful dedicated result channel independently of terminal output', () => {
+  const listing = JSON.stringify(publisher);
+  expect(
+    interactiveTrustResult({
+      status: 0,
+      output: [null, 'terminal challenge', null, JSON.stringify({ ok: true, listing })],
+    }),
+  ).toBe(listing);
+  for (const result of [
+    { status: 0, output: [null, JSON.stringify({ ok: true, listing })] },
+    { status: 1, output: [null, null, null, JSON.stringify({ ok: true, listing })] },
+    { status: 0, signal: 'SIGINT', output: [null, null, null, JSON.stringify({ ok: true, listing })] },
+    { status: 0, error: new Error('fixture-secret') },
+    { status: 0, output: [null, null, null, JSON.stringify({ ok: true })] },
+    {
+      status: 1,
+      output: [null, null, null, JSON.stringify({ ok: false, code: 'ECANCELED', message: 'fixture-secret' })],
+    },
+  ]) {
+    expect(() => interactiveTrustResult(result)).toThrow();
+    try {
+      interactiveTrustResult(result);
+    } catch (error) {
+      expect(String(error)).not.toContain('fixture-secret');
+    }
+  }
+});
 
 it('trusts exactly the publishing workflow, environment and repository', () => {
   expect(trustArgs('@inventarch/cli')).toEqual([
@@ -144,18 +427,125 @@ it('creates a name with a placeholder prerelease that can never be a cohort vers
   expect(() => bootstrapManifest('@other/work-system')).toThrow();
 });
 
+it('does not treat non-public visibility as proof that a package exists', async () => {
+  const fixture = registryFixture([{ ...absent, access: { [name]: 'private' }, trust: '' }]);
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
+  const plan = npmSetupPlan([name], state)[0]!;
+  expect(plan).toMatchObject({ existence: 'unconfirmed', ready: false, actions: [] });
+  expect(plan.blocked.join(' ')).not.toContain('package exists');
+  expect(npmSetupPlan([name], state, [name])[0]!.actions).toEqual([]);
+  await expect(applyNpm(fixture.npm, [name], { ...fixture, bootstrapNames: [name] })).rejects.toThrow(
+    /existence remains unconfirmed/,
+  );
+  expect(fixture.writes).toEqual([]);
+});
+
+it('does not infer existence from public visibility alone either', async () => {
+  const fixture = registryFixture([{ ...absent, access: { [name]: 'public' }, trust: '' }]);
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
+  expect(npmSetupPlan([name], state)[0]).toMatchObject({ existence: 'unconfirmed', ready: false, actions: [] });
+});
+
+it('confirms a genuinely private package from exact authenticated metadata without stage or trust evidence', async () => {
+  const fixture = registryFixture([{ ...ready, access: { [name]: 'private' }, public: null, trust: '' }]);
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
+  expect(state[name]).toMatchObject({ access: 'non-public', metadata: 'present', stages: { items: [] } });
+  expect(npmSetupPlan([name], state)[0]).toMatchObject({ existence: 'existing', ready: false, actions: [] });
+  await expect(applyNpm(fixture.npm, [name], fixture)).rejects.toThrow(/exists but is non-public/);
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each([
+  ['stage', { stages: [stage], trust: '' }],
+  ['trust', { stages: [], trust: publisher }],
+])('retains positive exact-package %s evidence despite an authenticated metadata 404', async (_label, evidence) => {
+  const fixture = registryFixture([{ ...absent, access: { [name]: 'public' }, ...evidence }]);
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
+  expect(npmSetupPlan([name], state)[0]).toMatchObject({ existence: 'existing', ready: false, actions: [] });
+  await expect(applyNpm(fixture.npm, [name], { ...fixture, bootstrapNames: [name] })).rejects.toThrow(
+    /metadata returned 404 despite package evidence/,
+  );
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each(['E401', 'E403', 'EOTP', 'ECONNRESET', 'ETIMEDOUT'])(
+  'keeps authenticated metadata %s blocked without invoking authentication or leaking response bodies',
+  async (code) => {
+    const fixture = registryFixture([{ ...ready, metadata: { ok: false, code, message: 'fixture-secret' } }]);
+    const recover = vi.fn();
+    const npm = npmWithInteractiveAuth(fixture.npm, recover, terminalAuth);
+    const state = await inspectNpm(npm, [name], fixture.readPublic, fixture.readMetadata);
+    expect(state[name]!.metadata).toBe('unknown');
+    expect(JSON.stringify(state)).toContain(code);
+    expect(JSON.stringify(state)).not.toContain('fixture-secret');
+    expect(npmSetupPlan([name], state)[0]).toMatchObject({ existence: 'existing', ready: false, actions: [] });
+    await expect(applyNpm(npm, [name], fixture)).rejects.toThrow(/inspection failed/);
+    expect(recover).not.toHaveBeenCalled();
+    expect(fixture.writes).toEqual([]);
+  },
+);
+
+it.each([
+  '',
+  'not-json fixture-secret',
+  null,
+  [],
+  {},
+  { ok: true },
+  { ok: true, name: '@inventarch/other' },
+  { ok: false, code: 'E404 fixture-secret' },
+  { ok: false, code: 'unrecognized fixture-secret' },
+])('blocks malformed authenticated metadata result %j without creating existence evidence', async (metadata) => {
+  const fixture = registryFixture([{ ...absent, access: { [name]: 'private' }, trust: '', metadata }]);
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
+  expect(state[name]!.metadata).toBe('unknown');
+  expect(JSON.stringify(state)).not.toContain('fixture-secret');
+  expect(npmSetupPlan([name], state, [name])[0]).toMatchObject({
+    existence: 'unconfirmed',
+    ready: false,
+    actions: [],
+  });
+  await expect(applyNpm(fixture.npm, [name], { ...fixture, bootstrapNames: [name] })).rejects.toThrow(
+    /inspection failed/,
+  );
+  expect(fixture.writes).toEqual([]);
+});
+
+it.each([null, {}, [], 'null', { id: 'tp_1' }, { type: 'github' }, { ...publisher, permissions: 'createPackage' }])(
+  'does not use malformed trust %j as proof of existence',
+  async (trust) => {
+    const fixture = registryFixture([{ ...absent, access: { [name]: 'private' }, trust }]);
+    const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
+    expect(state[name]!.trust.state).toBe('unknown');
+    expect(npmSetupPlan([name], state)[0]).toMatchObject({ existence: 'unconfirmed', ready: false, actions: [] });
+    expect(fixture.writes).toEqual([]);
+  },
+);
+
+it('fails closed when the authenticated metadata reader is unavailable', async () => {
+  const fixture = registryFixture([ready]);
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic);
+  expect(state[name]!.metadata).toBe('unknown');
+  expect(npmSetupPlan([name], state)[0]).toMatchObject({ ready: false, actions: [] });
+});
+
 it('distinguishes authenticated private existence from public 404 and refuses recovery writes', async () => {
   const fixture = registryFixture([{ ...ready, access: { [name]: 'private' }, public: null }]);
-  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic);
-  expect(state[name]).toMatchObject({ access: 'private', public: 'not-found', trust: { state: 'configured' } });
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
+  expect(state[name]).toMatchObject({
+    access: 'non-public',
+    metadata: 'present',
+    public: 'not-found',
+    trust: { state: 'configured' },
+  });
   expect(npmSetupPlan([name], state)[0]).toMatchObject({ existence: 'existing', ready: false, actions: [] });
-  await expect(applyNpm(fixture.npm, [name], fixture)).rejects.toThrow(/exists but is private/);
+  await expect(applyNpm(fixture.npm, [name], fixture)).rejects.toThrow(/exists but is non-public/);
   expect(fixture.writes).toEqual([]);
 });
 
 it('treats authenticated and public 404 as unconfirmed absence requiring an explicit owner decision', async () => {
   const fixture = registryFixture([absent]);
-  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic);
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
   expect(npmSetupPlan([name], state)[0]).toMatchObject({ existence: 'unconfirmed', ready: false, actions: [] });
   expect(npmSetupPlan([name], state, [name])[0]).toMatchObject({ actions: ['bootstrap', 'trust'], blocked: [] });
   expect(() => npmSetupPlan([name], state, ['@inventarch/other'])).toThrow(/Unknown bootstrap package/);
@@ -178,6 +568,10 @@ it('requires a reviewed main-only environment, pull-request creation and every d
     rulesets: ['main', 'tags'],
   };
   expect(githubSetupPlan(ready, ['main', 'tags'])).toEqual([]);
+  expect(githubSetupPlan({ ...ready, workflow: {} }, ['main', 'tags'])).toContainEqual({
+    setting: 'actions-create-pull-requests',
+    fix: 'allow creation and approval of pull requests',
+  });
   expect(githubSetupPlan({ ...ready, environment: null }, ['main'])).toEqual([
     { setting: 'environment', fix: 'create' },
   ]);
@@ -258,7 +652,7 @@ it('validates listed stage identities without guessing from malformed or cross-p
 
 it('requires exact authenticated access status instead of interpreting malformed output as absence', () => {
   expect(accessState(JSON.stringify({ [name]: 'public' }), name)).toBe('public');
-  expect(accessState(JSON.stringify({ [name]: 'private' }), name)).toBe('private');
+  expect(accessState(JSON.stringify({ [name]: 'private' }), name)).toBe('non-public');
   for (const value of [null, {}, [], { '@inventarch/other': 'public' }, { [name]: 'public', other: 'public' }])
     expect(accessState(JSON.stringify(value), name)).toBe('unknown');
   expect(accessState('public', name)).toBe('unknown');
@@ -339,12 +733,12 @@ it.each([
   expect(fixture.log).not.toHaveBeenCalledWith(expect.stringContaining('readiness verified'));
 });
 
-it.each(['access', 'stages', 'trust', 'public'] as const)(
+it.each(['access', 'metadata', 'stages', 'trust', 'public'] as const)(
   'refuses a failed %s read without disclosing error bodies',
   async (field) => {
     const failure = new Error('E401 token=fixture-secret');
     const fixture = registryFixture([{ ...ready, [field]: failure }]);
-    const state = await inspectNpm(fixture.npm, [name], fixture.readPublic);
+    const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
     expect(JSON.stringify(state)).toContain('E401');
     expect(JSON.stringify(state)).not.toContain('fixture-secret');
     await expect(applyNpm(fixture.npm, [name], fixture)).rejects.toThrow(/inspection failed/);
@@ -364,6 +758,9 @@ it.each([
 
 it.each([
   ['public 404', { ...ready, public: null }],
+  ['authenticated metadata 404', { ...ready, metadata: { ok: false, code: 'E404' } }],
+  ['failed authenticated metadata', { ...ready, metadata: new Error('E403 fixture-secret') }],
+  ['malformed authenticated metadata', { ...ready, metadata: { ok: true } }],
   ['private visibility', { ...ready, access: { [name]: 'private' } }],
   ['trust still missing', { ...ready, trust: '' }],
 ])('does not report setup success when a successful trust write is followed by %s', async (_label, afterWrite) => {
@@ -373,12 +770,13 @@ it.each([
   ]);
   await expect(applyNpm(fixture.npm, [name], fixture)).rejects.toThrow(/npm setup is not ready/);
   expect(fixture.writes).toEqual([trustArgs(name)]);
+  expect(fixture.readMetadata).toHaveBeenCalledTimes(2);
   expect(fixture.log).not.toHaveBeenCalledWith(expect.stringContaining('readiness verified'));
 });
 
 it('does not equate configured trust on a retained stage with public release readiness', async () => {
   const fixture = registryFixture([{ ...ready, stages: [stage], public: null }]);
-  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic);
+  const state = await inspectNpm(fixture.npm, [name], fixture.readPublic, fixture.readMetadata);
   expect(npmSetupPlan([name], state)[0]).toMatchObject({ existence: 'existing', ready: false, actions: [] });
   await expect(applyNpm(fixture.npm, [name], fixture)).rejects.toThrow(/npm setup is not ready/);
   expect(fixture.writes).toEqual([]);

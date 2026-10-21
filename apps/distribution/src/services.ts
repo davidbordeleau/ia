@@ -142,10 +142,10 @@ export interface InstalledState {
   readonly lock?: DistributionLock;
   readonly inputs?: GenerationInputs;
   /**
-   * Spec §7: observed per host, only when the caller opts in via `hosts: true`. Absent — never `[]` — when not
-   * requested, so a caller cannot mistake "didn't ask" for "asked, and none are registered". Observation walks
-   * every managed file under `.ia/distributions/hosts/`, so callers that don't need it (`distribute.ts`, `init.ts`,
-   * the native `list`/`doctor` body) must not pay for it.
+   * Host registration spec §7: observed per host, only when the caller opts in via `hosts: true`. Absent — never
+   * `[]` — when not requested, so a caller cannot mistake "didn't ask" for "asked, and none are registered".
+   * Observation walks every managed file under `.ia/distributions/hosts/`, so callers that don't need it
+   * (`distribute.ts`, `init.ts`, the native `list`/`doctor` body) must not pay for it.
    */
   readonly hosts?: readonly HostObservation[];
 }
@@ -401,16 +401,16 @@ export interface WorkspaceAdmission {
   readonly revision: string;
   /**
    * The authored revision (db `authoredRevision`): `revision` without runtime-placed sources, which names the
-   * evidence a validation records. Review finding B3-N4: a session reads no evidence, so `revision` is the one every
-   * other reader reports for the same workspace.
+   * evidence a validation records. A session reads no evidence, so `revision` is the one every other reader reports
+   * for the same workspace.
    */
   readonly authoredRevision: string;
   readonly findings: Findings;
   readonly records: number;
 }
 /**
- * Task execution-binding-host-entry (plan amendment C24): every admitted `@execution-binding` joined against the
- * installed-implementation catalog this workspace's host joined (`joinedCatalog`), with where that catalog came from.
+ * Every admitted `@execution-binding` joined against the installed-implementation catalog this workspace's host joined
+ * (`joinedCatalog`), with where that catalog came from.
  * `catalog` is null when there is no binding, and then nothing beyond the records is read.
  */
 export interface ValidationBindings {
@@ -434,8 +434,8 @@ export interface ValidationBindings {
   readonly results: readonly BindingResult[];
 }
 /**
- * Plan amendments C15 and C22: every admitted `@check` bound at validate (`bindChecks` in db) against the evaluator
- * catalog this workspace's host joined (`joinedCatalog`, as for execution bindings), with where that catalog came from.
+ * Every admitted `@check` bound at validate (`bindChecks` in db) against the evaluator catalog this workspace's host
+ * joined (`joinedCatalog`, as for execution bindings), with where that catalog came from.
  * `catalog` is null when every check names a built-in evaluator, which needs no catalog, and then none is read.
  */
 export interface ValidationChecks {
@@ -444,12 +444,12 @@ export interface ValidationChecks {
 }
 /**
  * How a session admits. Every existing caller takes the default; the validate request asks for structural admission. A
- * session never reads evidence (review finding B3-R4): what a validation admits, binds and reports is the authored
- * view's alone, and the evidence file is read only for the times an unchanged observation keeps.
+ * session never reads evidence: what a validation admits, binds and reports is the authored view's alone, and the
+ * evidence file is read only for the times an unchanged observation keeps.
  */
 export interface SessionOptions {
   readonly root: string;
-  /** C21: `structural` admits a check whatever evaluator it names, for binding; `strict`, the default, is unchanged. */
+  /** `structural` admits a check whatever evaluator it names, for binding; `strict`, the default, is unchanged. */
   readonly checks?: 'strict' | 'structural';
 }
 export interface WorkspaceSession {
@@ -469,9 +469,9 @@ export interface WorkspaceSession {
   /**
    * The execution bindings as a validation reports them (`ValidationBindings`). `ia validate` and `ia-distribution
    * validate` both report this one result. It reads the records, the join receipts, the host registration and the
-   * materialized payload, and writes nothing (C23); no implementation is loaded or executed. `trust` is the validating
-   * installation's IA home and pinned release (review finding B2-R2): only a join registered to exactly that payload
-   * binds, and with null nothing does.
+   * materialized payload, and writes nothing; no implementation is loaded or executed. `trust` is the validating
+   * installation's IA home and pinned release: only a join registered to exactly that payload binds, and with null
+   * nothing does.
    */
   bindings(trust: HostTrust | null): ValidationBindings;
   /**
@@ -501,8 +501,8 @@ function inertFindings(reader: Handle): Findings {
   }));
 }
 export function openWorkspaceSession(options: SessionOptions): WorkspaceSession {
-  // B3-N2, B4-RC3: taken before the inputs are read, so evidence a validation of another revision writes, or touches,
-  // after that is never pruned by this session.
+  // Taken before the inputs are read, so evidence a validation of another revision writes, or touches, after that is
+  // never pruned by this session.
   const openedAt = Date.now(),
     root = workspace(options.root),
     reader = open(root, {
@@ -643,17 +643,16 @@ export function formatSource(request: FormatRequest): FormatOutcome {
 }
 
 /**
- * Plan amendments C14 and C23: the validate request, the one service that records evidence. `ia validate` and
- * `ia-distribution validate` both call it, with the session they validated (opened `structural`, reading no evidence)
- * and the checks it bound, so the two write the same file. When admission is refused it records and prunes nothing
- * (review finding B3-N11). It records each bound check whose selected verdicts passed or
- * failed as an `@observation` in `.ia/work/evidence/<authored revision>.ia` (db `evidenceText`, `writeEvidence`):
- * an observation recorded again unchanged keeps the time it was first made, so validating twice at one authored revision
- * writes the same bytes; a revision with nothing to record keeps no file; files of other revisions are pruned. A
- * workspace whose vocabulary has no `@observation` word records nothing. Nothing else writes evidence: a session's
- * `validation`, `bindings` and `checks` only read, and doctor, capture and every other command never call this.
- * Only writing this revision's file can refuse (review finding B3-R1): a link, junction or misplaced entry on the way
- * refuses with the db's IA-DB-PATH-UNSAFE, and a directory or file the process cannot write as
+ * The validate request, the one service that records evidence. `ia validate` and `ia-distribution validate` both call
+ * it, with the session they validated (opened `structural`, reading no evidence) and the checks it bound, so the two
+ * write the same file. When admission is refused it records and prunes nothing. It records each bound check whose
+ * selected verdicts passed or failed as an `@observation` in `.ia/work/evidence/<authored revision>.ia` (db
+ * `evidenceText`, `writeEvidence`): an observation recorded again unchanged keeps the time it was first made, so
+ * validating twice at one authored revision writes the same bytes; a revision with nothing to record keeps no file;
+ * files of other revisions are pruned. A workspace whose vocabulary has no `@observation` word records nothing. Nothing
+ * else writes evidence: a session's `validation`, `bindings` and `checks` only read, and doctor, capture and every
+ * other command never call this. Only writing this revision's file can refuse: a link, junction or misplaced entry on
+ * the way refuses with the db's IA-DB-PATH-UNSAFE, and a directory or file the process cannot write as
  * IA-DIST-EVIDENCE-UNWRITABLE, located at the evidence directory, before anything is pruned; pruning other revisions'
  * files is best effort and never refuses.
  */
@@ -667,7 +666,7 @@ export function recordValidation(session: WorkspaceSession, checks: ValidationCh
   try {
     const path = `${EVIDENCE_DIRECTORY}/${revision}.ia`,
       found = vocabulary ? readEvidence(root, path) : null,
-      // B4-RC2: prior times come only from a file the writer itself would have written, as a reader admits it.
+      // Prior times come only from a file the writer itself would have written, as a reader admits it.
       prior =
         found !== null &&
         reproducesEvidence({ authoredRevision: revision, bindings: checks.results, records, text: found })

@@ -507,7 +507,7 @@ function collect(input: ObligationInput): Collected {
   return { obligations, rows: unique, findings };
 }
 /**
- * Pure obligation resolver (C27, OBL-01..03): explicit root adoptions, selected occurrences, a trusted catalog,
+ * Pure obligation resolver (C27): explicit root adoptions, selected occurrences, a trusted catalog,
  * the pinned catalog digest, the policy revision and captured facts yield immutable obligations sorted by id.
  * An unresolved reference or policy conflict refuses with no partial obligations; undetermined required
  * applicability is a blocking finding; package metadata cannot change a root-adopted obligation (D1).
@@ -528,7 +528,7 @@ export function resolveObligations(input: ObligationInput): ObligationResolution
   resolutions.add(resolution);
   return resolution;
 }
-/** Inspection (OBL-03): selected definitions, versions, applicability and missing support. Executes no evaluator. */
+/** Inspection (C27): selected definitions, versions, applicability and missing support. Executes no evaluator. */
 export function inspectObligations(input: ObligationInput): ObligationExplanation {
   const { rows, findings } = collect(input);
   return deepFreeze({

@@ -11,7 +11,7 @@ import { entryCount, position, renderHost, renderPacket } from '../src/index.js'
 import type { PacketCatalogRow, PacketOutput } from '../src/index.js';
 import { database, declare, freshInit, law, packetFixture, put, workspace } from './workspace.js';
 
-// R19 (position-and-projection §4 and items 11 and 12; plan amendments B1 to B5 and B8): the position packet. The golden
+// R19: the position packet. The golden
 // packet is regenerated only by `node packages/runtime/tests/golden/write.mjs`, which sets IA_POSITION_GOLDEN=write for
 // the golden cases alone; its diff is reviewed with the change that makes it.
 const fixture = packetFixture,
@@ -24,7 +24,7 @@ const fixture = packetFixture,
 const RUNTIME: Location = { placement: { kind: 'runtime', band: 0, reach: '' }, provenance: 'runtime' };
 /**
  * A catalog fixture with the shape of the CLI's nine rows (apps/cli packetCatalog): the runtime takes the catalog as
- * data and imports no app (B2), so the rows the CLI builds are pinned in apps/cli.
+ * data and imports no app, so the rows the CLI builds are pinned in apps/cli.
  */
 const CATALOG: readonly PacketCatalogRow[] = [
   { command: 'ia init', mode: 'effect', move: 'Execution', refuses: 'a target already initialized', next: 'ia init' },
@@ -46,7 +46,7 @@ const CATALOG: readonly PacketCatalogRow[] = [
 const render = (db: Handle, catalog: readonly PacketCatalogRow[] = CATALOG): PacketOutput =>
   renderPacket(db, db.resolveScope().token, catalog);
 const errors = (db: Handle) => db.report.findings.filter((finding) => finding.severity === 'error');
-/** A fixture @agent and a fixture @mandate in the shape of the fresh init's (B13), `authority` the mandate's fields. */
+/** A fixture @agent and a fixture @mandate in the shape of the fresh init's, `authority` the mandate's fields. */
 const agent = (name: string): string =>
   `\n@agent ${name}\n  meaning\n    says "Fixture participant ${name}."\n    answers "Who is ${name}?"\n  governance\n    applies []\n`;
 const authorized = (name: string, authority: readonly string[]): string =>
@@ -61,7 +61,7 @@ const authorityNames = (node: Node, key: string): readonly string[] =>
     )
     .flatMap((value) => (value.kind === 'ref' ? [value.name] : []));
 /**
- * B1's formula, its terms counted from the records the scope admits rather than from the packet's sections: N the
+ * The entry formula, its terms counted from the records the scope admits rather than from the packet's sections: N the
  * references the seat's `composition.systems` states, T the words of the band-100 membership rows under the seat's own
  * declared roots, and P and M the band-100 @mandate records scoped to the seat whose participant is a band-100 @agent,
  * and those agents.
@@ -123,7 +123,7 @@ it('matches the golden packet of a fresh init and pins its entry count, the revi
     )}\n`;
   if (process.env['IA_POSITION_GOLDEN'] === 'write') writeFileSync(file, text);
   else expect(text).toBe(readFileSync(file, 'utf8'));
-  // P = M = 1, N = 11, T = 3 (workspace, agent, mandate) and C = 9, with plan amendment C3's two rows (B1: 28 + N).
+  // P = M = 1, N = 11, T = 3 (workspace, agent, mandate) and C = 9, `ia preview` and `ia author` among them: 28 + N.
   expect([packet.participants.length, packet.mandates.length, packet.systems.length, packet.tallies.length]).toEqual([
     1, 1, 11, 3,
   ]);
@@ -148,7 +148,7 @@ it('holds the entry formula on the conformance corpus and on this repository, co
       { packet } = render(db);
     expect(packet.systems.length, name).toBe(packet.seat.systems);
     expect(entryCount(packet), name).toBe(formula(db, CATALOG.length));
-    // B1's pinned counts under the nine-row catalog: the conformance corpus (P = M = T = 0, N = 5) and this repository
+    // The pinned counts under the nine-row catalog: the conformance corpus (P = M = T = 0, N = 5) and this repository
     // (P = M = 1, N = 11, T = 17) after separating the neutral examples from the live corpus.
     expect(entryCount(packet), name).toBe(name === 'conformance' ? 28 : 53);
     // The host note is no entry, and the formula does not read the catalog's contents.
@@ -250,7 +250,7 @@ it('renders two participants named by three mandates by identity, each agent onc
 
 it('renders an admitted mandate as authored, never refusing it: one the reader refuses, fragment references; a refused one is not rendered', () => {
   const text = readFileSync(fixture, 'utf8');
-  // A declared empty move list fails admission (compliance C05; lane D): the position still runs and, as for any record
+  // A declared empty move list fails admission (compliance C05): the position still runs and, as for any record
   // admission refused, renders no mandate for it, so the packet never refuses (the CLI's gated commands do).
   const refused = database(
       freshInit(text.replace('moves [Observation, Verification, Synthesis, Delegation, Execution]', 'moves []')),
@@ -408,7 +408,7 @@ it('moves only the host note when a capture is written: the packet and its diges
 });
 
 it('keeps the packet, its digest, every rendered file and a current capture across a runtime-band source', () => {
-  // Plan amendment C13: the packet's revision is body(K0)'s authored revision, so a source at runtime placement (as
+  // The packet's revision is body(K0)'s authored revision, so a source at runtime placement (as
   // evidence an `ia validate` writes will be) moves the handle's revision and nothing the packet or a host file says.
   const root = freshInit(),
     lawFile = '.ia/src/runtime-rule.ia',
@@ -548,7 +548,7 @@ it('tables the five shapes and the four phases, each shape with the registered w
   ]);
   expect(packet.lines).toEqual([
     'run ia position; if it refuses, run the command it names',
-    'state intent to the CLI as shape + optional phase + optional seat + optional word; the CLI never receives free text',
+    'state intent to the CLI as shape + optional phase + optional primitive + optional seat + optional word; the CLI never receives free text',
     "when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation",
   ]);
 });

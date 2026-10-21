@@ -177,7 +177,7 @@ it('registers each read refusal in RUNTIME_CODES and names the locator field eac
     expect(readFileSync(resolve(schemas, declared[word]!), 'utf8'), word).toMatch(
       new RegExp(`have ${field.replace('.', '\\.')} as text`),
     );
-  // Decision work-source-locator: every work word whose schema declares `work.source` reads it as its locator.
+  // Every work word whose schema declares `work.source` reads it as its locator.
   for (const word of ['decision', 'milestone', 'plan', 'spec', 'task'])
     expect(SOURCE_LOCATORS, word).toHaveProperty(word, 'work.source');
 });
@@ -602,8 +602,8 @@ it('reads the document a source locator names: the whole file, or the section it
       kind: 'record',
       body: `The ${identity.split('/').at(-1)!} body.`,
     });
-  // A @milestone's and a @decision's `work.source` is a locator too (decision work-source-locator), and an anchor
-  // narrows it to the section, not the whole document.
+  // A @milestone's and a @decision's `work.source` is a locator too, and an anchor narrows it to the section, not the
+  // whole document.
   expect(markdownSection(DOCUMENT, 'reading-a-body')).not.toBe(DOCUMENT);
   expect(body(readBody(db, 'work-system/definition/milestone/located-milestone', options))).toMatchObject({
     kind: 'document',

@@ -2,9 +2,185 @@
 
 Generated from reviewed release changesets. Entries describe intended releases; publication is a separate action.
 
+## 3.2.2
+
+Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.
+
+### Judge a held user host lock from one opened file
+
+When `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run, @inventarch/distribution checks that the lock has not been replaced before removing it as stale. This protects a replacement lock found during that check. A brief window just before the removal remains, so a lock replaced at that moment can still be removed. A symbolic link or other non-regular file at the lock path now counts as busy and is not taken over, and a FIFO at the lock path no longer hangs the takeover; each refuses IA-DIST-INSTALL-BUSY, as does a lock file the run cannot open. Locks the CLI writes are taken over once their pid has died, or after 10 seconds when their pid is empty or unparseable; a live owner is taken over only once its lock is a day old. The IA-DIST-INSTALL-BUSY message is unchanged.
+
+Packages: `@inventarch/distribution`.
+
+### Take over a live user host lock only after a day, and release only a run's own
+
+A lock held by a live run for more than 10 minutes is no longer taken over at once: when `ia host claude --user` finds its lock, `<IA home>/claude/.lock`, held by another run whose pid is still running, @inventarch/distribution now refuses IA-DIST-INSTALL-BUSY until the lock is a day old, since a run holds its lock for milliseconds and a younger age does not show that its owner stopped. A lock whose pid has died is still taken over at any age, and one whose pid is empty or unparseable after 10 seconds; a lock holding 0, a negative number or a number above 2147483647 is now judged the same way, where 0, a number above 2147483647 or below -2147483648 and, on POSIX, -1 or the negative of a live process group used to wait out the 10 minutes, and any other negative number was taken over at once. A stale lock whose pid another process has since reused, or whose pid answers EPERM, now stays busy for up to a day unless it is removed by hand, as the unchanged IA-DIST-INSTALL-BUSY message says to do when no run is active. A run now writes its pid, a space and a random token, and at its end removes the lock only while it is still a regular file holding exactly that text and its name still names that file, so a run whose lock was replaced no longer removes the replacement and lets another run acquire the lock while the replacement's owner is active. A lock in the earlier format, a pid alone, is still judged by its pid, and a run's release leaves it in place. Earlier releases running at the same time still take over a lock older than 10 minutes and, when they finish, remove whatever lock is at the path, so two runs can still overlap until every CLI using that IA home is upgraded. A brief window between a release's check and its removal remains, as Node has no unlink-if-same. Liveness is judged in each run's own pid namespace, so a run in a container or on another host sharing the IA home can still take over a live run's lock.
+
+Packages: `@inventarch/distribution`.
+
+### Take over a stale user host lock under a claim
+
+When two `ia host claude --user` runs found the same stale lock, `<IA home>/claude/.lock`, at the same moment, both could take it over and go on to change the marketplace at once. @inventarch/distribution now removes a stale lock only under a claim, an exclusive `.lock.<inode>.claim` directory beside it, and only after finding again that the lock path still names the file it judged, serializing takeover while the claim remains exclusively owned. This reduces overlapping runs but does not eliminate them. A run whose claim was removed as abandoned, after it paused inside the claim for more than 10 seconds or because two runs interleaved while removing an abandoned claim, can still remove a newer lock. A claim older than 10 seconds is abandoned and removed, and a run that acquires the lock sweeps abandoned claims. On Windows the exclusive create now waits up to 250 milliseconds for a lock name another run is still removing, instead of failing with a raw EPERM. A create refused for permissions (on Windows, once that wait passes with nothing at the name; elsewhere at once, where a raw EPERM or EACCES was thrown before) refuses IA-DIST-INPUT-INVALID, naming the directory. Earlier CLIs do not claim, so a run of an earlier release sharing the IA home can still remove a lock without one.
+
+Packages: `@inventarch/distribution`.
+
+### Reuse one IA home across the checkpoint convergence test passes
+
+Test-only: the CLI's checkpoint convergence test writes the host payload once instead of on every pass. No behaviour changes for consumers.
+
+Packages: `@inventarch/cli`.
+
+### Verify the host payload once per ia host apply
+
+ia host --apply shares one verification of the host payload (about 1,400 files) between its MCP plan and its projection pre-check, so an apply scans the payload fewer times. Each step that writes still verifies afresh, so a payload that changes during the command still refuses the apply. In @inventarch/distribution, planHost, planHookRegistration and materializeHostPayload take an optional verify parameter for that shared verification: only a verifier from hostVerifier (./host-observe) is shared, and any other function is ignored in favour of a fresh check.
+
+Packages: `@inventarch/cli`, `@inventarch/distribution`.
+
+### Coordinated version alignment
+
+Package version metadata follows the coordinated 3.2.2 release; native archives keep their own versions.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
+## 3.2.1
+
+Coordinated 3.2.1 release of the 23 public npm packages: Refuse a coordinate value whose text conversion throws as an unknown value.
+
+### Refuse a coordinate value whose text conversion throws as an unknown value
+
+`validateCoordinate` now refuses a coordinate value whose conversion to text throws, such as the JSON object `{"toString":1}` or a very deeply nested array, with `IA-GRAPH-COORDINATE-VALUE-UNKNOWN`, and its message shows that value as `<unprintable>`. It used to throw whatever that conversion threw, which the runtime door answered with `IA-RUNTIME-REQUEST-INVALID` for such a value in a `context`, `select` or `traverse` coordinate or in the `phase` parameter of `scope`, `get`, `records`, `resolve`, `search` or `traverse`. The admitted axes, the error order, the output and the message for every other value are unchanged.
+
+Packages: `@inventarch/graph`, `@inventarch/runtime`.
+
+### Coordinated version alignment
+
+Package and native artifact version metadata follows the coordinated 3.2.1 release.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
+## 3.2.0
+
+Coordinated 3.2.0 release of the 23 public npm packages: Registry and archive downloads refuse URLs that are not credential-free HTTPS; ia doctor names the removal for a hook group changed by hand, and two help lines are corrected; Package guides and contracts corrected against the code; Read the steward hook's ownership markers, actor map, binding and code files through the opened file; Session stores can require host admission before each durable write; Source comments cite the spec sections that state their rules; Verify host cache, runtime and system package files through the file that is read; The vocabulary describes the distribution product section and the predicate phrase; The vocabulary catalogue lists closed kernel members in their authored spelling.
+
+### Registry and archive downloads refuse URLs that are not credential-free HTTPS
+
+`fetchBounded` (`@inventarch/distribution/internal/bounded-fetch`), the one request behind registry documents and remote archives, now checks the URL itself before any request, even when its caller did not. It parses the URL with `new URL` and refuses only a URL that does not parse, whose scheme is not `https:` or that has a username or password, as `IA-DIST-INPUT-INVALID` with the message `<label> <url> is not a credential-free HTTPS URL`. It then requests the canonical form `new URL` writes: a query or a fragment passes, and a legitimate non-canonical HTTPS spelling, such as an uppercase host, an explicit `:443` or a percent-encoded host character, is canonicalized and still accepted, with the same request as before, so a direct caller, or a hand-built `RegistryBase`, that passes an HTTPS URL sees no break. Before, an `http:` URL was requested in clear text and a `data:` or `blob:` URL was read; a URL with any other scheme, such as `file:`, `ftp:` or `wss:`, got a `TypeError` from fetch, reported as `IA-DIST-ARTIFACT-UNAVAILABLE` with `<label> <url> failed: …`, as a credentialed or malformed URL did. All of them now refuse as `IA-DIST-INPUT-INVALID`, so both the code and the message change. Refusing another scheme is a defensive patch: the supported contract already excluded it, since the registry spec (`docs/specs/registry/README.md`) says that a registry base is a credential-free HTTPS URL or a local directory and that other URL schemes refuse, and the archive check admits only HTTPS artifact URLs. URLs built on a `parseRegistryBase` base and URLs the archive check admits are already canonical and are requested unchanged. Migration: direct callers can keep passing HTTPS URLs, in any spelling, or use `parseRegistryBase` to get the canonical form up front; a direct caller passing an `http:`, `data:` or `blob:` URL moves to an HTTPS URL or, for a registry, a local directory base. This is URL-shape hygiene, not host authorization: it does not block internal or loopback hosts, DNS rebinding or other server-side request forgery. Redirects, the 30-second timeout and the byte bounds are unchanged.
+
+Packages: `@inventarch/distribution`.
+
+### ia doctor names the removal for a hook group changed by hand, and two help lines are corrected
+
+For a registered hook group deleted, changed or duplicated by hand, the `ia doctor --host <host> --json` session briefing told the session to run `ia host <host> --apply`, which refuses that state. Its notice, context line and `nextActions` now name `ia host <host> --remove --apply` first and then `ia host <host> --apply`, as the doctor row already did. `ia author --help` no longer lists `ia author system <name>`, a form that always refuses with `IA-CLI-EDIT-AUTHORITY`, and the `--digest` option no longer says it is optional for it. `ia init --help` shows `--host` with `--decline`, which accepts it, rather than with `--forget-decline`, which refuses it. The moved-home doctor warning now reads "the per-OS location earlier releases used" in place of an internal milestone id. No other output changes.
+
+Packages: `@inventarch/cli`.
+
+### Package guides and contracts corrected against the code
+
+The `README.md` and `SPEC.md` that `@inventarch/language`, `@inventarch/graph`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/runtime`, `@inventarch/workspace-runtime`, `@inventarch/service-contracts` and `@inventarch/cli` ship were checked against their code. They now document exit class 4 for an unreachable remote registry or archive, the `db` and `runtime` error models, and the `workspace-runtime` and `service-contracts` entry points, and they correct statements that did not hold, such as a browser bundle `service-contracts` never built and the revision a runtime position body carries. Documentation only: no code, behavior or API changes.
+
+Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/graph`, `@inventarch/language`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/workspace-runtime`.
+
+### Read the steward hook's ownership markers, actor map, binding and code files through the opened file
+
+The steward hook now opens each context ownership marker, the --actors map, the context hook binding and each code file of its implementation inventory before judging it, and reads through that descriptor, so a file swapped after its check is never read (CodeQL js/file-system-race). Admission is unchanged: markers and the actor map remain regular, single-link, unaliased files of at most 1 MiB (8 MiB for a pending journal), the binding at most 64 KiB, and inventory code files at most 8 MiB each and 32 MiB in all, with hard links still admitted there. A missing --actors map now refuses with IA-HOOK-STEWARD-UNAVAILABLE: Invalid actor map file instead of a raw ENOENT error. A FIFO swapped in is refused without blocking the hook, and a marker removed after its directory is listed, or an inventory file that changes while it is read, is refused.
+
+Packages: `@inventarch/steward-hook`.
+
+### Session stores can require host admission before each durable write
+
+A host can now make every durable session write pass its own synchronous current-authority check. `sqliteStore(root, { admit })`, `new SqliteBackend(root, { admit })`, `memoryStore({ admit })` and `new MemoryBackend({ admit })` accept an admission gate. The backend calls it inside its write transaction, after the ownership, idempotency and revision checks and after every await, immediately before the first journal event or checkpoint is written, and nothing yields between its answer and the commit. Authority revoked before the write, including while the store awaits ownership validation, is therefore refused even when every earlier host check passed. The gate receives a deeply frozen `Admission`: its kind (`commit` or `checkpoint`), session, principal, owner fence and command, the exact events, the resulting session, and the attempts whose output a commit newly stores, with the authority recorded when each was prepared; a checkpoint, which restates admitted history, offers none. Only a synchronous `true` admits. `false`, any other value, a promise or thenable, or a throw rolls the transaction back and refuses with `IA-SESSION-ADMISSION-DENIED`, whose message carries neither the payload nor the host's error. A configured `admit` that is not a function refuses at construction with `IA-SESSION-ADMISSION-UNAVAILABLE`. The new optional `admission` property of `SessionStore` and `JournalBackend` reports whether a gate runs, and an `EngineHost` that sets the new `requireAdmission` option is refused with `IA-ENGINE-ADMISSION-UNAVAILABLE`, at construction and at every later use of a store the host replaces, unless its store reports `admission: true`. `JournalBackend.commit` gains an optional fifth argument, the resulting session, which `JournalStore` supplies; a gated backend refuses a commit without it. The `@inventarch/agent-composition-system` installed-read qualification fixture adds an Engine, installed captured-read and SQLite regression for the gate. Stores configured without `admit` behave exactly as before, and writes admitted before a revocation stay in the journal. The guarantee covers authority state the gate reads synchronously in the same process; a remote authority service or another process needs its own lease or fencing protocol.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/session-system`.
+
+### Source comments cite the spec sections that state their rules
+
+Comments in shipped source no longer cite private issue numbers, and comments that cited retired spec sections now cite the section that states the rule, or none. Comments only: no code, output or API changes.
+
+Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/graph`, `@inventarch/runtime`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/workspace-runtime`.
+
+### Verify host cache, runtime and system package files through the file that is read
+
+The host cache launcher (`scripts/ia.mjs`, which verifies the cache before every mode), `installedDistributionDigest` and `verifySystemPackage` now open each file before judging it, read it through that descriptor, and check afterwards that its name still holds the same file. A file replaced while they verify by a link, FIFO, socket or other special file is refused: where the platform has `O_NOFOLLOW` and `O_NONBLOCK`, at the open, before anything is read, so the launcher no longer waits forever on a FIFO swapped into the cache; on Windows, which has neither, a link swapped in is opened and read, then refused by the check of its name. The launcher reports such a change with its own message rather than a system error such as `Unknown system error -102`; of the failures that keep a file from opening, it prints the system error only for a pinned file it may not read. A pinned cache file removed during verification reports `Plugin cache payload is missing`, and any other entry whose listed name no longer reaches it, such as a file Linux lists under a name that is not UTF-8, refuses as `Plugin cache payload differs: <path>`, where it failed with a system error before. Outside such races, which files are admitted is unchanged. Some refusals are new: `installedDistributionDigest` refuses a runtime file it cannot open, an unreadable one included, and an entry its listed name no longer reaches with `Installed distribution runtime is missing, mixed or aliased` instead of a system error; the launcher refuses a pinned file that fails to open for a reason other than permissions, such as too many open files or a lock another Windows process holds, as `Plugin cache payload differs: <path>`; `verifySystemPackage` refuses an input replaced or changed while it is read with `System package input changed while it was read: <path>`; and both refuse a file of more than 2147483647 bytes before reading it, `installedDistributionDigest` with its usual message and `verifySystemPackage` as `System package input exceeds 2147483647 bytes: <path>`, where Node's own error for a file that large was thrown.
+
+Packages: `@inventarch/distribution`.
+
+### The vocabulary describes the distribution product section and the predicate phrase
+
+The `@distribution` description now says that a distribution may describe the host plugin product it ships (its optional `product` section, which `ia init --from` and `ia project --product plugin` use), and the `@predicate` description now names the present phrase every predicate declares. The descriptions change in the catalogue `ia vocabulary` and the MCP door serve, in every shipped `LANGUAGE.md` and in the authoring-system reference guides; the authoring-system `SPEC.md` also drops a private planning reference. No schema, record or admission changes, and IA syntax remains 1.0. Native archives are now versioned by content within an npm major rather than following the npm version, so this release ships all twelve, each changed by these guides, at 3.1.2 under npm 3.2.0; an unchanged archive would have kept its published version.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
+### The vocabulary catalogue lists closed kernel members in their authored spelling
+
+The catalogue that `ia vocabulary` serves, the MCP door catalogue and the `vocabulary.md` reference listed the closed `@move` and `@primitive` members in lowercase (`synthesis`, `attention`). The language matches those members case-sensitively, so a `@system` registration that copied `move synthesis` from the catalogue was refused with `IA-LANG-DISCRIMINATOR-UNREGISTERED`. `kernelMembers` now lists `Delegation`, `Execution`, `Observation`, `Synthesis` and `Verification`, and `Attention`, `Decision`, `Escalation`, `Inference`, `Learning` and `Memory`, as the kernel spells them. No other catalogue field changes, and admission is unchanged. Migration: a consumer that compared `kernelMembers` against the lowercase names compares against the authored spelling.
+
+Packages: `@inventarch/cli`, `@inventarch/mcp-door`.
+
+## 3.1.1
+
+Coordinated 3.1.1 release of the 23 public npm packages: Cite the predecessor repository's issues by name; Refresh the package READMEs for 3.1; Self-contained phase rows in generated position packets; Cite public sources in package contracts and comments; Cite public contracts in package sources.
+
+### Cite the predecessor repository's issues by name
+
+Comments, SPEC text and test titles that cited issues and pull requests of the predecessor repository by bare number now cite them as crowncodes/ia#N, so they no longer resolve to unrelated items in this repository. Comments, documentation and test titles only; no behaviour, export, output or dependency changes.
+
+Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/workspace-runtime`.
+
+### Refresh the package READMEs for 3.1
+
+Each package README now has a badge row, a short summary, a verified quick start or example, its main commands or exports, its limits and links, in the voice of the repository README. The CLI README is the 3.x command guide: preview and author, mandate checks and --actor, the removal of ia compile, Claude Code and Codex as the supported hosts, and the 3.1 host plugin commands ia init --from and ia project --product plugin. The compliance README shows the opt-in conformance evidence and the workspace-runtime README the host plugin subpaths. Documentation only; no package behaviour, export or dependency changes.
+
+Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/graph`, `@inventarch/language`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/steward-hook`, `@inventarch/workspace-runtime`.
+
+### Self-contained phase rows in generated position packets
+
+The position packet that `ia project` and `ia host` write (`.claude/rules/ia-workspace.md` for Claude Code, `AGENTS.md` for Codex) no longer cites a decision record outside this repository. Each phase row now reads `--phase selects the playbook cell delivered and decides which conditional relation rows apply`. The packet text and its digest change, so `ia doctor` reports a projection an earlier version wrote as outdated until `ia project <host> --apply` writes it again. Nothing else in the packet, the position body or the delivery view changes.
+
+Packages: `@inventarch/cli`, `@inventarch/runtime`.
+
+### Cite public sources in package contracts and comments
+
+Package SPECs, source comments and test titles state each rule, or cite the public SPEC clause or docs/specs section that states it, instead of planning milestones, tasks, amendments, design rows, review-finding ids and decision names that live outside this repository. Comments, documentation and test titles only; no behaviour, export, output or dependency changes.
+
+Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/graph`, `@inventarch/language`, `@inventarch/mcp-door`, `@inventarch/runtime`, `@inventarch/steward-hook`, `@inventarch/workspace-runtime`.
+
+### Cite public contracts in package sources
+
+Package contracts, source comments and tests cite the public SPEC clauses that state each rule instead of planning documents kept outside this repository. No behaviour, export or dependency changes.
+
+Packages: `@inventarch/db`, `@inventarch/graph`, `@inventarch/mcp-door`, `@inventarch/workspace-runtime`.
+
+### Coordinated version alignment
+
+Package and native artifact version metadata follows the coordinated 3.1.1 release.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/compliance-system`, `@inventarch/governance-system`, `@inventarch/hook-authoring-system`, `@inventarch/learning-system`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-system`.
+
+## 3.1.0
+
+Coordinated 3.1.0 release of the 23 public npm packages: Lower and project host plugins; Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES.
+
+### Lower and project host plugins
+
+The `@capability` and `@agent-profile` words gain an invocation section and `@distribution` a product section; ia init --from lowers a Claude, Codex or Grok plugin into a kit workspace; ia project --product plugin renders it back and --check proves the round trip.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/mcp-door`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
+### Opt-in native conformance evidence for COMP-KERNEL and COMP-FIXTURES
+
+Compliance C31. @inventarch/compliance adds verifyKernel(floor?) and verifyFixtures(), isConformanceEvidence(value, subject?), CONFORMANCE_PROFILE ('package-v1') and the KernelEvidence, FixtureEvidence, ConformanceEvidence, ConformanceToolchain, ConformanceProfile, OutOfProfileSuite, KernelSource, ConformanceOptions and ConformanceSummary types. verifyKernel regenerates the kernel from a floor (the embedded one by default) in-process and compares it with the running @inventarch/language; verifyFixtures runs the package-v1 profile of the shipped language, refusal and evidence fixtures against a generated inventory. Both run only when called and read only this package's own files. Their evidence is deeply frozen and accepted only from the producing module instance. evaluate's new opt-in conformance: {inputs, kernel, fixtures} option binds that evidence to the evaluated graph: evidence for another revision, language version, kernel digest, floor or toolchain stays not-evaluated, each check judged on its own evidence, a verified failure on the graph's own floor fails, and copied, hand-built or swapped evidence, or evidence together with conformance, is a TypeError. evaluate reads the inputs once and refuses fields that are not strings. Results verified from evaluated evidence carry the new Verdict.basis 'verified' and add Report.conformance for those checks, a verified fixture result with the suites it did not run. Results taken from the caller-asserted evidence map now carry basis 'caller-asserted' and are rebuilt from their check, scope, outcome and findings, so other keys a caller put on such a verdict no longer reach the report: outcomes are unchanged, but reports from callers that pass the map change digest. Reports that pass neither option are unchanged. Limits: the profile does not run the hook, runtime, execution or publication suites, and every fixture result lists them as out of profile; the evidence verifies the installed package against itself, and the binding trusts the Graph it is given, so a consumer pins kernelDigest and inventoryDigest and relies on npm integrity.
+
+Packages: `@inventarch/compliance`.
+
+### Coordinated version alignment
+
+Package and native artifact version metadata follows the coordinated 3.1.0 release.
+
+Packages: `@inventarch/agent-system`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`.
+
 ## 3.0.0
 
-Coordinated 3.0.0 release of the 23 public npm packages: Reserve administrative authoring and report missing source-protection declarations; An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it; `ia preview` and `ia author` admit checks structurally, as `ia validate` does; `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence; A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none; Check optional distribution files through their opened descriptors; Document removal of the exported CLI admission helper; `ia author` applies previewed permitted record edits with digest checks; Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated; `ia preview` shows what one new record, field or relationship would compile to; Remove the deprecated ia compile command in 3.0; Refuse dangling links in guarded edit paths; Explain distribution engine incompatibility and preserve exact pins during migration; replace and createFile remove their temporary file when a write fails; Declare engine marker activation incompatible with the published CLI; Require an established actor for participant mandate grants; `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined; workspace-runtime generates a claude agent file for each authored `@agent-profile`, or reports why it does not; The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`; `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them; The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared; workspace-runtime renders authored playbook skills, hook declarations and operation and harness definitions; Generated host ownership and pending journals require this release for cleanup; The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both; Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure; Run native profiles with bounded local execution and durable journals; A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`; The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile; Align native archives once and enforce independent content versions; Explain profile agents and CLI actor selection; Separate public vocabulary payloads from repository work and release controls; Repair public contract citations; Align public qualification documentation; Maintain public implementation and release contracts; Qualify separated workspace and public examples; Use native nested paths in registry advice tests; Install registry kits and adopt pinned source workspaces; Recognize repository native records and release roots; Validate retained root release controls consistently; Pin scope, evidence gate and editor byte preservation regressions; Admit bounded runner journal claims as optional runtime evidence; Recognize linked runner entry points; Preserve unowned hooks and external evidence during recovery; Keep workspace roots inert in suggested commands; `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission; Keep runtime release checks valid after note consumption.
+Coordinated 3.0.0 release of the 23 public npm packages: Reserve administrative authoring and report missing source-protection declarations; An authored revision that runtime-band sources do not move: body(K), the packet, the host note and retention read it; `ia preview` and `ia author` admit checks structurally, as `ia validate` does; `ia validate` binds every `@check` and records the bound ones that passed or failed as runtime `@observation` evidence; A `@check` can claim paths with `check.covers`; `check.scope` stays text and claims none; Check optional distribution files through their opened descriptors; Document removal of the exported CLI admission helper; `ia author` applies previewed permitted record edits with digest checks; Consumer commands are judged by the acting participant's `@mandate` profile; `ia position` stays ungated; `ia preview` shows what one new record, field or relationship would compile to; Remove the deprecated ia compile command in 3.0; Refuse dangling links in guarded edit paths; Explain distribution engine incompatibility and preserve exact pins during migration; replace and createFile remove their temporary file when a write fails; Declare engine marker activation incompatible with the published CLI; Require an established actor for participant mandate grants; `ia validate` reports each `@execution-binding` as bound, unavailable or revoked against the catalog its host joined; workspace-runtime generates a claude agent file for each authored `@agent-profile`, or reports why it does not; The edit guard returns, re-keyed to the `@mandate` that governs the edited path, with one owned hook group per authored `@hook`; `ia host` applies the generated agents, skills and `@hook` groups through the one projection writer, and its receipt lists them; The packet receipt types gain optional authored-generation sections, and the packet line helpers are shared; workspace-runtime renders authored playbook skills, hook declarations and operation and harness definitions; Generated host ownership and pending journals require this release for cleanup; The host payload ships the installed read handler and an installed-implementation catalog; `ia host` records a join and `ia doctor` reports both; Language's editor edits one record of a source file in place, and `draftSource` refuses values that would add structure; Run native profiles with bounded local execution and durable journals; A `@mandate` that fails admission fails every mandate-gated decision closed, and admission refuses a stated `authority.moves []`; The runtime resolves the `@mandate` records that govern an actor, its default actor and a mode's refusal profile; Align public native artifacts with every coordinated npm release; Explain profile agents and CLI actor selection; Separate public vocabulary payloads from repository work and release controls; Repair public contract citations; Align public qualification documentation; Maintain public implementation and release contracts; Qualify separated workspace and public examples; Use native nested paths in registry advice tests; Install registry kits and adopt pinned source workspaces; Recognize repository native records and release roots; Validate retained root release controls consistently; Pin scope, evidence gate and editor byte preservation regressions; Admit bounded runner journal claims as optional runtime evidence; Recognize linked runner entry points; Preserve unowned hooks and external evidence during recovery; Keep workspace roots inert in suggested commands; `ia validate` admits a `@check` that names an evaluator that is not built in, to bind it; every other reader but `ia preview` and `ia author` keeps strict admission; Keep runtime release checks valid after note consumption; Keep release selector refresh and rollback verifiable.
 
 ### Reserve administrative authoring and report missing source-protection declarations
 
@@ -92,7 +268,7 @@ Packages: `@inventarch/distribution`.
 
 ### Declare engine marker activation incompatible with the published CLI
 
-Published `@inventarch/cli` 2.0.0 reads distribution engine 0.1.0. This successor uses engine 0.1.1, distinct from npm 3.0.0 and native 2.1.0. It can read compatible exact old locks without rewriting them, but new initialization with --apply and every applied install or update, including an applied no-op update, activate an engine 0.1.1 lock. The published CLI then refuses reads of that workspace before writing, even when unchanged package versions remain locked. Native package removal preserves the existing lock engine marker; removing a package from a compatible 0.1.0 lock does not itself migrate that marker, although its registered-host refresh can still write newer host state. Archive engine requirements stay strict. Older doctor, recover and restore commands cannot upgrade their running CLI or understand newer host journal formats; host removal alone cannot reverse an engine migration. Before upgrading, retain a complete workspace and state backup, its exact archives and the matching old CLI. For downgrade, finish pending recovery and necessary owned host cleanup with the newer CLI, then restore the complete pre-upgrade backup and use its matching old CLI. Preserve authored bytes, archive pins and ranges; never edit an engine marker to bypass the reader. No publication is performed by these migration instructions.
+Published `@inventarch/cli` 2.0.0 reads distribution engine 0.1.0. This successor uses engine 0.1.1, distinct from the coordinated npm and native artifact version 3.0.0. It can read compatible exact old locks without rewriting them, but new initialization with --apply and every applied install or update, including an applied no-op update, activate an engine 0.1.1 lock. The published CLI then refuses reads of that workspace before writing, even when unchanged package versions remain locked. Native package removal preserves the existing lock engine marker; removing a package from a compatible 0.1.0 lock does not itself migrate that marker, although its registered-host refresh can still write newer host state. Archive engine requirements stay strict. Older doctor, recover and restore commands cannot upgrade their running CLI or understand newer host journal formats; host removal alone cannot reverse an engine migration. Before upgrading, retain a complete workspace and state backup, its exact archives and the matching old CLI. For downgrade, finish pending recovery and necessary owned host cleanup with the newer CLI, then restore the complete pre-upgrade backup and use its matching old CLI. Preserve authored bytes, archive pins and ranges; never edit an engine marker to bypass the reader. No publication is performed by these migration instructions.
 
 Packages: `@inventarch/cli`, `@inventarch/db`, `@inventarch/distribution`.
 
@@ -174,9 +350,9 @@ Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inven
 
 Packages: `@inventarch/runtime`.
 
-### Align native archives once and enforce independent content versions
+### Align public native artifacts with every coordinated npm release
 
-The bundled public language and system archives move once to native 2.1.0. The current composition fixture tracks that selected native base while retaining exact equality with the initialized starter. Future native releases retain unchanged archive versions, require individual change notes, and refuse changed bytes under an already published native identity and version. Native selection remains independent of the coordinated npm release version.
+All twelve public native system and language archives follow the npm artifact target, including unchanged archives. This artifact-version alignment retains IA syntax 1.0 and makes no further schema, format, engine or protocol changes. Changed native content and dependency consumers still require individual baseline-bound impact notes; immutable published bytes, native membership and complete fresh candidate ledgers remain enforced. The composition fixture tracks the selected bundled language dependency on subsequent releases.
 
 Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance-system`, `@inventarch/governance-system`, `@inventarch/hook-authoring-system`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/session-system`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-system`.
 
@@ -206,7 +382,7 @@ Packages: `@inventarch/agent-composition-system`, `@inventarch/cli`, `@inventarc
 
 ### Maintain public implementation and release contracts
 
-Package source citations now resolve to maintained public specifications. Release preparation uses a public repository input seal and reviewed package membership, with independent native and npm versions; local qualification does not establish registry publication or host activation.
+Package source citations now resolve to maintained public specifications. Release preparation uses a public repository input seal and reviewed package membership, with aligned native and npm artifact versions and independent syntax and protocol compatibility numbers; local qualification does not establish registry publication or host activation.
 
 Packages: `@inventarch/cli`, `@inventarch/db`, `@inventarch/runtime`, `@inventarch/workspace-runtime`.
 
@@ -285,6 +461,12 @@ Packages: `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/db`, `@inven
 The release qualification tests continue to check the runtime mandate documentation after release notes are consumed and include that history in their cache inputs. Package behavior and APIs are unchanged.
 
 Packages: `@inventarch/runtime`.
+
+### Keep release selector refresh and rollback verifiable
+
+Native selectors and the exact composition fixture dependency follow the npm target on new releases and explicit refreshes. Release collection requires freshly proven exact metadata scopes, and late failures restore touched selectors. Native regeneration, final input sealing and archive qualification remain explicit preparation steps.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance-system`, `@inventarch/governance-system`, `@inventarch/hook-authoring-system`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/session-system`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-system`.
 
 ## 2.0.0
 

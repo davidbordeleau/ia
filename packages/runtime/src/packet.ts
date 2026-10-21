@@ -31,26 +31,26 @@ import { statedText, valueText } from './render.js';
 import { freeze } from './types.js';
 
 /**
- * The position packet: position-and-projection §4 and items 11 and 12; plan amendments B1 to B5 and B8 (milestone
- * position-packet). One host-neutral packet a host adapter renders: body(K0)'s digest, the seat, the participants and
- * their mandates, the N system pointer lines, the captured-record tallies, the intent and phase tables, the command
- * catalog the caller passes in, the three SPEC lines and provenance. The host note sits beside it, never digested.
+ * The position packet (SPEC R19). One host-neutral packet a host adapter renders: body(K0)'s digest, the seat, the
+ * participants and their mandates, the N system pointer lines, the captured-record tallies, the intent and phase
+ * tables, the command catalog the caller passes in, the three SPEC lines and provenance. The host note sits beside it,
+ * never digested.
  *
  * It is a pure function of the admitted records the scope token reads and the catalog: like body(K) it carries no
  * absolute path, token, time, capture state or CLI version, and nothing is written. Every read goes through `within`,
  * position's K0 included, and a record at runtime placement (band 0) is no part of it, as it is no part of a body (R15).
  */
 
-/** One command of the catalog (B5): the CLI passes them in, as data, from its COMMANDS rows. */
+/** One command of the catalog: the CLI passes them in, as data, from its COMMANDS rows. */
 export interface PacketCatalogRow {
   /** `ia <verb>`. */
   readonly command: string;
   readonly mode: Mode;
-  /** The move its mode maps to (MODE_MOVES, design item 13). */
+  /** The move its mode maps to (MODE_MOVES). */
   readonly move: Move;
   /** A one-line summary of the command's main refusal. */
   readonly refuses: string;
-  /** The one command that refusal names (design row 27). */
+  /** The one command that refusal names. */
   readonly next: string;
 }
 /** The seat line: the repository's own @workspace, K0's seat. */
@@ -63,18 +63,18 @@ export interface PacketSeat {
   readonly systems: number;
   /** Its `composition.steward` when it states one: the @agent the reference resolves to, or the reference as authored. */
   readonly steward?: string;
-  /** Present exactly when no participant is rendered (P = 0, B3): no refusal. */
+  /** Present exactly when no participant is rendered (P = 0): no refusal. */
   readonly participants?: 'none (no authored @mandate names an @agent)';
 }
-/** An authored @agent that an authored @mandate of `mandates` names as its `authority.participant` (B3). */
+/** An authored @agent that an authored @mandate of `mandates` names as its `authority.participant`. */
 export interface PacketParticipant {
   readonly identity: string;
   /** Its `meaning.says`. */
   readonly says?: string;
 }
 /**
- * An authored @mandate of body(K0)'s `mandates` whose participant resolves to an authored @agent (B3), each optional
- * field present exactly when the record states its key, as authored.
+ * An authored @mandate of body(K0)'s `mandates` whose participant resolves to an authored @agent, each optional field
+ * present exactly when the record states its key, as authored.
  */
 export interface PacketMandate {
   readonly identity: string;
@@ -90,7 +90,7 @@ export interface PacketMandate {
   readonly covers?: readonly string[];
 }
 /**
- * One system pointer line (B4) per `composition.systems` reference of the seat: the admitted @system it resolves to,
+ * One system pointer line per `composition.systems` reference of the seat: the admitted @system it resolves to,
  * the words its discriminators lower, its band, its steward and the key that seats at it; or, for a reference no
  * admitted record answers, the reference as authored with `unresolved` in place of the words and steward.
  */
@@ -139,7 +139,7 @@ export interface PacketPhase {
 export interface PacketProvenance {
   /** The packet's revision, body(K0)'s authored one. */
   readonly revision: string;
-  /** The seat @workspace's name (decision identity-namespace: the repository slug lives here, not in identities). */
+  /** The seat @workspace's name (the repository slug lives here, not in identities). */
   readonly slug?: string;
 }
 export interface PositionPacket {
@@ -162,7 +162,7 @@ export interface PositionPacket {
   readonly lines: readonly string[];
   readonly provenance: PacketProvenance;
 }
-/** position's host note (R16) and the installed state, which no join checks before milestone generation-binding. */
+/** position's host note (R16) and the installed state, which no join checks here. */
 export interface PacketHostNote extends HostNote {
   readonly installed: 'unknown (no join checked here)';
 }
@@ -177,12 +177,11 @@ export interface PacketOutput {
 const NO_PARTICIPANT = 'none (no authored @mandate names an @agent)' as const;
 const UNRESOLVED = 'unresolved' as const;
 const INSTALLED = 'unknown (no join checked here)' as const;
-const PHASE_CHANGES =
-  '--phase selects the playbook cell delivered and decides conditional relation rows (decision conditional-relations-in-delivery)';
-/** Design §4's three SPEC-owned lines, `ia scope` read as `ia position` (decision scope-verb-dispatch). */
+const PHASE_CHANGES = '--phase selects the playbook cell delivered and decides which conditional relation rows apply';
+/** The three SPEC-owned lines, `ia scope` read as `ia position`. */
 const LINES: readonly string[] = [
   'run ia position; if it refuses, run the command it names',
-  'state intent to the CLI as shape + optional phase + optional seat + optional word; the CLI never receives free text',
+  'state intent to the CLI as shape + optional phase + optional primitive + optional seat + optional word; the CLI never receives free text',
   "when a word's owner is not this workspace, delegate by re-seating at the owning system; a steward pointer is readable, not an invocation",
 ];
 const LOWERS = /^lowers to ([a-z]+)$/;
@@ -196,8 +195,8 @@ interface Lowering {
 }
 /**
  * The fields `node` states unconditionally at `field`, a `section.key` path. Exported on `./internal/packet` with
- * `valuesAt`, `textsAt` and `stated`, the one copy of these readers workspace-runtime's host generators read records
- * with (guard review finding G-N9).
+ * `valuesAt`, `textsAt` and `stated`, the one copy of these readers that workspace-runtime's host generators read
+ * records with.
  */
 export function fieldsAt(node: CompiledRecord, field: string): readonly CompiledField[] {
   const [section, key] = field.split('.');
@@ -234,8 +233,8 @@ function loweringsOf(node: CompiledRecord): readonly Lowering[] {
 /**
  * R19: the position packet through the scope token `within`, with its digest and host note. It calls position once,
  * at K0, and reads the rest through the same token. `catalog` is copied in its order, each row's five fields only. A
- * workspace with no participant renders none (B3). The refusals are position's alone: the packet renders the records
- * admission admitted and gates none of them (design §4, LS-30).
+ * workspace with no participant renders none. The refusals are position's alone: the packet renders the records
+ * admission admitted and gates none of them.
  */
 export function renderPacket(handle: ReadHandle, within: string, catalog: readonly PacketCatalogRow[]): PacketOutput {
   const k0 = position(handle, within),
@@ -279,7 +278,7 @@ export function renderPacket(handle: ReadHandle, within: string, catalog: readon
   const seatId = body.seat.identity,
     seat = seatId === undefined ? undefined : nodes.get(seatId);
 
-  // Participants and mandates (B3): the authored mandates body(K0) lists whose participant resolves to an authored
+  // Participants and mandates: the authored mandates body(K0) lists whose participant resolves to an authored
   // @agent, each read through the same token; an @agent once however many mandates name it. Each authority field is
   // rendered as admitted, never judged: a declared `moves []` is `moves: []`, an absent key no field, and a reference
   // with a fragment the record it resolves to.
@@ -304,7 +303,7 @@ export function renderPacket(handle: ReadHandle, within: string, catalog: readon
   mandates.sort((a, b) => order(a.identity, b.identity));
   const participants = [...agents.values()].sort((a, b) => order(a.identity, b.identity));
 
-  // System pointer lines (B4): one per `composition.systems` reference of the seat, by identity.
+  // System pointer lines: one per `composition.systems` reference of the seat, by identity.
   const systems: PacketSystem[] = (seat === undefined ? [] : refsAt(seat, 'composition.systems'))
     .map((identity): PacketSystem => {
       const node = nodes.get(identity);
@@ -400,8 +399,8 @@ export function renderPacket(handle: ReadHandle, within: string, catalog: readon
 }
 
 /**
- * B1: the packet's entries, design §4's formula. P participants + M mandates + 1 seat + N system lines + T tallies + 5
- * intent rows + 4 phase rows + C catalog rows + 1 provenance + 3 SPEC lines; the host note is no entry.
+ * The packet's entries: P participants + M mandates + 1 seat + N system lines + T tallies + 5 intent rows + 4 phase
+ * rows + C catalog rows + 1 provenance + 3 SPEC lines; the host note is no entry.
  */
 export function entryCount(packet: PositionPacket): number {
   return (

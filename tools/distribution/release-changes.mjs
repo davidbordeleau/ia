@@ -1,3 +1,4 @@
+import { gitText } from '../shared/git.mjs';
 import assert from 'node:assert/strict';
 import { manifestProblems, publicPackages } from './release-packages.mjs';
 import { BUMPS, bumpVersion, maxBump, packageOwner, pendingNotes, releaseBump } from './release-notes.mjs';
@@ -8,24 +9,17 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isEntry } from '../entry/is-entry.mjs';
 import { publicPackageInputs } from '../release/public-pack.mjs';
+import { nativeVersionOnly, NATIVE_COMPOSITION_FIXTURE } from '../release/native-selectors.mjs';
 
 export const RELEASE_POLICY = 'releases/current.json';
 export const SYSTEM_PACKAGE_POLICY = 'tools/distribution/system-package-policy.json';
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
-export const stableVersion = (version) =>
-  typeof version === 'string' && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version);
-export function compareVersions(left, right) {
-  assert.ok(stableVersion(left) && stableVersion(right), 'Stable package versions are required');
-  const a = left.split('.').map(Number),
-    b = right.split('.').map(Number);
-  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1;
-  return 0;
-}
+export { stableVersion, compareVersions } from '../shared/semver.mjs';
+import { stableVersion, compareVersions } from '../shared/semver.mjs';
 export const changesetPath = (version) => `releases/changesets/${version}.json`;
 export const releaseTag = (version) => `v${version}`;
 const json = (root, path) => JSON.parse(readFileSync(resolve(root, path), 'utf8'));
-const git = (root, ...args) =>
-  execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 }).trim();
+const git = (root, ...args) => gitText(root, args);
 export function releasePolicy(root) {
   const policy = json(root, RELEASE_POLICY);
   assert.equal(policy.format, 'ia.npm-cohort.v1');
@@ -109,8 +103,35 @@ export function trackedChanges(root, policy, since = policy.baseline.commit) {
             : value;
       if (JSON.stringify(canonical(before)) === JSON.stringify(canonical(after))) row.cohortOnly = true;
     }
+    if (
+      row.sha256 &&
+      (path === NATIVE_COMPOSITION_FIXTURE ||
+        path === SYSTEM_PACKAGE_POLICY ||
+        path === 'examples/public-language/versions.json' ||
+        /^\.ia\/src\/systems\/[^/]+\/system\.ia$/.test(path) ||
+        /^examples\/public-language\/contracts\/[^/]+\.ia$/.test(path)) &&
+      git(root, 'ls-tree', '--name-only', since, '--', path) &&
+      nativeVersionOnly(
+        root,
+        path,
+        execFileSync('git', ['show', since + ':' + path], {
+          cwd: root,
+          encoding: 'utf8',
+          windowsHide: true,
+          maxBuffer: 16 * 1024 * 1024,
+        }),
+        readFileSync(resolve(root, path), 'utf8'),
+      )
+    )
+      row.cohortOnly = true;
     return row;
   });
+}
+/** Generated alignment scopes cover only freshly proven version metadata at the exact named file. */
+export function changeApplies(change, row) {
+  return change.paths.some((prefix) =>
+    change.id === 'cohort-alignment' ? row.cohortOnly === true && row.path === prefix : row.path.startsWith(prefix),
+  );
 }
 export function renderChangelog(entries) {
   return (
@@ -221,10 +242,7 @@ export function validateChangeset(entry, policy, projects, actualCoverage) {
   }
   for (const row of entry.coverage) {
     const change = entry.changes.find((change) => change.id === row.change);
-    assert.ok(
-      change && change.paths.some((prefix) => row.path.startsWith(prefix)),
-      'Changed file lacks an applicable changeset entry',
-    );
+    assert.ok(change && changeApplies(change, row), 'Changed file lacks an applicable changeset entry');
     const owner = projects.find((project) => row.path.startsWith(project.directory + '/'));
     assert.ok(!owner || change.packages.includes(owner.manifest.name), 'Changed package omitted from its change entry');
     assert.ok(
@@ -314,6 +332,9 @@ export function committedChanges(root) {
 /**
  * The pull-request check. It never asks a contributor to rewrite the consumed changeset: package changes outside
  * the prepared release must carry a pending note, and `pnpm release:version` folds notes into the next release.
+ * While a release is prepared but untagged, it also refuses native version metadata the changeset does not cover. Only
+ * the release branch refreshes the changeset; any other branch, refused here between the release merge and its tag,
+ * waits for the tag.
  */
 export function releaseStatus(root, projects) {
   const policy = releasePolicy(root),
@@ -349,10 +370,32 @@ export function releaseStatus(root, projects) {
     renderChangelog(entries),
     'Generated changelog is stale; run pnpm release:collect',
   );
-  const noted = new Set(notes.flatMap(({ note }) => note.packages));
-  const outside = trackedChanges(root, policy, published ?? policy.baseline.commit).filter(
-    (row) => !row.cohortOnly && !covered.has(row.path + '\0' + row.sha256),
-  );
+  const noted = new Set(notes.flatMap(({ note }) => note.packages)),
+    rows = trackedChanges(root, policy, published ?? policy.baseline.commit);
+  // Publication's strict check reads the release merge commit and refuses native version metadata it does not cover, so
+  // refuse that in the release pull request instead of after merge. Main stays prepared from the release merge until
+  // the tag, so an ordinary branch, such as one whose `pnpm native:version --write` moved a native version, is refused
+  // in that window too; once the tag exists, the native check refuses the same branch until its notes name that tag.
+  if (!published) {
+    // Manifest byte changes can be formatting alone; npm versions are checked above. Native metadata has a
+    // separate version-only proof. Do not turn an ordinary semantic edit with a pending note into strict coverage.
+    const nativeOnly = (row) => row.cohortOnly && !row.path.endsWith('/package.json');
+    const actualPaths = new Set(rows.map((row) => row.path));
+    const uncovered = [
+      ...new Set([
+        ...rows.filter((row) => nativeOnly(row) && !covered.has(row.path + '\0' + row.sha256)).map((row) => row.path),
+        ...entry.coverage.filter((row) => nativeOnly(row) && !actualPaths.has(row.path)).map((row) => row.path),
+      ]),
+    ].sort();
+    assert.ok(
+      !uncovered.length,
+      `Prepared release ${policy.version} does not cover ${uncovered.length} native version file(s): ` +
+        `${uncovered.slice(0, 3).join(', ')}${uncovered.length > 3 ? ` and ${uncovered.length - 3} more` : ''}. ` +
+        'On the release branch, run pnpm release:version --write --refresh. ' +
+        `On any other branch, wait for ${releaseTag(policy.version)} to be tagged, then update from main, retarget native notes to that tag, and regenerate native selections.`,
+    );
+  }
+  const outside = rows.filter((row) => !row.cohortOnly && !covered.has(row.path + '\0' + row.sha256));
   const missing = new Map();
   for (const row of outside) {
     const owner = packageOwner(projects, row.path);
@@ -395,6 +438,7 @@ export function collectChanges(root, projects) {
     entry = json(root, path);
   entry.coverage = trackedChanges(root, policy).map((row) => {
     const matches = entry.changes
+      .filter((change) => changeApplies(change, row))
       .flatMap((change) =>
         change.paths.filter((prefix) => row.path.startsWith(prefix)).map((prefix) => ({ change: change.id, prefix })),
       )

@@ -70,6 +70,37 @@ function journal(root: string): { authoredRevision: string; events: Event[] } {
 }
 const runtime = (root: string) => using(root, true, (db) => db.records().filter((node) => node.band === 0));
 
+it.each(['current', 'legacy'])('projects journal-only runs without a live phase under the %s schema', (version) => {
+  const root = workspace();
+  const path = '.ia/src/systems/session-system/schemas/run.schema.ia';
+  if (version === 'current') put(root, path, readFileSync(resolve(import.meta.dirname, '../../..', path), 'utf8'));
+  const input = journal(root);
+  writeRunnerEvidence(root, input);
+  const run = runtime(root).find((record) => record.discriminator === 'run');
+  expect(run).toBeDefined();
+  const phase = run!.sections
+    .find((section) => section.name === 'execution')!
+    .fields.find((field) => 'key' in field && field.key === 'phase');
+  if (version === 'current') expect(phase).toBeUndefined();
+  else expect(phase).toMatchObject({ value: { text: 'recorded' } });
+  using(root, true, (db) => expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]));
+});
+
+it.each(['recorded', 'orient'])('keeps historical declared run phase %s admitted under the current schema', (phase) => {
+  const root = workspace();
+  const path = '.ia/src/systems/session-system/schemas/run.schema.ia';
+  put(root, path, readFileSync(resolve(import.meta.dirname, '../../..', path), 'utf8'));
+  put(
+    root,
+    '.ia/src/systems/session-system/records/historical-run.ia',
+    `#! ia 1.0\n@run historical-run\n  meaning\n    says "Historical authored execution."\n    answers "Which execution retains a historical phase?"\n  execution\n    status recorded\n    phase ${phase}\n    owner @agent agent-steward\n`,
+  );
+  using(root, false, (db) => {
+    expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    expect(db.records().some((record) => record.name === 'historical-run')).toBe(true);
+  });
+});
+
 it('admits contiguous atomic command consequences with the same command id', () => {
   const root = workspace(),
     input = journal(root);
@@ -354,6 +385,30 @@ it('bounds receipt reads and ignores hard-linked or junction receipts while refu
   symlinkSync(resolve(root, RUNNER_EVIDENCE_DIRECTORY), path, process.platform === 'win32' ? 'junction' : 'dir');
   expect(runtime(other)).toEqual([]);
   expect(() => writeRunnerEvidence(other, journal(other))).toThrow();
+});
+
+it('admits the same runner evidence when conformance verification fails the report (D10a)', () => {
+  // The native example corpus keeps a floor of its own, so a verifying reader fails COMP-KERNEL and the report.
+  const root = workspace();
+  writeRunnerEvidence(root, journal(root));
+  const read = (verify: boolean) => {
+    const db = open(root, { cache: false, evidence: true, ...(verify ? { conformance: 'verify' as const } : {}) });
+    try {
+      return {
+        outcome: db.report.outcome,
+        revision: db.revision,
+        records: db.records().map((node) => [node.identity, node.band] as const),
+      };
+    } finally {
+      db.close();
+    }
+  };
+  const plain = read(false),
+    verified = read(true);
+  expect(verified.outcome).toBe('fail');
+  expect(verified.records.some(([, band]) => band === 0)).toBe(true);
+  expect(verified.revision).toBe(plain.revision);
+  expect(verified.records).toEqual(plain.records);
 });
 
 it('refreshes evidence through the normal editor reader and invalidates prior scope tokens', () => {

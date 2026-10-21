@@ -1,11 +1,18 @@
 import { fileURLToPath } from 'node:url';
-import { mkdtempSync, readFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, mkdirSync, rmSync, writeFileSync, statSync, utimesSync, linkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { verifyArchive } from '../../apps/distribution/src/archive.js';
 import { DISTRIBUTION_ENGINE_VERSION } from '../../packages/db/src/distribution/index.js';
-import { BASE_ID, buildLanguageBase, languageVersion, languageBaseFindings } from './language-base.js';
+import {
+  BASE_ID,
+  buildLanguageBase,
+  languageVersion,
+  languageBaseFindings,
+  writeLanguageBase,
+  archivePath,
+} from './language-base.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const version = languageVersion(root);
@@ -13,9 +20,56 @@ const base = buildLanguageBase(root);
 const checked = (overrides: Partial<Parameters<typeof languageBaseFindings>[0]> = {}) =>
   languageBaseFindings({ ...base, languageVersion: version, engineVersion: DISTRIBUTION_ENGINE_VERSION, ...overrides });
 
+it.each(['unchanged', 'foreign-file', 'aliased-pin'])(
+  'publishes language base idempotently with owned outputs: %s',
+  (kind) => {
+    const scratch = mkdtempSync(resolve(tmpdir(), 'ia-base-write-'));
+    try {
+      writeLanguageBase(scratch, base);
+      const archive = resolve(scratch, 'apps/cli', archivePath(base.pin.archive));
+      const pin = resolve(scratch, 'apps/cli/assets/base.json'),
+        before = readFileSync(pin);
+      if (kind === 'unchanged') {
+        const date = new Date('2000-01-01T00:00:00Z');
+        utimesSync(archive, date, date);
+        utimesSync(pin, date, date);
+        writeLanguageBase(scratch, base);
+        expect(statSync(archive).mtimeMs).toBe(date.getTime());
+        expect(statSync(pin).mtimeMs).toBe(date.getTime());
+      } else {
+        if (kind === 'foreign-file') writeFileSync(resolve(scratch, 'apps/cli/assets/base/retain.txt'), 'foreign');
+        else linkSync(pin, resolve(scratch, 'foreign-pin.json'));
+        expect(() => writeLanguageBase(scratch, base)).toThrow();
+        expect(readFileSync(pin)).toEqual(before);
+        expect(
+          readFileSync(
+            kind === 'foreign-file'
+              ? resolve(scratch, 'apps/cli/assets/base/retain.txt')
+              : resolve(scratch, 'foreign-pin.json'),
+          ),
+        ).toEqual(kind === 'foreign-file' ? Buffer.from('foreign') : before);
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  },
+);
+
 // docs/specs/workspace-initialization-apply/README.md §2 “Base artifact” and §8 “Acceptance evidence”.
 describe('bundled language base', () => {
-  it('selects native versions independently of npm and refuses an absent or malformed version policy', () => {
+  it('packs artifact3 without changing syntax1, the archive format or the released engine contract', () => {
+    const aligned = buildLanguageBase(root, { version: '3.0.0' });
+    const verified = verifyArchive(aligned.bytes, aligned.pin.archive);
+    expect(aligned.pin.version).toBe('3.0.0');
+    expect(verified.manifest.version).toBe('3.0.0');
+    expect(verified.manifest.formatVersion).toBe(1);
+    expect(verified.manifest.language).toEqual(['1.0']);
+    expect(verified.manifest.engine).toBe('^0.1.1');
+    const sources = [...verified.files].filter(([path]) => path.endsWith('.ia'));
+    expect(sources.length).toBeGreaterThan(0);
+    for (const [, bytes] of sources) expect(Buffer.from(bytes).toString('utf8')).toMatch(/^#! ia 1\.0(?:\r?\n|$)/);
+  });
+  it('reads the derived native language selector and refuses an absent or malformed version policy', () => {
     const temporary = mkdtempSync(resolve(tmpdir(), 'ia-language-version-'));
     try {
       mkdirSync(resolve(temporary, 'examples/public-language'), { recursive: true });
@@ -33,7 +87,7 @@ describe('bundled language base', () => {
       rmSync(temporary, { recursive: true, force: true });
     }
   });
-  it('packs inventarch/language at the independently selected native version from the language-only set, deterministically', () => {
+  it('packs inventarch/language at its derived artifact version from the language-only set, deterministically', () => {
     expect(base.pin).toMatchObject({ id: BASE_ID, version });
     const verified = verifyArchive(base.bytes, base.pin.archive);
     expect(verified.manifestDigest).toBe(base.pin.manifest);

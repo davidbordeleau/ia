@@ -1,6 +1,5 @@
 /**
- * `ia project` acceptance (milestone position-packet task ia-project-verb; position-and-projection §5, design items 11
- * and 12; plan amendments B1, B5, B8, B11 and B12): the plan writes nothing, `--apply` writes the packet and its
+ * `ia project` acceptance (SPEC `project`; runtime R19 and R20): the plan writes nothing, `--apply` writes the packet and its
  * receipt through the writer `ia host` uses, `ia doctor` reads the receipt, a registered 1.x workspace upgrades, and
  * every refusal names one next command, its `ia project`, `ia validate` and `ia init` commands with the root as given
  * and its `ia-distribution` recoveries, and the `ia validate` an unopenable workspace names, with the resolved root.
@@ -79,16 +78,15 @@ it('plans the claude projection and writes nothing: the entry count, the packet 
     host: 'claude',
     apply: false,
     plan: {
-      // Plan amendment B1 on a fresh init with the CLI's nine catalog rows (C3 adds `ia preview` and `ia author`): 28 + N,
-      // N = 11.
-      entries: 39,
+      // A fresh init with sixteen catalog rows, including seven KB modes: 35 + N, N = 11.
+      entries: 46,
       packetDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
       files: [
         { path: RULES, action: 'create' },
         { path: SKILL, action: 'create' },
       ],
       guard: 'none',
-      // Milestone generation-binding: no authored @hook to register, and no authored record the host does not take.
+      // No authored @hook to register, and no authored record the host does not take.
       hooks: [],
       unsupported: [],
       conflict: null,
@@ -98,15 +96,15 @@ it('plans the claude projection and writes nothing: the entry count, the packet 
   expect(text.exitCode).toBe(0);
   const shown = flat(text.stdout);
   expect(shown).toContain('This is a preview. Nothing has been written.');
-  expect(shown).toContain(`39 entries, digest ${envelope.plan.packetDigest.slice(0, 12)}`);
+  expect(shown).toContain(`46 entries, digest ${envelope.plan.packetDigest.slice(0, 12)}`);
   expect(shown).toContain(`${RULES} create`);
   expect(shown).toContain('no steward guard to retire');
-  // A long command breaks with a backslash continuation (§6.4); joined, it is the apply of this plan.
+  // A long command breaks with a backslash continuation; joined, it is the apply of this plan.
   expect(shown.replaceAll(' \\ ', ' ')).toContain(`Apply with "${rooted('ia project claude', root)} --apply --yes".`);
   // Neither the workspace nor the IA home was written: no projection, no receipt, no payload.
   expect(tree(root)).toEqual(before);
   expect(readdirSync(env.IA_HOST_HOME)).toEqual([]);
-  // `ia host`'s projection element is this same plan (task ia-project-verb item 3).
+  // `ia host`'s projection element is this same plan.
   expect(element(JSON.parse((await host(root, env, 'claude')).stdout), 'projection').files).toEqual(
     envelope.plan.files,
   );
@@ -117,14 +115,14 @@ it('applies the packet and its receipt, which doctor reads with no drift until a
   const applied = await project(root, env, 'claude', '--apply', '--yes');
   expect(applied.exitCode, applied.stdout).toBe(0);
   const envelope = JSON.parse(applied.stdout);
-  expect(envelope).toMatchObject({ command: 'project', host: 'claude', apply: true, plan: { entries: 39 } });
-  // `applied` is the receipt written beside the projection state (B12), and its digests are the bytes on disk.
+  expect(envelope).toMatchObject({ command: 'project', host: 'claude', apply: true, plan: { entries: 46 } });
+  // `applied` is the receipt written beside the projection state, and its digests are the bytes on disk.
   const receipt = JSON.parse(read(root, RECEIPT));
   expect(envelope.applied).toEqual(receipt);
   expect(receipt).toMatchObject({
     format: 'ia.packet-receipt.v1',
     host: 'claude',
-    entries: 39,
+    entries: 46,
     packetDigest: envelope.plan.packetDigest,
     removed: [],
     foreign: [],
@@ -184,16 +182,16 @@ it('applies the packet and its receipt, which doctor reads with no drift until a
   const again = await human(root, env, 'claude', '--apply', '--yes');
   expect(again.exitCode).toBe(0);
   const shown = flat(again.stdout);
-  expect(shown).toContain('Projected 39 entries for claude: written; not observed being read.');
+  expect(shown).toContain('Projected 46 entries for claude: written; not observed being read.');
   expect(shown).toContain(RECEIPT);
   expect(shown).toContain(`${RULES} sha256 ${sha(readFileSync(resolve(root, RULES))).slice(0, 12)}`);
   expect(shown).toContain(`Run "${rooted('ia doctor', root)}" for the observed projection state.`);
 });
 
 /**
- * The upgrade fixture of task replace-renderers (host-fixture.ts `legacyRegistration`): a workspace a 1.x `ia host claude
- * --apply` registered, the steward guard's group and ownership state, and a projection state listing demo-steward.md
- * with that marked file.
+ * The upgrade fixture (host-fixture.ts `legacyRegistration`): a workspace a 1.x `ia host claude --apply` registered,
+ * the steward guard's group and ownership state, and a projection state listing demo-steward.md with that marked
+ * file.
  */
 it('upgrades a registered 1.x workspace: retires the guard, deletes the steward file and lists it in the receipt', async () => {
   const { root, env } = await initialized();
@@ -467,7 +465,8 @@ it('names ia project for a hand edit to a projection without a registration, and
     detail: `${RULES} changed since the projection apply wrote it; move or delete it, then run the remedy`,
     remedy: `ia project claude --root ${quote(root)} --apply`,
   });
-  // No registration exists, so none is stale: §8.2's briefing says the host is not registered, as it did before.
+  // No registration exists, so none is stale: host plugin distribution spec §8.2's briefing says the host is not
+  // registered, as it did before.
   expect(envelope.session.notice).toBe(
     `IA: this workspace has no Claude host registration; run ia host claude --root ${quote(root)} --apply`,
   );

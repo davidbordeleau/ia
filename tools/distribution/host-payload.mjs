@@ -21,12 +21,12 @@ const ROOTS = ['apps/cli', 'apps/distribution', 'apps/mcp-door', 'apps/steward-h
 /** Imported only by the private service bridge (apps/mcp-door/src/service*.ts); the public door never loads them. */
 export const EXCLUDED = new Set(['@modelcontextprotocol/client', '@inventarch/service-contracts']);
 /**
- * Plan amendments C16 and C24 (milestone generation-binding): the first-party installed operation implementations
- * whose executable handler bytes the payload ships, each a payload root beside ROOTS. Each names its implementation
- * id, the installed package that holds the handler, the handler's built module inside it and the module export that
- * declares it. The package is resolved from the repository's own node_modules, never an enclosing directory's, and bundled with its declared
- * dependency closure; the declaration is imported here, by the producer, and never by a host app
- * (tools/dependencies/check.ts). An implementation whose package or module is not there is listed as unavailable.
+ * The first-party installed operation implementations whose executable handler bytes the payload ships, each a payload
+ * root beside ROOTS. Each names its implementation id, the installed package that holds the handler, the handler's
+ * built module inside it and the module export that declares it. The package is resolved from the repository's own
+ * node_modules, never an enclosing directory's, and bundled with its declared dependency closure; the declaration is
+ * imported here, by the producer, and never by a host app (tools/dependencies/check.ts). An implementation whose
+ * package or module is not there is listed as unavailable.
  */
 export const IMPLEMENTATIONS = Object.freeze([
   Object.freeze({
@@ -79,10 +79,10 @@ const under = (parent, child) => {
 };
 /**
  * Node's node_modules walk from the dependent's own directory. pnpm links every declared dependency, workspace or
- * store, into the dependent's node_modules (store packages see their dependencies as siblings), so no exports map
- * is consulted: some packages expose neither "." nor "./package.json". With a `ceiling` (review finding B-RC2, for an
- * implementation's closure) the walk stays inside it: a dependency found only above the repository's own install fails
- * the build (review finding B3-N9) rather than being shipped and imported from wherever an enclosing directory holds one.
+ * store, into the dependent's node_modules (store packages see their dependencies as siblings), so no exports map is
+ * consulted: some packages expose neither "." nor "./package.json". With a `ceiling` (for an implementation's closure)
+ * the walk stays inside it: a dependency found only above the repository's own install fails the build rather than
+ * being shipped and imported from wherever an enclosing directory holds one.
  */
 function manifestDir(name, from, ceiling = null) {
   if (ceiling !== null && !under(ceiling, from))
@@ -105,9 +105,9 @@ function manifestDir(name, from, ceiling = null) {
   }
 }
 /**
- * Review finding B-N3: an implementation package as the repository itself installs it, in `<repository>/node_modules`
- * and nowhere above, or null. Walking up as `manifestDir` does would ship, and import at build time, whatever package of
- * that name an enclosing directory happens to hold.
+ * An implementation package as the repository itself installs it, in `<repository>/node_modules` and nowhere above, or
+ * null. Walking up as `manifestDir` does would ship, and import at build time, whatever package of that name an
+ * enclosing directory happens to hold.
  */
 function repositoryPackageDir(name, repository) {
   const modules = join(repository, 'node_modules');
@@ -219,7 +219,7 @@ export async function collectPayload(repository, implementations = IMPLEMENTATIO
       return { ...implementation, dir, reason: `${implementation.package} is not installed in this repository` };
     if (statSync(join(dir, implementation.module), { throwIfNoEntry: false })?.isFile() !== true)
       return { ...implementation, dir, reason: `${implementation.package} has no built ${implementation.module}` };
-    // B-RC2: the closure resolves inside the repository install that holds the implementation package, never above it.
+    // The closure resolves inside the repository install that holds the implementation package, never above it.
     bundle(dir, dirname(realpathSync(join(repository, 'node_modules'))));
     return { ...implementation, dir, reason: null };
   });
@@ -259,7 +259,7 @@ export function packageClosure(files, name) {
   return [...found].sort();
 }
 /**
- * C24: the handler's static module closure within the payload files, from `start`. Every literal import, export-from,
+ * The handler's static module closure within the payload files, from `start`. Every literal import, export-from,
  * dynamic import and require in a reached module is followed: a relative one to the payload file it names, an
  * @inventarch package through its shipped manifest's released exports. A third-party package is a leaf, reached when
  * its manifest is shipped (it is bundled whole). Node built-ins are skipped. Returns the reached payload paths, the
@@ -304,12 +304,12 @@ export function moduleClosure(files, start) {
   return { reached: [...reached].sort(), packages: [...packages].sort(), missing: [...missing].sort() };
 }
 /**
- * C24: one catalog row for a located implementation (`collectPayload`). It is available only when the payload ships
- * its handler module and every module the handler reaches lies in the package closure the payload ships, and when the
+ * One catalog row for a located implementation (`collectPayload`). It is available only when the payload ships its
+ * handler module and every module the handler reaches lies in the package closure the payload ships, and when the
  * module, imported here by the producer at build time, declares the implementation; the row then pins the SHA-256 of
- * the shipped module bytes and names that package closure, whose other bytes the payload inventory pins (review finding
- * B-N5). Otherwise it is unavailable, with the reason. A module that is shipped but does not declare its implementation
- * is a producer error, never a row.
+ * the shipped module bytes and names that package closure, whose other bytes the payload inventory pins. Otherwise it
+ * is unavailable, with the reason. A module that is shipped but does not declare its implementation is a producer
+ * error, never a row.
  */
 export async function operationRow(implementation, files) {
   const unavailable = (reason) => ({ id: implementation.id, status: 'unavailable', reason });
@@ -360,8 +360,8 @@ export async function operationRow(implementation, files) {
 const distributionModule = (repository, name) =>
   pathToFileURL(realpathSync.native(resolve(repository, 'apps/distribution/dist', name))).href;
 /**
- * The payload, its pin and its installed-implementation catalog (C16), which lists every one of `implementations` by
- * id: available with its shipped handler pins, or unavailable with the reason (C24). The catalog is generated here and
+ * The payload, its pin and its installed-implementation catalog, which lists every one of `implementations` by id:
+ * available with its shipped handler pins, or unavailable with the reason. The catalog is generated here and
  * inventoried like every other payload file, since `verifyHostCache` refuses an uninventoried one. Its evaluators
  * section is an `ia-evaluator-catalog/1.0` with no installed entries: the built-ins are implicit, as that format
  * requires, and no installed evaluator exists yet.

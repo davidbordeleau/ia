@@ -1,4 +1,5 @@
 import { MACHINE_PROTOCOL } from '@inventarch/runtime';
+import { KB_OPERATIONS } from '@inventarch/kb/protocol';
 import type { JsonSchema } from '@inventarch/runtime';
 import { LIMITS } from './vocabulary.js';
 
@@ -20,9 +21,8 @@ const withFormat = (schema: JsonSchema): JsonSchema => ({
   properties: { ...(schema['properties'] as Record<string, unknown>), format: FORMAT },
 });
 /**
- * M04: the door operations whose row names a tool, described once in @inventarch/runtime's MACHINE_PROTOCOL (spec-0012
- * MCP-01): the eight of version 1 (report is CLI-only), and read, next and position, which version 2 adds (plan
- * amendment A3).
+ * The door operations whose row names a tool, described once in @inventarch/runtime's MACHINE_PROTOCOL (runtime R12):
+ * the eight of version 1 (report is CLI-only), and read, next and position, which version 2 adds.
  */
 const served = MACHINE_PROTOCOL.operations.flatMap((operation) =>
   operation.mcp === null
@@ -71,7 +71,16 @@ const vocabulary = {
     },
   }),
 };
-const definitions = [...served, vocabulary];
+const definitions = [
+  ...served,
+  vocabulary,
+  ...KB_OPERATIONS.map((row) => ({
+    name: 'ia_kb_' + row.name,
+    operation: 'kb:' + row.name,
+    description: row.description,
+    inputSchema: row.inputSchema,
+  })),
+];
 export const TOOLS = definitions.map(({ name, description, inputSchema }) => ({
   name,
   description,

@@ -18,7 +18,10 @@ import { isListType, matchesForm, matchesType } from './values.js';
 import { assess } from './types.js';
 import type { Assessment, CompCode, Finding } from './types.js';
 
-/** Whether a typed reference field names at least one admitted record (W0-L2). Absent, no `IA-COMP-FIELD-REF-MISSING` warning is raised. */
+/**
+ * Whether a typed reference field names at least one admitted record (C04a). Absent, no `IA-COMP-FIELD-REF-MISSING`
+ * warning is raised.
+ */
 export type ReferenceLookup = (reference: EdgeReference) => boolean;
 /**
  * One lookup per pool array, built on first use and kept for the pool's lifetime, over language's `indexedResolver`:
@@ -190,7 +193,8 @@ function validateFields(record: CompiledRecord, schema: SchemaDeclaration, add: 
         sections[0]?.span ?? record.source,
         `@schema ${schema.name} requires '${rule.section}.${rule.key}'`,
       );
-    // D3: a declared non-list key is exactly one field; `list of T` is the only type a key may carry more than once. One finding per rule, at the second occurrence.
+    // C04: a declared non-list key is exactly one field; `list of T` is the only type a key may carry more than once.
+    // One finding per rule, at the second occurrence.
     else if (matches.length > 1 && !isListType(rule.type))
       add(
         'IA-COMP-FIELD-DUPLICATE',
@@ -213,12 +217,12 @@ function validateFields(record: CompiledRecord, schema: SchemaDeclaration, add: 
 }
 
 /**
- * C05's one exception (lane D, operator ruling 2026-10-12): a record whose word is `mandate` (agent-system registers
- * it, as the runtime's mandate resolver reads it) and whose schema declares `authority.moves`, as agent-system's does
- * (`list of id`), states its moves as one or more kernel moves in the agent-system design, while the dialect has no
- * non-empty list constraint. So a stated empty `authority.moves` is IA-COMP-FIELD-VALUE at the field, each occurrence on
- * its own; an absent one stays valid and restricts no move. Keyed to another system's word as COMP-STEWARD keys the
- * steward to agent-system's `agent` (`systems.ts`, `validateSystems`; review D-N7).
+ * C05's one exception (2026-10-12): a record whose word is `mandate` (agent-system registers it, as the runtime's
+ * mandate resolver reads it) and whose schema declares `authority.moves`, as agent-system's does (`list of id`), states
+ * its moves as one or more kernel moves, while the dialect has no non-empty list constraint. So a stated empty
+ * `authority.moves` is IA-COMP-FIELD-VALUE at the field, each occurrence on its own; an absent one stays valid and
+ * restricts no move. Keyed to another system's word as COMP-STEWARD keys the steward to agent-system's `agent`
+ * (`systems.ts`, `validateSystems`).
  */
 function validateMandateMoves(record: CompiledRecord, rule: SchemaField, field: CompiledField, add: Add): void {
   if (record.discriminator !== 'mandate' || rule.section !== 'authority' || rule.key !== 'moves') return;
@@ -231,9 +235,9 @@ function validateMandateMoves(record: CompiledRecord, rule: SchemaField, field: 
 }
 
 /**
- * D1 (W0-L4, work-system design O-6, 2026-09-25): under `closed`, a declared body section admits only the keys the schema
- * declares for it; every other ordinary field is `IA-COMP-FIELD-UNKNOWN` at its own span, nested children folded into
- * their block's one finding. An ordinary field is a compiled field the compiler left as a field. It is not one when:
+ * C04b: under `closed`, a declared body section admits only the keys the schema declares for it; every other ordinary
+ * field is `IA-COMP-FIELD-UNKNOWN` at its own span, nested children folded into their block's one finding. An ordinary
+ * field is a compiled field the compiler left as a field. It is not one when:
  *  - its section is floor grammar (`relationships` lower to edges, `cognition` to cells, `activation` to selectors),
  *    which the language reads and refuses itself;
  *  - the compiler consumed it as a semantic product: a governance variant clause (its span is one of `record.variants`;

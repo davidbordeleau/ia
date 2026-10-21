@@ -199,6 +199,59 @@ it('preserves named lower-layer errors and guards privileged reports and foreign
     other.close();
   }
 });
+// The MCP door parses each stdin line as JSON and hands the tool arguments to Door.request as its params; a door
+// coordinate reaches graph validateCoordinate directly (traverse) and through prepareCoordinate (context and select).
+const parsed = (text: string): Record<string, unknown> => JSON.parse(text) as Record<string, unknown>;
+const axes = 'shape, category, phase, primitive, move, kind, lane, predicate, artifact-set, severity, provenance';
+it('refuses a parsed prototype key as an unknown axis on the door coordinate paths', () => {
+  const door = new Door(workspace(), { cache: false });
+  try {
+    expect(
+      door.request({ operation: 'traverse', params: parsed('{"start":[],"coordinate":{"phase":"act"}}') }),
+    ).toMatchObject({ ok: true, result: { nodes: [] } });
+    for (const name of ['__proto__', 'constructor', 'toString']) {
+      const coordinate = `{"${name}":"act"}`,
+        message = `Unknown coordinate axis '${name}'; admitted: ${axes}`;
+      for (const [operation, params] of [
+        ['traverse', `{"start":[],"coordinate":${coordinate}}`],
+        ['context', `{"text":"","coordinate":${coordinate}}`],
+        ['select', `{"text":"","candidates":["x"],"coordinate":${coordinate}}`],
+      ] as const)
+        expect(door.request({ operation, params: parsed(params) })).toEqual({
+          ok: false,
+          code: 'IA-GRAPH-COORDINATE-VALUE-UNKNOWN',
+          message,
+        });
+    }
+  } finally {
+    door.close();
+  }
+});
+it('refuses a parsed value String() cannot render as an unknown value on the door phase paths', () => {
+  const door = new Door(workspace(), { cache: false });
+  try {
+    const value = '{"toString":1}',
+      refusal = {
+        ok: false,
+        code: 'IA-GRAPH-COORDINATE-VALUE-UNKNOWN',
+        message: "Unknown phase value '<unprintable>'; admitted: orient, plan, act, learn",
+      };
+    for (const [operation, params] of [
+      ['traverse', `{"start":[],"coordinate":{"phase":${value}}}`],
+      ['context', `{"text":"","coordinate":{"phase":${value}}}`],
+      ['select', `{"text":"","candidates":["x"],"coordinate":{"phase":${value}}}`],
+      ['scope', `{"phase":${value}}`],
+      ['get', `{"identity":"x","phase":${value}}`],
+      ['records', `{"phase":${value}}`],
+      ['resolve', `{"reference":{"kind":"identity","identity":"x"},"phase":${value}}`],
+      ['search', `{"text":"x","phase":${value}}`],
+      ['traverse', `{"start":[],"phase":${value}}`],
+    ] as const)
+      expect(door.request({ operation, params: parsed(params) })).toEqual(refusal);
+  } finally {
+    door.close();
+  }
+});
 it('preserves the published 1.2.0 get and records shape, including spelling but without digest or membership', () => {
   const root = workspace(),
     door = new Door(root, { cache: false }),
@@ -246,7 +299,7 @@ const propertiesOf = (name: string): Record<string, unknown> =>
       properties: Record<string, unknown>;
     }
   ).properties;
-// spec-0012 DRF-01: the description names exactly what the Door admits; the Door, not the table, is the authority.
+// The machine protocol description names exactly what the Door admits; the Door, not the table, is the authority.
 it('describes exactly the operations and parameters the Door admits', () => {
   const door = new Door(workspace(), { cache: false, allowReport: true });
   try {
@@ -283,8 +336,8 @@ it('describes exactly the operations and parameters the Door admits', () => {
   } finally {
     door.close();
   }
-  // A door serving version 1, as the CLI's machine routes do (plan amendment A2), names exactly the version 1 rows, and
-  // refuses a later version's operation before reading its parameters, with the bytes of 1.1.0's unknown operation.
+  // A door serving version 1, as the CLI's machine routes do, names exactly the version 1 rows, and refuses a later
+  // version's operation before reading its parameters, with the bytes of 1.1.0's unknown operation.
   const routes = new Door(workspace(), { cache: false, allowReport: true, protocol: 1 });
   try {
     const unknown = routes.request({ operation: 'unlisted' });
@@ -310,12 +363,13 @@ it('describes exactly the operations and parameters the Door admits', () => {
 }, 30_000);
 
 /**
- * spec-0012 VER-01: the parameter digest each description version carries, over the operations that version describes:
- * version 1's nine, frozen, and every later version's over its own rows and the rows before it.
+ * The parameter digest each description version carries, over the operations that version describes: version 1's
+ * nine, frozen, and every later version's over its own rows and the rows before it.
  */
 const PARAMS_DIGESTS: Readonly<Record<number, string>> = {
   1: 'b92e71f8d59eadd34034974eb77cdc868ccd33b34a6c3c73fe2b2999707f7206',
   2: '09cfa22896d7f1738bc0aa339991fe24a6b87e1c8a902dbb56b96c24fb8412c0',
+  3: '3163b418c8d24bed0ceebbac18c66660e1cd5871e727f1e7ca5f2e82ac51eb42',
 };
 it("bumps the protocol description version whenever an operation's parameters change", () => {
   const strip = (value: unknown): unknown =>
@@ -349,9 +403,9 @@ it("bumps the protocol description version whenever an operation's parameters ch
   expect(Math.max(...Object.keys(PARAMS_DIGESTS).map(Number))).toBe(MACHINE_PROTOCOL.version);
 });
 
-// The operator's additive constraint (plan amendment A2): a later version appends rows, so the nine version 1 rows keep
-// the bytes 1.1.0 exported. The golden holds the rows as tag v1.1.0 exports them: it was written from a build whose
-// src/machine-protocol.ts was the tag's, unchanged, and whose dist/machine-protocol.js was the published 1.1.0 file's.
+// Versions append rows or revise later rows' parameters; the nine version 1 rows keep the bytes 1.1.0 exported. The
+// golden holds the rows as tag v1.1.0 exports them: it was written from a build whose src/machine-protocol.ts was the
+// tag's, unchanged, and whose dist/machine-protocol.js was the published 1.1.0 file's.
 it('keeps the nine version 1 rows byte-identical to 1.1.0 and marks each later row with its version', () => {
   const golden = readFileSync(resolve(import.meta.dirname, 'golden/machine-protocol-v1.json'), 'utf8'),
     rows = MACHINE_PROTOCOL.operations;
@@ -365,7 +419,10 @@ it('keeps the nine version 1 rows byte-identical to 1.1.0 and marks each later r
       (version, index) => version >= 2 && version <= MACHINE_PROTOCOL.version && version >= (since[index - 1] ?? 2),
     ),
   ).toBe(true);
-  expect(since.at(-1)).toBe(MACHINE_PROTOCOL.version);
+  const revisions = rows.flatMap((operation) => (operation.paramsSince === undefined ? [] : [operation.paramsSince]));
+  for (const operation of rows)
+    if (operation.paramsSince !== undefined) expect(operation.paramsSince).toBeGreaterThan(operation.since ?? 1);
+  expect(Math.max(...since, ...revisions)).toBe(MACHINE_PROTOCOL.version);
 });
 
 // Existing routes retain the published 1.2.0 responses at protocol 1 and 2, including authored edge spelling.
@@ -411,16 +468,19 @@ const estimatedAsAnswered = (response: unknown, label: string): void => {
   const packet = (response as { result: Parameters<typeof envelopeBytes>[0] }).result;
   expect(packet.limits.envelopeBytes, label).toBe(envelopeBytes(packet));
 };
-it('answers the nine version 1 examples with the key paths 1.2.0 answers them with, at protocol 1 and 2 alike', () => {
+it('answers the nine version 1 examples with the key paths 1.2.0 answers them with, at every supported protocol', () => {
   const root = workspace(),
-    doors = [1, 2].map((protocol) => new Door(root, { cache: false, allowReport: true, protocol }));
+    doors = Array.from(
+      { length: MACHINE_PROTOCOL.version },
+      (_, index) => new Door(root, { cache: false, allowReport: true, protocol: index + 1 }),
+    );
   try {
     const rows = MACHINE_PROTOCOL.operations.filter((operation) => operation.since === undefined);
     expect(Object.keys(V1_WIRE.examples)).toEqual(rows.map((row) => row.name));
     for (const row of rows) {
       const responses = doors.map((door) => door.request({ operation: row.name, params: row.example })),
-        [one, two] = responses.map(wire);
-      expect(two, row.name).toBe(one);
+        [one, ...rest] = responses.map(wire);
+      for (const response of rest) expect(response, row.name).toBe(one);
       expect([...keyPaths(JSON.parse(one!))].sort(), row.name).toEqual(V1_WIRE.examples[row.name]);
       withoutRecordDigest(one!, row.name);
       if (row.name === 'context') for (const response of responses) estimatedAsAnswered(response, row.name);
@@ -429,7 +489,7 @@ it('answers the nine version 1 examples with the key paths 1.2.0 answers them wi
     for (const door of doors) door.close();
   }
 });
-it('answers gated and dangling edges and each refusal as 1.2.0 does, byte for byte, at protocol 1 and 2 alike', () => {
+it('answers gated and dangling edges and each refusal as 1.2.0 does, byte for byte, at every supported protocol', () => {
   const root = workspace(),
     rule = resolve(root, '.ia/src/systems/governance-system/records/sample-rule.ia'),
     enforced = '    enforced-by @check instance-schema-check when phase is act and severity is blocking\n';
@@ -440,7 +500,10 @@ it('answers gated and dangling edges and each refusal as 1.2.0 does, byte for by
     '.ia/src/systems/governance-system/records/sample-rule.ia',
     text.replace(enforced, `${enforced}    enforced-by @check absent-check\n`),
   );
-  const doors = [1, 2].map((protocol) => new Door(root, { cache: false, allowReport: true, protocol }));
+  const doors = Array.from(
+    { length: MACHINE_PROTOCOL.version },
+    (_, index) => new Door(root, { cache: false, allowReport: true, protocol: index + 1 }),
+  );
   try {
     for (const { operation, params, answer } of V1_WIRE.answers) {
       const label = `${operation} ${JSON.stringify(params)}`;
@@ -456,8 +519,8 @@ it('answers gated and dangling edges and each refusal as 1.2.0 does, byte for by
     for (const { operation, params, paths } of V1_WIRE.shapes) {
       const label = `${operation} ${JSON.stringify(params)}`,
         responses = doors.map((door) => door.request({ operation, params })),
-        [one, two] = responses.map(wire);
-      expect(two, label).toBe(one);
+        [one, ...rest] = responses.map(wire);
+      for (const response of rest) expect(response, label).toBe(one);
       expect([...keyPaths(JSON.parse(one!))].sort(), label).toEqual(paths);
       withoutRecordDigest(one!, label);
       for (const response of responses) estimatedAsAnswered(response, label);

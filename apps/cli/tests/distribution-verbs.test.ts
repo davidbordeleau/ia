@@ -3,7 +3,7 @@
  *
  * The package installed here is packed from the committed loop fixture by this file, so every digest, version and
  * plan in these assertions is one the mechanisms produced rather than one written down. The one stubbed thing is
- * the transport: §2.8's class 4 cannot be reached without a remote that fails, and a test that reached a real host
+ * the transport: §3's class 4 cannot be reached without a remote that fails, and a test that reached a real host
  * would be a test of the network.
  */
 import {
@@ -109,7 +109,7 @@ it('does not apply when cancellation arrives with a confirmation answer', async 
     },
     [],
   );
-  // Design row 27: the interruption names the invocation to run again, as it was typed.
+  // The one next command: the interruption names the invocation to run again, as it was typed.
   expect(result).toEqual({
     exitCode: 130,
     stdout: '',
@@ -141,7 +141,7 @@ it('packs a reviewable archive, prints its integrity values and refuses to repla
   const again = await run(['pack', '--root', root, '--descriptor', '.ia/work/descriptor.json']);
   expect(again.exitCode).toBe(3);
   expect(again.stderr).toContain('IA-DIST-LOCAL-MODIFICATION');
-  // Design row 27: the one command is this pack again with --force, every argument it was given included.
+  // The one next command is this pack again with --force, every argument it was given included.
   expect(again.stderr.replace(/\s+/g, ' ')).toContain(
     `Run "ia pack --descriptor .ia/work/descriptor.json --force --root ${quote(root)}" to overwrite it.`,
   );
@@ -230,8 +230,9 @@ it('opens a --root reached through a link at its real path for every verb, and s
 });
 
 it('discovers a workspace from a cwd inside a link and opens it at its real path, as a --root through the link opens', async () => {
-  // Windows keeps a junction's spelling in the cwd (POSIX getcwd resolves links), and the §8.1 session hook runs doctor from the
-  // project directory without --root, so the discovered root must not be refused as a link.
+  // Windows keeps a junction's spelling in the cwd (POSIX getcwd resolves links), and the session hook of host plugin
+  // distribution spec §8.2 runs doctor from the project directory without --root, so the discovered root must not be
+  // refused as a link.
   const root = packable(),
     linked = resolve(scratch('linked-cwd'), 'linked');
   symlinkSync(root, linked, 'junction');
@@ -301,7 +302,7 @@ it('plans and applies an installation, an update, a restore and a removal throug
   ]);
   expect(saved.exitCode).toBe(0);
   expect(existsSync(resolve(root, '.ia/work/install-plan.json'))).toBe(true);
-  // §2.8: a saved plan must be a new file, which is the same newness rule the 1.x `ia compile` met.
+  // A saved plan must be a new file, which is the same newness rule the 1.x `ia compile` met.
   const twice = await run([
     'install',
     `${ID}@^0.1.0`,
@@ -370,7 +371,7 @@ it('asks one question before applying on a terminal and does exactly what the an
   const args = ['install', `${ID}@^0.1.0`, '--root', root, '--catalog', '.ia/work/catalog.json', '--apply'];
   const lock = resolve(root, '.ia/distributions.lock.json');
 
-  // §2.8 rule 3: the question shows the change summary, and the summary is the preview's own change table.
+  // §2.0: the question shows the change summary, and the summary is the preview's own change table.
   const declined: string[] = [];
   const no = await run(args, { interactive: true, answers: ['n'], prompts: declined });
   expect(no.exitCode).toBe(0);
@@ -429,7 +430,8 @@ it('refuses an --apply whose question could not be asked, and skips the question
   expect(machine.exitCode).toBe(2);
   expect(JSON.parse(machine.stdout)).toMatchObject({ version: 1, ok: false, code: 'IA-CLI-USAGE', exit: 2 });
   expect(JSON.parse(machine.stdout).message).toContain('--apply --json requires --yes');
-  // Both halves of rule 3 refuse at parse time, so neither reached a workspace read or an installation write.
+  // Both halves of §2.0's confirmation rule refuse at parse time, so neither reached a workspace read or an
+  // installation write.
   expect(existsSync(resolve(root, '.ia/distributions'))).toBe(false);
 
   // `--yes` skips the question entirely, on a terminal as well as off one; nothing is written to the interaction.
@@ -442,8 +444,8 @@ it('refuses an --apply whose question could not be asked, and skips the question
 
 it('refuses without a confirmation and without an existing installation', async () => {
   const { root } = await catalogued();
-  // §2.8: both checks are class 2 and run at parse time, so nothing was read and nothing was written. A command with
-  // no source flag resolves from registries (registry spec §6.1); registry.test.ts covers that route and its refusals.
+  // §2.0: both checks are class 2 and run at parse time, so nothing was read and nothing was written. A command with
+  // no source flag resolves from registries (registry spec); registry.test.ts covers that route and its refusals.
   const unconfirmed = await run(['install', ID, '--root', root, '--catalog', '.ia/work/catalog.json', '--apply']);
   expect(unconfirmed.exitCode).toBe(2);
   expect(unconfirmed.stderr).toContain('--apply without a terminal requires --yes');
@@ -457,7 +459,7 @@ it('refuses without a confirmation and without an existing installation', async 
     expect(absent.stderr).toContain('IA-DIST-INPUT-INVALID');
     expect(absent.stderr).toContain('existing installation');
   }
-  // §2.8–2.11: `remove` reads only the current lock, so it can refuse but can never reach class 4.
+  // Registry spec §6.5: `remove` reads only the current lock, so it can refuse but can never reach class 4.
   const nothing = await run(['remove', ID, '--root', root]);
   expect(nothing.exitCode).toBe(3);
   expect(nothing.stderr).toContain('IA-DIST-INPUT-INVALID');
@@ -466,7 +468,7 @@ it('refuses without a confirmation and without an existing installation', async 
 });
 
 it('keeps the 1.x collectPlan request form of @inventarch/cli/internal/distribute, its remedies spelled from the request', async () => {
-  // Decision release-bump: a request without `reruns` (the 1.x PlanRequest) refuses with the service's code, not a
+  // A request without `reruns` (the 1.x PlanRequest) refuses with the service's code, not a
   // TypeError, and its next action is spelled from the request's own fields.
   const { root } = await catalogued();
   const request = {
@@ -500,7 +502,8 @@ it('separates an unreachable artifact from a refusal by exit class', async () =>
   const url = `https://dist.example.invalid/artifacts/${digest}.ia.tgz`;
   writeFileSync(resolve(root, '.ia/work/catalog.json'), JSON.stringify([{ url, digest, withdrawn: false }]) + '\n');
 
-  // §2.8: an offline run never reaches the network, so a cache miss is a refusal and not an acquisition failure.
+  // Registry spec §5.4: an offline run never reaches the network, so a cache miss is a refusal and not an
+  // acquisition failure.
   const offline = await run([
     'install',
     `${ID}@^0.1.0`,
@@ -525,7 +528,7 @@ it('separates an unreachable artifact from a refusal by exit class', async () =>
     (await run(['install', `${ID}@^0.1.0`, '--root', root, '--catalog', '.ia/work/catalog.json', '--json'])).stdout,
   );
   expect(machine).toMatchObject({ version: 1, ok: false, code: 'IA-DIST-ARTIFACT-UNAVAILABLE', exit: 4 });
-  // The catalog route's remedy is the retry of this invocation, the catalog it resolves from included (design row 27).
+  // The catalog route's remedy is the retry of this invocation, the catalog it resolves from included.
   expect(machine.next).toBe(
     `Retry "ia install ${ID}@^0.1.0 --catalog .ia/work/catalog.json --root ${quote(root)}" when the host is reachable.`,
   );
@@ -572,7 +575,7 @@ it('doctor --host: codex gets plain commands, and a --root with no workspace abo
     status: 'info',
     detail: 'None recorded',
   });
-  // Contract §3: a host outside the closed set is usage.
+  // Contract §2.0: a host outside the closed set is usage.
   expect((await run(['doctor', '--host', 'vim', '--json'], { env })).exitCode).toBe(2);
 });
 
@@ -583,7 +586,7 @@ it('doctor reports a recorded decline and the briefing reminds once', async () =
     0,
   );
   const report = JSON.parse((await run(['doctor', '--host', 'claude', '--json'], { env, cwd: project })).stdout);
-  // The user's local calendar date, as the declined-today expiry is (§9.1).
+  // The user's local calendar date, as the declined-today expiry is.
   const today = new Date().toLocaleDateString('en-CA');
   expect(report.checks.find((check: { id: string }) => check.id === 'workspace-decision')).toMatchObject({
     status: 'info',
@@ -606,7 +609,7 @@ it('doctor never creates the IA home', async () => {
     expect(result.exitCode, argv.join(' ')).toBe(0);
     expect(existsSync(resolve(home, '..')), argv.join(' ')).toBe(false);
   }
-  // A due refresh is only named (Amendment item 4): the vector is returned, never run, so the home is still absent.
+  // A due refresh is only named: the vector is returned, never run, so the home is still absent.
   const report = JSON.parse(
     (
       await run(['doctor', '--host', 'claude', '--json'], {
@@ -619,7 +622,7 @@ it('doctor never creates the IA home', async () => {
   expect(existsSync(resolve(home, '..'))).toBe(false);
 });
 
-// ---- Host plugin distribution spec §11: the cached update check and local compatibility ---------------------------
+// ---- Host plugin distribution spec §11 and §7.3: the cached update check and local compatibility -------------------
 
 type Report = {
   checks: { id: string; status: string; detail: string; remedy: string | null }[];

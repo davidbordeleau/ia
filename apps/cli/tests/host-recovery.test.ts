@@ -169,7 +169,7 @@ it('reports each pending host journal as a failure naming its own recovery', asy
 });
 
 /**
- * §10 item 8 at the CLI: an interruption at each sub-transaction boundary, then the rerun, ends byte for byte where an
+ * §6 at the CLI: an interruption at each sub-transaction boundary, then the rerun, ends byte for byte where an
  * uninterrupted apply ends. The reference is taken in the same workspace, because every owned entry embeds the root.
  */
 it('converges byte for byte after an interruption at each apply and removal boundary', async () => {
@@ -300,7 +300,7 @@ it('replays the printed guard remedy through the emitted ia entry and finishes t
   expect(JSON.parse(read(root, RECEIPT))).toMatchObject({ guard: 'retired', removed: [{ path: STEWARD }] });
 });
 
-it('leaves no join, or the previous one, when an apply is interrupted before it completes (B-N1)', async () => {
+it('leaves no join, or the previous one, when an apply is interrupted before it completes', async () => {
   const JOINS = '.ia/distributions/hosts/joins.json';
   const { root, env } = await initialized();
   // A first apply cut after either element records no join: the join is recorded only once every element is applied.
@@ -331,7 +331,7 @@ it('leaves no join, or the previous one, when an apply is interrupted before it 
   expect(current.consumerRevision).toBe(JSON.parse(read(root, RECEIPT)).revision);
 });
 
-it('refuses receipts it cannot read before writing anything, and the deletion it names converges (B-N1)', async () => {
+it('refuses receipts it cannot read before writing anything, and the deletion it names converges', async () => {
   const JOINS = '.ia/distributions/hosts/joins.json';
   const { root, env } = await initialized();
   put(root, JOINS, '{broken');

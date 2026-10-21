@@ -6,7 +6,6 @@ import {
   openSync,
   readSync,
   readdirSync,
-  readFileSync,
   realpathSync,
   type BigIntStats,
 } from 'node:fs';
@@ -63,7 +62,7 @@ function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 /**
- * Rules key names with db `pathKey`: case on win32; normalization and full case folding on darwin (#315, #323). It folds
+ * Rules key names with db `pathKey`: case on win32; normalization and full case folding on darwin. It folds
  * by platform, whatever the volume, so on a case-sensitive directory there a sibling spelled in another case matches too.
  */
 const fold = pathKey;
@@ -98,7 +97,7 @@ function installation(path: string): boolean {
 }
 /**
  * The projection list written for this repository; in a consumer workspace only its owned subset stays protected. The
- * position packet's files (milestone position-packet): `CLAUDE.md` and both `ia-authoring` skills here, and a consumer's
+ * position packet's files: `CLAUDE.md` and both `ia-authoring` skills here, and a consumer's
  * `.claude/rules/ia-workspace.md`, `AGENTS.md` and skills; its receipt sits under `.ia/distributions/`.
  */
 function projectionCandidate(path: string): boolean {
@@ -114,7 +113,7 @@ function projectionCandidate(path: string): boolean {
   );
 }
 /**
- * B9: a 1.x per-system steward file. No projection writes one any more, so one stays protected only until it is removed:
+ * A 1.x per-system steward file. No projection writes one any more, so one stays protected only until it is removed:
  * in a consumer workspace while its projection state lists it, and elsewhere while it carries a 1.x renderer's marker,
  * which `pnpm projections:generate` or the next projection apply deletes. Any other agent file is the user's.
  */
@@ -172,13 +171,16 @@ function legacySteward(target: string): boolean {
     closeSync(fd);
   }
 }
+/** The bound of an ownership state, the actor map and a context ownership marker other than a pending journal. */
+const STATE_LIMIT = 1024 * 1024;
 /**
- * The bytes of the ownership state at the absolute `path`, or undefined when there is none. A state must be a plain,
- * unaliased, single-link file within 1 MiB. It is opened before it is judged, so the checks and the read are of one
- * file (CodeQL js/file-system-race), and it must still be that file after the read. Anything else throws `unsafe`, and
- * the caller fails closed.
+ * The bytes of the ownership state, context ownership marker or actor map at the absolute `path`, or undefined when there
+ * is none. It must be a plain, unaliased, single-link file within `limit` bytes. It is opened before it is judged, so the
+ * checks and the read are of one file (CodeQL js/file-system-race), and it must still be that file after the read.
+ * Anything else throws `unsafe`, and the caller fails closed; an open that fails other than for a missing file throws its
+ * own error.
  */
-function readState(path: string, unsafe: string): Buffer | undefined {
+function readState(path: string, unsafe: string, limit = STATE_LIMIT): Buffer | undefined {
   let fd: number;
   try {
     fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
@@ -187,8 +189,7 @@ function readState(path: string, unsafe: string): Buffer | undefined {
     throw error;
   }
   try {
-    const stat = fstatSync(fd, { bigint: true }),
-      limit = 1024 * 1024;
+    const stat = fstatSync(fd, { bigint: true });
     const same = (value: BigIntStats): boolean =>
       value.isFile() &&
       value.nlink === 1n &&
@@ -204,7 +205,8 @@ function readState(path: string, unsafe: string): Buffer | undefined {
       !unaliased(path, physical(path))
     )
       throw new Error(unsafe);
-    const content = Buffer.alloc(limit + 1);
+    // The opened size plus one byte: growth during the read shows, and nothing past the bound is ever read.
+    const content = Buffer.alloc(Number(stat.size) + 1);
     let size = 0;
     for (;;) {
       const count = readSync(fd, content, size, content.length - size, null);
@@ -221,6 +223,22 @@ function readState(path: string, unsafe: string): Buffer | undefined {
     return content.subarray(0, size);
   } finally {
     closeSync(fd);
+  }
+}
+/**
+ * `readState` for a reader that refuses as `unsafe` whatever is not a plain single-link file within `limit` bytes, also
+ * when the open fails on it: a failed open has the name examined, so a link (`O_NOFOLLOW`), a socket or anything else
+ * the open refuses that is not such a file gets the refusal an opened one does. A failed open of such a file throws its
+ * own error, as before.
+ */
+function stateBytes(path: string, unsafe: string, limit = STATE_LIMIT): Buffer | undefined {
+  try {
+    return readState(path, unsafe, limit);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).syscall !== 'open') throw error;
+    const named = lstatSync(path, { bigint: true });
+    if (!named.isFile() || named.nlink !== 1n || named.size > BigInt(limit)) throw new Error(unsafe);
+    throw error;
   }
 }
 
@@ -266,16 +284,16 @@ function hostsArea(root: string): string | undefined {
 }
 /**
  * The same projection allowlist `@inventarch/distribution` validates a state against (projection.ts), so a state cannot
- * claim other paths: the packet's two files per host, the agents and skills authored generation writes (milestone
- * generation-binding: claude agents and skills, codex skills), and for claude a 1.x steward file a state still lists
- * until the next apply removes it (B9). The state format name is unchanged.
+ * claim other paths: the packet's two files per host, the agents and skills authored generation writes (claude agents
+ * and skills, codex skills), and for claude a 1.x steward file a state still lists until the next apply removes it. The
+ * state format name is unchanged.
  */
 const PROJECTION_OWNED: Readonly<Record<'claude' | 'codex', (path: string) => boolean>> = {
   claude: (path) =>
     path === '.claude/rules/ia-workspace.md' ||
     path === '.claude/skills/ia-authoring/SKILL.md' ||
     /^\.claude\/agents\/[a-z][a-z0-9-]*\.md$/.test(path) ||
-    // Milestone generation-binding: a generated skill (distribution's GENERATED_PATHS); a generated agent is the pattern above.
+    // A generated skill (distribution's GENERATED_PATHS); a generated agent is the pattern above.
     /^\.claude\/skills\/[a-z][a-z0-9-]*\/SKILL\.md$/.test(path),
   codex: (path) =>
     path === 'AGENTS.md' ||
@@ -346,7 +364,7 @@ function registeredSelection(root: string, hook: string): readonly string[] | un
       if (!object(row) || row['format'] !== 'ia.hook-registration-state.v1' || !Array.isArray(row['groups']))
         throw new Error('Invalid hook ownership state');
     } catch (error) {
-      // The state file that could not be read, root-relative, so a refusal can name its repair (review finding A-F3).
+      // The state file that could not be read, root-relative, so a refusal can name its repair.
       throw new UnreadableHookState(`.ia/distributions/hosts/${name}`, error);
     }
     for (const group of row['groups'] as unknown[])
@@ -397,19 +415,15 @@ function contextSettingsManaged(root: string, includeContext = true): GuardContr
       guardPending = fold(name) === 'guard-pending.json',
       hooks = /^claude-hooks-([a-z][a-z0-9-]{0,63})\.json$/.exec(fold(name));
     if (!guard && !guardPending && !hooks && (!includeContext || (!match && !pending))) continue;
-    const path = resolve(directory, name),
-      stat = lstatSync(path),
-      limit = pending || guardPending ? 8 * 1024 * 1024 : 1024 * 1024;
-    if (
-      name !== name.toLowerCase() ||
-      !stat.isFile() ||
-      stat.nlink !== 1 ||
-      stat.size > limit ||
-      !unaliased(path, physical(path))
-    )
-      throw new Error('Unsafe context ownership marker');
-    const content = readFileSync(path);
-    if (content.length > limit) throw new Error('Context ownership marker exceeds its bound');
+    // A marker is a plain, unaliased, single-link file of at most 1 MiB, or 8 MiB for a pending journal, read through
+    // the descriptor that judged it; one named in another case, or gone since the listing, is as unsafe.
+    if (name !== name.toLowerCase()) throw new Error('Unsafe context ownership marker');
+    const content = stateBytes(
+      resolve(directory, name),
+      'Unsafe context ownership marker',
+      pending || guardPending ? 8 * 1024 * 1024 : STATE_LIMIT,
+    );
+    if (content === undefined) throw new Error('Unsafe context ownership marker');
     const row: unknown = decodeDistributionJson(new TextDecoder('utf-8', { fatal: true }).decode(content));
     if (!object(row) || typeof row['id'] !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(row['id']))
       throw new Error('Invalid context ownership marker');
@@ -460,8 +474,8 @@ function contextSettingsManaged(root: string, includeContext = true): GuardContr
         }
       }
     } else if (hooks) {
-      // The `@hook` groups' ownership state (plan amendment C9): the settings that hold them, and the launcher they run,
-      // are managed as the retired guard's were.
+      // The `@hook` groups' ownership state: the settings that hold them, and the launcher they run, are managed as the
+      // retired guard's were.
       if (
         Object.keys(row)
           .filter((key) => key !== 'existing')
@@ -617,10 +631,9 @@ function sourceGuardRegistered(root: string): boolean {
 function actorMap(path: string, revision: string): ReadonlyMap<string, string> {
   if (!isAbsolute(path) || !unaliased(path, physical(path)))
     throw new Error('Actor map must be an absolute unaliased file');
-  const stat = lstatSync(path);
-  if (!stat.isFile() || stat.nlink !== 1 || stat.size > 1024 * 1024) throw new Error('Invalid actor map file');
-  const content = readFileSync(path);
-  if (content.length > 1024 * 1024) throw new Error('Actor map exceeds 1 MiB');
+  // A plain single-link file of at most 1 MiB, read through the descriptor that judged it; a missing map is as invalid.
+  const content = stateBytes(path, 'Invalid actor map file');
+  if (content === undefined) throw new Error('Invalid actor map file');
   const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(content));
   if (
     !object(value) ||
@@ -824,7 +837,7 @@ export function evaluateHook(root: string, event: unknown, actorsPath?: string):
 }
 /**
  * Whether the workspace admits; when it does not, whether what admission refused fails the mandate resolvers closed: an
- * authored `@mandate`, or a record an admitted mandate or workspace depends on (lane D, D2 and D9).
+ * authored `@mandate`, or a record an admitted mandate or workspace depends on.
  */
 type Admission = 'admits' | 'refuses' | 'mandate';
 /** The workspace's admission as `recovery` names it, read from an open database. */
@@ -835,13 +848,13 @@ const admissionOf = (db: ReturnType<typeof openDatabase>): Admission =>
       ? 'mandate'
       : 'refuses';
 /**
- * The commands that bring a registration whose hook or records cannot be read back in step, each runnable from a shell in
- * that very state (review findings G-R7, H-R2 and H-R8): removing the host registration, which restores editing and
- * needs neither an admitting workspace nor readable records; and, only where the workspace admits, re-registering its
- * current hooks, which removes a group whose record is gone. Where it does not admit, `ia validate` shows why; where an
- * authored `@mandate`, or a record a mandate resolution reads, failed admission, `ia validate` refuses like every
- * mandate-gated command (lane D), so the admission report, the version 1 machine route `ia report`, shows it instead,
- * its root spelled only when inert unquoted, else run from the workspace root (runtime `admissionReport`; review D-R1).
+ * The commands that bring a registration whose hook or records cannot be read back in step, each runnable from a shell
+ * in that very state: removing the host registration, which restores editing and needs neither an admitting workspace
+ * nor readable records; and, only where the workspace admits, re-registering its current hooks, which removes a group
+ * whose record is gone. Where it does not admit, `ia validate` shows why; where an authored `@mandate`, or a record a
+ * mandate resolution reads, failed admission, `ia validate` refuses like every mandate-gated command, so the admission
+ * report, the version 1 machine route `ia report`, shows it instead, its root spelled only when inert unquoted, else
+ * run from the workspace root (runtime `admissionReport`).
  */
 const rootCommand = (command: string, root: string, tail = ''): string =>
   inertCommandRoot(root)
@@ -858,17 +871,16 @@ const recovery = (root: string, admission: Admission): string => {
   return `run ${remove} from a shell to remove the registration and restore editing, and ${rootCommand('ia validate', root)} to see why the workspace does not admit before registering again`;
 };
 /**
- * The `@mandate` guard (milestone generation-binding, plan amendments C9 and C10): one authored `@hook`'s group runs
- * `guard --root <root> --hook <identity>` for every edit tool. The same input checks, path safety and managed-state
- * protection as the legacy guard run first, whatever tools the hook names, so no hook leaves the guard's own
- * registration, the installation state or the owned projection open (the retired steward rule is not one of them). Then
- * the admitted authored `@hook` the registration names is read as hook generation declares it, and runtime's
- * evaluateMandateGuard decides the edit: allowed unless the hook selects it (its paths select the file and its tools
- * name the tool) and the actor is unknown or holds no governing mandate that grants Synthesis there. A selected path
- * reached through an alias is refused. What cannot be read refuses with a code; nothing is allowed because something was
- * unreadable once the hook is known to select the edit. When the hook's record, or the workspace's records at all,
- * cannot be read, the registration refuses only the edits under the selection last registered for it, or every edit
- * under the root when none is recorded (review findings G-N4 and H-R8).
+ * The `@mandate` guard: one authored `@hook`'s group runs `guard --root <root> --hook <identity>` for every edit tool.
+ * The same input checks, path safety and managed-state protection as the legacy guard run first, whatever tools the
+ * hook names, so no hook leaves the guard's own registration, the installation state or the owned projection open (the
+ * retired steward rule is not one of them). Then the admitted authored `@hook` the registration names is read as hook
+ * generation declares it, and runtime's evaluateMandateGuard decides the edit: allowed unless the hook selects it (its
+ * paths select the file and its tools name the tool) and the actor is unknown or holds no governing mandate that grants
+ * Synthesis there. A selected path reached through an alias is refused. What cannot be read refuses with a code;
+ * nothing is allowed because something was unreadable once the hook is known to select the edit. When the hook's
+ * record, or the workspace's records at all, cannot be read, the registration refuses only the edits under the
+ * selection last registered for it, or every edit under the root when none is recorded.
  */
 export function evaluateMandateHook(root: string, hook: string, event: unknown): HookOutput {
   if (!editEvent(event)) return deny('IA-HOOK-INPUT-INVALID', 'Expected a PreToolUse file edit event');
@@ -890,8 +902,7 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
   );
   if (paths.length === 0) return {};
   // A file with more than one link has another name a hook may select, which the guard cannot find: the edit is refused
-  // wherever it is under the root rather than decided by the name it was typed with (guard review finding G-N3; a pnpm
-  // store link is such a file, H-N13).
+  // wherever it is under the root rather than decided by the name it was typed with (a pnpm store link is such a file).
   try {
     const linked = lstatSync(edit.actual, { throwIfNoEntry: false });
     if (linked !== undefined && linked.isFile() && linked.nlink > 1)
@@ -903,8 +914,8 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     return deny('IA-HOOK-PATH-UNSAFE', error instanceof Error ? error.message : String(error));
   }
   // What cannot be read refuses no more than the selection the hook was registered with, which the hook ownership state
-  // recorded (guard review finding G-N4, review finding H-R8): edits elsewhere, the repair among them unless that
-  // selection holds it, proceed. With no recorded selection, every edit under the root is refused.
+  // recorded: edits elsewhere, the repair among them unless that selection holds it, proceed. With no recorded
+  // selection, every edit under the root is refused.
   const unavailable = (code: HookCode, why: string, admission: Admission): HookOutput => {
     let selection: readonly string[] | undefined, unreadable: string | undefined;
     try {
@@ -924,8 +935,8 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
       })
     )
       return {};
-    // An unreadable state is one the removal refuses too: its repair, from a shell, is deleting the state and the groups
-    // it owns, which restores editing; the removal then takes the rest of the registration (review finding A-F3).
+    // An unreadable state is one the removal refuses too: its repair, from a shell, is deleting the state and the
+    // groups it owns, which restores editing; the removal then takes the rest of the registration.
     if (unreadable !== undefined)
       return deny(
         code,
@@ -949,7 +960,7 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
   }
   try {
     let within: string, nodes: ReturnType<typeof db.records>;
-    // Review D-R4: the admission is read first, so records that then cannot be read still name what runs there.
+    // The admission is read first, so records that then cannot be read still name what runs there.
     let admission: Admission = 'refuses';
     try {
       admission = admissionOf(db);
@@ -965,8 +976,8 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
       );
     }
     /**
-     * Review D-N1: a hook that cannot be decided while a record a mandate resolution reads failed admission (the hook in
-     * the refused mandate's own file, say) fails closed at that record, as a decided edit would.
+     * A hook that cannot be decided while a record a mandate resolution reads failed admission (the hook in the refused
+     * mandate's own file, say) fails closed at that record, as a decided edit would.
      */
     const undecided = (why: string): HookOutput => {
       try {
@@ -989,7 +1000,7 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
     } catch (error) {
       return undecided(message(error));
     }
-    // `root` spells the registration's root into a next command that cannot find it (`ia report`; lane D, D4).
+    // `root` spells the registration's root into a next command that cannot find it (`ia report`).
     const request = {
       hook: declaration,
       tool: event.tool_name,
@@ -1004,17 +1015,16 @@ export function evaluateMandateHook(root: string, hook: string, event: unknown):
       return deny('IA-HOOK-PATH-UNSAFE', 'Selected path has an aliased ancestor or target');
     const decision = evaluateMandateGuard(db, within, request);
     if (decision.allowed) return {};
-    // Guard review finding G-N1: a refusal of the main session names the shell command that lifts every hook, which
-    // needs neither an admitting workspace nor readable records (H-R2, H-R8); a subagent's refusal is the main
-    // session's to resolve.
+    // A refusal of the main session names the shell command that lifts every hook, which needs neither an admitting
+    // workspace nor readable records; a subagent's refusal is the main session's to resolve.
     const lift =
       event['agent_id'] === undefined
         ? `; the main session can lift every hook from a shell with ${rootCommand('ia host claude', edit.base, ' --remove --apply --yes')}`
         : '';
     return deny(decision.code!, decision.message + lift);
   } catch (error) {
-    // `ia validate` is mandate-gated and may refuse in the very state that failed here (lane D); the admission report,
-    // the version 1 machine route, never is. Its root is spelled only when inert unquoted (review D-R1, D-N2).
+    // `ia validate` is mandate-gated and may refuse in the very state that failed here; the admission report, the
+    // version 1 machine route, never is. Its root is spelled only when inert unquoted.
     const report = admissionReport(edit.base);
     return deny(
       'IA-HOOK-MANDATE-UNAVAILABLE',

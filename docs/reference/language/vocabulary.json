@@ -2,7 +2,7 @@
   "version": 1,
   "language": "ia 1.0",
   "status": "public IA 1.0 language contract",
-  "sourceDigest": "0fe164d3e7bb2e18a73c3ded06d9d47d6b4ac8ffe7951fb42d181a633d025f3e",
+  "sourceDigest": "6b36475d89b787e364c44ad5b8ba479b19787990c9fdb1d93a72af8b825c993a",
   "words": [
     {
       "word": "agent",
@@ -86,6 +86,14 @@
           {
             "name": "execution",
             "required": true
+          },
+          {
+            "name": "invocation",
+            "required": false
+          },
+          {
+            "name": "presentation",
+            "required": false
           },
           {
             "name": "relationships",
@@ -186,6 +194,39 @@
           {
             "path": "execution.limit-duration-ms",
             "type": "number",
+            "required": false
+          },
+          {
+            "path": "invocation.mode",
+            "type": "id",
+            "required": false,
+            "values": [
+              "model",
+              "user",
+              "delegated",
+              "none"
+            ]
+          },
+          {
+            "path": "invocation.use-when",
+            "type": "text",
+            "required": false,
+            "description": "When a host should hand work to this profile."
+          },
+          {
+            "path": "invocation.avoid-when",
+            "type": "text",
+            "required": false,
+            "description": "Work this profile must not take."
+          },
+          {
+            "path": "presentation.color",
+            "type": "id",
+            "required": false
+          },
+          {
+            "path": "execution.effort",
+            "type": "id",
             "required": false
           }
         ],
@@ -441,6 +482,10 @@
             "required": true
           },
           {
+            "name": "invocation",
+            "required": false
+          },
+          {
             "name": "relationships",
             "required": false
           }
@@ -550,6 +595,53 @@
             "path": "execution.limit-duration-ms",
             "type": "number",
             "required": false
+          },
+          {
+            "path": "invocation.mode",
+            "type": "id",
+            "required": false,
+            "values": [
+              "model",
+              "user",
+              "delegated",
+              "none"
+            ]
+          },
+          {
+            "path": "invocation.use-when",
+            "type": "text",
+            "required": false,
+            "description": "When a host should offer this capability, in the user's words."
+          },
+          {
+            "path": "invocation.triggers",
+            "type": "list of text",
+            "required": false,
+            "description": "Phrases that should select this capability."
+          },
+          {
+            "path": "invocation.avoid-when",
+            "type": "text",
+            "required": false,
+            "description": "Nearby requests this capability must not take."
+          },
+          {
+            "path": "invocation.argument-hint",
+            "type": "text",
+            "required": false,
+            "description": "The argument shape a user-invoked entry point shows."
+          },
+          {
+            "path": "invocation.paths",
+            "type": "list of text",
+            "required": false,
+            "description": "Path selections that make this capability relevant."
+          },
+          {
+            "path": "invocation.agent",
+            "type": "ref",
+            "required": false,
+            "description": "The agent a delegated invocation runs as."
           }
         ],
         "edges": []
@@ -1216,7 +1308,7 @@
         "distribution"
       ],
       "identity": "workspace-system/definition/<facet>/<name>",
-      "description": "Declares root records from which a distributable closure is selected.",
+      "description": "Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes.",
       "schema": {
         "name": "distribution",
         "path": ".ia/src/systems/workspace-system/schemas/distribution.schema.ia",
@@ -1229,6 +1321,10 @@
           {
             "name": "distribution",
             "required": true
+          },
+          {
+            "name": "product",
+            "required": false
           },
           {
             "name": "relationships",
@@ -1250,6 +1346,61 @@
             "path": "distribution.records",
             "type": "list of ref",
             "required": true
+          },
+          {
+            "path": "product.name",
+            "type": "id",
+            "required": false
+          },
+          {
+            "path": "product.display-name",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.version",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.description",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.author",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.license",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.keywords",
+            "type": "list of text",
+            "required": false
+          },
+          {
+            "path": "product.hosts",
+            "type": "list of id",
+            "required": false,
+            "values": [
+              "claude",
+              "codex",
+              "grok"
+            ]
+          },
+          {
+            "path": "product.short-description",
+            "type": "text",
+            "required": false
+          },
+          {
+            "path": "product.category",
+            "type": "text",
+            "required": false
           }
         ],
         "edges": []
@@ -2298,11 +2449,11 @@
         "edges": []
       },
       "kernelMembers": [
-        "delegation",
-        "execution",
-        "observation",
-        "synthesis",
-        "verification"
+        "Delegation",
+        "Execution",
+        "Observation",
+        "Synthesis",
+        "Verification"
       ],
       "consumer": "language/schema admission; graph resolution; explicitly selected domain consumer for stronger semantics"
     },
@@ -2882,7 +3033,7 @@
         "predicate"
       ],
       "identity": "taxonomy/definition/<facet>/<name>",
-      "description": "Defines a directed relationship and its inverse spelling.",
+      "description": "Defines a directed relationship, its inverse spelling and its present phrase.",
       "schema": {
         "name": "kernel-predicate",
         "path": ".ia/src/floor/kernel.schema.ia",
@@ -3000,12 +3151,12 @@
         "edges": []
       },
       "kernelMembers": [
-        "attention",
-        "decision",
-        "escalation",
-        "inference",
-        "learning",
-        "memory"
+        "Attention",
+        "Decision",
+        "Escalation",
+        "Inference",
+        "Learning",
+        "Memory"
       ],
       "consumer": "language/schema admission; graph resolution; explicitly selected domain consumer for stronger semantics"
     },
@@ -3097,7 +3248,7 @@
         "run"
       ],
       "identity": "session-system/definition/<facet>/<name>",
-      "description": "Represents a governed run identity, declared phase, status and owner. Declaration does not start execution.",
+      "description": "Represents a governed run identity, status, owner and declared phase when known. Declaration does not start execution.",
       "schema": {
         "name": "run",
         "path": ".ia/src/systems/session-system/schemas/run.schema.ia",
@@ -3135,7 +3286,8 @@
           {
             "path": "execution.phase",
             "type": "id",
-            "required": true
+            "required": false,
+            "description": "The declared phase, when known; omit it when unknown. Historical id values remain valid. A declaration does not prove engine state."
           },
           {
             "path": "execution.owner",
@@ -3478,7 +3630,7 @@
             "path": "work.exit-evidence",
             "type": "ref",
             "required": false,
-            "description": "The observation whose success verdict closes the task.",
+            "description": "An observation used to establish this task's exit evidence when its verdict is success and its subject revision matches the task's current digest; it does not change work.status.",
             "target": "observation"
           },
           {
@@ -3577,12 +3729,14 @@
           {
             "path": "template.parameters",
             "type": "list of id",
-            "required": true
+            "required": false,
+            "description": "The scalar renderer requires declared parameters; structured-v1 may omit this field or retain an empty list."
           },
           {
             "path": "template.lines",
             "type": "list of text",
-            "required": true
+            "required": false,
+            "description": "The scalar renderer requires content lines; structured-v1 may omit this field or retain an empty list."
           },
           {
             "path": "template.profile",

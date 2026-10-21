@@ -229,7 +229,7 @@ export function readAuthoringManifestFile(inputRoot: string): unknown {
       current = resolve(current, part);
       if (lstatSync(current).isSymbolicLink()) invalid('Authoring manifest crosses a filesystem alias');
     }
-    // Another case or normalization of the same names is not an alias (#315); the loop above has refused every link.
+    // Another case or normalization of the same names is not an alias; the loop above has refused every link.
     if (!unaliased(current, realpathSync.native(current))) invalid('Aliased authoring manifest');
     return current;
   };

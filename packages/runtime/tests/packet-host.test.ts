@@ -15,8 +15,7 @@ import type {
 } from '../src/index.js';
 import { database, freshInit } from './workspace.js';
 
-// R20 (position-and-projection §4, the host adapter contract, and items 11, 12 and 14; plan amendments B9, B10 and
-// B12): the claude and codex adapters render one position packet as files with the generated marker, and a receipt.
+// R20: the claude and codex adapters render one position packet as files with the generated marker, and a receipt.
 const repository = resolve(import.meta.dirname, '../../..'),
   version = (JSON.parse(readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8')) as { version: string })
     .version,
@@ -34,12 +33,12 @@ const PATHS: Readonly<Record<PacketHost, Readonly<Record<PacketTarget, readonly 
     consumer: ['AGENTS.md', '.agents/skills/ia-authoring/SKILL.md'],
   },
 };
-/** A catalog fixture: the runtime takes the catalog as data (B2), and the CLI pins its own rows. */
+/** A catalog fixture: the runtime takes the catalog as data, and the CLI pins its own rows. */
 const CATALOG: readonly PacketCatalogRow[] = [
   { command: 'ia position', mode: 'read', move: 'Observation', refuses: 'an unadmitted seat', next: 'ia position' },
   { command: 'ia next', mode: 'read', move: 'Observation', refuses: 'several plans', next: 'ia next --seat <plan>' },
 ];
-/** The consumer skill as compliance's retired renderWorkspaceProjection wrote it, its marker line aside (B10). */
+/** The consumer skill as compliance's retired renderWorkspaceProjection wrote it, its marker line aside. */
 const consumerSkill = (revision: string): string =>
   `---\nname: ia-authoring\ndescription: Author or review IA records in this workspace.\n---\n\n${PACKET_MARKER}\n\nSource revision: ${revision}\n\nFind a word and its schema with \`ia vocabulary <word> --schema\`. Check records with \`ia validate\`. Inspect an admitted record with \`ia inspect <identity>\`. Validation establishes conformance to the declared schemas, not design quality.\n`;
 /**
@@ -200,7 +199,7 @@ it('renders each host and target its entry file and ia-authoring skills, never a
 
 it("keeps each ia-authoring skill's text byte for byte, its marker line the new marker", () => {
   // The repository's skills are the files this repository commits, which `pnpm projections:generate` renders with
-  // this adapter since milestone position-packet task replace-renderers: the 1.x marker is gone from both.
+  // this adapter: the 1.x marker is gone from both.
   const own = packetOf(repository);
   for (const host of HOSTS)
     for (const file of render(own, host, 'repository').files.slice(1)) {
@@ -239,7 +238,7 @@ it("renders entryCount(packet) entries in the packet's field order, on a fresh i
       }
     expect(items(entryOf(output, 'claude', 'repository'), 'Systems').length, name).toBe(output.packet.systems.length);
   }
-  // This repository's packet names its one participant (plan task self-host-participant-records).
+  // This repository's packet names its one participant.
   const own = entryOf(outputs[1]![1], 'claude', 'repository');
   expect(items(own, 'Participants')).toEqual([
     '- `agent-system/binding/agent/language-participant`: The IDE agent operating in the language workspace, any vendor.',
@@ -459,6 +458,14 @@ it('renders each bare IA word token in free text as a code span, the packet and 
 });
 
 it("prints the host note's key as ia position prints it, and pads a code span a backtick touches", () => {
+  const explicit = renderHost(
+    'claude',
+    HAND,
+    digest(HAND),
+    { ...NOTE, key: { ...NOTE.key, primitive: 'Escalation' } },
+    'consumer',
+  );
+  expect(explicit.files[0]!.text).toContain('primitive Escalation');
   const key = (seat: NonNullable<PacketHostNote['key']['seat']>, word?: string): string =>
     renderHost(
       'claude',

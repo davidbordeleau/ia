@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { publicLanguageInputs } from './public-language.js';
 import { checkNative } from './check.js';
 import { fieldTypeText } from '../../packages/language/src/index.js';
 import { isEntry } from '../entry/is-entry.mjs';
+import { checkWrite } from '../shared/check-write.mjs';
+import { generationMode } from '../shared/args.mjs';
 
 export const descriptions: Readonly<Record<string, string>> = {
   system: 'Registers vocabulary, direct system dependencies, a local steward and consent for relationships.',
@@ -16,7 +16,7 @@ export const descriptions: Readonly<Record<string, string>> = {
   phase: 'Defines a cognitive phase coordinate: orient, plan, act or learn.',
   primitive: 'Defines a cognitive primitive coordinate; a cell is selected using its phase and primitive.',
   move: 'Defines the closed classification of an agent action or activity.',
-  predicate: 'Defines a directed relationship and its inverse spelling.',
+  predicate: 'Defines a directed relationship, its inverse spelling and its present phrase.',
   axis: 'Defines a closed coordinate axis for selection.',
   dimension: 'Defines a supported record dimension used by conditions and lookup.',
   'intent-shape': 'Defines a request framing and its retrieval defaults.',
@@ -33,13 +33,14 @@ export const descriptions: Readonly<Record<string, string>> = {
   case: 'Declares scenario inputs, expected behavior and evaluator attribution. A declaration is not an observed test result.',
   workspace:
     'Groups systems into an explicit work boundary; relationships can describe dependencies between boundaries. Its sources name the roots and placement bands its records are captured from, and its steward the agent that directs it by default.',
-  distribution: 'Declares root records from which a distributable closure is selected.',
+  distribution:
+    'Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes.',
   law: 'Declares a rule with severity. Structural admission cannot establish the truth or suitability of its prose.',
   principle: 'Declares a governing rationale in the shared governance shape.',
   convention: 'Declares a convention in the shared governance shape.',
   playbook:
     'Represents a procedure as phase/primitive cells. Cell delivery is generic; the authored method belongs to its author.',
-  run: 'Represents a governed run identity, declared phase, status and owner. Declaration does not start execution.',
+  run: 'Represents a governed run identity, status, owner and declared phase when known. Declaration does not start execution.',
   'authoring-guide': 'Associates a vocabulary owner and schema with an authoring reference and usage guidance.',
   operation:
     'Binds a declared operation to an implementation/input/output/effect contract; the host installs implementations.',
@@ -114,7 +115,8 @@ export function vocabulary(root: string, read?: (path: string) => string) {
           registration.system === 'taxonomy'
             ? corpus.records
                 .filter((r) => r.discriminator === registration.keyword)
-                .map((r) => r.name)
+                // The authored spelling: closed members such as `@move Synthesis` are matched case-sensitively.
+                .map((r) => r.displayName)
                 .sort()
             : [],
         consumer:
@@ -205,31 +207,40 @@ export function vocabularyOutputs(root: string, read?: (path: string) => string)
  */
 export const SHIPPED_CATALOGUE = 'apps/cli/assets/vocabulary.json';
 /**
- * The MCP door's `ia_vocabulary` tool serves the same catalogue (apps/mcp-door/SPEC.md M04c). The door imports
- * only @inventarch/runtime (M01) and does not depend on @inventarch/cli, so its package ships its own byte-identical copy under
- * this drift gate instead of reading another package's files.
+ * The MCP door's `ia_vocabulary` tool serves the same catalogue. The door imports only @inventarch/runtime and does
+ * not depend on @inventarch/cli, so its package ships its own byte-identical copy under this drift gate instead of
+ * reading another package's files.
  */
 export const DOOR_CATALOGUE = 'apps/mcp-door/assets/vocabulary.json';
 if (isEntry(process.argv[1], import.meta.url)) {
-  const mode = process.argv[2];
-  if (!['--write', '--check'].includes(mode ?? '') || process.argv.length !== 3)
-    throw new Error('Use --write or --check');
-  const root = fileURLToPath(new URL('../../', import.meta.url));
-  const outputs = vocabularyOutputs(root);
-  const targets: readonly (readonly [string, string])[] = [
-    ...Object.entries(outputs).map(([name, text]) => [`docs/reference/language/${name}`, text] as const),
-    [SHIPPED_CATALOGUE, outputs['vocabulary.json']],
-    [DOOR_CATALOGUE, outputs['vocabulary.json']],
-  ];
-  for (const [name, text] of targets) {
-    const path = resolve(root, name);
-    if (mode === '--write') {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, text);
-    } else if (!existsSync(path) || readFileSync(path, 'utf8').replace(/\r\n/g, '\n') !== text)
-      throw new Error(`Public vocabulary drift: ${name}`);
+  let mode: 'check' | 'write' | undefined;
+  try {
+    mode = generationMode(process.argv.slice(2), { defaultCheck: false });
+  } catch (error) {
+    console.error('Usage: public-vocabulary.ts --check|--write');
+    console.error(String(error));
+    process.exitCode = 2;
   }
-  console.log(
-    'Public vocabulary: 44 documented words; schema, reference projection and shipped CLI and door catalogues verified.',
-  );
+  if (mode)
+    try {
+      const root = fileURLToPath(new URL('../../', import.meta.url)),
+        outputs = vocabularyOutputs(root);
+      const targets = new Map([
+        ...Object.entries(outputs).map(([name, text]) => ['docs/reference/language/' + name, text] as const),
+        [SHIPPED_CATALOGUE, outputs['vocabulary.json']],
+        [DOOR_CATALOGUE, outputs['vocabulary.json']],
+      ]);
+      const compared = checkWrite(root, targets, { write: mode === 'write', normalizeNewlines: true });
+      if (mode === 'check' && compared.changed.length)
+        throw new Error('Public vocabulary drift: ' + compared.changed.join(', '));
+      const words = JSON.parse(outputs['vocabulary.json']).words.length;
+      console.log(
+        'Public vocabulary: ' +
+          words +
+          ' documented words; schema, reference projection and shipped CLI and door catalogues verified.',
+      );
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
 }

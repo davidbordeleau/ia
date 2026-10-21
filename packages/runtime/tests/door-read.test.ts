@@ -472,8 +472,9 @@ it('binds the mounts once, when the door opens, so a manifest rewritten later ch
   expect(() => door(root)).toThrow('IA-DB-SOURCE-UNAVAILABLE');
 });
 
-// spec-0012 DRF-02 for the version 2 row: its example reads the loop fixture, locator is required, and the refusal list
-// is proven both ways. apps/cli/tests/cli.test.ts proves the version 1 rows, which are the CLI's machine routes.
+// The read row of the machine protocol description: its example reads the loop fixture, locator is required, and the
+// refusal list is proven both ways. apps/cli/tests/cli.test.ts proves the version 1 rows, which are the CLI's machine
+// routes.
 it('holds the read row of the machine protocol table to the Door', () => {
   const row = MACHINE_PROTOCOL.operations.find((operation) => operation.name === 'read')!;
   expect(row).toMatchObject({ since: 2, mcp: 'ia_read' });

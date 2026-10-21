@@ -7,9 +7,8 @@ import { stableSerialize } from '../../packages/graph/src/index.js';
 import { open, readInputs } from '../../packages/db/src/index.js';
 import { generateProjections, renderProjections } from './generate.js';
 
-// The repository projection over a pinned adopted tree (milestone position-packet task replace-renderers): the packet
-// renders what the database admits, whatever its mount, and neither promotes a local contribution nor touches the
-// adopted source.
+// The repository projection over a pinned adopted tree: the packet renders what the database admits, whatever its
+// mount, and neither promotes a local contribution nor touches the adopted source.
 const root = resolve(import.meta.dirname, '../..'),
   temporary: string[] = [];
 function fixture(): string {
@@ -71,7 +70,7 @@ it('projects a real pinned adopted tree without promoting local methods or chang
     '.agents/skills/ia-authoring/SKILL.md',
   ]);
   const claude = files[0]!.text;
-  // No record body is part of the packet (design §4: K0 has n = 0), and no adopted or local source path is printed.
+  // No record body is part of the packet, and no adopted or local source path is printed.
   expect(claude).not.toContain('PROJECT-METHOD-SENTINEL');
   expect(claude).not.toContain(path);
   expect(claude).not.toContain('.ia/adopted/');

@@ -120,7 +120,7 @@ describe('instance field schemas', () => {
         .outcome,
     ).toBe('pass');
   });
-  describe('duplicated field keys (D3)', () => {
+  describe('duplicated field keys (C04)', () => {
     const open = (rule: string) => `  sections\n    open\n  fields\n    ${rule}`;
     it('refuses a second occurrence of a declared non-list key as IA-COMP-FIELD-DUPLICATE at that occurrence, once per rule', () => {
       const f = fixture('  data\n    title "one"\n    title "two"\n    title "three"');
@@ -210,7 +210,7 @@ describe('instance field schemas', () => {
       ]);
     });
   });
-  describe('undeclared keys in closed-schema sections (D1 / W0-L4)', () => {
+  describe('undeclared keys in closed-schema sections (C04b)', () => {
     const closed = (rules = '') =>
       `  sections\n    must have data\n    may have governance\n    may have relationships\n    closed\n  fields\n    must have data.title as text${rules}`;
     it('refuses an undeclared ordinary key in a declared section as IA-COMP-FIELD-UNKNOWN at that field', () => {
@@ -297,7 +297,7 @@ describe('instance field schemas', () => {
 describe('narrowed fields (W0)', () => {
   const open = (rule: string) => `  sections\n    open\n  fields\n    ${rule}`;
   const severities = (result: ReturnType<typeof validateSchema>) => result.findings.map((f) => [f.code, f.severity]);
-  describe('id in [...] (W0-L1)', () => {
+  describe('id in [...] (C04a)', () => {
     const rule = open('must have work.status as id in [todo, doing, done]');
     it('admits a member and refuses a non-member as IA-COMP-FIELD-VALUE naming the set', () => {
       expect(fixture('  work\n    status doing', rule).check().outcome).toBe('pass');
@@ -318,7 +318,7 @@ describe('narrowed fields (W0)', () => {
       expect(fixture('  work\n    status "doing"', rule).check().outcome).toBe('pass');
     });
   });
-  describe('ref to <word> (W0-L2)', () => {
+  describe('ref to <word> (C04a)', () => {
     const rule = open('must have work.parent as ref to entry');
     it('admits a resolved reference of the named word', () => {
       expect(fixture('  work\n    parent @entry target', rule, '@entry target').check()).toMatchObject({
@@ -384,7 +384,7 @@ describe('narrowed fields (W0)', () => {
       );
     });
   });
-  describe('text form iso-date (W0-L5)', () => {
+  describe('text form iso-date (C05)', () => {
     const rule = open('must have work.due as text form iso-date');
     it.each(['2026-09-25', '2024-02-29', '0001-01-01', '9999-12-31'])(
       'admits the calendar date %s bare or quoted',

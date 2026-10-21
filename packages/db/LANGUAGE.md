@@ -22,7 +22,7 @@ Spec source locators do not load documents. Resource capture and disclosure requ
 | @convention | governance-system | Declares a convention in the shared governance shape. |
 | @decision | work-system | Represents a choice that is needed or has been made: the question, options and decider, and once made, the choice and rationale. |
 | @dimension | taxonomy | Defines a supported record dimension used by conditions and lookup. |
-| @distribution | workspace-system | Declares root records from which a distributable closure is selected. |
+| @distribution | workspace-system | Declares root records from which a distributable closure is selected, and optionally the host plugin product it describes. |
 | @execution-binding | agent-composition-system | Connects a native target to a host-installed entry or operation descriptor. |
 | @harness | agent-composition-system | Composes profiles and execution bindings in a workspace under a host contract. |
 | @hook | hook-authoring-system | Represents a host event, tool/path selection and guard message. Registration and executing a guard require a host adapter. |
@@ -40,10 +40,10 @@ Spec source locators do not load documents. Resource capture and disclosure requ
 | @placement | taxonomy | Defines source authority and reach metadata. |
 | @plan | work-system | Represents an arrangement of milestones toward an intent; it heads the work hierarchy and has no parent. Plans do not nest. |
 | @playbook | governance-system | Represents a procedure as phase/primitive cells. Cell delivery is generic; the authored method belongs to its author. |
-| @predicate | taxonomy | Defines a directed relationship and its inverse spelling. |
+| @predicate | taxonomy | Defines a directed relationship, its inverse spelling and its present phrase. |
 | @primitive | taxonomy | Defines a cognitive primitive coordinate; a cell is selected using its phase and primitive. |
 | @principle | governance-system | Declares a governing rationale in the shared governance shape. |
-| @run | session-system | Represents a governed run identity, declared phase, status and owner. Declaration does not start execution. |
+| @run | session-system | Represents a governed run identity, status, owner and declared phase when known. Declaration does not start execution. |
 | @schema | floor | Declares the structural contract for exactly one registered discriminator. |
 | @spec | work-system | Represents a maintained specification with explicit status and at most one same-word supersession. Contents and document membership belong to its author; a source locator does not load a body or prove semantic quality. |
 | @system | floor | Registers vocabulary, direct system dependencies, a local steward and consent for relationships. |

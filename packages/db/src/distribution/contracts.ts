@@ -62,7 +62,7 @@ interface CommonRelease {
 export interface ReleaseDescriptor extends CommonRelease {
   /**
    * The native `@distribution` identity the release ships. Absent for a workspace that releases nothing, such as one a
-   * default `ia init` created (position-packet plan amendment B7); a pack of such a descriptor is refused.
+   * default `ia init` created; a pack of such a descriptor is refused.
    */
   readonly distribution?: string;
   readonly dependencies: readonly ExternalDependency[];
@@ -190,7 +190,7 @@ function publicAsset(path: string, role: unknown): boolean {
   );
 }
 export function decodeReleaseDescriptor(input: unknown): ReleaseDescriptor {
-  // Plan amendment B7: `distribution` is the one optional key; every other key stays exact.
+  // `distribution` is the one optional key; every other key stays exact.
   const value = data(input),
     named = value !== null && typeof value === 'object' && Object.hasOwn(value, 'distribution');
   const row = object(value, [...commonKeys.filter((key) => named || key !== 'distribution'), 'dependencies', 'assets']),

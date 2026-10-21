@@ -198,7 +198,7 @@ it('installs from a directory registry named by --registry, pins sha256 location
   expect(existsSync(join(root, '.ia/distributions.lock.json'))).toBe(true);
   expect(trapped).not.toHaveBeenCalled();
 
-  // §10.1: a repeat install is unchanged.
+  // A repeat install is unchanged.
   const again = json<Envelope>(
     (await run(['install', 'acme/app', '--root', root, '--registry', dir, '--json'])).stdout,
   );
@@ -287,7 +287,7 @@ it('refuses an unmapped provider at class 3, naming the workspace file to map it
   expect(machine.exitCode).toBe(3);
   const failure = json<Failure>(machine.stdout);
   expect(failure).toMatchObject({ code: 'IA-DIST-REGISTRY-UNMAPPED', exit: 3 });
-  // Design row 27: one command, the rerun after the map is written; the service's message names the flag.
+  // One next command, the rerun after the map is written; the service's message names the flag.
   expect(failure.next).toBe(
     `Every requested and locked package's provider needs a registry: map the provider to an HTTPS URL or a workspace directory in .ia/registries.json. Then run "ia install acme/app --root ${quote(root)}".`,
   );
@@ -597,14 +597,14 @@ it('refuses a licensed-only release at class 3 and names the catalog route as a 
 });
 
 it('keeps the exported 1.1 UNMAPPED text, which ia doctor prints as its remedy', () => {
-  // Decision release-bump: @inventarch/cli/internal/distribute keeps its 1.x exports; this is v1.1.0's text exactly.
+  // @inventarch/cli/internal/distribute keeps its 1.x exports; this is v1.1.0's text exactly.
   expect(UNMAPPED).toBe(
     "Every requested and locked package's provider needs a registry. Map the provider to an HTTPS URL or a workspace directory in .ia/registries.json, or pass --registry <url|dir>.",
   );
 });
 
 it('spells each remedy family a 1.x collectPlan request can reach, though it carries no reruns, from the request', async () => {
-  // Decision release-bump: a PlanRequest without `reruns` keeps the service's code, and each next action names one
+  // A PlanRequest without `reruns` keeps the service's code, and each next action names one
   // command spelled from the request's own fields: the local catalog route, the same rerun with --offline kept, the
   // rerun without --offline that fetches a deleted cache file again, restore's --apply --yes and the overview of an
   // installation. The install update needs is pinned in distribution-verbs.test.ts; a 1.x request chooses no
@@ -743,7 +743,7 @@ it('names an online rerun after deleting a corrupt cached archive, and that reru
   expect(readdirSync(cache)).toEqual([archive]);
 });
 
-// Registry spec §5.1 and §6.3 (operator decision 2026-09-23): an `ia init` workspace keeps its unpublished base pin.
+// Registry spec §5.1 and §6.3: since 2026-09-23, an `ia init` workspace keeps its unpublished base pin.
 it('installs from a registry into an initialized workspace without consulting any registry about the bundled base', async () => {
   const { root, base } = await initialized(),
     dir = companionRegistry(root, base),
@@ -846,7 +846,7 @@ it('locates a failure at a corrupt cached base and names deleting it', async () 
   expect(failure.next).toContain(`Delete ${path}`);
 });
 
-// Registry spec §4 "Doctor" (M5.4 plan Task 10): for each provider in the lock's requests and packages, the base it
+// Registry spec §4 "Doctor": for each provider in the lock's requests and packages, the base it
 // resolves to and the level that chose it. Doctor never contacts a registry, so every test here traps fetch.
 interface DoctorCheck {
   readonly id: string;
@@ -1044,7 +1044,7 @@ it('doctor names no provider from a lock it cannot read or while an apply is int
   expect(trapped).not.toHaveBeenCalled();
 });
 
-// LKI-09: the consumer over a selected closure published through `registry add` dependency-first. The product's guides
+// The consumer over a selected closure published through `registry add` dependency-first. The product's guides
 // resolve only through its declared language dependency, so it refuses standalone verification, and the only route that
 // installs it is registry selection (apps/distribution/SPEC.md, "Public registry selected admission"). The standalone
 // catalog and licensed routes keep refusing it until their own caller cutover.

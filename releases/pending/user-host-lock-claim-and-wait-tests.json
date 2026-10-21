@@ -1,0 +1,12 @@
+{
+  "format": "ia.npm-change-note.v1",
+  "bump": "none",
+  "title": "Cover the user host lock's stale-lock claim and busy-create wait in tests",
+  "summary": "Tests only. New tests cover the lock that `ia host claude --user` holds in the IA home. A stale lock is removed while the run's claim on it still stands, and the lock's name is compared with the lock file the run judged before that claim and again under it, both times while that file is still open. A claim older than 10 seconds is abandoned and a younger one is not. While nothing holds the lock's name, an exclusive create of the lock refused with a busy code (EBUSY, and on Windows also EPERM and EACCES) is retried with a growing backoff until 250 milliseconds have passed, then twice more, and then refuses `IA-DIST-INPUT-INVALID`; off Windows, EPERM and EACCES refuse `IA-DIST-INPUT-INVALID` at once. A lock naming pid 1 or 2147483647, the ends of the owner range, is judged by whether that pid runs until it is a day old. Nothing changes for consumers: the package's code, behavior and API are the same.",
+  "packages": [
+    "@inventarch/distribution"
+  ],
+  "paths": [
+    "apps/distribution/tests/plugin-home.test.ts"
+  ]
+}

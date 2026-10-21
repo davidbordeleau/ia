@@ -1,24 +1,13 @@
 import { createHash } from 'node:crypto';
-import {
-  closeSync,
-  constants,
-  existsSync,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-} from 'node:fs';
-import type { Stats } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import type { BigIntStats, Stats } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BAND_OF, KERNEL_SOURCES, isPlacementKind, isProvenance } from '@inventarch/language';
 import type { Location } from '@inventarch/language';
 import { canonicalRoot, stableSerialize } from '@inventarch/graph';
 import type { RevisionSource } from '@inventarch/graph';
 import { DbError } from './errors.js';
+import { lstatNamed, readOpened } from './named.js';
 import { pathKey, sameFile } from './paths.js';
 import { decodeActivationPointer } from './distribution/contracts.js';
 import type { ActivationPointer, LockedPackage } from './distribution/contracts.js';
@@ -64,10 +53,10 @@ export interface InputSnapshot {
   readonly floorOrigin: 'explicit' | 'local' | 'embedded';
   /**
    * D14: the evidence files listed when `evidence` was asked for, by path, size and modification time; never in
-   * `sources`, and none is read here (review finding B3-N10): a view reads only its own authored revision's file.
+   * `sources`, and none is read here: a view reads only its own authored revision's file.
    */
   readonly evidence?: readonly EvidenceCandidate[];
-  /** M7: bounded runner journal receipts, listed only when evidence was requested. */
+  /** Bounded runner journal receipts, listed only when evidence was requested. */
   readonly runnerEvidence?: readonly EvidenceCandidate[];
   readonly fingerprint: string;
 }
@@ -75,7 +64,7 @@ export interface InputSnapshot {
 export const EVIDENCE_DIRECTORY = '.ia/work/evidence';
 /** D14: an evidence file's name, `<authored revision>.ia`; anything else in the directory is not evidence. */
 export const EVIDENCE_FILE = /^[0-9a-f]{64}\.ia$/;
-/** M7 receipts are data, never native sources supplied by a caller. */
+/** Runner journal receipts are data, never native sources supplied by a caller. */
 export const RUNNER_EVIDENCE_DIRECTORY = '.ia/work/runner-evidence';
 export const RUNNER_EVIDENCE_FILE = /^[0-9a-f]{64}-[0-9a-f]{64}\.json$/;
 const EVIDENCE_BYTES = 4 * 1024 * 1024;
@@ -220,59 +209,50 @@ export function readWorkspaceBytes(root: string, path: string, limit: number): U
       throw new DbError('IA-DB-PATH-UNSAFE', `Symlink/junction traversal is not admitted: ${relative}`, relative);
     if (directories.some(({ stat }) => !stat.isDirectory()))
       throw new DbError('IA-DB-SOURCE-UNAVAILABLE', `Missing file ${relative}`, relative);
-    let fd: number;
-    try {
-      // Open before deciding the file's type, link count, size or allocation. NOFOLLOW rejects a final symlink;
-      // NONBLOCK avoids waiting on a FIFO substituted during opening. Unsupported platform flags are zero.
-      fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-    } catch (error) {
-      // Windows may refuse opening a directory. Preserve the same public refusal as an opened non-file.
-      const named = lstatSync(file, { bigint: true });
-      if (!named.isFile() || named.nlink !== 1n) throw unsafe();
-      throw error;
-    }
-    try {
-      const opened = fstatSync(fd, { bigint: true });
-      if (!opened.isFile() || opened.nlink !== 1n) throw unsafe();
-      if (opened.size > BigInt(limit))
-        throw new DbError('IA-DB-SOURCE-UNAVAILABLE', `File exceeds ${limit} bytes: ${relative}`, relative);
-      const assertNamed = () => {
-        try {
-          const named = lstatSync(file, { bigint: true });
-          if (!named.isFile() || named.nlink !== 1n || named.dev !== opened.dev || named.ino !== opened.ino)
-            throw changed();
-          for (const { path, stat } of directories) {
-            const now = lstatSync(path, { bigint: true });
-            if (!now.isDirectory() || now.isSymbolicLink() || now.dev !== stat.dev || now.ino !== stat.ino)
-              throw changed();
-          }
-        } catch {
+    // Still the opened file at its name, under the same directories.
+    const assertNamed = (opened: BigIntStats) => {
+      try {
+        const named = lstatSync(file, { bigint: true });
+        if (!named.isFile() || named.nlink !== 1n || named.dev !== opened.dev || named.ino !== opened.ino)
           throw changed();
+        for (const { path, stat } of directories) {
+          const now = lstatSync(path, { bigint: true });
+          if (!now.isDirectory() || now.isSymbolicLink() || now.dev !== stat.dev || now.ino !== stat.ino)
+            throw changed();
         }
-      };
-      assertNamed();
-      // Bound both allocation and reading to the opened file's size plus one, even if a concurrent writer grows it.
-      const buffer = Buffer.alloc(Number(opened.size) + 1);
-      let length = 0;
-      while (length < buffer.length) {
-        const count = readSync(fd, buffer, length, buffer.length - length, null);
-        if (!count) break;
-        length += count;
-      }
-      const after = fstatSync(fd, { bigint: true });
-      if (
-        BigInt(length) !== opened.size ||
-        after.size !== opened.size ||
-        after.nlink !== 1n ||
-        after.mtimeNs !== opened.mtimeNs ||
-        after.ctimeNs !== opened.ctimeNs
-      )
+      } catch {
         throw changed();
-      assertNamed();
-      return buffer.subarray(0, length);
-    } finally {
-      closeSync(fd);
-    }
+      }
+    };
+    // Open before deciding the file's type, link count, size or allocation; allocation and reading are bounded to the
+    // opened file's size plus one, even if a concurrent writer grows it.
+    return readOpened(file, {
+      unopened: (error) => {
+        // A link the open refused, a socket, or anything else whose open fails is judged by its name: refuse it as an
+        // opened one is refused.
+        const named = lstatSync(file, { bigint: true });
+        if (!named.isFile() || named.nlink !== 1n) throw unsafe();
+        throw error;
+      },
+      opened: (opened) => {
+        if (!opened.isFile() || opened.nlink !== 1n) throw unsafe();
+        if (opened.size > BigInt(limit))
+          throw new DbError('IA-DB-SOURCE-UNAVAILABLE', `File exceeds ${limit} bytes: ${relative}`, relative);
+        assertNamed(opened);
+      },
+      read: ({ opened, bytes, after }) => {
+        if (
+          BigInt(bytes.length) !== opened.size ||
+          after.size !== opened.size ||
+          after.nlink !== 1n ||
+          after.mtimeNs !== opened.mtimeNs ||
+          after.ctimeNs !== opened.ctimeNs
+        )
+          throw changed();
+        assertNamed(opened);
+        return bytes;
+      },
+    });
   } catch (error) {
     if (error instanceof DbError) throw error;
     // A path through a file is missing too: ENOENT on Windows, ENOTDIR on POSIX. Only the error code is kept, as a
@@ -469,15 +449,46 @@ interface Binding {
  * `ia scope` report that refusal, so the order is part of their output.
  */
 function bindings<T = Binding>(root: string, each: (binding: Binding) => T = (binding) => binding as T): readonly T[] {
-  const path = safePath(root, '.ia/workspace.json');
-  if (!existsSync(path)) return [];
-  if (!statSync(path).isFile() || statSync(path).size > 65_536)
-    invalid('Expected a regular manifest of at most 64 KiB');
+  const path = safePath(root, '.ia/workspace.json'),
+    irregular = (): never => invalid('Expected a regular manifest of at most 64 KiB'),
+    undecodable = (): never => invalid('Expected UTF-8 JSON');
+  // The manifest is opened before it is judged, so the judgment and the bytes are of one file (CodeQL
+  // js/file-system-race), and a final link put in place after safePath is refused by the open where the platform has
+  // the flag. A missing manifest declares no bindings.
+  const bytes = readOpened(path, {
+    unopened: (error) => {
+      if (error.code === 'ENOENT') return null;
+      // A link the open refused, a socket, or anything else whose open fails is judged by its name: refuse it as an
+      // opened one is refused. A regular manifest that cannot be opened is unreadable, as one that cannot be read is.
+      const named = lstatSync(path, { bigint: true });
+      if (!named.isFile() || named.size > 65_536n) irregular();
+      return undecodable();
+    },
+    opened: (opened) => {
+      if (!opened.isFile() || opened.size > 65_536n) irregular();
+    },
+    unread: undecodable,
+    read: ({ opened, bytes, after }) => {
+      // The bytes are the manifest's only if it kept its size and still has that name; on Windows, which opens through
+      // a link, the name's identity is the only guard against a link placed after the path check.
+      const named = lstatNamed(path);
+      if (
+        BigInt(bytes.length) !== opened.size ||
+        after.size !== opened.size ||
+        named?.isFile() !== true ||
+        named.dev !== opened.dev ||
+        named.ino !== opened.ino
+      )
+        irregular();
+      return bytes;
+    },
+  });
+  if (bytes === null) return [];
   let value: unknown;
   try {
-    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path)));
+    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
-    invalid('Expected UTF-8 JSON');
+    undecodable();
   }
   const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
   if (
@@ -597,7 +608,7 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
     )) {
       // Colocated executable systems contain package artifacts, never corpus sources.
       if (['node_modules', 'dist', '.git'].includes(entry.name.toLowerCase())) continue;
-      // Where the volume opens `.ia/src/systems` as `Systems`, that is the systems folder; its members keep their names (#315, #323).
+      // Where the volume opens `.ia/src/systems` as `Systems`, that is the systems folder; its members keep their names.
       const folded = pathKey(entry.name),
         name =
           path === '.ia/src' &&
@@ -696,35 +707,40 @@ function discover(root: string, supplied: InputOptions): InputSnapshot {
             !existsSync(safePath(canonical, `.ia/src/systems/${owner.name}/system.ia`))
           )
             throw new DbError('IA-DB-PATH-UNSAFE', `Package instance lacks a root-owned system declaration: ${child}`);
-          const stat = lstatSync(file);
-          if (stat.nlink !== 1) throw new DbError('IA-DB-PATH-UNSAFE', `Hard-linked package source: ${child}`);
-          if (++packageFiles > 20000 || stat.size > 1048576 || (packageBytes += stat.size) > 67108864)
-            throw new DbError('IA-DB-SOURCE-UNAVAILABLE', 'Authored package source capture limit exceeded');
-          // Bound allocation and reading even if a concurrent writer grows the file.
-          const fd = openSync(file, 'r'),
-            buffer = Buffer.alloc(stat.size + 1);
-          let length = 0;
-          try {
-            const opened = fstatSync(fd);
-            if (!opened.isFile() || opened.dev !== stat.dev || opened.ino !== stat.ino || opened.nlink !== 1)
-              throw new DbError('IA-DB-SOURCE-CHANGED', `Package source replaced during read: ${child}`);
-            while (length < buffer.length) {
-              const count = readSync(fd, buffer, length, buffer.length - length, null);
-              if (!count) break;
-              length += count;
-            }
-            const after = fstatSync(fd);
-            if (
-              length !== stat.size ||
-              after.size !== stat.size ||
-              after.mtimeMs !== stat.mtimeMs ||
-              after.ctimeMs !== stat.ctimeMs
-            )
-              throw new DbError('IA-DB-SOURCE-CHANGED', `Package source changed during read: ${child}`);
-          } finally {
-            closeSync(fd);
-          }
-          const bytes = buffer.subarray(0, length);
+          const replaced = () => new DbError('IA-DB-SOURCE-CHANGED', `Package source replaced during read: ${child}`);
+          // Still the regular file the listing named, with one link and within the capture bounds, before any byte is read.
+          const admit = (stat: BigIntStats): void => {
+            if (!stat.isFile()) throw replaced();
+            if (stat.nlink !== 1n) throw new DbError('IA-DB-PATH-UNSAFE', `Hard-linked package source: ${child}`);
+            if (++packageFiles > 20000 || stat.size > 1048576n || (packageBytes += Number(stat.size)) > 67108864)
+              throw new DbError('IA-DB-SOURCE-UNAVAILABLE', 'Authored package source capture limit exceeded');
+          };
+          // The file is opened before it is judged, so the judgment and the bytes are of one file (CodeQL
+          // js/file-system-race), and a link put in place since the listing is refused by the open where the platform
+          // has the flag. Allocation and reading are bounded even if a concurrent writer grows the file.
+          const bytes = readOpened(file, {
+            unopened: (error) => {
+              // A link the open refused, a socket, or anything else whose open fails: judge the name as the opened
+              // file would be.
+              admit(lstatSync(file, { bigint: true }));
+              throw error;
+            },
+            opened: admit,
+            read: ({ opened, bytes, after }) => {
+              if (
+                BigInt(bytes.length) !== opened.size ||
+                after.size !== opened.size ||
+                after.mtimeNs !== opened.mtimeNs ||
+                after.ctimeNs !== opened.ctimeNs
+              )
+                throw new DbError('IA-DB-SOURCE-CHANGED', `Package source changed during read: ${child}`);
+              // On Windows, which opens through a link, the name's identity is the only guard against a link placed
+              // after the listing.
+              const named = lstatNamed(file);
+              if (named?.isFile() !== true || named.dev !== opened.dev || named.ino !== opened.ino) throw replaced();
+              return bytes;
+            },
+          });
           add({ path: child, text: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) });
         }
       }

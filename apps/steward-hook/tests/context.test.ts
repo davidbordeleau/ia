@@ -120,7 +120,7 @@ beforeAll(() => {
     file.sha256 = createHash('sha256').update(bytes).digest('hex');
   }
   writeFileSync(join(root, '.ia/authoring.resources.json'), JSON.stringify(manifest));
-  // #479: a 30,000 ms deadline, the external default; it was 3,000 ms, which one evaluation overran on windows-latest. No case that
+  // crowncodes/ia#479: a 30,000 ms deadline, the external default; it was 3,000 ms, which one evaluation overran on windows-latest. No case that
   // reads this binding checks a deadline: each deadline refusal selects its own 5 ms or 1 ms binding.
   binding = createContextHookBinding({
     format: 'ia.context-hook-binding.v1',
@@ -996,7 +996,7 @@ describe('prompt-scoped runtime and resource context through the context executa
     }
   }, 120_000);
 
-  // #447 review: the local host answers STALE only when the owners report that current bytes differ from those its open view
+  // crowncodes/ia#447 review: the local host answers STALE only when the owners report that current bytes differ from those its open view
   // captured or pinned, and lets every other re-check failure through to the generic handling. Each case uses its own binding
   // with the default budgets, on its own copy of the fixture root.
   const recheck = (run: () => unknown): { name: string; code: unknown; message: string } => {
@@ -1455,7 +1455,7 @@ interface Launch {
   readonly signal?: AbortSignal;
   readonly onStderr?: (chunk: string) => void;
 }
-/** Each started process's wall time, start to exit (#479). It bounds that process's preparation time from above; each case reports them once. */
+/** Each started process's wall time, start to exit (crowncodes/ia#479). It bounds that process's preparation time from above; each case reports them once. */
 const walls: number[] = [];
 /** The suite's one way to start a process: Node under its permission model, read access only, with a case's instrument and then the watch above, unless plain. */
 async function runNode(argv: readonly string[], input: string | Buffer, options: Launch = {}): Promise<BoundedResult> {
@@ -1560,7 +1560,7 @@ describe('the context executable in new processes on the selected claude-code@2.
   // identity handshake reports, as registration does. A run that is not plain has read access only, under Node's permission model.
   const selectedDigest = lifecycleProfile('claude-code', '2.1.285').digest,
     compact = served285.find(([name]) => name === 'SessionStart compact')?.[1];
-  // #479: one line per case with its processes' wall times. The longest bounds every one of its preparations, so the margin
+  // crowncodes/ia#479: one line per case with its processes' wall times. The longest bounds every one of its preparations, so the margin
   // to the 60,000 ms deadline is at least the deadline minus that maximum; Vitest's own report gives the case's duration.
   afterEach((context) => {
     const times = walls.splice(0);
@@ -1631,7 +1631,7 @@ describe('the context executable in new processes on the selected claude-code@2.
           key: decodeLifecycleEvent(selected.binding.profile, input).key,
           inputDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
         });
-        // #479: the duplicate delivery runs the first and last slots that carry data and slot 11, an empty-slot marker while fewer than
+        // crowncodes/ia#479: the duplicate delivery runs the first and last slots that carry data and slot 11, an empty-slot marker while fewer than
         // twelve slots carry data, each in a new process, instead of all twelve again. This case is the suite's one twelve-process assembly.
         const compared = [...new Set([0, slotFrame(first[0]!).dataCount - 1, 11])],
           duplicate = await Promise.all(compared.map((part) => launch(selected.args(part), input)));
@@ -1690,7 +1690,7 @@ describe('the context executable in new processes on the selected claude-code@2.
         const earlier = slotFrame(await launch(selected.args(0), input));
         expect(source.split(cell)).toHaveLength(2);
         writeFileSync(record, source.replace(cell, `${cell} Edited between processes.`));
-        // #479: one slot process after the edit, not twelve; P2 holds the twelve-process assembly. That process prints exactly the frame
+        // crowncodes/ia#479: one slot process after the edit, not twelve; P2 holds the twelve-process assembly. That process prints exactly the frame
         // the test process prepares from the edited workspace, and the frame carries the digest of the whole packet, whose method cell is edited.
         const next = await launch(selected.args(0), input),
           later = slotFrame(next),

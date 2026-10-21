@@ -1,9 +1,8 @@
 /**
- * Milestone generation-binding task host-consumes-generated-set (plan amendments C4, C5, C9, C10 and C12), end to end:
- * an `ia init` workspace with the composition fixture laid over it (C7) gets its packet, its generated agent and skill
- * and its `@hook`'s group through `ia host`, the one projection writer; the group is run through the materialized
- * launcher exactly as Claude Code runs it; and renames and removals of the records take the obsolete agent, skill and
- * group away again, leaving unrelated settings and unmarked files alone.
+ * The generated set, end to end: an `ia init` workspace with the composition fixture laid over it gets its packet,
+ * its generated agent and skill and its `@hook`'s group through `ia host`, the one projection writer; the group is
+ * run through the materialized launcher exactly as Claude Code runs it; and renames and removals of the records take
+ * the obsolete agent, skill and group away again, leaving unrelated settings and unmarked files alone.
  */
 import {
   copyFileSync,
@@ -39,8 +38,31 @@ import {
 
 vi.setConfig({ testTimeout: 600_000, hookTimeout: 300_000 });
 
-/** A seam on the host set's generation, so a test can make it refuse as workspace-runtime refuses; it passes through. */
-const seams = vi.hoisted(() => ({ refuse: undefined as Error | undefined }));
+/**
+ * Seams, each passing through: the host set's generation, so a test can make it refuse as workspace-runtime refuses;
+ * every verification of a host payload that crosses a module boundary (`scans`, when a test sets it); and the MCP
+ * apply, so a test can change the payload between it and the projection step (`afterMcp`).
+ */
+const seams = vi.hoisted(() => ({
+  refuse: undefined as Error | undefined,
+  scans: undefined as string[] | undefined,
+  afterMcp: undefined as (() => void) | undefined,
+}));
+vi.mock('@inventarch/distribution/host', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@inventarch/distribution/host')>();
+  return {
+    ...actual,
+    verifyHostCache: (...args: Parameters<typeof actual.verifyHostCache>) => {
+      seams.scans?.push(args[0]);
+      return actual.verifyHostCache(...args);
+    },
+    applyHost: (...args: Parameters<typeof actual.applyHost>) => {
+      const applied = actual.applyHost(...args);
+      seams.afterMcp?.();
+      return applied;
+    },
+  };
+});
 vi.mock('@inventarch/workspace-runtime/internal/generate', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@inventarch/workspace-runtime/internal/generate')>();
   return {
@@ -67,9 +89,12 @@ const SETTINGS = '.claude/settings.local.json',
   PACKET = ['.claude/rules/ia-workspace.md', '.claude/skills/ia-authoring/SKILL.md'];
 const reviewer = { agent_id: 'subagent-1', agent_type: 'reviewer' };
 
-/** An `ia init` workspace with the composition fixture laid over it, by its physical path, and its IA home. */
-async function composed(legacy = false): Promise<{ root: string; env: { IA_HOST_HOME: string } }> {
-  const { root, env } = await initialized();
+/** An `ia init` workspace with the composition fixture laid over it, by its physical path, and its IA home (`home`, if given). */
+async function composed(
+  legacy = false,
+  home?: { IA_HOST_HOME: string },
+): Promise<{ root: string; env: { IA_HOST_HOME: string } }> {
+  const { root, env } = await initialized(home);
   if (legacy) legacyRegistration(root, env);
   cpSync(FIXTURE, root, { recursive: true });
   return { root: realpathSync(root), env };
@@ -283,7 +308,7 @@ it('applies the packet, one agent, one skill and one hook group through the one 
   expect(first.hooks).toEqual([{ hook: HOOK, action: 'create' }]);
   expect(first.unsupported).toEqual([]);
   for (const path of [...PACKET, AGENT, SKILL]) expect(read(root, path).split('\n'), path).toContain(PACKET_MARKER);
-  // One group, for every edit tool, running the guard for the hook (C9, G-R2); the ownership state records its paths.
+  // One group, for every edit tool, running the guard for the hook; the ownership state records its paths.
   const group = hookGroups(root).get(HOOK)!;
   expect([...hookGroups(root).keys()]).toEqual([HOOK]);
   expect(settings(root).hooks?.PreToolUse).toHaveLength(1);
@@ -321,7 +346,7 @@ it('applies the packet, one agent, one skill and one hook group through the one 
     hooks: [expect.objectContaining({ identity: HOOK, paths: ['docs/**', 'restricted/**'] })],
   });
 
-  // A second apply is a no-op: no file, setting or state changes, and the receipt every apply writes (B12) holds the
+  // A second apply is a no-op: no file, setting or state changes, and the receipt every apply writes holds the
   // same rows, only its time differing.
   const watched = [...PACKET, AGENT, SKILL, SETTINGS, HOOK_STATE, PROJECTION],
     before = snapshot(root, watched),
@@ -350,7 +375,7 @@ it('runs the registered group through the launcher: the hook decides what it sel
   expect(codeOf(refused)).toBe('IA-HOOK-NOT-MANDATED');
   expect(refused).toContain(`Use the participant's documentation mandate. (${HOOK}: subagent reviewer acts as`);
   expect(codeOf(await guarded(root, group, 'restricted/plan.md', reviewer, 'Edit'))).toBe('IA-HOOK-NOT-MANDATED');
-  // What the hook does not select is not decided (C10), the records under .ia/src included.
+  // What the hook does not select is not decided, the records under .ia/src included.
   expect(await guarded(root, group, 'src/app.ts', reviewer)).toBeUndefined();
   expect(await guarded(root, group, '.ia/src/hooks.ia', reviewer)).toBeUndefined();
   // A subagent no authored profile names is refused wherever the hook selects.
@@ -368,7 +393,7 @@ it('reports drift in a generated file and in a hook group, and names the way bac
   await apply(root, env);
   const original = read(root, SKILL);
   writeFileSync(resolve(root, SKILL), `${original}Edited by hand.\n`);
-  // The hand-edited skill is the one drift row, a fail naming its repair (H-N5).
+  // The hand-edited skill is the one drift row, a fail naming its repair.
   const drifted = await doctor(root, env);
   expect(drifted.checks.filter((check) => check.id.startsWith('projection-claude') && check.status !== 'ok')).toEqual([
     {
@@ -417,7 +442,7 @@ const withoutHookGroups = (root: string): void => {
   );
 };
 
-it('names the recovery for a hook group deleted or changed by hand, for ia host and ia project, and it works (H-R1, H-N3)', async () => {
+it('names the recovery for a hook group deleted or changed by hand, for ia host and ia project, and it works', async () => {
   // Deleted by hand: both verbs refuse naming the removal, which drops the registration; ia host registers again.
   const { root, env } = await composed();
   await apply(root, env);
@@ -499,7 +524,7 @@ it('removes the obsolete agent, skill and hook group when their records are rena
   const validated = await run(['validate', '--root', root, '--json']);
   expect(validated.exitCode, validated.stdout).toBe(0);
   // Until the next apply, the group whose hook is gone refuses no more than its last registered selection, naming the
-  // shell commands that bring the registration back in step (G-N4).
+  // shell commands that bring the registration back in step.
   const stale = await guarded(root, old, 'docs/guide.md');
   expect(codeOf(stale)).toBe('IA-HOOK-DECLARATION-UNAVAILABLE');
   expect(stale).toContain('this edit is under its last registered selection');
@@ -521,7 +546,7 @@ it('removes the obsolete agent, skill and hook group when their records are rena
   for (const path of [AGENT, SKILL]) expect(existsSync(resolve(root, path)), path).toBe(false);
   const written = receipt(root);
   expect(written.removed.map((file) => file.path).sort()).toEqual([AGENT, SKILL].sort());
-  // The removed group is listed by its hook and the digest it was registered with (H-R5).
+  // The removed group is listed by its hook and the digest it was registered with.
   expect(written.removedHooks).toEqual([{ identity: HOOK, sha256: hookGroupDigest(old) }]);
   expect(written.generated.map((row) => row.path)).toEqual([
     '.claude/agents/auditor.md',
@@ -608,7 +633,7 @@ it('retires a 1.x steward guard and registers the hook group in one apply, and a
   expect(receipt(root).guard).toBe('none');
 });
 
-it('applies the packet and the skill for codex, and reports the agent and the hook as not taken (C12)', async () => {
+it('applies the packet and the skill for codex, and reports the agent and the hook as not taken', async () => {
   const { root, env } = await composed();
   const result = await host(root, env, 'codex', '--apply', '--yes');
   expect(result.exitCode, result.stdout).toBe(0);
@@ -632,7 +657,7 @@ it('applies the packet and the skill for codex, and reports the agent and the ho
   for (const path of [AGENT, SETTINGS, '.codex/agents']) expect(existsSync(resolve(root, path)), path).toBe(false);
 });
 
-it("falls back to the mandates that bind the fixture profile's agent when the profile names none (C1)", async () => {
+it("falls back to the mandates that bind the fixture profile's agent when the profile names none", async () => {
   const { root } = await composed();
   edit(root, '.ia/src/composition.ia', ['    mandate @mandate demo-mandate\n', '']);
   const agent = renderProjectionFor(root, 'claude').files.find((file) => file.path === AGENT)!.text;
@@ -648,7 +673,52 @@ it("falls back to the mandates that bind the fixture profile's agent when the pr
   );
 });
 
-// Kept with its seam (review finding H-N5): generation reports every record it cannot render as an unsupported row, so
+it("verifies the payload once for the apply's plans, through the one verifier the command makes", async () => {
+  const { root, env } = await composed();
+  const release = JSON.parse((await host(root, env, 'claude')).stdout).plan.release as string;
+  const scans: string[] = [];
+  seams.scans = scans;
+  try {
+    await apply(root, env);
+  } finally {
+    seams.scans = undefined;
+  }
+  // Scans of the payload itself, its stage aside. The shared verdict made after the rename is one; the MCP plan and the
+  // projection re-plan read it; the rest are the fresh checks that guard a write. Planning afresh adds a scan.
+  expect(scans.filter((directory) => directory.split(/[\\/]/).at(-1) === release)).toHaveLength(5);
+});
+
+it('refuses the projection step when the payload changed during the MCP apply, before any projection write', async () => {
+  const { root, env } = await composed();
+  const release = JSON.parse((await host(root, env, 'claude')).stdout).plan.release as string;
+  const launcher = resolve(env.IA_HOST_HOME, 'hosts', release, 'scripts/ia.mjs');
+  seams.afterMcp = () => writeFileSync(launcher, `${readFileSync(launcher, 'utf8')}\n// changed\n`);
+  let refused;
+  try {
+    refused = await host(root, env, 'claude', '--apply', '--yes');
+  } finally {
+    seams.afterMcp = undefined;
+  }
+  // The projection step plans its hooks afresh, so the shared verdict made before the change cannot pass it: the step
+  // refuses at its hook plan, before its pending receipt (its evidence) or any projection file is written. Through the
+  // shared verdict, the plan would pass and only the hook registration's own check would refuse, after that receipt.
+  expect(refused.exitCode, refused.stdout).toBe(3);
+  expect(JSON.parse(refused.stdout)).toMatchObject({
+    code: 'IA-DIST-INTEGRITY-MISMATCH',
+    where: { path: SETTINGS },
+  });
+  for (const path of [
+    ...PACKET,
+    AGENT,
+    SKILL,
+    HOOK_STATE,
+    PROJECTION,
+    '.ia/distributions/hosts/claude-receipt-pending.json',
+  ])
+    expect(existsSync(resolve(root, path)), path).toBe(false);
+});
+
+// Kept with its seam: generation reports every record it cannot render as an unsupported row, so
 // no workspace's records make generateHostSet itself refuse; the seam is the only way to pin the refusal's mapping.
 it('reports a generation refusal with its own code, naming ia validate, and writes nothing', async () => {
   const { root, env } = await composed();
@@ -670,7 +740,7 @@ it('reports a generation refusal with its own code, naming ia validate, and writ
   for (const path of [AGENT, SKILL, HOOK_STATE]) expect(existsSync(resolve(root, path)), path).toBe(false);
 });
 
-it('applies the rest when a hook exceeds the bounds a registration holds, reporting that hook (H-N2)', async () => {
+it('applies the rest when a hook exceeds the bounds a registration holds, reporting that hook', async () => {
   const { root, env } = await composed();
   const hook = (name: string, paths: string) =>
     `\n@hook ${name}\n  meaning\n    says "Hook ${name}."\n    answers "Which hook is ${name}?"\n  hook\n    event PreToolUse\n    tools [Write]\n    paths ${paths}\n    message "Use the ${name} mandate."\n`;
@@ -704,7 +774,7 @@ async function lifted(root: string, env: Record<string, string>, reason: string 
   return existsSync(resolve(root, SETTINGS)) ? hookGroups(root).size : 0;
 }
 
-it('restores editing with the removal the guard names when a broken record keeps the workspace from admitting (H-R2)', async () => {
+it('restores editing with the removal the guard names when a broken record keeps the workspace from admitting', async () => {
   const { root, env } = await composed();
   edit(root, '.ia/src/hooks.ia', ['"restricted/**"]', '"restricted/**", ".ia/src/**"]']);
   await apply(root, env);
@@ -713,7 +783,7 @@ it('restores editing with the removal the guard names when a broken record keeps
   edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
   const refused = await guarded(root, group, '.ia/src/hooks.ia', {}, 'Edit');
   // hooks.ia holds docs-mandate and reviewer-docs too, which admission refuses with it, so the edit fails closed at the
-  // first of them (review D-N1), and `ia validate`, mandate-gated, refuses there (lane D). Re-registering would refuse
+  // first of them, and `ia validate`, mandate-gated, refuses there. Re-registering would refuse
   // too, so it is not named: the admission report, which shows why, is named instead, and runs.
   expect(codeOf(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
   expect(refused).toContain('agent-system/policy/mandate/docs-mandate (.ia/src/hooks.ia:15) failed admission');
@@ -740,11 +810,11 @@ it('restores editing with the removal the guard names when a broken record keeps
     '#! ia 1.0\n\n@mandate reviewer-scoped\n  meaning\n    says "x"\n    answers "x?"\n  governance\n    requires "x"\n  authority\n    participant @agent reviewer\n    moves [Observation]\n    scope [@workspace demo]\n',
   );
   // With no steward and two participants the default actor is open, and a workspace `ia host --apply` is gated as an
-  // effect (review C2-R7), so the registration names its actor; the guarded edits below are judged as before.
+  // effect, so the registration names its actor; the guarded edits below are judged as before.
   await apply(second.root, second.env, '--actor', 'agent-system/binding/agent/demo');
   const ambiguous = hookGroups(second.root).get(HOOK);
   // The source error is inside a record db identifies: a stray top-level line would be a record it cannot identify,
-  // possibly a @mandate, which fails the edit closed at it instead (review D2-R2), and the lift works then too.
+  // possibly a @mandate, which fails the edit closed at it instead, and the lift works then too.
   put(second.root, '.ia/src/broken.ia', '#! ia 1.0\n\n@playbook broken\n  meaning\n    says "x"\n   not ia\n');
   const lift = await guarded(second.root, ambiguous, 'docs/guide.md');
   expect(codeOf(lift)).toBe('IA-HOOK-IDENTITY-UNAVAILABLE');
@@ -755,7 +825,7 @@ it('restores editing with the removal the guard names when a broken record keeps
   expect(await lifted(second.root, second.env, closed)).toBe(0);
 });
 
-it('refuses no more than the last registered selection when the records cannot open, and the removal it names works (H-R8)', async () => {
+it('refuses no more than the last registered selection when the records cannot open, and the removal it names works', async () => {
   for (const breaking of [
     (root: string) => put(root, '.ia/workspace.json', '{ not json'),
     // A Windows checkout's autocrlf rewrites the lock with CRLF line ends: the db refuses it as drift.
@@ -777,7 +847,7 @@ it('refuses no more than the last registered selection when the records cannot o
   }
 });
 
-it('keeps unchanged hook groups without the payload their registration recorded, and names ia host when a change needs it (H-R4)', async () => {
+it('keeps unchanged hook groups without the payload their registration recorded, and names ia host when a change needs it', async () => {
   const { root, env } = await composed();
   const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release,
     payload = resolve(env.IA_HOST_HOME, 'hosts', release);
@@ -800,7 +870,7 @@ it('keeps unchanged hook groups without the payload their registration recorded,
   ]);
 });
 
-it('lists a removed hook group in the receipt even when the apply that removed it was interrupted (H-R5)', async () => {
+it('lists a removed hook group in the receipt even when the apply that removed it was interrupted', async () => {
   const { root, env } = await composed();
   const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release,
     old = hookGroups(root).get(HOOK)!;
@@ -853,7 +923,7 @@ const harnessRegistrations = (root: string): unknown =>
 const recordedPaths = (root: string): unknown =>
   JSON.parse(read(root, HOOK_STATE)).groups.map((group: { paths: string[] }) => group.paths);
 
-it('applies the generated set through ia project: hooks unregistered without ia host, kept in step after it (H-R6, H-R7)', async () => {
+it('applies the generated set through ia project: hooks unregistered without ia host, kept in step after it', async () => {
   const { root, env } = await composed();
   const projected = await run(['project', 'claude', '--root', root, '--apply', '--yes', '--json'], { env });
   expect(projected.exitCode, projected.stdout).toBe(0);
@@ -874,7 +944,7 @@ it('applies the generated set through ia project: hooks unregistered without ia 
   ]);
   for (const path of [AGENT, SKILL]) expect(read(root, path).split('\n'), path).toContain(PACKET_MARKER);
   expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
-  // The harness lists what this apply applied: the agent and the skill, and no hook, since none was registered (H-R7).
+  // The harness lists what this apply applied: the agent and the skill, and no hook, since none was registered.
   expect(receipt(root).hooks).toEqual([]);
   expect(receipt(root).unsupported.map((row) => row.identity)).toEqual([HOOK]);
   expect(harnessRegistrations(root)).toEqual({
@@ -896,7 +966,7 @@ it('applies the generated set through ia project: hooks unregistered without ia 
   expect(read(root, '.claude/agents/auditor.md').split('\n')).toContain(PACKET_MARKER);
 });
 
-it('refreshes the generated set and the hook group after an install, and previews a generated agent as written (H-R6, H-N7)', async () => {
+it('refreshes the generated set and the hook group after an install, and previews a generated agent as written', async () => {
   const { root, env } = await composed();
   await apply(root, env);
   const install = baseInstall(root);
@@ -918,7 +988,7 @@ it('refreshes the generated set and the hook group after an install, and preview
   expect((await doctor(root, env)).checks).toContainEqual(noDrift());
 });
 
-it('refuses an install before any install write when its refresh would refuse the hook step, naming the repair (H-R3)', async () => {
+it('refuses an install before any install write when its refresh would refuse the hook step, naming the repair', async () => {
   const { root, env } = await composed();
   const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release;
   const install = baseInstall(root),
@@ -946,7 +1016,7 @@ it('refuses an install before any install write when its refresh would refuse th
   expect(read(root, '.ia/distributions.lock.json')).toBe(lock);
 });
 
-it('applies the host without registering hooks where disableAllHooks turns them off, naming the file (H-N12)', async () => {
+it('applies the host without registering hooks where disableAllHooks turns them off, naming the file', async () => {
   for (const file of ['.claude/settings.json', SETTINGS]) {
     const { root, env } = await composed();
     put(root, file, `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
@@ -965,7 +1035,7 @@ it('applies the host without registering hooks where disableAllHooks turns them 
   }
 });
 
-it('reports a changed and a foreign hook group, an unregistered hook and a receipt from before generation (H-N4, H-N5)', async () => {
+it('reports a changed and a foreign hook group, an unregistered hook and a receipt from before generation', async () => {
   const { root, env } = await composed();
   await apply(root, env);
   const row = async (id: string) => (await doctor(root, env)).checks.find((check) => check.id === id);
@@ -979,6 +1049,16 @@ it('reports a changed and a foreign hook group, an unregistered hook and a recei
     detail: expect.stringContaining('changed since it was registered, or appears twice; delete only that group'),
     remedy: `ia host claude --root ${quote(root)} --remove --apply`,
   });
+  // The session briefing names the same removal first: an apply alone refuses a group changed by hand.
+  const briefed = JSON.parse((await run(['doctor', '--root', root, '--host', 'claude', '--json'], { env })).stdout) as {
+    session: { notice: string };
+    nextActions: { argv: string[] }[];
+  };
+  expect(briefed.nextActions.map((action) => action.argv)).toEqual([
+    ['ia', 'host', 'claude', '--root', root, '--remove', '--apply'],
+    ['ia', 'host', 'claude', '--root', root, '--apply'],
+  ]);
+  expect(briefed.session.notice).toMatch(/was changed or deleted by hand; run .*--remove --apply, then .*--apply$/);
   // A group naming another hook for this root, which no registration owns: a warning, left in place.
   const foreign = structuredClone(kept),
     other = 'hook-authoring-system/binding/hook/other-edits',
@@ -1021,10 +1101,13 @@ it('reports a changed and a foreign hook group, an unregistered hook and a recei
   expect((await doctor(unregistered.root, unregistered.env)).checks).toContainEqual(noDrift());
 });
 
-it('converges after a generated-set rename apply interrupted at any of its checkpoints (H-N1)', async () => {
-  /** A workspace whose fixture records were applied and then renamed, and the payload its groups run from. */
-  const renamedWorkspace = async () => {
-    const { root, env } = await composed();
+it('converges after a generated-set rename apply interrupted at any of its checkpoints', async () => {
+  /**
+   * A workspace whose fixture records were applied and then renamed, and the payload its groups run from. Every pass
+   * after the probe reuses the probe's IA home: the cuts are inside the workspace's apply, and the payload is the same.
+   */
+  const renamedWorkspace = async (home?: { IA_HOST_HOME: string }) => {
+    const { root, env } = await composed(false, home);
     const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release;
     edit(root, '.ia/src/hooks.ia', ['note-edits', 'doc-edits'], ['@agent-profile reviewer', '@agent-profile auditor']);
     edit(
@@ -1049,7 +1132,7 @@ it('converges after a generated-set rename apply interrupted at any of its check
   );
   expect(stages).toEqual(expect.arrayContaining(['evidence', 'guard', 'hooks', 'pending', 'complete', 'receipt']));
   for (const stage of stages) {
-    const { root, env, cache } = await renamedWorkspace();
+    const { root, env, cache } = await renamedWorkspace(probe.env);
     expect(
       () =>
         applyHostProjection(
@@ -1083,7 +1166,7 @@ it('converges after a generated-set rename apply interrupted at any of its check
   }
 });
 
-it('refuses a generated skill at a populated folder it does not own, naming the files to move, and the next works (A-F2)', async () => {
+it('refuses a generated skill at a populated folder it does not own, naming the files to move, and the next works', async () => {
   // A folder the user holds under the skill's own name, and, where the volume folds names, under a case variant of it.
   const folds = process.platform === 'win32' || process.platform === 'darwin';
   for (const folder of ['.claude/skills/note-review', '.claude/skills/Note-Review']) {
@@ -1102,7 +1185,7 @@ it('refuses a generated skill at a populated folder it does not own, naming the 
     expect(body.next).toBe(
       `Move the files out of .claude/skills/note-review, or rename the @playbook that renders it, then run "ia host claude --root ${quote(root)} --apply".`,
     );
-    // The plans print the conflict as code, path and reason only (A-F4).
+    // The plans print the conflict as code, path and reason only.
     const conflict = {
       code: 'IA-DIST-LOCAL-MODIFICATION',
       path: '.claude/skills/note-review',
@@ -1130,7 +1213,7 @@ it('refuses a generated skill at a populated folder it does not own, naming the 
   }
 });
 
-it('keeps an owned group as registered while disableAllHooks is on, and still removes an obsolete one (A-F1)', async () => {
+it('keeps an owned group as registered while disableAllHooks is on, and still removes an obsolete one', async () => {
   const { root, env } = await composed();
   await apply(root, env);
   const owned = hookGroups(root).get(HOOK)!;
@@ -1159,14 +1242,14 @@ it('keeps an owned group as registered while disableAllHooks is on, and still re
   });
 });
 
-it('names the state repair when the hook ownership state cannot be read and the hook record is broken, and it works (A-F3)', async () => {
+it('names the state repair when the hook ownership state cannot be read and the hook record is broken, and it works', async () => {
   const { root, env } = await composed();
   await apply(root, env);
   const group = hookGroups(root).get(HOOK);
   writeFileSync(resolve(root, HOOK_STATE), '{ not json');
   edit(root, '.ia/src/hooks.ia', ['@hook note-edits', '@hook note-edits\n  bogus-section\nzzz']);
   const refused = await guarded(root, group, 'src/app.ts');
-  // hooks.ia holds docs-mandate and reviewer-docs too, so the edit fails closed at the first of them (review D-N1).
+  // hooks.ia holds docs-mandate and reviewer-docs too, so the edit fails closed at the first of them.
   expect(codeOf(refused)).toBe('IA-HOOK-MANDATE-UNAVAILABLE');
   expect(refused).toContain('agent-system/policy/mandate/docs-mandate (.ia/src/hooks.ia:15) failed admission');
   expect(refused).toContain(
@@ -1193,7 +1276,7 @@ const localHooksOff = (root: string, off: boolean): void => {
   writeFileSync(resolve(root, SETTINGS), `${JSON.stringify(local, null, 2)}\n`);
 };
 
-it('reports an obsolete group kept while hooks are off and its payload is gone, never as registered, and removes it once hooks are on (F1)', async () => {
+it('reports an obsolete group kept while hooks are off and its payload is gone, never as registered, and removes it once hooks are on', async () => {
   const { root, env } = await composed();
   put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits'));
   const release = (JSON.parse((await apply(root, env)).stdout) as { plan: { release: string } }).plan.release;
@@ -1219,7 +1302,7 @@ it('reports an obsolete group kept while hooks are off and its payload is gone, 
   expect(receipt(root).unsupported).toEqual([]);
 });
 
-it('refuses a group deleted by hand while hooks are off as it does with hooks on, and the named removal works (F2)', async () => {
+it('refuses a group deleted by hand while hooks are off as it does with hooks on, and the named removal works', async () => {
   const { root, env } = await composed();
   await apply(root, env);
   put(root, '.claude/settings.json', `${JSON.stringify({ disableAllHooks: true }, null, 2)}\n`);
@@ -1243,7 +1326,7 @@ it('refuses a group deleted by hand while hooks are off as it does with hooks on
   ]);
 });
 
-it('renames one of two hooks while disableAllHooks is on in the local settings, then registers both once hooks are on (F3)', async () => {
+it('renames one of two hooks while disableAllHooks is on in the local settings, then registers both once hooks are on', async () => {
   const { root, env } = await composed();
   put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits'));
   await apply(root, env);
@@ -1275,7 +1358,7 @@ it('renames one of two hooks while disableAllHooks is on in the local settings, 
   expect(receipt(root).unsupported).toEqual([]);
 });
 
-it("converges in one hop when the user's skill folder holds its own SKILL.md and other files (F6)", async () => {
+it("converges in one hop when the user's skill folder holds its own SKILL.md and other files", async () => {
   const { root, env } = await composed();
   put(root, SKILL, '---\nname: note-review\n---\n\nMy own skill.\n');
   put(root, '.claude/skills/note-review/reference.md', 'notes\n');
@@ -1289,7 +1372,7 @@ it("converges in one hop when the user's skill folder holds its own SKILL.md and
   expect(read(root, SKILL).split('\n')).toContain(PACKET_MARKER);
 });
 
-it('refuses an install before any install write when its refresh would refuse a generated skill at a populated folder (F4)', async () => {
+it('refuses an install before any install write when its refresh would refuse a generated skill at a populated folder', async () => {
   const { root, env } = await composed();
   await apply(root, env);
   // A new playbook whose skill folder already holds the user's files.
@@ -1325,7 +1408,7 @@ async function offWithoutPayload(): Promise<{ root: string; env: { IA_HOST_HOME:
   return { root, env };
 }
 
-it("plans the obsolete group's removal against the payload ia host materializes, so its preview and apply agree (N1)", async () => {
+it("plans the obsolete group's removal against the payload ia host materializes, so its preview and apply agree", async () => {
   const { root, env } = await offWithoutPayload();
   rmSync(resolve(root, '.ia/src/extra-hooks.ia'));
   const expected = [
@@ -1343,7 +1426,7 @@ it("plans the obsolete group's removal against the payload ia host materializes,
   expect(receipt(root).unsupported).toEqual([]);
 });
 
-it('words a kept group as one that still guards, and reports an unsupported authored hook whose group is kept once (N2, N3)', async () => {
+it('words a kept group as one that still guards, and reports an unsupported authored hook whose group is kept once', async () => {
   const { root, env } = await offWithoutPayload();
   // spec-edits stops being registrable (another event): generation reports it, and its owned group is kept.
   put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits').replace('event PreToolUse', 'event PostToolUse'));
@@ -1357,14 +1440,14 @@ it('words a kept group as one that still guards, and reports an unsupported auth
   expect(checks).toEqual([
     expect.objectContaining({
       status: 'warn',
-      // The apply that removes it, and generation's own reason beside it (F3, F4).
+      // The apply that removes it, and generation's own reason beside it.
       detail: `the hook group for ${SPEC_HOOK} stays in ${SETTINGS} though no registrable hook claims it any more: the next "ia host claude --root ${quote(root)} --apply" removes it once hooks are back on, or while they are off once it materializes the payload the group was registered against (${rows[0]!.reason.replace(`; ${HOOK_KEPT}`, '')})`,
       remedy: null,
     }),
   ]);
 });
 
-it('drops the ownership of a hand-deleted group whose hook is no longer declared while hooks are off, as with hooks on (N4)', async () => {
+it('drops the ownership of a hand-deleted group whose hook is no longer declared while hooks are off, as with hooks on', async () => {
   const { root, env } = await composed();
   put(root, '.ia/src/extra-hooks.ia', secondHook('spec-edits'));
   await apply(root, env);
@@ -1385,7 +1468,7 @@ it('drops the ownership of a hand-deleted group whose hook is no longer declared
   expect(receipt(root).unsupported).toEqual([]);
 });
 
-it('keeps the ownership of a hand-deleted obsolete group until a plan can run, and doctor names the removal (F1)', async () => {
+it('keeps the ownership of a hand-deleted obsolete group until a plan can run, and doctor names the removal', async () => {
   // n4x's E1: hooks off, the recorded payload gone, spec-edits's record deleted and its group deleted by hand.
   const { root, env } = await offWithoutPayload();
   rmSync(resolve(root, '.ia/src/extra-hooks.ia'));
@@ -1408,7 +1491,7 @@ it('keeps the ownership of a hand-deleted obsolete group until a plan can run, a
   expect(existsSync(resolve(root, HOOK_STATE))).toBe(false);
 });
 
-it('agrees with its apply for a home spelled in another case, and keeps the group for another payload, in both (F2)', async () => {
+it('agrees with its apply for a home spelled in another case, and keeps the group for another payload, in both', async () => {
   // Another letter case names the same home only where the volume folds names.
   const folds = process.platform === 'win32' || process.platform === 'darwin';
   if (folds) {

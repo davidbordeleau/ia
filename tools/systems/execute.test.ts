@@ -18,11 +18,11 @@ import { execute, executeWithContext } from './execute.js';
 import * as execution from './execute.js';
 import { publish } from './publish.js';
 import * as publication from './publish.js';
-import { portablePath } from './shared.js';
+import { portablePath, field, text } from '@inventarch/runtime/authoring-execution';
 import { runScenarios } from './scenarios.js';
-import { executionFixtureCodes, runExecutionFixtures } from './refusal-fixtures.js';
-import { EXEC_CODES, ExecutionError } from './types.js';
-import type { Result, Success } from './types.js';
+import { executionFixtureCodes, runExecutionFixtures } from '../compliance/execution-fixtures.js';
+import { EXEC_CODES, ExecutionError } from '@inventarch/runtime/authoring-execution';
+import type { Result, Success } from '@inventarch/runtime/authoring-execution';
 
 import { createSystemFixture } from './fixture.js';
 const repository = resolve(import.meta.dirname, '../..'),
@@ -89,7 +89,7 @@ it('executes every native case with actual success/refusal and owner attribution
       ),
     }).toEqual({ case: o.identity, findings: [] });
   // The runner compares result codes only, so a work-system refusal could pass for another reason (an empty-diagnostic
-  // refusal, #398 review). Require each one to refuse with exactly the diagnostic its scenario.expected names.
+  // refusal, crowncodes/ia#398 review). Require each one to refuse with exactly the diagnostic its scenario.expected names.
   const refused = result.observations.filter(
     (o) => !o.result.ok && o.identity.startsWith('compliance-system/definition/scenario/work-'),
   );
@@ -113,6 +113,64 @@ it('executes every native case with actual success/refusal and owner attribution
     expect({ case: name, codes }).toEqual({ case: name, codes: [named.get(name)] });
   }
 }, 120_000);
+it('executes the public validate, format and scalar-render cases against their declared operation and result code', () => {
+  const db = open(root, { cache: false });
+  try {
+    const inputs: Record<string, { operation: string; input: unknown }> = {
+      'public-validate-ia-success': { operation: 'validate-ia', input: agent },
+      'public-validate-ia-refusal': { operation: 'validate-ia', input: { path: agent.path, text: 'malformed' } },
+      'public-format-ia-success': { operation: 'format-ia', input: agent },
+      'public-format-ia-refusal': { operation: 'format-ia', input: { path: agent.path, text: 'malformed' } },
+      'public-render-template-success': { operation: 'render-template', input: template },
+      'public-render-template-refusal': {
+        operation: 'render-template',
+        input: { ...template, values: { name: 'only' } },
+      },
+    };
+    const cases = db
+      .records()
+      .filter(
+        (record) =>
+          record.discriminator === 'case' &&
+          text(field(record, 'scenario', 'evaluator')) === 'tools/systems/execute.test.ts',
+      );
+    expect(cases.map((record) => record.name).sort()).toEqual(Object.keys(inputs).sort());
+    for (const record of cases) {
+      const scenario = inputs[record.name]!;
+      expect(field(record, 'scenario', 'operation')).toMatchObject({
+        kind: 'ref',
+        discriminator: 'operation',
+        name: scenario.operation,
+      });
+      const result = execute(root, scenario.operation, scenario.input);
+      expect(result.ok, record.name).toBe(text(field(record, 'scenario', 'kind')) === 'success');
+      expect(result.ok ? 'pass' : result.code, record.name).toBe(text(field(record, 'scenario', 'code')));
+      if (result.ok) {
+        expect(result.steward).toContain('/binding/agent/public-');
+        if (scenario.operation === 'validate-ia') expect(result.artifacts).toEqual([]);
+        else if (scenario.operation === 'format-ia')
+          expect(result.artifacts).toEqual([
+            expect.objectContaining({ path: agent.path, text: expect.stringContaining('@agent generated-expert') }),
+          ]);
+        else expect(result.artifacts).toEqual([{ path: 'notes/note.md', text: '# note\n\nA concrete note\n' }]);
+        for (const artifact of result.artifacts) expect(existsSync(resolve(root, artifact.path))).toBe(false);
+      }
+    }
+  } finally {
+    db.close();
+  }
+});
+
+it.each(['parameters', 'lines'])(
+  'keeps scalar template.%s required by its renderer when structural fields are optional',
+  (key) => {
+    const base = temp();
+    const path = '.ia/src/systems/template-system/records/authored-note.ia';
+    const source = readFileSync(resolve(base, path), 'utf8');
+    put(base, path, source.replace(new RegExp(`^    ${key} .+\\n`, 'm'), ''));
+    expect(execute(base, 'render-template', template)).toMatchObject({ ok: false, code: 'IA-EXEC-TEMPLATE-INVALID' });
+  },
+);
 it('observes every platform-reachable executable refusal code through real handlers and isolated publication', () => {
   const result = runExecutionFixtures(repository);
   expect(result).toHaveLength(8);
@@ -333,7 +391,7 @@ it('rechecks source revision after a handler and refuses a stale input snapshot'
   }
 });
 it('takes the authored revision as its base, so a source appearing at runtime placement during a run refuses nothing', () => {
-  // Plan amendment C13: runtime-band evidence moves the handle's revision, not the authored one the run rechecks.
+  // Runtime-band evidence moves the handle's revision, not the authored one the run rechecks.
   const base = temp(),
     path = '.ia/src/systems/template-system/records/runtime-evidence.ia',
     locations = {

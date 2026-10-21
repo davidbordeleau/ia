@@ -42,10 +42,15 @@ export interface OpenOptions extends InputOptions {
   /**
    * D13: how `@check` records are admitted (`ViewOptions.checks`). `strict`, the default, keeps every existing reader's
    * admission; `structural` is for the validate path that binds checks, and `preview` drafts under it too. A handle
-   * opened `structural` or with `evidence` never reads or writes the cache, whatever `cache` says (review finding
-   * B3-N5), so `.ia/.iadb/graph.json` only ever holds a strict, evidence-free graph.
+   * opened `structural` or with `evidence` never reads or writes the cache, whatever `cache` says, so
+   * `.ia/.iadb/graph.json` only ever holds a strict, evidence-free graph.
    */
   readonly checks?: 'strict' | 'structural';
+  /**
+   * D10: `verify` binds verified COMP-KERNEL and COMP-FIXTURES evidence to every view's report, `preview` drafts and
+   * refreshes included (`ViewOptions.conformance`). The graph is the same either way, so the cache is too.
+   */
+  readonly conformance?: 'verify';
 }
 export interface ReadOptions {
   readonly root?: string;
@@ -327,7 +332,7 @@ export class Reader {
     return this.#state.rootView.refused;
   }
   /**
-   * Lane D, D1: every record occurrence of the root view's sources that it does not admit, at the band of its source's
+   * D15: every record occurrence of the root view's sources that it does not admit, at the band of its source's
    * placement (`UnadmittedRecord`): those `refused` names, those an identity tie drops, and those of a file refused whole
    * by a language error or a duplicate requirement id, which `refused` cannot name because no graph ever held them. Like
    * `refused` and `report` it reads the root view, whatever scope a read binds: an occurrence that is not admitted is in
@@ -418,7 +423,7 @@ export class Reader {
     const { now, before, rooted } = this.#compared(identity, options);
     return rooted ? stalenessOf(now, before) : undefined;
   }
-  /** D08 (position-and-projection row 20): which retained snapshot gives the record `get` returns an observed `digest`. */
+  /** D08: which retained snapshot gives the record `get` returns an observed `digest`. */
   readiness(identity: string, digest: string, options: ReadOptions = {}): Readiness {
     const { now, before } = this.#compared(identity, options);
     return readinessOf(now, before, digest);
@@ -454,7 +459,7 @@ export class Reader {
     return allowed === undefined ? rows : Object.freeze(rows.filter((row) => allowed.has(row.counterpart)));
   }
   /**
-   * D02b (position-and-projection row 17): the seat `path` is declared at, a @system or @workspace identity, and the
+   * D02b: the seat `path` is declared at, a @system or @workspace identity, and the
    * graph G06c claimants whose path selections select it, records outside the scope treated as absent (D09).
    */
   resolveSeat(path: string, options: ReadOptions = {}): SeatResolution {
@@ -488,7 +493,7 @@ export class Reader {
     );
   }
   /**
-   * D09a (position-and-projection row 10): the words the read's registry registers for its admitted systems, the
+   * D09a: the words the read's registry registers for its admitted systems, the
    * floor's two included, sorted. A scope narrows records, never the registry, so every scope of a view reads the same
    * words; the registry itself stays private.
    */
@@ -503,7 +508,7 @@ export class Reader {
     );
   }
   /**
-   * D02c (position-and-projection row 3): the roots the capture declares (D02a), longest first, then by declaring
+   * D02c: the roots the capture declares (D02a), longest first, then by declaring
    * workspace, as frozen copies; a root whose declaring @workspace the read does not admit is pruned, as the seat rule
    * prunes it (D02b, D09). Membership rows keep their roots whatever the scope, so a pruned root is never re-rooted.
    */
@@ -537,6 +542,7 @@ export class Handle extends Reader {
       ...inputOptions(options),
       cache: options.checks === 'structural' || options.evidence === true ? false : (options.cache ?? true),
       ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
+      ...(options.conformance === 'verify' ? { conformance: 'verify' as const } : {}),
     });
     const state = stableState(() => readInputs(root, selected), selected.cache, selected),
       canonical = state.inputs.root,
@@ -553,7 +559,10 @@ export class Handle extends Reader {
         },
       },
       selected.locations,
-      selected.checks === 'structural' ? { checks: 'structural' } : {},
+      {
+        ...(selected.checks === 'structural' ? { checks: 'structural' as const } : {}),
+        ...(selected.conformance === 'verify' ? { conformance: 'verify' as const } : {}),
+      },
     );
     this.#options = selected;
     Object.freeze(this);

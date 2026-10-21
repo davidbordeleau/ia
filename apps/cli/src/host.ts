@@ -1,36 +1,35 @@
 /**
  * `ia host`: docs/specs/host-registration/README.md §4.
  *
- * One verb owns the managed host set of §5.1: the MCP entry and the workspace projection, plus the context element
- * §5.2's gate keeps unselected. It plans by default and never writes while planning — the payload's location is
- * computed, not created. `--apply` materializes the embedded payload once per user (§3.3), re-plans every
- * sub-transaction against the verified payload, then applies them in order — mcp, projection — and removal runs them
- * in reverse (§8). No cross-file atomicity is claimed: a rerun converges, and a pending journal refuses naming its
- * recovery. Nothing here reports that a server answered or a hook ran; `applied.observed` is always false (plan-0002
- * M5 exit).
+ * One verb owns the managed host set of §4: the MCP entry and the workspace projection, plus the context element
+ * §4's gate keeps unselected. It plans by default and never writes while planning — the payload's location is
+ * computed, not created. `--apply` materializes the embedded payload once per user (§3), re-plans every
+ * sub-transaction against the verified payload, then applies them in order — mcp, projection — and removal runs them in
+ * reverse (§4). No cross-file atomicity is claimed (§6): a rerun converges, and a pending journal refuses naming its
+ * recovery. Nothing here reports that a server answered or a hook ran; `applied.observed` is always false.
  *
- * Milestone position-packet task replace-renderers (plan amendments B9, B11 and B12): the projection is the position
- * packet's consumer rendering, and `ia host` registers no steward guard. The projection element lists instead the
- * retirement of a guard an earlier release registered, which `applyHostProjection` (host-projection.ts) performs before
- * any projection file changes, the owned 1.x steward files it deletes and the foreign files it leaves. Task
- * ia-project-verb: `ia project` (project.ts) plans and applies that element alone, through the same planner
+ * The projection is the position packet's consumer rendering, and `ia host` registers no steward guard. The projection
+ * element lists instead the retirement of a guard an earlier release registered, which `applyHostProjection`
+ * (host-projection.ts) performs before any projection file changes, the owned 1.x steward files it deletes and the
+ * foreign files it leaves. `ia project` (project.ts) plans and applies that element alone, through the same planner
  * (`projectionElement`), re-plan (`replanProjection`) and writer, and its file rows (`projectionFileRows`).
  *
  * The plan asks the mechanisms themselves. `planHostFor` plans against the payload apply will materialize, described
  * from the pin without reading it (`expectedHostCache`), so a conflict in the preview is the service's own refusal —
- * its code and message unchanged (contract §4.1) — and is the refusal apply would raise.
+ * its code and message unchanged (contract §4) — and is the refusal apply would raise.
  *
- * Milestone generation-binding (plan amendments C16 and C24, design item 9): the apply reads the join receipts before it
- * writes anything, refusing ones it cannot read, and once every element is applied it records the host's join from the
- * committed registration (`joinHost`): the installed-implementation catalog of the payload it names, at the workspace's
- * authored revision. A removal drops it (`leaveHost`). The plan and the envelope do not change; `ia doctor` reports
- * the join.
+ * The apply reads the join receipts before it writes anything, refusing ones it cannot read, and once every element is
+ * applied it records the host's join from the committed registration (`joinHost`): the installed-implementation catalog
+ * of the payload it names, at the workspace's authored revision. A removal drops it (`leaveHost`). The plan and the
+ * envelope do not change; `ia doctor` reports the join.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { lifecycleProfile } from '@inventarch/workspace-runtime/lifecycle-profile';
 import type { HostCacheTarget, HostPlan } from '@inventarch/distribution/host';
+import { hostVerifier } from '@inventarch/distribution/host-observe';
+import type { HostVerifier } from '@inventarch/distribution/host-observe';
 import { hostRow, WORKSPACE_HOSTS, workspaceRow } from '@inventarch/distribution/hosts';
 import { recoverInstallation } from '@inventarch/distribution/install';
 import { recoverGuardRegistration } from '@inventarch/distribution/guard-registration';
@@ -93,10 +92,10 @@ import { runUserHost } from './user-host.js';
 const DAMAGED =
   'The ia installation is damaged; run "ia doctor" for its install channel and reinstall @inventarch/cli through it, so assets/host travels with it.';
 
-/** §5.1's elements. `ia host` registers no steward guard since milestone position-packet (B11), so none is `hooks`. */
+/** §4's elements. `ia host` registers no steward guard any more, so none is `hooks`. */
 export type ElementId = 'mcp' | 'context' | 'projection';
 /**
- * §5.4's four capabilities, plus `absent` for a removal row whose element this workspace does not own: claiming
+ * The four capabilities, plus `absent` for a removal row whose element this workspace does not own: claiming
  * `registered` for something that is not there would be a false report.
  */
 export type Capability = 'registered' | 'not selected' | 'unsupported by host' | 'refused' | 'absent';
@@ -112,7 +111,7 @@ export interface Conflict {
 export interface Element {
   readonly id: ElementId;
   /**
-   * §4's plan actions. `none` is an element with nothing to do: the unselected context element, or a removal of an
+   * The plan actions. `none` is an element with nothing to do: the unselected context element, or a removal of an
    * element this workspace does not own.
    */
   readonly action: 'create' | 'update' | 'unchanged' | 'remove' | 'refused' | 'none';
@@ -120,13 +119,13 @@ export interface Element {
   readonly capability: Capability;
   readonly conflict: Conflict | null;
   /**
-   * The projection's per-file actions (B9). `remove` includes each 1.x steward file the state owns; `foreign` is a
+   * The projection's per-file actions. `remove` includes each 1.x steward file the state owns; `foreign` is a
    * `.claude/agents/*.md` file it does not own, marked or not: listed and never touched, so it is not a conflict.
    */
   readonly files?: readonly ProjectionAction[];
-  /** The projection's B11 step: `retire` when the apply first removes a steward-guard registration this workspace owns. */
+  /** The projection's guard retirement: `retire` when the apply first removes a steward-guard registration it owns. */
   readonly guard?: 'retire' | 'none';
-  /** The projection's hook groups (claude): what the apply does to each authored `@hook`'s group (plan amendment C9). */
+  /** The projection's hook groups (claude): what the apply does to each authored `@hook`'s group. */
   readonly hooks?: readonly HookAction[];
   /** The authored records the host does not take, each with the reason (an unregistered hook included). */
   readonly unsupported?: readonly UnsupportedRow[];
@@ -152,7 +151,7 @@ export interface HostView {
   readonly userPlugin: UserPlugin | null;
   /**
    * The projection rendering this plan made, on the session an apply's mandate gate judged; null for a removal. The apply
-   * writes exactly it, so the profile and the files written read one snapshot (review C3-N2).
+   * writes exactly it, so the profile and the files written read one snapshot.
    */
   readonly rendered: HostOutput | null;
 }
@@ -164,29 +163,29 @@ export interface UserPlugin {
 export const USER_PLUGIN_COMMAND = 'ia host claude --user --apply';
 export const USER_PLUGIN_MISSING = `The user-level plugin is not installed; run "${USER_PLUGIN_COMMAND}" to add it.`;
 
-/** §5.3's sentence, verbatim, per host. Every element — the projection included — is machine-local. */
+/** §4's machine-local sentence, per host. Every element — the projection included — is machine-local. */
 export const MACHINE_LOCAL: Readonly<Record<HostName, string>> = {
   claude:
     'These files are machine-local: .mcp.json, .claude/settings.local.json, .claude/rules/ia-workspace.md, .claude/skills/ia-authoring/, the agents and skills generated from authored records under .claude/agents/ and .claude/skills/, and .ia/distributions/. Do not commit them.',
   codex:
     'These files are machine-local: .codex/config.toml, AGENTS.md, .agents/skills/ia-authoring/, the skills generated from authored records under .agents/skills/, and .ia/distributions/. Do not commit them.',
 };
-/** §5.4: the MCP element's one fixed addition, from §2.3's host facts. */
+/** The MCP element's one fixed addition, from the host's facts. */
 export const MCP_APPROVAL = 'Claude Code asks for approval before starting a project MCP server.';
 /**
- * Operator decision 2026-10-08 (plan amendment B11), said where the guard used to be registered, as operator decision
- * 2026-09-23 ("narrow + disclose") said what it refused: the guard is retired, so nothing it refused is refused now.
+ * From 2026-10-08 this says where the guard used to be registered, as from 2026-09-23 it said what the guard refused:
+ * the guard is retired, so nothing it refused is refused now.
  */
 export const GUARD_SCOPE =
   'ia host registers one guard group per authored @hook, which refuses an edit its paths and tools select unless the acting agent holds a governing @mandate granting Synthesis there; it registers no per-system steward guard, and applying the projection retires one an earlier release registered.';
-/** §5.1's files, exported once so `ia doctor` names the same ones. */
+/** §4's files, exported once so `ia doctor` names the same ones. */
 export const MCP_PATH: Readonly<Record<HostName, string>> = { claude: '.mcp.json', codex: '.codex/config.toml' };
 export const SETTINGS = '.claude/settings.local.json';
 export const HOSTS_AREA = '.ia/distributions/hosts';
 /**
- * §5.1's state files. Their presence says whether this workspace owns an element; their content is the mechanisms'.
- * `hooks` is a steward-guard registration an earlier release made, which the projection apply retires (B11), and
- * `receipt` the receipt it writes beside the projection state (B12).
+ * The state files. Their presence says whether this workspace owns an element; their content is the mechanisms'.
+ * `hooks` is a steward-guard registration an earlier release made, which the projection apply retires, and `receipt`
+ * the receipt it writes beside the projection state.
  */
 export const STATE = {
   mcp: (host: HostName): string => `${HOSTS_AREA}/${host}-${HOST_REGISTRATION}.json`,
@@ -219,7 +218,7 @@ const OWNED_HOOKS = `every IA hook group in ${SETTINGS} (each runs the guard for
 export function stateRepair(host: HostName, path: string, rerun: string): string | null {
   if (path === STATE.mcp(host)) return `Delete ${path} and ${OWNED_MCP[host]}, then run "${rerun}".`;
   if (host === 'claude' && path === STATE.hooks) return `Delete ${path} and ${OWNED_GUARD}, then run "${rerun}".`;
-  // Review finding H-N3: the hook ownership state names the groups it owns, so both go before the rerun.
+  // The hook ownership state names the groups it owns, so both go before the rerun.
   if (host === 'claude' && path === STATE.hookGroups) return `Delete ${path} and ${OWNED_HOOKS}, then run "${rerun}".`;
   if (path === STATE.projection(host) || path === STATE.receipt(host)) return `Delete ${path}, then run "${rerun}".`;
   return null;
@@ -232,18 +231,18 @@ export function modifiedRepair(host: HostName, elements: readonly ('mcp' | 'hook
   const owned = elements.map((element) => (element === 'mcp' ? OWNED_MCP[host] : OWNED_GUARD)).join(' and ');
   return `Delete ${owned}, then run "ia host ${host} --remove --apply" and register again.`;
 }
-/** §8: each pending journal names its own recovery on the distribution binary. `ia doctor` reports the same ones. */
+/** §6: each pending journal names its own recovery on the distribution binary. `ia doctor` reports the same ones. */
 export const JOURNALS: readonly (readonly [string, string])[] = [
   [`${HOSTS_AREA}/pending.json`, 'recover-host'],
   [`${HOSTS_AREA}/guard-pending.json`, 'recover-guard'],
   [`${HOSTS_AREA}/lifecycle-pending.json`, 'recover-lifecycle'],
 ];
-/** §8: the lock every host sub-transaction holds while it writes (`acquireHostRegistrationLock`). */
+/** §5: the lock every host sub-transaction holds while it writes (`acquireHostRegistrationLock`). */
 export const HOST_LOCK = `${HOSTS_AREA}/lock.json`;
 /**
- * The close of a remedy whose follow-up is the refused command itself, run again as typed, so the recovery before it
- * is the one command named (design row 27). `ia init --host` cannot simply be run again once it has initialized, so it
- * names `ia host` instead of such a remedy.
+ * The close of a remedy whose follow-up is the refused command itself, run again as typed, so the recovery before it is
+ * the one command named. `ia init --host` cannot simply be run again once it has initialized, so it names `ia host`
+ * instead of such a remedy.
  */
 export const THEN_RERUN = ', then rerun.';
 /** An installed CLI recovery, delegating the named distribution mechanism with an explicit root. */
@@ -283,9 +282,9 @@ export function runRecovery(context: Context): Result {
 }
 
 /**
- * §8 "or refuses naming a recovery": a held host lock is another run or a killed one, and nothing here can tell
- * which, so the next action names the recovery that decides it — `recoverHost` takes the lock in recovery mode,
- * which clears a dead holder's lock and refuses a live one. It names no `ia host` command, so `--root` needs no rewrite.
+ * §5: a held host lock names its recovery. It is another run or a killed one, and nothing here can tell which, so the
+ * next action names the recovery that decides it — `recoverHost` takes the lock in recovery mode, which clears a dead
+ * holder's lock and refuses a live one. It names no `ia host` command, so `--root` needs no rewrite.
  */
 export const lockNext = (root: string): string =>
   `Another ia host run holds the host lock, or a killed run left it: run "${recoverCommand('recover-host', root)}" (it clears a dead holder's lock and refuses a live one)${THEN_RERUN}`;
@@ -303,7 +302,7 @@ export function lockRefusal(error: unknown, root: string): Refusal | null {
 /** lifecycle-profile.ts: Codex's hooks are unavailable, and the profile says why. */
 const CODEX_HOOKS = lifecycleProfile('codex', '0.116.0').reason ?? 'Codex hooks are unavailable.';
 
-/** §3.3 step 1, through the service: a missing or malformed pin or archive is IA-DIST-ARTIFACT-UNAVAILABLE. */
+/** §3, through the service: a missing or malformed pin or archive is IA-DIST-ARTIFACT-UNAVAILABLE. */
 const bundledPin = (packageRoot: string): ReturnType<typeof readHostPin> =>
   located(null, DAMAGED, () => readHostPin(packageRoot));
 /** The running installation's payload release, or null with the code that kept it from being read. */
@@ -337,7 +336,7 @@ export function requireInitialized(root: string, named: string = root): void {
 /** The journal a failed transaction left behind, if any, with the command that recovers it. */
 export const pendingJournal = (root: string): readonly [string, string] | undefined =>
   JOURNALS.find(([path]) => existsSync(resolve(root, path)));
-/** Design row 27: the recovery is the one command named; the refused command is simply run again after it. */
+/** The recovery is the one command named; the refused command is simply run again after it. */
 export const recoverNext = (root: string, command: string): string =>
   `Run "${recoverCommand(command, root)}"${THEN_RERUN}`;
 /**
@@ -365,10 +364,10 @@ export const refusedPath = (error: unknown): string | null =>
     ? error.path
     : null;
 /**
- * §6.3: the repair for a projection refusal with `code` located at `path`. The ownership state has its own repair; a
- * guard group the retirement (B11) refuses as changed is deleted by hand, after which the retirement removes the
- * ownership state alone, and settings it cannot read are fixed; any other file is never replaced or adopted, so it is
- * moved or deleted first. `ia host`, `ia doctor` and the install refresh all name it this way.
+ * §6: the repair for a projection refusal with `code` located at `path`. The ownership state has its own repair; a
+ * guard group the retirement refuses as changed is deleted by hand, after which the retirement removes the ownership
+ * state alone, and settings it cannot read are fixed; any other file is never replaced or adopted, so it is moved or
+ * deleted first. `ia host`, `ia doctor` and the install refresh all name it this way.
  */
 export const projectionRepair = (host: HostName, path: string, rerun: string, code?: string): string =>
   code === 'IA-CLI-FAILED'
@@ -380,15 +379,14 @@ export const projectionRepair = (host: HostName, path: string, rerun: string, co
           ? `Delete only the IA guard group in ${path}, then run "${rerun}".`
           : `Fix ${path}, then run "${rerun}".`));
 /**
- * What a hook-registration refusal carries so it can name its own recovery (review findings H-R1 and H-R4): an owned
- * group deleted (`missing`), or changed or duplicated (`modified`), by hand, or a recorded host payload a change of hooks
- * needs and cannot use.
+ * What a hook-registration refusal carries so it can name its own recovery: an owned group deleted (`missing`), or
+ * changed or duplicated (`modified`), by hand, or a recorded host payload a change of hooks needs and cannot use.
  */
 export type HookRefusal =
   | { readonly drift: 'missing' | 'modified'; readonly hook: string }
   | { readonly drift: 'foreign'; readonly hook: string; readonly path: string }
   | { readonly payload: string };
-/** The populated skill folder a projection refusal names (distribution's `skillFolder`, review finding A-F2), if any. */
+/** The populated skill folder a projection refusal names (distribution's `skillFolder`), if any. */
 export const skillFolderOf = (error: unknown): string | undefined =>
   error !== null && typeof error === 'object' && 'skillFolder' in error && typeof error.skillFolder === 'string'
     ? error.skillFolder
@@ -473,13 +471,13 @@ export function projectionFailure(error: unknown, root: string, host: HostName, 
 export const projectedHosts = (root: string): readonly HostName[] =>
   WORKSPACE_HOSTS.filter((host) => existsSync(resolve(root, STATE.projection(host))));
 /**
- * The apply that repairs `host`'s projection, which `ia doctor` and the install refresh both name (task
- * ia-project-verb): `ia host <host> --apply` for a registered host, and `ia project <host> --apply` for a projection
- * `ia project` wrote without a registration, which `ia host` would also register an MCP server for.
+ * The apply that repairs `host`'s projection, which `ia doctor` and the install refresh both name:
+ * `ia host <host> --apply` for a registered host, and `ia project <host> --apply` for a projection `ia project` wrote
+ * without a registration, which `ia host` would also register an MCP server for.
  */
 export const projectionRerun = (root: string, host: HostName): string =>
   existsSync(resolve(root, STATE.mcp(host))) ? `ia host ${host} --apply` : `ia project ${host} --apply`;
-/** §8: a pending journal refuses the whole verb and names the recovery that clears it. `ia project` shares it. */
+/** §6: a pending journal refuses the whole verb and names the recovery that clears it. `ia project` shares it. */
 export function requireIdle(root: string, supplied: string): void {
   try {
     assertHostRegistrationIdle(root);
@@ -531,7 +529,7 @@ function registrationElement(path: string, owned: boolean, remove: boolean, plan
   }
 }
 /**
- * §5.2: the context element. Claude reports it `not selected` until the gate lifts; Codex reports it `unsupported by
+ * §4: the context element. Claude reports it `not selected` until the gate lifts; Codex reports it `unsupported by
  * host`, because it is delivered through lifecycle hooks and Codex hooks are unavailable, so both hosts carry the
  * same three rows.
  */
@@ -543,17 +541,18 @@ const contextElement = (host: HostName): Element => ({
   conflict: null,
 });
 /**
- * §5.1 `projection`, planned by the real planners: B11's retirement of an owned guard registration, then the file plan
- * (B9). Both read only the workspace, so the plan is exactly apply's. A retirement is a change, and so is a missing
- * receipt, which every apply writes (B12), so a projection whose files are unchanged is then an update; a removal that
- * finds only a guard registration or a receipt removes them. `ia project` plans with it, and both verbs' applies
- * re-plan with it (`replanProjection`), so no two of them can plan the projection differently.
+ * §4 `projection`, planned by the real planners: the retirement of an owned guard registration, then the file plan.
+ * Both read only the workspace, so the plan is exactly apply's. A retirement is a change, and so is a missing receipt,
+ * which every apply writes, so a projection whose files are unchanged is then an update; a removal that finds only a
+ * guard registration or a receipt removes them. `ia project` plans with it, and both verbs' applies re-plan with it
+ * (`replanProjection`), so no two of them can plan the projection differently.
  */
 export function projectionElement(
   root: string,
   host: HostName,
   rendered: HostOutput | null,
   cache: HookCache = null,
+  verify?: HostVerifier,
 ): Element {
   const refused = (conflict: Conflict): Element => ({
     id: 'projection',
@@ -565,7 +564,7 @@ export function projectionElement(
   let guard: 'retire' | 'none', hooks: readonly HookAction[], unregistered: readonly UnsupportedRow[];
   try {
     guard = planRetirement(root, host) === null ? 'none' : 'retire';
-    const step = planHookStep(root, host, rendered, cache);
+    const step = planHookStep(root, host, rendered, cache, verify);
     hooks = step.plan?.hooks ?? [];
     unregistered = step.unregistered;
   } catch (error) {
@@ -616,7 +615,7 @@ function invocationOf(context: Context, host: HostName, remove: boolean): string
 export function collectHost(context: Context): HostView {
   const { args, host } = context;
   // Host plugin distribution spec §4: the adapter table decides. An unknown host is usage, and so is --context with
-  // Codex; both precede every read (§3). A known row without the workspace set (Cursor, planned) refuses.
+  // Codex; both precede every read (contract §1.2). A known row without the workspace set (Cursor, planned) refuses.
   const given = args.positionals[0] ?? '';
   if (hostRow(given) === undefined) throw new UsageError(`ia host takes claude, codex or cursor; got ${given}`);
   const row = workspaceRow(given);
@@ -638,8 +637,8 @@ export function collectHost(context: Context): HostView {
     throw new UsageError('--context applies to claude only; Codex hooks are unavailable');
   const supplied = requireRoot(context);
   requireInitialized(supplied);
-  // Spec §5.2's gate: until the binding's coordinate, bootstrap and policy are derived and one context run from a v2
-  // payload is observed generating, the context element refuses. The spec fixes this code for the gate.
+  // Host registration spec §4's gate: until the binding's coordinate, bootstrap and policy are derived and one context
+  // run from a v2 payload is observed generating, the context element refuses. The spec fixes this code for the gate.
   if (selected !== undefined)
     throw new Refusal(
       'IA-DIST-HOST-UNSUPPORTED',
@@ -653,20 +652,20 @@ export function collectHost(context: Context): HostView {
   // Every IA home remedy ends by planning this invocation again; `runHost` adds `--root` as it does to every next action.
   const plan = `ia host ${name}${remove ? ' --remove' : ''}`;
   const home = hostHome(host.env, plan);
-  // §3.3: neither may contain the other; the service raises IA-DIST-PATH-UNSAFE.
+  // §5: neither may contain the other; the service raises IA-DIST-PATH-UNSAFE.
   located(supplied, `Move the workspace, or set IA_HOME to an absolute directory outside it; then run "${plan}".`, () =>
     assertHomeOutsideWorkspace(home, root),
   );
-  // §3: refuse a home that itself looks like a workspace at plan time, before any payload write is attempted.
+  // §5: refuse a home that itself looks like a workspace at plan time, before any payload write is attempted.
   located(null, homeSrcRemedy(home, plan), () => assertIaHomeUsable(home));
   const { pin: bundled } = bundledPin(host.packageRoot);
   requireIdle(root, supplied);
-  // §4: zero error findings before anything is rendered or registered. A removal renders nothing and reads no record, so
-  // it needs neither an admitting workspace nor records that open (review findings H-R2 and H-R8): it is what restores
-  // editing when a broken record or an unreadable workspace leaves a hook group refusing the repair.
-  // Review C2-R7: a workspace apply writes the projection `ia project --apply` writes, so it is the effect mode (Execution)
-  // under the participant's mandate profile, judged on the rendering session before the confirmation; its plan writes
-  // nothing, `--remove` restores editing, and `--user` reads no workspace, so none of them is gated.
+  // §4: zero error findings before anything is rendered or registered. A removal renders nothing and reads no record,
+  // so it needs neither an admitting workspace nor records that open: it is what restores editing when a broken record
+  // or an unreadable workspace leaves a hook group refusing the repair.
+  // A workspace apply writes the projection `ia project --apply` writes, so it is the effect mode (Execution) under the
+  // participant's mandate profile, judged on the rendering session before the confirmation; its plan writes nothing,
+  // `--remove` restores editing, and `--user` reads no workspace, so none of them is gated.
   const rendered: HostOutput | null = remove
     ? null
     : renderProjectionFor(root, name, args.flag('apply') ? sessionGate(context, 'effect') : undefined);
@@ -699,7 +698,7 @@ export function collectHost(context: Context): HostView {
   };
 }
 
-/** One applied element; the projection's also says whether it retired a steward-guard registration first (B11). */
+/** One applied element; the projection's also says whether it retired a steward-guard registration first. */
 export interface AppliedElement {
   readonly id: ElementId;
   readonly status: string;
@@ -710,7 +709,7 @@ export interface HostApplied {
   readonly elements: readonly AppliedElement[];
   readonly observed: false;
 }
-/** What an apply that retired the steward guard (B11) says it did. */
+/** What an apply that retired the steward guard says it did. */
 export const GUARD_RETIRED =
   'Retired the steward guard an earlier release registered: its group in .claude/settings.local.json and its ownership state are removed.';
 /** A next action of this verb as printed: with `--root` given, each `ia host` command in it carries the root. */
@@ -719,15 +718,15 @@ const say = (view: Pick<HostView, 'host' | 'root' | 'rooted'>, text: string): st
 /** The next action a conflict renders, and the one its refusal carries, rooted when `--root` was given. */
 const nextFor = (view: HostView, id: ElementId, conflict: Conflict): string =>
   safeRootAdvice(say(view, conflictNext(view, id, conflict)), [view.root]);
-/** The unrooted next action for a conflict. §5.3 fixes the unowned MCP entry's wording. */
+/** The unrooted next action for a conflict. */
 function conflictNext(view: HostView, id: ElementId, conflict: Conflict): string {
   const rerun = `ia host ${view.host}${view.remove ? ' --remove' : ''} --apply`;
   // An unreadable ownership state: the mechanisms locate the refusal at the state file itself.
   const unreadable = stateRepair(view.host, conflict.path, rerun);
   if (unreadable !== null) return unreadable;
   if (conflict.code === 'IA-DIST-LOCAL-MODIFICATION' && id === 'mcp') {
-    // Owned: removal tolerates a deleted entry, so deleting it and re-registering converges. Unowned: §5.3's wording,
-    // made exact for Codex, where the collision can be any ia-workspace table or a file that no longer parses.
+    // Owned: removal tolerates a deleted entry, so deleting it and re-registering converges. Unowned: remove that
+    // entry, made exact for Codex, where the collision can be any ia-workspace table or a file that no longer parses.
     if (view.owned.has('mcp')) return modifiedRepair(view.host, ['mcp']);
     return view.host === 'codex'
       ? 'Remove any ia-workspace server outside the IA block from .codex/config.toml and make sure the file parses as TOML, then run "ia host codex --apply".'
@@ -763,15 +762,16 @@ export function replanProjection(
   rendered: HostOutput | null,
   refuse: (conflict: Conflict) => Refusal,
   cache: HookCache = null,
+  verify?: HostVerifier,
 ): void {
-  const { conflict } = projectionElement(root, host, rendered, cache);
+  const { conflict } = projectionElement(root, host, rendered, cache, verify);
   if (conflict !== null) throw refuse(conflict);
 }
 /**
- * §3.3 steps 3-4. A payload directory that fails verification is named by the mechanism and the remedy is to delete
+ * §3. A payload directory that fails verification is named by the mechanism and the remedy is to delete
  * it; nothing overwrites it. Any other failure is the bundled payload's own, which only a reinstall repairs.
  */
-function materialize(view: HostView, packageRoot: string): string {
+function materialize(view: HostView, packageRoot: string, verify: HostVerifier): string {
   const { pin: bundled, archive, archivePath } = bundledPin(packageRoot);
   const payload = hostPayloadPath(view.home, bundled.release);
   // Re-checked explicitly rather than inferred from a caught refusal's message: verifyNaming's own PATH-UNSAFE
@@ -781,7 +781,7 @@ function materialize(view: HostView, packageRoot: string): string {
     assertIaHomeUsable(view.home),
   );
   try {
-    return materializeHostPayload({ home: view.home, archive: archive(), pin: bundled }).directory;
+    return materializeHostPayload({ home: view.home, archive: archive(), pin: bundled, verify }).directory;
   } catch (error) {
     const refusal = refusalOf(error),
       corrupt = refusal.message.includes(payload);
@@ -796,12 +796,12 @@ function materialize(view: HostView, packageRoot: string): string {
 }
 
 /**
- * §8: mcp, projection in order; removal in reverse. The payload is materialized, then every sub-transaction is
- * re-planned with the verifying planners before any is applied — the projection's guard retirement (B11) and file plan
+ * §4: mcp, projection in order; removal in reverse. The payload is materialized, then every sub-transaction is
+ * re-planned with the verifying planners before any is applied — the projection's guard retirement and file plan
  * included — so a refusal any planner can find is raised before the workspace changes; each apply then re-plans under
  * the host lock and refuses a plan that went stale. The projection is applied through `applyHostProjection`, the one
- * writer of projection files, which retires an owned steward guard before any projection file changes and reports it
- * as the element's `guard`. Cancellation is observed between sub-transactions. A failure after an element was written
+ * writer of projection files, which retires an owned steward guard before any projection file changes and reports it as
+ * the element's `guard`. Cancellation is observed between sub-transactions. A failure after an element was written
  * names the rerun that finishes the set, or the recovery a pending journal needs. `checkpoint` runs after each element
  * completes, which is where an interruption test cuts.
  */
@@ -852,9 +852,9 @@ export function applyHostSet(
     checkpoint(id);
   };
   /**
-   * Design item 9 (plan amendment C16): the host's join receipts. Receipts that cannot be read are never replaced, and a
-   * rerun alone would refuse again, so their refusal names deleting them first: they are derived, and the rerun records
-   * them again. Any other failure is `failure`'s.
+   * The host's join receipts. Receipts that cannot be read are never replaced, and a rerun alone would refuse again, so
+   * their refusal names deleting them first: they are derived, and the rerun records them again. Any other failure is
+   * `failure`'s.
    */
   const joinFailure = (error: unknown): unknown => {
     if (refusedPath(error) !== JOINS || pendingJournal(root) !== undefined) return failure(error);
@@ -879,28 +879,42 @@ export function applyHostSet(
       throw joinFailure(error);
     }
   };
-  // Review finding B-N1: receipts that cannot be read refuse before anything is written, the payload included, rather
-  // than after the MCP registration (`joinHost` and `leaveHost` read them again under the host lock).
+  // Receipts that cannot be read refuse before anything is written, the payload included, rather than after the MCP
+  // registration (`joinHost` and `leaveHost` read them again under the host lock).
   try {
     readJoins(root);
   } catch (error) {
     throw joinFailure(error);
   }
+  /**
+   * One verification of the payload for this command's plans before its first workspace write. It is made after the
+   * last write to the payload (`materialize`), and only the MCP plan and the projection re-plan read through it. The
+   * projection step plans its hooks afresh, so a payload that changed during the MCP apply refuses before the
+   * projection's evidence or guard retirement is written; and every check that guards a commit (`applyHost` and
+   * `applyHookRegistration` re-planning under the host lock, and their checks before activation and commit) verifies
+   * afresh.
+   */
+  const verify = hostVerifier();
   const project = (rendered: HostOutput | null, cache: HookCache) => (): Omit<AppliedElement, 'id'> => {
     const { status, guard } = applyHostProjection(root, host, rendered, undefined, undefined, cache);
     return { status, guard };
   };
   if (!view.remove) {
-    const cache = materialize(view, packageRoot);
-    const mcp = replan(view, 'mcp', MCP_PATH[host], () => planHost(root, host, cache));
-    // Review C3-N2: the rendering the plan's gated session made, re-planned against the files as they are now.
+    const cache = materialize(view, packageRoot, verify);
+    const mcp = replan(view, 'mcp', MCP_PATH[host], () => planHost(root, host, cache, undefined, verify));
+    // The rendering the plan's gated session made, re-planned against the files as they are now.
     const { rendered } = view;
     // Only a removal's view carries no rendering (collectHost); an apply always has the one its gated plan made.
     if (rendered === null) throw new Error('A host apply view carries no rendering');
-    // The hook groups run the guard in the payload just materialized and verified (plan amendment C9).
-    replanProjection(root, host, rendered, (conflict) => refusalFor(view, 'projection', conflict), {
-      verified: cache,
-    });
+    // The hook groups run the guard in the payload just materialized and verified.
+    replanProjection(
+      root,
+      host,
+      rendered,
+      (conflict) => refusalFor(view, 'projection', conflict),
+      { verified: cache },
+      verify,
+    );
     step('mcp', () => ({ status: applyHost(mcp).status }));
     done.push(skipped('context'));
     step('projection', project(rendered, { verified: cache }));
@@ -921,12 +935,12 @@ export function applyHostSet(
 }
 
 /**
- * A conflict as the `--json` envelopes print it (review finding A-F4): its code, path and reason. The descriptors a
- * refusal carries to word its own repair (`hook`, `folder`) stay internal; the repair is the refusal's `next`.
+ * A conflict as the `--json` envelopes print it: its code, path and reason. The descriptors a refusal carries to word
+ * its own repair (`hook`, `folder`) stay internal; the repair is the refusal's `next`.
  */
 export const printedConflict = (conflict: Conflict | null): Conflict | null =>
   conflict === null ? null : { code: conflict.code, path: conflict.path, reason: conflict.reason };
-/** §4 `--json`: the plan always, and `applied` only after an apply. */
+/** `--json`: the plan always, and `applied` only after an apply. */
 const hostEnvelope = (view: HostView, applied: HostApplied | null): unknown => ({
   version: 1,
   command: 'host',
@@ -971,7 +985,7 @@ function elementFields(view: HostView): readonly Field[] {
     };
   });
 }
-/** A projection plan's B11 step as its plan says it, in `ia host` and `ia project` alike. */
+/** A projection plan's guard retirement as its plan says it, in `ia host` and `ia project` alike. */
 export const GUARD_RETIRE = `first retires the steward guard registered in ${SETTINGS}`;
 /**
  * Each projected file with its action, at `column`; a foreign steward file says why it is left alone. `ia host` nests
@@ -1006,7 +1020,7 @@ const HOOK_SYMBOL: Readonly<Record<HookAction['action'], SymbolName>> = {
   unchanged: 'info',
   remove: 'removed',
 };
-/** Each authored `@hook`'s group with its action (plan amendment C9), worded alike by `ia host` and `ia project`. */
+/** Each authored `@hook`'s group with its action, worded alike by `ia host` and `ia project`. */
 export const projectionHookRows = (
   hooks: readonly HookAction[],
   column: number,
@@ -1033,8 +1047,8 @@ export const unsupportedRows = (
     ),
   );
 /**
- * Each projected file, then each hook group and each record not taken, nested at the elements block's content column
- * (§6.4 rule 3), under the element they belong to.
+ * Each projected file, then each hook group and each record not taken, nested at the elements block's content column,
+ * under the element they belong to.
  */
 const fileBlock = (view: HostView, caps: Capabilities): readonly string[] => {
   const projection = view.elements.find((element) => element.id === 'projection'),
@@ -1061,8 +1075,8 @@ const elementsBlock = (view: HostView, caps: Capabilities): readonly string[] =>
   ...fileBlock(view, caps),
 ];
 /**
- * §5.3's machine-local sentence and, for a Claude registration, §5.4's approval note and the guard's retirement (only
- * Claude ever registered the guard, B11). `ia init --host` prints the same blocks after its host step, so the two verbs
+ * §4's machine-local sentence and, for a Claude registration, the MCP approval note and the guard's retirement (only
+ * Claude ever registered the guard). `ia init --host` prints the same blocks after its host step, so the two verbs
  * cannot word them differently.
  */
 export const hostNotes = (host: HostName, caps: Capabilities, remove = false): readonly (readonly string[])[] => [
@@ -1075,8 +1089,8 @@ export const hostNotes = (host: HostName, caps: Capabilities, remove = false): r
     : []),
 ];
 /**
- * §7.1: a registration plan also names the missing user-level plugin's command. It is printed as is, never through
- * `say`: that command belongs to no workspace, so it never carries --root.
+ * Host plugin distribution spec §7.1: a registration plan also names the missing user-level plugin's command. It is
+ * printed as is, never through `say`: that command belongs to no workspace, so it never carries --root.
  */
 const notesBlocks = (view: HostView, caps: Capabilities): readonly (readonly string[])[] => [
   ...hostNotes(view.host, caps, view.remove),
@@ -1116,7 +1130,7 @@ export function renderHostPlan(
           ...(applied === null && !conflicted
             ? commandFacts('Apply with "', `${view.invocation} --apply --yes`, '".', 3, caps, [view.root, supplied])
             : []),
-          // `plan.undo` stays unrooted (§4 `--json`); the printed command carries --root when it was given.
+          // `plan.undo` stays unrooted in `--json`; the printed command carries --root when it was given.
           ...(view.remove
             ? []
             : commandFacts('Undo with "', say(view, `"${view.undo}"`).slice(1, -1), '".', 3, caps, [view.root])),
@@ -1129,7 +1143,7 @@ export function renderHostPlan(
     { leadingBlank: true },
   );
 }
-/** §2.8 rule 3's summary: what the preview shows, without its note or footer, because the question is the action. */
+/** Contract §2.0's summary: what the preview shows, without its note or footer, because the question is the action. */
 const renderHostSummary = (view: HostView, caps: Capabilities): string =>
   document([headerBlock(view, caps), elementsBlock(view, caps), ...notesBlocks(view, caps)], { leadingBlank: true });
 export const CONFIRMATION = 'Apply this host registration? [y/N] ';
@@ -1137,7 +1151,7 @@ const REMOVAL_CONFIRMATION = 'Remove this host registration? [y/N] ';
 
 export async function runHost(context: Context): Promise<Result> {
   const { args, caps, host, json } = context;
-  // Host plugin distribution spec §7.1: `--user` is the user-level entry point, which needs no workspace.
+  // Host plugin distribution spec §6.3: `--user` is the user-level entry point, which needs no workspace.
   if (args.flag('user')) return runUserHost(context);
   let view: HostView;
   try {
@@ -1170,9 +1184,9 @@ export async function runHost(context: Context): Promise<Result> {
     json
       ? { exitCode: 0, stdout: JSON.stringify(hostEnvelope(view, applied)) + '\n', stderr: '' }
       : { exitCode: 0, stdout: renderHostPlan(view, applied, caps, args.value('root')), stderr: '' };
-  // §4: a plan with a conflict is a successful report; only --apply refuses it.
+  // §5: a plan with a conflict is a successful report; only --apply refuses it.
   if (!args.flag('apply')) return rendered(null);
-  // §2.8 rule 3. Parsing has already refused every --apply whose question cannot be asked or answered.
+  // Contract §2.0. Parsing has already refused every --apply whose question cannot be asked or answered.
   if (
     !args.flag('yes') &&
     !(await confirm(host.interaction, renderHostSummary(view, caps), view.remove ? REMOVAL_CONFIRMATION : CONFIRMATION))

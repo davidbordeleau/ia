@@ -651,7 +651,7 @@ it('reports an unprovisioned default registry as unavailable, and a configured b
   await expect(registryWithdrawals(root, lock, flagged())).rejects.toMatchObject(notRegistry);
 });
 
-// Registry spec §5.1 and §6.3, operator decision 2026-09-23: cached lock pins answer for themselves.
+// Registry spec §5.1 and §6.3: cached lock pins answer for themselves.
 const fetchedIndexes = (requested: readonly string[]) =>
   requested.filter((u) => u.includes('/packages/')).map((u) => u.slice(`${HTTPS}packages/`.length));
 const fetchedArtifacts = (requested: readonly string[]) => requested.filter((u) => u.includes('/artifacts/'));

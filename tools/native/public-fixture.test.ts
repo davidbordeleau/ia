@@ -5,7 +5,7 @@ import { publicFixtureCapture } from './public-fixture.js';
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));
 
-it('returns a whole-corpus capture usable by the M6 reader without repository release work', () => {
+it('returns a whole-corpus capture usable by the corpus reader without repository release work', () => {
   const capture = publicFixtureCapture(repository);
   expect(capture.version).toBe(1);
   expect(capture.selection).toBeUndefined();

@@ -31,7 +31,7 @@
     decider "Release maintainer"
     choice "Read the npm version from releases/current.json and derive package membership from the selected public package manifests; bind historical choices to their versioned changesets."
     rationale "A mutable release selection must have one authority. Work records state the qualification process and historical records retain immutable evidence."
-    constraints ["Native system, language archive and protocol versions remain independently selected.", "Work status does not establish qualification; current-source observations and exact archive receipts supply evidence.", "Merge, tags, registry publication, trust configuration and deployment require their own publication checkpoint."]
+    constraints ["Public native system and language archive artifact versions align with the npm release target at each new major and are content-driven within it; syntax, schema, format, engine and protocol versions retain their own compatibility meaning.", "Work status does not establish qualification; current-source observations and exact archive receipts supply evidence.", "Merge, tags, registry publication, trust configuration and deployment require their own publication checkpoint."]
 
 @plan npm-release-hygiene
   meaning
@@ -63,7 +63,7 @@
     owner "Release maintainer"
     source "tools/distribution/NPM-PUBLISHING.md"
     action "Run the release coverage and package qualification commands against the policy-selected source; retain exact receipts and report every refusal or unavailable prerequisite."
-    expected-artifact "Exact source-bound package qualification and archive receipts"
+    expected-artifact "artifacts/npm/npm-release.json, its exact archives and compatibility manifest, source-bound platform qualification evidence and the npm-consumer result for those archives. Partial checks do not close this task."
   relationships
     requires @decision npm-release-policy
 
@@ -77,6 +77,6 @@
     owner "Release reviewer"
     source "tools/distribution/NPM-PUBLISHING.md"
     action "Review the qualification receipts, trusted publication setup and remaining blockers without treating preparation as publication."
-    expected-artifact "Review of publication prerequisites and explicit remaining blockers"
+    expected-artifact "A retained review naming the exact source, npm-release.json and archive receipts reviewed, registry setup evidence and every unresolved publication prerequisite. Qualification alone does not close this review."
   relationships
     requires @task npm-release-hygiene-checks

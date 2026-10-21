@@ -25,8 +25,8 @@ export function runCli(
   try {
     const operation = args[0];
     if (operation === undefined || operation.startsWith('-')) return usage(USAGE.trim());
-    // spec-0012 CLI-01 and CLI-05: help or the schema asked in an option position answers before any option is checked, so
-    // it opens no workspace and reads no stdin. Each argument vector this changes was an IA-CLI-USAGE refusal at exit 2 before.
+    // Help or the schema asked in an option position answers before any option is checked, so it opens no workspace and
+    // reads no stdin. Each argument vector this changes was an IA-CLI-USAGE refusal at exit 2 before.
     const described = describeOperation(operation);
     const asked =
       described === undefined
@@ -55,8 +55,8 @@ export function runCli(
     } catch {
       return usage('--params must contain valid JSON');
     }
-    // Plan amendment A2: the machine routes are the version 1 operations, so the door serves version 1 and refuses a later
-    // version's operation, such as `read`, as the unknown operation 1.1.0 refused, byte for byte.
+    // The machine routes are the version 1 operations, so the door serves version 1 and refuses a later version's
+    // operation, such as `read`, as the unknown operation 1.1.0 refused, byte for byte.
     door = new Door(root, { cache: false, allowReport: true, protocol: 1 });
     const response: DoorResponse = door.request({ operation, params });
     const reportFailed =
@@ -97,7 +97,7 @@ const version = (): string => {
   }
 };
 /**
- * §2.8 rule 3's reader: one line from stdin, or null at EOF, on a closed stdin or on a stdin that errors. No
+ * §2.0's confirmation reader: one line from stdin, or null at EOF, on a closed stdin or on a stdin that errors. No
  * dependency and no prompt library — the question is a line written to stderr and a line read back, and the
  * decision it feeds is `consents()` in consumer.ts. stdin is paused again afterwards so a read cannot hold the
  * process open past the answer.
@@ -130,7 +130,7 @@ export function readLine(signal?: AbortSignal, stdin: Readable = process.stdin):
       const end = buffer.search(/\r?\n/);
       if (end !== -1) done(buffer.slice(0, end));
     };
-    // EOF with nothing typed is no answer at all, which §2.8 rule 3 declines; EOF after a line is that line.
+    // EOF with nothing typed is no answer at all, which §2.0 declines; EOF after a line is that line.
     const onEnd = (): void => {
       done(buffer === '' ? null : buffer);
     };
@@ -157,7 +157,7 @@ function host(controller: AbortController): Host {
     env: process.env,
     stdout: describe(process.stdout),
     stderr: describe(process.stderr),
-    // §2.8 rule 3 and §5: a question needs a terminal at both ends, and it is written to stderr, never to stdout.
+    // §2.0 and §5: a question needs a terminal at both ends, and it is written to stderr, never to stdout.
     // isatty(0) rather than process.stdin.isTTY: reading that getter constructs the stdin stream, and on POSIX
     // constructing it puts fd 0 into non-blocking mode. Every later readSync(0) on a pipe then throws EAGAIN once
     // the payload outgrows the pipe buffer — which is how this host, built before dispatch chooses a route, broke
@@ -196,7 +196,7 @@ export function installSignals(
 export const EXTENSIONS: readonly Extension[] = [];
 
 if (isEntry(process.argv[1], import.meta.url)) {
-  // §5: a closed stdout is a normal end of output. The three moves are apps/mcp-door/src/main.ts:27-30 and :35.
+  // A closed stdout is a normal end of output. The three moves are apps/mcp-door/src/main.ts's stdout error handlers.
   process.stdout.on('error', (error: NodeJS.ErrnoException) => {
     process.stdin.destroy();
     if (error.code !== 'EPIPE') throw error;

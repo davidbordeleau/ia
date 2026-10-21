@@ -1,8 +1,8 @@
 /**
- * Task execution-binding-host-entry (plan amendments C16 and C24): `ia validate`'s Bindings section. Each authored
- * `@execution-binding` is joined against the catalog its host joined; only a bound one is ever a pass, an unavailable
- * one says so, and a revoked one is an error. Nothing is executed. tests/equivalence.test.ts compares the section the
- * two validation binaries report and proves neither writes; this file owns its presentation.
+ * `ia validate`'s Bindings section. Each authored `@execution-binding` is joined against the catalog its host joined;
+ * only a bound one is ever a pass, an unavailable one says so, and a revoked one is an error. Nothing is executed.
+ * tests/equivalence.test.ts compares the section the two validation binaries report and proves neither writes; this
+ * file owns its presentation.
  */
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -31,7 +31,7 @@ const BINDINGS = `#! ia 1.0
     kind operation
     implementation missing-read-v1
 `;
-/** The canonical binding's own target line, which no `ia init` consumer can resolve (review finding B2-R1). */
+/** The canonical binding's own target line, which no `ia init` consumer can resolve. */
 const TARGETED = `#! ia 1.0
 
 @execution-binding targeted-read-binding
@@ -112,7 +112,7 @@ it('prints the Bindings section: unbound is never a pass, bound names the shippe
     expect(revoked.text).toContain('2 execution bindings are revoked, which is an error.');
     expect(revoked.text).toContain('The catalog host claude joined failed verification: IA-DIST-INTEGRITY-MISMATCH');
     expect(revoked.text).toContain(`${READ} captured-source-read-v1: revoked`);
-    // Review finding B2-N8: no admission error is listed, so the closing names the repair instead.
+    // No admission error is listed, so the closing names the repair instead.
     expect(revoked.text).not.toContain('Fix the errors above');
     expect(revoked.text).toContain(
       `Delete ${resolve(env.IA_HOST_HOME, 'hosts', envelope.bindings.catalog.release)}, the host payload that failed verification, then run "ia host claude --root ${quoteCommandRoot(root)} --apply".`,
@@ -123,8 +123,8 @@ it('prints the Bindings section: unbound is never a pass, bound names the shippe
     });
     // Revocation is the bindings' own error: admission's findings and their counts are unchanged.
     expect(JSON.parse((await validate(root, env, '--json')).stdout).counts).toEqual(envelope.counts);
-    // Review findings B3-R2 and B3-R3: a check naming a catalog evaluator is revoked by the same damaged catalog and
-    // fails the run on its own; since ia host refuses the check, the repair names it before the payload.
+    // A check naming a catalog evaluator is revoked by the same damaged catalog and fails the run on its own; since
+    // ia host refuses the check, the repair names it before the payload.
     put(root, '.ia/src/typing.ia', TYPING);
     const checked = await validate(root, env, '--json'),
       body = JSON.parse(checked.stdout);
@@ -142,7 +142,7 @@ it('prints the Bindings section: unbound is never a pass, bound names the shippe
     writeFileSync(handler, original);
   }
   expect((await validate(root, env)).exitCode).toBe(0);
-  // Only the shipped handler deleted (review finding B2-N4): the payload is incomplete rather than changed, so the
+  // Only the shipped handler deleted: the payload is incomplete rather than changed, so the
   // catalog is unavailable, every binding is unbound rather than revoked, and the run does not fail.
   rmSync(handler);
   try {

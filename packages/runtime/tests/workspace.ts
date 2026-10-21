@@ -19,7 +19,7 @@ export const methodId = 'governance-system/definition/procedure/sample-procedure
 export const lawPath = '.ia/src/systems/governance-system/records/sample-rule.ia';
 export const lawId = 'governance-system/governance/law/sample-rule';
 export const workspacePath = '.ia/src/systems/workspace-system/records/foundation-workspace.ia';
-/** The three records of plan T6 step 1 that a fresh init authors (B13), for the packet tests. */
+/** The three records a fresh `ia init` authors, for the packet tests. */
 export const packetFixture = resolve(import.meta.dirname, 'fixtures/packet/workspace.ia');
 const conformance = resolve(import.meta.dirname, '../../../examples/conformance/native');
 export function workspace(source: string | null = conformance): string {
@@ -50,7 +50,7 @@ export function declare(root: string, sources: readonly string[]): void {
   );
 }
 /**
- * A fresh init (plan T6 step 1): the three records an `ia init` authors at `.ia/src/workspace.ia`, over the conformance
+ * A fresh init: the three records an `ia init` authors at `.ia/src/workspace.ia`, over the conformance
  * corpus adopted at band 90 as the installed base would be, so the authored root holds those three records alone.
  * `vendored` adds files to the installed base before its revision is pinned.
  */

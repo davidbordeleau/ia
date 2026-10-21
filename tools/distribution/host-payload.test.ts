@@ -103,7 +103,7 @@ it('ships the installed read handler as a payload root and pins the catalog to t
   expect(operation.digest).toBe(sha(shipped));
   expect(listed(HANDLER)!.sha256).toBe(operation.digest);
   expect(inventory.packages.map((row) => row.name)).toContain('@inventarch/agent-composition-system');
-  // The row names the handler's package closure, every file of which the verified inventory pins (B-N5).
+  // The row names the handler's package closure, every file of which the verified inventory pins.
   expect(operation.packages).toEqual(
     expect.arrayContaining(['@inventarch/agent-composition-system', '@inventarch/db']),
   );
@@ -138,9 +138,9 @@ it('never reports the read handler available once its shipped bytes are altered 
     expect.objectContaining({ code: 'IA-DIST-ARTIFACT-UNAVAILABLE' }),
   );
   expect(() => verifyHostCache(missing)).toThrow(expect.objectContaining({ code: 'IA-DIST-ARTIFACT-UNAVAILABLE' }));
-  // B-R1: a module the inventory does not list, where Node's resolution would load it instead of the shipped
-  // agent-system: in the handler package's own node_modules, or beside the scope directory, outside every closure
-  // package. Either refuses the catalog, as host verification refuses the payload.
+  // A module the inventory does not list, where Node's resolution would load it instead of the shipped agent-system:
+  // in the handler package's own node_modules, or beside the scope directory, outside every closure package. Either
+  // refuses the catalog, as host verification refuses the payload.
   for (const planted of [
     'runtime/node_modules/@inventarch/agent-composition-system/node_modules/@inventarch/agent-system',
     'runtime/node_modules/@inventarch/node_modules/@inventarch/agent-system',
@@ -298,7 +298,12 @@ it('excludes the private service dependencies and the payload itself', async () 
       (p: { name: string }) => p.name === '@modelcontextprotocol/client' || p.name === '@inventarch/service-contracts',
     ),
   ).toBe(false);
-  expect([...files.keys()].some((path) => /@ia\/cli\/assets\/host(\/|\.json$)/.test(path))).toBe(false);
+  const hasNestedPayload = (paths: Iterable<string>) =>
+    [...paths].some((path) => /@inventarch\/cli\/assets\/host(\/|\.json$)/.test(path));
+  expect(hasNestedPayload(files.keys())).toBe(false);
+  // Prove the exclusion observes the current namespace before trusting its negative result.
+  for (const suffix of ['.json', '/payload.tgz'])
+    expect(hasNestedPayload([...files.keys(), `runtime/node_modules/@inventarch/cli/assets/host${suffix}`])).toBe(true);
   expect(
     packages.some((p) =>
       ['@inventarch/architecture-system', '@inventarch/code-quality-system', '@inventarch/monorepo-kit-host'].includes(
@@ -309,7 +314,7 @@ it('excludes the private service dependencies and the payload itself', async () 
   expect([...files.keys()].some((path) => /inventarch-development|development-native/.test(path))).toBe(false);
   expect(packages.length).toBeLessThanOrEqual(64);
 });
-it('bundles @ia manifests without the development condition, pinned by the bundled bytes', async () => {
+it('bundles @inventarch manifests without the development condition, pinned by the bundled bytes', async () => {
   const { files, packages } = await collectPayload(repository);
   for (const pkg of packages.filter((p) => p.name.startsWith('@inventarch/'))) {
     const bytes = files.get(`runtime/node_modules/${pkg.name}/package.json`) as Buffer;
@@ -395,7 +400,7 @@ it('keeps the catalog producer-only: no host app imports the composition package
       moduleProblem({ name, path: repository, app: true }, 'src/x.ts', '@inventarch/agent-composition-system'),
     ).toBe(`${name} may not depend on @inventarch/agent-composition-system`);
 });
-it('never ships, or imports at build time, an implementation package found above the repository (B-N3)', async () => {
+it('never ships, or imports at build time, an implementation package found above the repository', async () => {
   // A repository whose own node_modules lacks the implementation package, inside a directory whose node_modules has it.
   const outer = realpathSync(mkdtempSync(join(tmpdir(), 'ia-host-payload-outer-'))),
     fake = join(outer, 'repo'),
@@ -430,7 +435,7 @@ it('never ships, or imports at build time, an implementation package found above
   expect(readFileSync(resolve(extract(archive), 'inventory.json'), 'utf8')).not.toContain('@acme/impl');
   expect(pin.files).toBeGreaterThan(0);
 });
-it('resolves an implementation closure inside the repository install, never from an enclosing node_modules (B-RC2)', async () => {
+it('resolves an implementation closure inside the repository install, never from an enclosing node_modules', async () => {
   // The implementation is installed in the repository, but the package it depends on only in the enclosing directory.
   const outer = realpathSync(mkdtempSync(join(tmpdir(), 'ia-host-payload-ceiling-'))),
     candidate = join(outer, 'repo');
@@ -454,7 +459,7 @@ it('resolves an implementation closure inside the repository install, never from
     ]),
   ).rejects.toThrow('Installed package manifest unavailable: @acme/outside');
 });
-it('lists an implementation unavailable when its module closure is incomplete or leaves its package closure, and refuses one that declares nothing (B-N2)', async () => {
+it('lists an implementation unavailable when its module closure is incomplete or leaves its package closure, and refuses one that declares nothing', async () => {
   const files = (handler: string, extra: Record<string, string> = {}) =>
     new Map(
       Object.entries({

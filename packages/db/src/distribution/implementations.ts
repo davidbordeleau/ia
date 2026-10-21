@@ -1,8 +1,8 @@
 /**
- * The installed-implementation catalog's value (milestone generation-binding, plan amendments C16 and C24; review finding
- * B-N9): the shape a host payload's `implementations.json` holds, shared by the reader that verifies it against the
- * payload (`@inventarch/distribution/implementations`) and by binders that join records with it
- * (`@inventarch/workspace-runtime/bind`), so neither carries its own copy. Pure: it reads, loads and executes nothing.
+ * The installed-implementation catalog's value: the shape a host payload's `implementations.json` holds, shared by the
+ * reader that verifies it against the payload (`@inventarch/distribution/implementations`) and by binders that join
+ * records with it (`@inventarch/workspace-runtime/bind`), so neither carries its own copy. Pure: it reads, loads and
+ * executes nothing.
  *
  * An operation row is one of three:
  * - `available`: the payload ships the implementation's handler. `module` is the payload path of the handler module
@@ -161,10 +161,10 @@ function operationProblem(item: unknown): string | null {
 /**
  * Whether `value` is a catalog: exactly `format`, `evaluators` (an `ia-evaluator-catalog/1.x` format and entry list,
  * whose entries compliance validates when it binds) and `operations`, one row per operation sorted by id and unique,
- * each as the module comment describes. Review finding B2-N11: `value` is first copied once as plain data, as the
- * descriptor codec copies host input (`snapshot`: no proxy, accessor, class instance, cycle or excess size), and the
- * checked copy is returned deeply frozen, so what was checked is what every reader of it sees. Returns that copy, or the
- * first reason `value` is not a catalog.
+ * each as the module comment describes. `value` is first copied once as plain data, as the descriptor codec copies
+ * host input (`snapshot`: no proxy, accessor, class instance, cycle or excess size), and the checked copy is returned
+ * deeply frozen, so what was checked is what every reader of it sees. Returns that copy, or the first reason `value` is
+ * not a catalog.
  */
 export function checkInstalledImplementations(input: unknown): InstalledImplementationsCheck {
   const refuse = (reason: string): InstalledImplementationsCheck => ({ ok: false, reason });

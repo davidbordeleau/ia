@@ -49,7 +49,7 @@ afterAll(cleanup, 120_000);
 
 it('doctor reports registered, then stale after a simulated upgrade, and projection drift', async () => {
   const { root, env } = await initialized();
-  // No host state at all is a note, never a verdict (spec §7 `absent`).
+  // No host state at all is a note, never a verdict (`absent`).
   const none = await doctor(root, env);
   expect(none.exitCode).toBe(0);
   // Given --root, each command it names carries it; discovered from the cwd, neither does.
@@ -81,7 +81,7 @@ it('doctor reports registered, then stale after a simulated upgrade, and project
     `Release ${release.slice(0, 12)}, present in ${resolve(env.IA_HOST_HOME, 'hosts')}`,
   );
   expect(registered.checks.filter((check) => check.id.startsWith('projection-claude'))).toEqual([noDrift()]);
-  // §3.3: an unfinished `.stage-*` materialization is never listed as a payload; another release's directory is.
+  // An unfinished `.stage-*` materialization is never listed as a payload; another release's directory is.
   mkdirSync(resolve(env.IA_HOST_HOME, 'hosts', '.stage-interrupted'));
   mkdirSync(resolve(env.IA_HOST_HOME, 'hosts', 'a'.repeat(64)));
   expect(row((await doctor(root, env)).checks, 'host-payload')!.detail).toBe(
@@ -103,7 +103,7 @@ it('doctor reports registered, then stale after a simulated upgrade, and project
   // Discovered from the cwd rather than given, the root is not repeated in the remedy.
   const discovered = JSON.parse((await run(['doctor', '--json'], { env, cwd: root })).stdout).checks as Row[];
   expect(row(discovered, 'host-claude')!.remedy).toBe('ia host claude --apply');
-  // §10 item 3's second half: the remedy alone, re-applying, restores `registered` and the bytes a fresh apply wrote.
+  // The remedy alone, re-applying, restores `registered` and the bytes a fresh apply wrote.
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   const restored = await doctor(root, env);
   expect(restored.exitCode).toBe(0);
@@ -121,7 +121,7 @@ it('doctor reports registered, then stale after a simulated upgrade, and project
   );
   writeFileSync(launcher, original);
 
-  // B12: drift is read from the receipt. A hand edit to a file it lists is `changed`, which apply refuses; the row
+  // Drift is read from the receipt. A hand edit to a file it lists is `changed`, which apply refuses; the row
   // names the same repair `ia host` does.
   put(root, '.claude/rules/ia-workspace.md', read(root, '.claude/rules/ia-workspace.md') + 'edit\n');
   const drifted = await doctor(root, env);
@@ -169,7 +169,7 @@ it('reports a newly authored local system as an outdated packet, and the rerun c
     detail: expect.stringContaining(', 0 errors,'),
   });
   // The packet carries the revision, so the receipt's packet digest is no longer the current render's; no steward
-  // agent is missing, because none is rendered (design §4), and the files the receipt lists are as it wrote them.
+  // agent is missing, because none is rendered, and the files the receipt lists are as it wrote them.
   const drifted = authored.checks.filter((check) => check.id.startsWith('projection-claude'));
   expect(drifted).toEqual([
     expect.objectContaining({
@@ -335,7 +335,7 @@ it('names the unreadable ownership file and a repair that converges, in ia host 
   expect(row((await doctor(root, env)).checks, 'host-claude')!.detail).toContain(
     rootedNext(guardRepair, 'claude', root),
   );
-  // ia host registers no guard group (B11), so deleting the state file is the whole repair here.
+  // ia host registers no guard group, so deleting the state file is the whole repair here.
   rmSync(resolve(root, guard));
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);
   expect((await doctor(root, env)).exitCode).toBe(0);
@@ -360,7 +360,7 @@ it('names the unreadable ownership file and a repair that converges, in ia host 
 });
 
 it('doctor warns when a registration pins its payload outside the IA home, and re-applying clears it', async () => {
-  // Host plugin distribution spec §3: registered before the move, under what stands in for M5.3's per-OS directory.
+  // Host plugin distribution spec §3: registered before the move, under what stands in for the former per-OS home.
   const { root } = await initialized();
   const data = scratch('legacy-data'),
     before = { IA_HOST_HOME: join(data, 'ia') };
@@ -372,7 +372,7 @@ it('doctor warns when a registration pins its payload outside the IA home, and r
   expect(warning.detail).toMatch(/^Host claude pins its payload under .+, outside the IA home /);
   expect(warning.detail).toContain(`outside the IA home ${moved.IA_HOME}`);
   // legacyHostHome reads LOCALAPPDATA on win32 and XDG_DATA_HOME on Linux; macOS derives it from the user's home.
-  if (process.platform !== 'darwin') expect(warning.detail).toMatch(/ \(the M5\.3 per-OS location\)$/);
+  if (process.platform !== 'darwin') expect(warning.detail).toMatch(/ \(the per-OS location earlier releases used\)$/);
   // The registration still works, so doctor warns rather than fails; the briefing names the same remedy.
   expect(row(report.checks, 'host-claude')!.status).toBe('ok');
   expect(report.counts.fail).toBe(0);
@@ -516,8 +516,8 @@ it('names --root in every ia host next action only when the invocation gave it, 
   expect(humanRefusal.exitCode).toBe(3);
   expect(humanRefusal.stderr.replace(/\s+/g, ' ')).toContain(rooted);
   // The preview's conflict row prints the same next action the refusal carries, and its undo line carries the root;
-  // the JSON plan's `undo` stays the unrooted command (§4 `--json`).
-  // A command too long for the line is broken with a trailing `\` (§6.4), which a reader's shell joins back.
+  // the JSON plan's `undo` stays the unrooted command.
+  // A command too long for the line is broken with a trailing `\`, which a reader's shell joins back.
   const joined = (text: string): string => text.replace(/ \\\r?\n\s*/g, ' ').replace(/\s+/g, ' ');
   const preview = joined((await human(root, env, 'claude')).stdout);
   expect(preview).toContain(rooted);
@@ -575,9 +575,9 @@ function tree(...roots: string[]): Record<string, string> {
   return entries;
 }
 
-it('doctor lists the installed-implementation catalog and the join ia host recorded, and writes nothing (C16, C24)', async () => {
+it('doctor lists the installed-implementation catalog and the join ia host recorded, and writes nothing', async () => {
   const { root, env } = await initialized();
-  /** Doctor in the current state, checked to leave the workspace and the IA home exactly as it found them (B-N2). */
+  /** Doctor in the current state, checked to leave the workspace and the IA home exactly as it found them. */
   const quiet = async () => {
     const before = tree(root, env.IA_HOST_HOME);
     const report = await doctor(root, env);
@@ -627,7 +627,7 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
     }),
   ]);
 
-  // B-R1: a module the inventory does not list, planted where Node would load it instead of a shipped one, fails host
+  // A module the inventory does not list, planted where Node would load it instead of a shipped one, fails host
   // verification, and the catalog and join rows agree: nothing in that payload is listed or joined as present.
   const planted = resolve(payload, 'runtime/node_modules/@inventarch/agent-composition-system/node_modules');
   put(planted, '@inventarch/agent-system/package.json', JSON.stringify({ name: '@inventarch/agent-system' }));
@@ -659,7 +659,7 @@ it('doctor lists the installed-implementation catalog and the join ia host recor
   expect(JSON.parse(read(root, JOINS))).toEqual(recorded);
   expect(row((await doctor(root, env)).checks, 'join-claude')!.status).toBe('ok');
 
-  // Review finding B2-RC1: the join row trusts what ia validate trusts. A registration naming a copy of the payload
+  // The join row trusts what ia validate trusts. A registration naming a copy of the payload
   // inside the workspace (another directory holding the same bytes) is drifted, with the apply that registers this
   // installation's own payload, where it used to read the copy and say ok.
   const registration = '.ia/distributions/hosts/claude-workspace.json',
@@ -751,7 +751,7 @@ function installation(home: string, catalog: unknown | null): string {
   materializeHostPayload({ home, archive, pin });
   return packageRoot;
 }
-it('notes a payload that carries no catalog and warns about one that lists an operation unavailable or revoked (B-N2)', async () => {
+it('notes a payload that carries no catalog and warns about one that lists an operation unavailable or revoked', async () => {
   const { root, env } = await initialized();
   const report = (packageRoot: string) =>
     collectDoctor({
@@ -781,7 +781,7 @@ it('notes a payload that carries no catalog and warns about one that lists an op
   expect(degraded!.detail).toContain('withdrawn-read-v1 revoked (withdrawn by its producer)');
 });
 
-it('records a codex join and an ia init --host join, and doctor lists each (B-N2)', async () => {
+it('records a codex join and an ia init --host join, and doctor lists each', async () => {
   const { root, env } = await initialized();
   expect((await host(root, env, 'codex', '--apply', '--yes')).exitCode).toBe(0);
   expect((await host(root, env, 'claude', '--apply', '--yes')).exitCode).toBe(0);

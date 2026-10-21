@@ -1,13 +1,16 @@
 import { expect, it, afterEach, vi } from 'vitest';
 import { EditorSnapshot } from '@inventarch/db/editor';
 import { field, text as textField } from '@inventarch/runtime/authoring-execution';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { Engine, manifestDigest } from '@inventarch/agent-system';
 import type { OperationContext } from '@inventarch/agent-system';
 import { copy, digest, memoryStore } from '@inventarch/session-system';
+import { sqliteStore } from '@inventarch/session-system/sqlite';
 import * as SDK from '../src/index.js';
 import * as code from '../src/installed-catalog.js';
-import { readFixture, readPath, qualifyInstalledRead } from './installed-read-fixture.mjs';
+import { readFixture, readPath, qualifyAdmission, qualifyInstalledRead } from './installed-read-fixture.mjs';
 
 vi.setConfig({ testTimeout: 30000 });
 const root = resolve(import.meta.dirname, '../../../../..'),
@@ -78,7 +81,8 @@ function declaredReadCase(name: string, capture: SDK.Capture): string {
 
 function setup() {
   const fixture = readFixture(SDK, root),
-    bound = SDK.installedReadAdapters(fixture.capture, fixture.options);
+    currentCapture = vi.fn<SDK.InstalledReadOptions['currentCapture']>(fixture.options.currentCapture),
+    bound = SDK.installedReadAdapters(fixture.capture, { ...fixture.options, currentCapture });
   close.push(bound.close);
   const context: OperationContext = {
     sessionId: 's',
@@ -91,7 +95,7 @@ function setup() {
     signal: new AbortController().signal,
     assertCurrent: vi.fn(async () => {}),
   };
-  return { ...fixture, bound, context, adapter: bound.operations[SDK.INSTALLED_READ.handler]! };
+  return { ...fixture, bound, context, currentCapture, adapter: bound.operations[SDK.INSTALLED_READ.handler]! };
 }
 
 it('describes and binds a fixed first-party read without invoking source or grant callbacks', () => {
@@ -283,6 +287,65 @@ it('refuses missing authority and wrong, expired or revoked grants before source
     await expect(f.adapter.execute({ path: readPath }, context)).rejects.toMatchObject({ code: refusalCode });
   expect(f.context.assertCurrent).not.toHaveBeenCalled();
 });
+it.each([undefined, null])('refuses an absent grant (%s) before invoking host callbacks', async (grant) => {
+  const f = setup(),
+    context = { ...f.context, grant } as unknown as OperationContext;
+  await expect(f.adapter.execute({ path: readPath }, context)).rejects.toMatchObject({
+    code: declaredReadCase('read-captured-source-authority-refusal', f.capture),
+    message: 'Read exceeds current host authority',
+  });
+  expect(f.context.assertCurrent).not.toHaveBeenCalled();
+  expect(f.currentCapture).not.toHaveBeenCalled();
+});
+it.each([
+  { at: 1, malformed: 'null' },
+  { at: 2, malformed: 'null' },
+  { at: 1, malformed: 'changed bytes' },
+  { at: 2, malformed: 'changed bytes' },
+])('normalizes malformed current captures ($malformed) at verification $at', async ({ at, malformed }) => {
+  const f = setup(),
+    changed = {
+      ...f.capture,
+      sources: f.capture.sources.map((source) =>
+        source.path === readPath ? { ...source, text: source.text + '# private drift\n' } : source,
+      ),
+    };
+  let calls = 0;
+  f.currentCapture.mockImplementation(() =>
+    ++calls === at ? (malformed === 'null' ? (null as unknown as SDK.Capture) : changed) : f.capture,
+  );
+  await expect(f.adapter.execute({ path: readPath }, f.context)).rejects.toMatchObject({
+    code: 'IA-INSTALLED-READ-DENIED',
+    message: 'Captured native source verification failed',
+  });
+  expect(f.currentCapture).toHaveBeenCalledTimes(at);
+  expect(f.context.assertCurrent).toHaveBeenCalledTimes(at);
+});
+it.each(['currentCapture', 'assertCurrent'] as const)(
+  'preserves programming errors from the %s host callback',
+  async (callback) => {
+    const f = setup(),
+      failure = new Error('Host callback failed');
+    const fail = async () => {
+      throw failure;
+    };
+    if (callback === 'currentCapture') f.currentCapture.mockImplementation(fail);
+    else f.context.assertCurrent = fail;
+    await expect(f.adapter.execute({ path: readPath }, f.context)).rejects.toBe(failure);
+  },
+);
+it.each([1, 2])('preserves cancellation during current capture callback %s', async (at) => {
+  const f = setup(),
+    controller = new AbortController(),
+    reason = new Error('Host cancelled the read');
+  let calls = 0;
+  f.currentCapture.mockImplementation(() => {
+    if (++calls !== at) return f.capture;
+    controller.abort(reason);
+    return null as unknown as SDK.Capture;
+  });
+  await expect(f.adapter.execute({ path: readPath }, { ...f.context, signal: controller.signal })).rejects.toBe(reason);
+});
 it('rechecks revocation across current-authority callbacks and after reading', async () => {
   for (const at of [1, 2]) {
     const f = setup();
@@ -473,5 +536,56 @@ it('refuses changed installed code on retry before a second operation attempt is
     });
   } finally {
     await store.close();
+  }
+});
+it('keeps a read revoked after its final host check out of the SQLite journal, the model and the caller', async () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'ia-admission-'));
+  try {
+    expect(await qualifyAdmission(SDK, root, directory)).toEqual({
+      revoked: true,
+      returnChecks: 1,
+      nativeReads: 1,
+      agentDisclosures: 0,
+      returnedBytes: 0,
+      refusal: 'IA-SESSION-ADMISSION-DENIED',
+      journalContainsSentinel: false,
+      recoveredWithoutDisclosure: true,
+      revokedRetryRefused: true,
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+it('keeps exact receipts, recovery and replay through a gated SQLite store under current authority', async () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'ia-admission-')),
+    offers: string[] = [],
+    store = sqliteStore(directory, {
+      admit: (admission) => {
+        offers.push(admission.kind);
+        return true;
+      },
+    });
+  try {
+    expect(await qualifyInstalledRead(SDK, root, store)).toMatchObject({
+      calls: 2,
+      reads: 2,
+      attempts: 2,
+      paidProviderCalls: 0,
+      revokedRetryRefused: true,
+      restart: true,
+    });
+    expect(offers).toContain('commit');
+    expect(offers).toContain('checkpoint');
+    const state = await store.read('installed-read');
+    await store.close();
+    const reopened = sqliteStore(directory);
+    try {
+      expect(await reopened.read('installed-read')).toEqual(state);
+    } finally {
+      await reopened.close();
+    }
+  } finally {
+    await store.close();
+    rmSync(directory, { recursive: true, force: true });
   }
 });

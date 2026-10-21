@@ -4,7 +4,7 @@ import type { ObligationOccurrence } from './obligations.js';
 import { exactKeys } from './shape.js';
 
 /**
- * Consumer evaluation profiles (C29, OBL-02). A profile id such as strict-typing-v1 is a consumer contract id, not a
+ * Consumer evaluation profiles (C29). A profile id such as strict-typing-v1 is a consumer contract id, not a
  * native word: it maps one selected law/contract occurrence to required obligations that host catalog evaluators
  * discharge. Cases and declarations never satisfy them; only valid receipts do.
  */

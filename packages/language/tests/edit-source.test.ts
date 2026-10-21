@@ -7,7 +7,7 @@ import * as editor from '../src/editor/index.js';
 import { SourceEditError } from '../src/editor/index.js';
 import type { SourceEditReason } from '../src/editor/index.js';
 
-// Milestone generation-binding plan amendment C18: schema-aware source edits that change one top-level record of a file.
+// E04: schema-aware source edits that change one top-level record of a file.
 const schema = {
   sections: [
     { name: 'meaning', must: true },
@@ -265,7 +265,7 @@ describe('setField', () => {
       ['meaning.says', 'line one\nline two'],
       ['meaning.says', 'carriage\rreturn'],
       ['meaning.says', 'separator\u2028here'],
-      // C1 controls (NEL, CSI) and bidirectional overrides and isolates (C-R3).
+      // C1 controls (NEL, CSI) and bidirectional overrides and isolates.
       ['meaning.says', `next${String.fromCharCode(0x85)}line`],
       ['meaning.says', `csi${String.fromCharCode(0x9b)}2J`],
       ['meaning.says', `override${String.fromCharCode(0x202e)}txt`],
@@ -348,7 +348,7 @@ describe('annotateRecord', () => {
   });
 });
 
-describe('the bytes of everything but the edited record (review C-R8)', () => {
+describe('the bytes of everything but the edited record (E04)', () => {
   const crlf = source.replaceAll('\n', '\r\n'),
     bom = String.fromCharCode(0xfeff);
   const edits: readonly (readonly [string, (text: string) => string])[] = [
@@ -389,7 +389,7 @@ describe('the bytes of everything but the edited record (review C-R8)', () => {
     const appended = edits[2]![1](odd);
     expect(appended.startsWith(odd)).toBe(true);
   });
-  it("keeps the old last line's own ending in a file of mixed endings (review C-RC3)", () => {
+  it("keeps the old last line's own ending in a file of mixed endings", () => {
     // CRLF for every line but the last, which ends LF: the file's bytes stay a prefix, new lines take CRLF.
     const lines = source.replace(/\n$/, '').split('\n');
     const mixed = `${lines.join('\r\n')}\n`;

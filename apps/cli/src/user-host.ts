@@ -80,7 +80,7 @@ const rerunOf = (remove: boolean): string => `ia host claude --user${remove ? ' 
 export const claudeCommand = (command: readonly string[]): string => ['claude', ...command].map(quote).join(' ');
 
 /**
- * §7.1's plan. It reads the IA home and asks `claude` what it lists; it writes nothing. `claude` is first run (the
+ * §6.3's plan. It reads the IA home and asks `claude` what it lists; it writes nothing. `claude` is first run (the
  * availability probe) only after every usage check and refusal has passed, so a class-2 invocation does no work
  * (consumer CLI contract §3 “Exit classes and protocol boundaries”). The runner is returned so apply reuses it instead of probing again.
  */
@@ -90,7 +90,7 @@ export function collectUserHost(
 ): { readonly view: UserHostView; readonly runner: ClaudeRunner } {
   const { args, host } = context;
   const name = args.positionals[0] ?? '';
-  // The host adapter table decides. Unknown is usage, and so is --root (§7.1); both precede every read.
+  // The host adapter table decides. Unknown is usage, and so is --root (§6.3); both precede every read.
   const row = hostRow(name);
   if (row === undefined) throw new UsageError(`ia host takes claude, codex or cursor; got ${name}`);
   if (args.value('root') !== undefined)
@@ -130,7 +130,7 @@ export function collectUserHost(
     plugin: { version: plugin.version, cli: host.version, channel: channel.kind },
     installed: installed === null ? null : { version: installed.version },
     claude: runner.available,
-    // §7.1: registration is idempotent and needs no observation; removal asks claude what exists.
+    // §6.3: registration is idempotent and needs no observation; removal asks claude what exists.
     commands: remove ? removalCommands(observeClaude(runner)) : registrationCommands(marketplace),
     files: plugin.files,
   };
@@ -207,7 +207,7 @@ export function applyUserHost(view: UserHostView, runner: ClaudeRunner): UserHos
   return { status, ran };
 }
 
-/** §7.1 `--json`: the plan always, and `applied` only after an apply. The rendered files are not part of it. */
+/** `--json`: the plan always, and `applied` only after an apply. The rendered files are not part of it. */
 const envelope = (view: UserHostView, applied: UserHostApplied | null): unknown => ({
   version: 1,
   command: 'host',
@@ -299,7 +299,7 @@ export async function runUserHost(context: Context): Promise<Result> {
       ? { exitCode: 0, stdout: JSON.stringify(envelope(view, applied)) + '\n', stderr: '' }
       : { exitCode: 0, stdout: render(view, applied, context), stderr: '' };
   if (!args.flag('apply')) return done(null);
-  // Consumer CLI contract §2.8–2.11 “Distribution changes”. Parsing has already refused every --apply whose question cannot be asked or answered.
+  // Consumer CLI contract §2.0 “Grammar”. Parsing has already refused every --apply whose question cannot be asked or answered.
   if (
     !args.flag('yes') &&
     !(await confirm(

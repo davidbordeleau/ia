@@ -1,6 +1,6 @@
 import { isAbsolute, relative, sep } from 'node:path';
-import { PHASES, PRIMITIVE_ANCHORS, SHAPE_ROWS, SHAPES, isPhase } from '@inventarch/language';
-import type { Phase } from '@inventarch/language';
+import { PHASES, PRIMITIVES, PRIMITIVE_ANCHORS, SHAPE_ROWS, SHAPES, isPhase, isPrimitive } from '@inventarch/language';
+import type { Phase, Primitive } from '@inventarch/language';
 import type { ReadHandle, SeatResolution } from '@inventarch/db';
 import type { Shape } from './classify.js';
 import { scopeCoordinate } from './coordinate.js';
@@ -8,20 +8,33 @@ import type { PreparedCoordinate } from './coordinate.js';
 import { RuntimeError } from './errors.js';
 import { freeze } from './types.js';
 
+/** Ordered display parts shared by host renderers; each host applies its own output escaping. */
+export function scopeKeyTextParts(key: ScopeKey): readonly string[] {
+  return [
+    `seat ${key.seat === undefined ? "the repository's workspace" : typeof key.seat === 'string' ? key.seat : key.seat.path || '.'}`,
+    `shape ${key.shape}`,
+    `phase ${key.phase}`,
+    `depth ${key.depth}`,
+    `budget ${key.budget}`,
+    ...(key.word === undefined ? [] : [`word ${key.word}`]),
+    ...(key.primitive === undefined ? [] : [`primitive ${key.primitive}`]),
+  ];
+}
+
 /**
- * The scope key K = (S, H, P, d, n, w) (position-and-projection §1, design item 10; decision scope-key-caps).
+ * The scope key K = (S, H, P, d, n, w), optionally overriding its cognitive primitive (SPEC R14).
  *
  * A key names where a reader sits (the seat), what it intends (the shape), the phase it works in, how many rows a body
  * may hop (depth) and how many entries it may load (budget), optionally restricted to one word. This module holds the
  * caps, the defaults and K0, completes a partial key, validates a key against a scoped read, resolves its seat and
  * derives its coordinate. `positionBody` (src/position.ts, R15) assembles the body a resolved key gives, and `position`
  * (R16) adds its digest and host note, which the Door's `position` operation (MACHINE_PROTOCOL version 2) serves; no
- * version 1 Door route reads a key. Each key refusal names the one command to run as its `next` (design row 27).
+ * version 1 Door route reads a key. Each key refusal names the one command to run as its `next`.
  */
 
-/** Decision scope-key-caps: depth in 0..2 hops, budget in 0..64 entries. */
+/** The caps: depth in 0..2 hops, budget in 0..64 entries. */
 export const SCOPE_KEY_CAPS = Object.freeze({ depth: 2, budget: 64 } as const);
-/** Design §1 and open decision 6: the depth and budget of a key that names any part; K0 alone takes 0 and 0. */
+/** The depth and budget of a key that names any part; K0 alone takes 0 and 0. */
 const DEFAULTS = { depth: 1, budget: 16 } as const;
 
 export interface ScopeKey {
@@ -42,6 +55,8 @@ export interface ScopeKey {
   readonly budget: number;
   /** w: a word registered in the closure, restricting seeds and tallies inside the body; absent for none. */
   readonly word?: string;
+  /** An explicit cognitive primitive; absent, derive it from the shape without adding a key part. */
+  readonly primitive?: Primitive;
 }
 
 /** K0 = (the repository's `@workspace`, context, orient, 0, 0, no word): a pointers-only first position. */
@@ -74,22 +89,23 @@ export interface ResolvedScopeKey {
    * the record declared at it (`seat`), the rule `by` that declares it and the path's claimants.
    */
   readonly resolution?: SeatResolution;
-  /** The key's coordinate: shape and phase declared, category and primitive derived from SHAPE_ROWS[shape]. */
+  /** Shape and phase declared; category derived; primitive declared when supplied, otherwise derived from shape. */
   readonly coordinate: PreparedCoordinate;
 }
 
-const PARTS = ['seat', 'shape', 'phase', 'depth', 'budget', 'word'] as const;
+const PARTS = ['seat', 'shape', 'phase', 'depth', 'budget', 'word', 'primitive'] as const;
 type Part = (typeof PARTS)[number];
 /**
- * Design row 27 and §11: the one command each key refusal names, its closed set printed or its cap given. A key that is
- * no key and a seat the scope does not hold name the position without one, K0, which every scope can compute, and a
- * word the closure does not register names the vocabulary.
+ * The one command each key refusal names, its closed set printed or its cap given. A key that is no key and a seat the
+ * scope does not hold name the position without one, K0, which every scope can compute, and a word the closure does
+ * not register names the vocabulary.
  */
 const NEXT = {
   key: 'ia position',
   seat: 'ia position',
   shape: `ia position --shape <${SHAPES.join('|')}>`,
   phase: `ia position --phase <${PHASES.join('|')}>`,
+  primitive: `ia position --primitive <${PRIMITIVES.join('|')}>`,
   depth: `ia position --depth ${SCOPE_KEY_CAPS.depth}`,
   budget: `ia position --budget ${SCOPE_KEY_CAPS.budget}`,
   word: 'ia vocabulary',
@@ -107,6 +123,11 @@ function shapeOf(value: unknown): Shape {
     invalid(`Scope key shape must be one of ${SHAPES.join(', ')}`, NEXT.shape);
   return value as Shape;
 }
+function primitiveOf(value: unknown): Primitive {
+  if (typeof value !== 'string' || !isPrimitive(value))
+    invalid(`Scope key primitive must be one of ${PRIMITIVES.join(', ')}`, NEXT.primitive);
+  return value;
+}
 /** An object whose own parts are all key parts. */
 function parted(key: unknown): Readonly<Partial<Record<Part, unknown>>> {
   if (key === null || typeof key !== 'object' || Array.isArray(key)) invalid('A scope key must be an object', NEXT.key);
@@ -122,7 +143,8 @@ function parted(key: unknown): Readonly<Partial<Record<Part, unknown>>> {
 function formed(supplied: unknown): ScopeKey {
   const key = parted(supplied),
     { seat, phase, word } = key,
-    shape = shapeOf(key.shape);
+    shape = shapeOf(key.shape),
+    primitive = key.primitive === undefined ? undefined : primitiveOf(key.primitive);
   if (typeof phase !== 'string' || !isPhase(phase))
     invalid(`Scope key phase must be one of ${PHASES.join(', ')}`, NEXT.phase);
   const depth = capped(key.depth, 'depth'),
@@ -147,12 +169,13 @@ function formed(supplied: unknown): ScopeKey {
     depth,
     budget,
     ...(word === undefined ? {} : { word: word as string }),
+    ...(primitive === undefined ? {} : { primitive }),
   });
 }
 /**
- * R14: complete a partial key with the defaults of design §1, so every host applies the same ones. A partial naming
- * no part is K0. Otherwise `shape` defaults to context, `phase` to the anchor phase of the shape's primitive
- * (PRIMITIVE_ANCHORS[SHAPE_ROWS[shape].primitive]), `depth` to 1 and `budget` to 16, and a seat or word stays absent
+ * R14: complete a partial key with its defaults, so every host applies the same ones. A partial naming
+ * no part is K0. Otherwise `shape` defaults to context, `phase` to the anchor of the explicit primitive or the shape's
+ * primitive, `depth` to 1 and `budget` to 16, and a seat, word or primitive override stays absent
  * unless named; a part whose value is `undefined` is not named. The result is checked as resolveScopeKey checks a
  * key's form, so its refusals are the same IA-RUNTIME-REQUEST-INVALID ones; nothing is read, so the word and the seat
  * are checked only when the key is resolved.
@@ -161,11 +184,12 @@ export function normalizeScopeKey(partial: Partial<ScopeKey> = {}): ScopeKey {
   const key = parted(partial),
     named = (part: Part): boolean => key[part] !== undefined;
   if (!PARTS.some(named)) return K0;
-  const shape = named('shape') ? shapeOf(key.shape) : 'context';
+  const shape = named('shape') ? shapeOf(key.shape) : 'context',
+    primitive = named('primitive') ? primitiveOf(key.primitive) : SHAPE_ROWS[shape].primitive;
   return formed({
     ...key,
     shape,
-    phase: named('phase') ? key.phase : PRIMITIVE_ANCHORS[SHAPE_ROWS[shape].primitive],
+    phase: named('phase') ? key.phase : PRIMITIVE_ANCHORS[primitive],
     depth: named('depth') ? key.depth : DEFAULTS.depth,
     budget: named('budget') ? key.budget : DEFAULTS.budget,
   });
@@ -197,7 +221,7 @@ export function resolveScopeKey(handle: ReadHandle, within: string, key: ScopeKe
   if (typeof within !== 'string' || within.length === 0) invalid('Runtime reads require an explicit scope token');
   const valid = formed(key),
     { seat, word } = valid,
-    coordinate = scopeCoordinate(valid.shape, valid.phase);
+    coordinate = scopeCoordinate(valid.shape, valid.phase, valid.primitive);
   // The reads, each through the token: the word against the view's registry, then the seat.
   if (word !== undefined) {
     const words = handle.words({ within });

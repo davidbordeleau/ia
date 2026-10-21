@@ -4,7 +4,7 @@ import { systemMember } from './inputs.js';
 import type { DeclaredRoot } from './membership.js';
 import type { View } from './view.js';
 
-/** D02b (position-and-projection row 17): the seat a path is declared at and the records whose selections claim it. */
+/** D02b: the seat a path is declared at and the records whose selections claim it. */
 export interface SeatResolution {
   /** The canonical workspace-relative path, '' for the workspace root, or the supplied text when it lies outside. */
   readonly path: string;

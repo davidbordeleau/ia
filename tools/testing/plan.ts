@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { isEntry } from '../entry/is-entry.mjs';
-import { PLATFORMS, readManifest, type Manifest, type Platform, type TaskRecord } from './inventory.js';
-import { readEvidence } from './report.js';
+import { PLATFORMS, readManifest, type Manifest, type Platform, type TaskRecord } from './manifest.js';
+import { readEvidence } from './evidence.js';
+import { parseOptions } from '../shared/args.mjs';
 
 /**
  * Deterministic shard assignment. Placement uses historical duration, which is scheduling metadata:
@@ -46,7 +47,12 @@ export interface ShardPlan {
 export const CONSERVATIVE_ESTIMATE_SECONDS = 600;
 /** A task a platform has not recorded is placed by this platform's duration for it, scaled, until `--record` gives it its own. */
 export const BORROWED_PLATFORM: Platform = 'linux';
-/** Test shards per platform. Platforms differ in cost as well as speed: hosted macOS minutes bill at a multiple of Linux's. */
+/** GitHub-hosted macOS jobs one organization can run at once, shared by every run; a job past it waits for a slot. */
+export const MACOS_CONCURRENT_JOBS = 5;
+/**
+ * Test shards per platform. Platforms differ in speed and in runner supply: hosted minutes are free on this public
+ * repository, but the organization runs at most `MACOS_CONCURRENT_JOBS` macOS jobs at once, across every run.
+ */
 export type PlatformCounts = Readonly<Record<Platform, number>>;
 
 export function emptySchedule(): Schedule {
@@ -252,6 +258,15 @@ export function runNeeded(event: string | undefined, head: string | undefined, v
   return !(event === 'schedule' && !!head && head === verified);
 }
 
+/**
+ * Whether a run only copies the verdict of the head commit's last full run: a pull request edit that leaves the base
+ * branch as it was changes a title or a description, never what is verified. Retargeting changes the merge commit, so
+ * an edit that changes the base runs in full. The workflow's concurrency group repeats this condition.
+ */
+export function reusesVerdict(event: string | undefined, action: string | undefined, baseChanged: boolean): boolean {
+  return event === 'pull_request' && action === 'edited' && !baseChanged;
+}
+
 /** Distinct known platforms, in `PLATFORMS` order; an empty, unknown or repeated platform is refused. */
 export function selectedPlatforms(platforms: readonly string[]): readonly Platform[] {
   const unknown = platforms.filter((platform) => !(PLATFORMS as readonly string[]).includes(platform));
@@ -334,56 +349,96 @@ export function ciMatrices(
   };
 }
 
-/** Folds executed durations into the schedule. Restored results carry no execution time, so they are ignored. */
-export function updateSchedule(schedule: Schedule, evidenceDirectory: string): Schedule {
-  const { evidence } = readEvidence(evidenceDirectory);
-  const platforms: Record<string, Record<string, number>> = Object.fromEntries(
+/** The middle sample, or the upper of the two middle ones for an even count, so the value is always one that was observed. */
+export function upperMedian(samples: readonly number[]): number {
+  if (!samples.length) throw new Error('A median needs at least one sample');
+  return [...samples].sort((a, b) => a - b)[Math.floor(samples.length / 2)]!;
+}
+
+/**
+ * Folds executed durations into the schedule. Each evidence directory is one run; a task the runs executed keeps the
+ * upper median of their whole-second durations, so one slow or fast run cannot set its estimate alone. Restored results
+ * carry no execution time, so they are ignored, and a task no run executed keeps its estimate.
+ */
+export function updateSchedule(schedule: Schedule, evidenceDirectories: string | readonly string[]): Schedule {
+  const samples = new Map<string, number[]>();
+  for (const directory of typeof evidenceDirectories === 'string' ? [evidenceDirectories] : evidenceDirectories)
+    for (const entry of readEvidence(directory).evidence) {
+      if (entry.outcome !== 'executed' || entry.report.status !== 'passed') continue;
+      const key = `${entry.platform}\0${entry.task}`;
+      samples.set(key, [...(samples.get(key) ?? []), Math.round(entry.report.durationMs / 1000)]);
+    }
+  const platforms = Object.fromEntries(
     PLATFORMS.map((platform) => [platform, { ...schedule.platforms?.[platform] }]),
-  );
-  for (const entry of evidence) {
-    if (entry.outcome !== 'executed' || entry.report.status !== 'passed') continue;
-    platforms[entry.platform]![entry.task] = Math.round(entry.report.durationMs / 1000);
+  ) as Record<string, Record<string, number>>;
+  for (const [key, observed] of samples) {
+    const [platform, task] = key.split('\0') as [Platform, string];
+    platforms[platform] = { ...platforms[platform], [task]: upperMedian(observed) };
   }
-  return { version: SCHEDULE_VERSION, platforms: platforms as Schedule['platforms'] };
+  // Tasks in identity order, so the same evidence always writes the same file whatever order the schedule had. The
+  // order is by code point: localeCompare follows the machine's locale, and Lithuanian, for one, sorts y as i.
+  const sorted = Object.fromEntries(
+    PLATFORMS.map((platform) => [
+      platform,
+      Object.fromEntries(Object.entries(platforms[platform]!).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
+    ]),
+  );
+  return { version: SCHEDULE_VERSION, platforms: sorted as Schedule['platforms'] };
 }
 
 if (isEntry(process.argv[1], import.meta.url)) {
-  const args = process.argv.slice(2),
-    root = resolve(import.meta.dirname, '../..');
-  const flag = (name: string): string | undefined => {
-    const index = args.indexOf(name);
-    return index < 0 ? undefined : args[index + 1];
-  };
-  const known = [
-    '--platform',
-    '--shards',
-    '--native-shards',
-    '--matrix',
-    '--ci-matrix',
-    '--event',
-    '--head-sha',
-    '--verified-sha',
-    '--json',
-    '--record',
-    '--record-out',
-  ];
-  const stray = args.filter((arg, index) =>
-    arg.startsWith('--') ? !known.includes(arg) : !(index > 0 && known.includes(args[index - 1]!)),
-  );
-  if (stray.length) {
+  const root = resolve(import.meta.dirname, '../..'),
+    argv = process.argv.slice(2);
+  // `--record` repeats, one evidence directory per run, so it is taken out before the strict parse, which refuses a
+  // repeated option. A missing directory is kept as an empty one and refused below with the other record errors.
+  const records: string[] = [],
+    rest: string[] = [];
+  for (let index = 0; index < argv.length; index++)
+    if (argv[index] !== '--record') rest.push(argv[index]!);
+    else if (argv[index + 1] === undefined || argv[index + 1]!.startsWith('--')) records.push('');
+    else records.push(argv[++index]!);
+  let options: ReturnType<typeof parseOptions> | undefined;
+  try {
+    options = parseOptions(rest, {
+      values: [
+        'platform',
+        'shards',
+        'native-shards',
+        'event',
+        'head-sha',
+        'verified-sha',
+        'action',
+        'base-changed',
+        'record-out',
+      ],
+      booleans: ['matrix', 'ci-matrix', 'json'],
+      exclusive: [['matrix', 'ci-matrix', 'json']],
+      allowEmpty: ['head-sha', 'verified-sha', 'action', 'base-changed'],
+    });
+    if (records.length && (options.has('matrix') || options.has('ci-matrix')))
+      throw new Error('Conflicting options: --record, --matrix, --ci-matrix');
+    if (options.has('record-out') && !records.length) throw new Error('--record-out requires --record');
+  } catch (error) {
     console.error(
-      `Usage: pnpm tests:plan [--platform <${PLATFORMS.join('|')}>] [--shards N|${PLATFORMS.map((platform) => `${platform}=N`).join(',')}] [--native-shards (the same)] [--matrix|--ci-matrix [--event <GitHub event> --head-sha <sha> --verified-sha <sha>]|--json] [--record <evidence directory> [--record-out <output file>]]`,
+      `Usage: pnpm tests:plan [--platform <${PLATFORMS.join('|')}>] [--shards N|${PLATFORMS.map((platform) => `${platform}=N`).join(',')}] [--native-shards (the same)] [--matrix|--ci-matrix [--event <GitHub event> --head-sha <sha> --verified-sha <sha> --action <event action> --base-changed <true|false>]|--json] [--record <evidence directory> ... [--record-out <output file>]]`,
     );
+    console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 2;
-  } else
+  }
+  const flag = (name: string): string | undefined => options?.value(name.slice(2));
+  if (options)
     try {
-      const record = flag('--record');
-      if (args.includes('--record-out') && (!record || !flag('--record-out')))
+      if (records.some((directory) => !directory)) throw new Error('--record expects an evidence directory');
+      const record = records.length ? records : undefined;
+      if (options.has('record-out') && (!record || !flag('--record-out')))
         throw new Error('--record-out requires --record <evidence directory> and an output file');
-      if (args.includes('--ci-matrix')) {
+      if (options.has('ci-matrix')) {
         // The triggering event selects the platforms, and for a scheduled run whether there is anything new to verify.
         const event = flag('--event'),
           platforms = eventPlatforms(event);
+        // Checked before the first output line, so a refused argument never leaves half the outputs written.
+        const baseChanged = flag('--base-changed') ?? 'false';
+        if (baseChanged !== 'true' && baseChanged !== 'false') throw new Error('--base-changed expects true or false');
         const matrices = ciMatrices(readManifest(root), readSchedule(root), {
           shards: platformCounts(flag('--shards') ?? '4', '--shards'),
           ...(flag('--native-shards') === undefined
@@ -395,10 +450,17 @@ if (isEntry(process.argv[1], import.meta.url)) {
           console.log(`${lane}=${JSON.stringify(matrices[lane])}`);
         console.log(`gate=${JSON.stringify(gateMatrix(platforms))}`);
         console.log(`platforms=${JSON.stringify(platforms)}`);
-        console.log(`run=${runNeeded(event, flag('--head-sha'), flag('--verified-sha'))}`);
+        // `reuse` runs no lane: the gate reports the verdict the Plan job copied. Any value but `true` skips the lanes.
+        const run = reusesVerdict(event, flag('--action'), baseChanged === 'true')
+          ? 'reuse'
+          : runNeeded(event, flag('--head-sha'), flag('--verified-sha'));
+        console.log(`run=${run}`);
         // No process.exit(): output a slow reader has not taken yet is still queued here, and exiting would drop it.
       } else if (record !== undefined) {
-        const updated = updateSchedule(readSchedule(root), resolve(root, record));
+        const updated = updateSchedule(
+          readSchedule(root),
+          record.map((directory) => resolve(root, directory)),
+        );
         const output = resolve(root, flag('--record-out') ?? 'tools/testing/schedule.json');
         mkdirSync(dirname(output), { recursive: true });
         writeFileSync(output, JSON.stringify(updated, null, 2) + '\n');
@@ -415,7 +477,7 @@ if (isEntry(process.argv[1], import.meta.url)) {
             ? {}
             : { nativeShards: platformCounts(flag('--native-shards')!, '--native-shards')[platform] }),
         });
-        if (args.includes('--matrix'))
+        if (options.has('matrix'))
           console.log(
             JSON.stringify({
               include: plan.shards.map((shard) => ({
@@ -425,7 +487,7 @@ if (isEntry(process.argv[1], import.meta.url)) {
               })),
             }),
           );
-        else if (args.includes('--json')) console.log(JSON.stringify(plan, null, 2));
+        else if (options.has('json')) console.log(JSON.stringify(plan, null, 2));
         else {
           console.log(
             `Plan for ${platform}: ${plan.lanes.build.length} build, ${plan.lanes.static.length} static, ${plan.lanes.tests.length} test and ${plan.lanes.emitted.length} emitted tasks.`,

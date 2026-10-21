@@ -76,14 +76,14 @@ export function revisionOf(registry: FrozenRegistry, inputs: RevisionInputs): st
   return hashOf(registry, inputs, canonicalSources(inputs));
 }
 /**
- * The authored revision (decision evidence-placement; plan amendment C13): `revisionOf` over the same inputs without
- * the sources at runtime placement (band 0), so runtime-band evidence, admitted below authored, moves it no more than it
- * moves what agents are given. A runtime-placed input whose path `derived` names stays: a derived revision-only input
- * that no record compiles from, such as db's `.ia/.db-inputs.json` (its folder inventory, floor origin, authored roots
- * and activation), so those still move it. The registry, language version and kernel digest stay as `revisionOf` hashes
- * them, and every source is checked as `revisionOf` checks it. With no other source at runtime placement it is
- * `revisionOf(registry, inputs)` itself. It is no `load` input: a graph's `revision` stays `revisionOf`'s, and `load`
- * still needs every record's source among the full inputs.
+ * The authored revision (G01a): `revisionOf` over the same inputs without the sources at runtime placement (band 0),
+ * so runtime-band evidence, admitted below authored, moves it no more than it moves what agents are given. A
+ * runtime-placed input whose path `derived` names stays: a derived revision-only input that no record compiles from,
+ * such as db's `.ia/.db-inputs.json` (its folder inventory, floor origin, authored roots and activation), so those
+ * still move it. The registry, language version and kernel digest stay as `revisionOf` hashes them, and every source
+ * is checked as `revisionOf` checks it. With no other source at runtime placement it is `revisionOf(registry, inputs)`
+ * itself. It is no `load` input: a graph's `revision` stays `revisionOf`'s, and `load` still needs every record's
+ * source among the full inputs.
  */
 export function authoredRevisionOf(
   registry: FrozenRegistry,

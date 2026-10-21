@@ -101,7 +101,7 @@ function create(root: string, path: string, content: Buffer): void {
   if (!bytes(root, path, DISTRIBUTION_LIMITS.compressed)?.equals(content))
     fail('CONFLICT', `Registry changed while adding: ${path}`);
 }
-/** Encodes an index and round-trips it through the Task 2 decoder under the §3 bounds before any write. */
+/** Encodes an index and round-trips it through `decodePackageIndex` under the §3 bounds before any write. */
 function indexContent(id: string, releases: readonly RegistryRelease[]): Buffer {
   if (releases.length > REGISTRY_LIMITS.releases)
     fail('LIMIT-EXCEEDED', `Registry index exceeds ${REGISTRY_LIMITS.releases} releases`);

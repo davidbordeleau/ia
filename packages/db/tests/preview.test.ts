@@ -86,7 +86,7 @@ it('rejects malformed paths, duplicates, floor edits and malformed Unicode befor
     expect(() => db.preview([{ path, text: '\ud800' }])).toThrow(
       expect.objectContaining({ code: 'IA-DB-DRAFT-INVALID' }),
     );
-    // Where the volume folds them, two spellings of one file are one draft (#315, #323); the `.ia/src/` prefix keeps its case.
+    // Where the volume folds them, two spellings of one file are one draft (crowncodes/ia#315, crowncodes/ia#323); the `.ia/src/` prefix keeps its case.
     for (const [a, b] of [
       ['.ia/src/Draft.ia', '.ia/src/draft.ia'],
       ['.ia/src/cla\u00df.ia', '.ia/src/class.ia'],

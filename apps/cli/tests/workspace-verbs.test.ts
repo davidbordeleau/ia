@@ -95,7 +95,7 @@ it('plans a workspace without creating one and plans the selected host without w
     'descriptor:pending',
     'capture:pending',
   ]);
-  // M5.1 §7 item 4: the starter object carries the authored paths, the descriptor values and the base pin.
+  // The starter object carries the authored paths, the descriptor values and the base pin.
   const name = machine.plan.starter.id.slice('local/'.length);
   expect(machine.plan.starter.id).toMatch(/^local\/ia-cli-init-[a-z0-9-]+$/);
   expect(machine.plan.starter.paths).toEqual(['.ia/src/workspace.ia', '.ia/release.json']);
@@ -119,7 +119,7 @@ it('plans a workspace without creating one and plans the selected host without w
   // The rendered "Starter records" row shows the contents rather than the plan task that specified them.
   expect(plan.stdout.replace(/\s+/g, ' ')).toContain(`its participant @agent ${name}; @mandate ${name}-mandate`);
   expect(plan.stdout).not.toContain('@system');
-  expect(plan.stdout).not.toContain('M5.1');
+  expect(plan.stdout).not.toMatch(/\bM\d\.\d\b/);
   expect(JSON.parse((await run(['init', '--host', 'claude', '--json'], { cwd: empty })).stdout).plan.host).toEqual({
     selected: 'claude',
     status: 'planned',
@@ -132,11 +132,11 @@ it('plans a workspace without creating one and plans the selected host without w
   expect(existsSync(resolve(empty, 'new-workspace'))).toBe(false);
 
   // Host registration spec §4: without --apply a selected host is planned and nothing is written for it, the
-  // payload included; unattended --apply with a host still needs --yes, refused at parse time (contract §2.1).
+  // payload included; unattended --apply with a host still needs --yes, refused at parse time (contract §2.0).
   const hostHome = scratch('init-host-home');
   const hosted = await run(['init', '--host', 'claude'], { cwd: empty, env: { IA_HOST_HOME: hostHome } });
   expect(hosted.exitCode).toBe(0);
-  // §6.4 wraps the row at 80 columns, so the words are compared with the break folded back to a space.
+  // The renderer wraps the row at 80 columns, so the words are compared with the break folded back to a space.
   expect(hosted.stdout.replace(/\s+/g, ' ')).toContain(
     '--host claude selected; registered after initialization by ia host',
   );
@@ -155,8 +155,8 @@ it('plans a workspace without creating one and plans the selected host without w
   writeFileSync(resolve(empty, 'file'), 'not a directory\n');
   const file = await run(['init', 'file'], { cwd: empty });
   expect(file.exitCode).toBe(2);
-  // Same class as consumer.test.ts's root-discovery case: init.ts:48 interpolates the target into the message and
-  // §6.4 wraps at 80, so the phrase straddles the break for target lengths 45-56 and 64-70. Both runners sit
+  // Same class as consumer.test.ts's root-discovery case: init.ts interpolates the target into the message and
+  // the renderer wraps at 80, so the phrase straddles the break for target lengths 45-56 and 64-70. Both runners sit
   // outside those bands today, which is luck rather than design. The property asserted is the wording.
   expect(file.stderr.replace(/\s+/g, ' ')).toContain('not a directory');
   expect((await run(['init', 'absent/deeper'], { cwd: empty })).exitCode).toBe(2);
@@ -181,7 +181,8 @@ it('detects each conflict condition against a workspace that already exists', as
     '.ia/distributions/',
   ]);
 
-  // §2.1: an interrupted apply is not a conflict row but a refusal, because nothing may reason about the state.
+  // Workspace initialization apply spec §1: an interrupted apply is not a conflict row but a refusal, because
+  // nothing may reason about the state.
   mkdirSync(resolve(root, '.ia/distributions'), { recursive: true });
   writeFileSync(resolve(root, '.ia/distributions/pending.json'), '{}\n');
   const pending = await run(['init', root]);
@@ -231,8 +232,8 @@ it('checks formatting by default, rewrites only with --write, and refuses a path
 });
 
 it("formats this repository's participant records, authored under its root outside every system folder", async () => {
-  // Plan task self-host-participant-records put them in .ia/src/participant.ia, which the formatter refused until the
-  // authoring-system draft target took a file under an authored root the workspace declares (`.ia/src @authored`).
+  // They sit in .ia/src/participant.ia, which the formatter refused until the authoring-system draft target took a
+  // file under an authored root the workspace declares (`.ia/src @authored`).
   const participant = '.ia/src/participant.ia',
     before = readFileSync(resolve(repository, participant));
   for (const mode of [[], ['--check']]) {
@@ -437,7 +438,8 @@ it('diagnoses runtime, workspace and installation state in five buckets without 
   expect(machine.counts['fail']).toBe(0);
   expect(machine.checks.find((check) => check.id === 'host')?.status).toBe('unknown');
   expect(machine.checks.find((check) => check.id === 'root')?.remedy).toBe('ia init');
-  // §7.3: reported with or without a workspace; this package runs from this repository's checkout.
+  // Host plugin distribution spec §7.3: reported with or without a workspace; this package runs from this
+  // repository's checkout.
   expect(machine.checks.find((check) => check.id === 'install-channel')).toMatchObject({
     status: 'ok',
     detail: expect.stringMatching(/^checkout /),
@@ -470,7 +472,8 @@ it('diagnoses runtime, workspace and installation state in five buckets without 
   expect(present.exitCode).toBe(0);
   expect(present.stdout).toContain('158 records, 0 errors');
   expect(present.stdout).toContain('0 archives in .ia/distributions/cache');
-  // §9.2: a decision is a fact about a directory that is not a workspace, so a workspace has no such row.
+  // Host plugin distribution spec §7.3: a decision is a fact about a directory that is not a workspace, so a
+  // workspace has no such row.
   const presentRows = JSON.parse((await run(['doctor', '--root', root, '--json'], { env })).stdout).checks as {
     id: string;
   }[];
@@ -597,7 +600,7 @@ it("keeps every new verb's --json stdout one parseable value with no ANSI, in su
   ];
   for (const { argv, refusal } of invocations) {
     const result = await run(argv, { ...options, cwd: empty });
-    // §5 and §4.3: the result envelope and the refusal object are both the one value on stdout.
+    // §5: the result envelope and the refusal object are both the one value on stdout.
     const stream = result.stdout;
     expect(stream, argv.join(' ')).not.toMatch(ANSI);
     expect(stream.endsWith('\n'), argv.join(' ')).toBe(true);

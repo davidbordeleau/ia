@@ -1,8 +1,9 @@
 import '../temp/physical-temp.mjs';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -84,6 +85,20 @@ export function trustState(listing) {
   } catch {
     return { state: 'unknown' };
   }
+  const nonempty = (value) => typeof value === 'string' && value.trim().length > 0;
+  if (
+    !config ||
+    typeof config !== 'object' ||
+    Array.isArray(config) ||
+    !nonempty(config.id) ||
+    !nonempty(config.type) ||
+    (config.permissions !== undefined && (!Array.isArray(config.permissions) || !config.permissions.every(nonempty))) ||
+    (config.type === 'github' &&
+      (!nonempty(config.repository) ||
+        !nonempty(config.file) ||
+        (config.environment !== undefined && typeof config.environment !== 'string')))
+  )
+    return { state: 'unknown' };
   const matches =
     config?.type === 'github' &&
     Array.isArray(config?.permissions) &&
@@ -113,10 +128,9 @@ export function npmSetupPlan(names, state, bootstrapNames = []) {
   for (const name of bootstrapNames) assert.ok(names.includes(name), `Unknown bootstrap package: ${name}`);
   return names.map((name) => {
     const current = state[name];
-    const { access, public: published, stages, trust } = current;
+    const { access, metadata, public: published, stages, trust } = current;
     const existing =
-      access === 'public' ||
-      access === 'private' ||
+      metadata === 'present' ||
       published === 'present' ||
       stages.items.length > 0 ||
       trust.state === 'configured' ||
@@ -124,20 +138,33 @@ export function npmSetupPlan(names, state, bootstrapNames = []) {
     const bootstrap =
       !existing &&
       access === 'not-found' &&
+      metadata === 'not-found' &&
       published === 'not-found' &&
       stages.state === 'known' &&
       ['missing', 'not-found'].includes(trust.state);
     const blocked = [];
-    if (access === 'unknown' || published === 'unknown' || stages.state === 'unknown' || trust.state === 'unknown')
+    if (
+      access === 'unknown' ||
+      metadata === 'unknown' ||
+      published === 'unknown' ||
+      stages.state === 'unknown' ||
+      trust.state === 'unknown'
+    )
       blocked.push('inspection failed; resolve authentication, permissions or registry errors before applying');
     if (trust.state === 'different')
       blocked.push('trusted publisher differs or lacks direct-publish permission; owner review required');
-    if (access === 'private')
-      blocked.push('package exists but is private; owner-authorized registry recovery required');
+    if (access === 'non-public')
+      blocked.push(
+        existing
+          ? 'package exists but is non-public; owner-authorized registry recovery required'
+          : 'visibility is non-public; package existence remains unconfirmed',
+      );
     if (existing && access === 'not-found')
       blocked.push('package evidence conflicts with authenticated 404; owner investigation required');
     if (existing && trust.state === 'not-found')
       blocked.push('trust returned 404 for an existing package; owner investigation required');
+    if (existing && metadata === 'not-found')
+      blocked.push('authenticated metadata returned 404 despite package evidence; owner investigation required');
     const candidates = stages.items.filter((stage) => stage.version === BOOTSTRAP_VERSION);
     if (candidates.length > 1 || candidates.some((stage) => stage.status !== 'staged'))
       blocked.push('bootstrap stage identity or status is ambiguous; owner review required');
@@ -174,7 +201,7 @@ export function githubSetupPlan(state, rulesets, { everyWorkflowDeclaresPermissi
       issues.push({ setting: 'environment-branches', fix: 'main only' });
   }
   if (!state.workflow?.can_approve_pull_request_reviews)
-    issues.push({ setting: 'actions-create-pull-requests', fix: 'allow' });
+    issues.push({ setting: 'actions-create-pull-requests', fix: 'allow creation and approval of pull requests' });
   if (everyWorkflowDeclaresPermissions && state.workflow?.default_workflow_permissions !== 'read')
     issues.push({ setting: 'default-token-permissions', fix: 'read' });
   for (const name of rulesets)
@@ -220,15 +247,69 @@ export function stageState(listing, name) {
 export function accessState(listing, name) {
   try {
     const value = JSON.parse(listing);
-    return Object.keys(value).length === 1 && ['public', 'private'].includes(value[name]) ? value[name] : 'unknown';
+    if (Object.keys(value).length !== 1 || !['public', 'private'].includes(value[name])) return 'unknown';
+    return value[name] === 'private' ? 'non-public' : 'public';
   } catch {
     return 'unknown';
   }
 }
 // Keep diagnostics to error codes: npm errors can include credentials or sensitive response bodies.
 const errorCode = (error) =>
-  failure(error).match(/\bE(?:404|401|403|OTP|NOTFOUND|CONNRESET|TIMEDOUT)\b/)?.[0] ?? 'read failed';
-export async function inspectNpm(npm, names, readPublic = registryPackage) {
+  failure(error).match(
+    /\bE(?:404|401|403|429|500|502|503|504|OTP|NOTTY|AUTHFAILED|AUTHRESULT|CANCELED|NPMVERSION|NPMCLI|NOTFOUND|CONNRESET|CONNREFUSED|TIMEDOUT|USAGE|METADATARESULT|METADATAFAILED)\b/,
+  )?.[0] ?? 'read failed';
+const AUTH_RECOVERY =
+  'Run pnpm npm:setup --interactive-auth --skip-github in a terminal with stdin and stdout attached. ' +
+  `It uses pinned npm ${NPM_VERSION}; PATH npm may not support trust. Do not pipe or redirect the run, pass OTPs as arguments, or repeat --apply.`;
+
+/** Accept only a completed helper result from its dedicated channel, never terminal output or an exit code alone. */
+export function interactiveTrustResult(result) {
+  let response;
+  try {
+    response = JSON.parse(String(result.output?.[3] ?? ''));
+  } catch {}
+  if (result.error || result.signal || result.status !== 0 || response?.ok !== true) {
+    const code = ['EOTP', 'E401', 'E403', 'E404', 'ENOTTY', 'ECANCELED', 'ENPMVERSION'].includes(response?.code)
+      ? response.code
+      : 'EAUTHFAILED';
+    throw new Error(code + ': interactive trust inspection did not complete; readiness remains unverified');
+  }
+  if (typeof response.listing !== 'string') throw new Error('EAUTHRESULT: no structured trust result');
+  return response.listing;
+}
+
+/** Recover only the failed read itself. npm's request-scoped OTP cannot authenticate a later piped process. */
+export function npmWithInteractiveAuth(
+  npm,
+  recoverTrust,
+  {
+    enabled = false,
+    stdinIsTTY = Boolean(process.stdin.isTTY),
+    stdoutIsTTY = Boolean(process.stdout.isTTY),
+    log = console.error,
+  } = {},
+) {
+  assert.ok(!enabled || (stdinIsTTY && stdoutIsTTY), 'ENOTTY: ' + AUTH_RECOVERY);
+  let recoveryFailed = false;
+  return (args, options) => {
+    try {
+      return npm(args, options);
+    } catch (error) {
+      const trustRead = args.length === 4 && args[0] === 'trust' && args[1] === 'list' && args[3] === '--json';
+      if (!enabled || !trustRead || errorCode(error) !== 'EOTP') throw error;
+      if (recoveryFailed) throw new Error('EAUTHFAILED: earlier interactive inspection failed; no further prompts');
+      assert.match(args[2], NAME, 'Unexpected package name');
+      log(args[2] + ': npm requires 2FA for this read; complete or cancel the terminal challenge.');
+      try {
+        return recoverTrust(args[2]);
+      } catch (error) {
+        recoveryFailed = true;
+        throw new Error(errorCode(error) + ': interactive trust inspection failed; no further prompts this run');
+      }
+    }
+  };
+}
+export async function inspectNpm(npm, names, readPublic = registryPackage, readMetadata = () => '') {
   const state = {};
   for (const name of names) {
     const errors = [];
@@ -237,12 +318,26 @@ export async function inspectNpm(npm, names, readPublic = registryPackage) {
         return parse(npm(args, { stdio: 'pipe' }));
       } catch (error) {
         const code = errorCode(error);
-        errors.push(`${args.slice(0, 2).join(' ')}: ${code}`);
+        errors.push(`${args.slice(0, 2).join(' ')}: ${code}${code === 'EOTP' ? '; ' + AUTH_RECOVERY : ''}`);
         return code === 'E404' && absent !== undefined ? absent : undefined;
       }
     };
     const access =
       read(['access', 'get', 'status', name, '--json'], (text) => accessState(text, name), 'not-found') ?? 'unknown';
+    let metadata = 'unknown';
+    try {
+      const result = JSON.parse(await readMetadata(name));
+      if (result?.ok === true && result.name === name) metadata = 'present';
+      else if (result?.ok === false && typeof result.code === 'string') {
+        const code = errorCode(new Error(result.code));
+        if (code === result.code) {
+          if (code === 'E404') metadata = 'not-found';
+          errors.push('authenticated metadata: ' + code);
+        } else errors.push('authenticated metadata: malformed response');
+      } else errors.push('authenticated metadata: malformed response');
+    } catch (error) {
+      errors.push('authenticated metadata: ' + errorCode(error));
+    }
     const stages = read(['stage', 'list', name, '--json'], (text) => stageState(text, name)) ?? {
       state: 'unknown',
       items: [],
@@ -262,7 +357,7 @@ export async function inspectNpm(npm, names, readPublic = registryPackage) {
     } catch (error) {
       errors.push(`public metadata: ${error.status ?? errorCode(error)}`);
     }
-    state[name] = { access, stages, trust, public: published, errors };
+    state[name] = { access, metadata, stages, trust, public: published, errors };
   }
   return state;
 }
@@ -276,6 +371,7 @@ function run(command, args, options = {}) {
     encoding: 'utf8',
     windowsHide: true,
     maxBuffer: 16 * 1024 * 1024,
+    timeout: 120_000,
     ...options,
   });
 }
@@ -314,27 +410,79 @@ function npmNode(override) {
     }
   return null;
 }
+/**
+ * Arguments for the private pinned npm installation. `--no-bin-links`: npm otherwise links its bundled dependencies'
+ * executables under node_modules/npm/node_modules/.bin, and those symlinks are refused as aliases below.
+ */
+export function pinnedNpmInstallArgs(prefix) {
+  return [
+    'install',
+    '--prefix',
+    prefix,
+    '--no-save',
+    '--package-lock=false',
+    '--ignore-scripts',
+    '--no-bin-links',
+    '--registry',
+    REGISTRY,
+    `npm@${NPM_VERSION}`,
+  ];
+}
+/**
+ * Whether a POSIX mode lets another user change the private npm installation. The private prefix (a fresh mkdtemp)
+ * must admit no other user. Entries npm creates inside it follow the installing umask, so group-writable entries
+ * (umask 002) are accepted: no one else can reach them through the private prefix. World-writable entries are refused.
+ */
+export function writableInstallationMode(mode, isPrefix) {
+  return (mode & (isPrefix ? 0o077 : 0o002)) !== 0;
+}
 /** The pinned publishing CLI. Trust and staged publishing need a newer npm than Node 22 bundles. */
-function pinnedNpm(override, node) {
-  if (override) return resolve(override);
-  const prefix = resolve(realpathSync(tmpdir()), `ia-npm-cli-${NPM_VERSION}`);
-  const cli = resolve(prefix, 'node_modules/npm/bin/npm-cli.js');
-  if (!existsSync(cli)) {
-    mkdirSync(prefix, { recursive: true });
-    run(process.execPath, [
-      bundledNpm(),
-      'install',
-      '--prefix',
-      prefix,
-      '--no-save',
-      '--package-lock=false',
-      '--ignore-scripts',
-      `npm@${NPM_VERSION}`,
-    ]);
+export function pinnedNpm(
+  override,
+  node,
+  {
+    install = (prefix) =>
+      run(process.execPath, [bundledNpm(), ...pinnedNpmInstallArgs(prefix)], { timeout: 5 * 60_000 }),
+  } = {},
+) {
+  const parent = realpathSync(tmpdir());
+  // Fresh mkdtemp directories are private on POSIX. Never execute a pre-existing shared cache.
+  const prefix = override ? null : mkdtempSync(resolve(parent, `ia-npm-cli-${NPM_VERSION}-`));
+  const cli = override ? realpathSync(resolve(override)) : resolve(prefix, 'node_modules/npm/bin/npm-cli.js');
+  const dispose = () => {
+    if (prefix) {
+      assert.equal(dirname(prefix), parent, 'Unsafe npm installation cleanup');
+      rmSync(prefix, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
+  };
+  try {
+    if (prefix) install(prefix);
+    const inspect = (path, recursive = true) => {
+      const stat = lstatSync(path);
+      assert.ok(!stat.isSymbolicLink(), 'Aliased npm installation refused');
+      assert.ok(stat.isFile() || stat.isDirectory(), 'Unexpected npm installation entry');
+      if (prefix && process.platform !== 'win32') {
+        assert.equal(stat.uid, process.getuid(), 'Foreign npm installation owner');
+        assert.ok(!writableInstallationMode(stat.mode, path === prefix), 'Writable npm installation refused');
+      }
+      if (recursive && stat.isDirectory()) for (const name of readdirSync(path)) inspect(resolve(path, name));
+    };
+    if (prefix) {
+      inspect(prefix, false);
+      inspect(resolve(prefix, 'node_modules'), false);
+    }
+    inspect(resolve(cli, '../..'));
+    const manifest = JSON.parse(readFileSync(resolve(cli, '../../package.json'), 'utf8'));
+    assert.equal(manifest.name, 'npm', 'Expected an npm installation');
+    assert.equal(manifest.version, NPM_VERSION, 'Pinned npm package version differs');
+    assert.equal(realpathSync(cli), cli, 'Aliased npm entry refused');
+    const version = run(node, [cli, '--version'], { timeout: 30_000 }).trim();
+    assert.equal(version, NPM_VERSION, `Expected npm ${NPM_VERSION}, found ${version}`);
+    return { cli, dispose };
+  } catch (error) {
+    dispose();
+    throw error;
   }
-  const version = run(node, [cli, '--version']).trim();
-  assert.equal(version, NPM_VERSION, `Expected npm ${NPM_VERSION}, found ${version}`);
-  return cli;
 }
 function ghCommand() {
   for (const candidate of ['gh', 'C:\\Program Files\\GitHub CLI\\gh.exe'])
@@ -419,7 +567,9 @@ function applyGithub(gh, issues, reviewer) {
     };
     try {
       put(`repos/${REPOSITORY}/actions/permissions/workflow`, next);
-      console.log(`Actions may create pull requests; default workflow token: ${next.default_workflow_permissions}`);
+      console.log(
+        `Actions may create and approve pull requests; default workflow token: ${next.default_workflow_permissions}`,
+      );
     } catch (error) {
       console.error(
         `Could not update Actions workflow permissions: ${String(error.stderr ?? error.message).trim()}\n` +
@@ -441,9 +591,9 @@ function applyGithub(gh, issues, reviewer) {
 export async function applyNpm(
   npm,
   names,
-  { bootstrapNames = [], readPublic = registryPackage, log = console.log } = {},
+  { bootstrapNames = [], readPublic = registryPackage, readMetadata, log = console.log } = {},
 ) {
-  const plan = npmSetupPlan(names, await inspectNpm(npm, names, readPublic), bootstrapNames);
+  const plan = npmSetupPlan(names, await inspectNpm(npm, names, readPublic, readMetadata), bootstrapNames);
   const blockers = plan.flatMap((row) => row.blocked.map((reason) => row.name + ': ' + reason));
   assert.equal(blockers.length, 0, blockers.join('\n'));
   const retained = new Map();
@@ -472,7 +622,7 @@ export async function applyNpm(
         assert.ok(id, row.name + ': staging returned no exact bootstrap identity; inspect stages before retrying');
         retained.set(row.name, id);
         log(row.name + '@' + BOOTSTRAP_VERSION + ': retaining bootstrap stage ' + id + '; never approve it');
-        const confirmed = await inspectNpm(npm, [row.name], readPublic);
+        const confirmed = await inspectNpm(npm, [row.name], readPublic, readMetadata);
         const stage = confirmed[row.name].stages.items.find((item) => item.id === id);
         assert.ok(
           stage?.version === BOOTSTRAP_VERSION && stage.status === 'staged',
@@ -499,7 +649,7 @@ export async function applyNpm(
       }
     }
   }
-  const final = npmSetupPlan(names, await inspectNpm(npm, names, readPublic));
+  const final = npmSetupPlan(names, await inspectNpm(npm, names, readPublic, readMetadata));
   for (const row of final) {
     const id = retained.get(row.name);
     if (
@@ -525,6 +675,7 @@ function reportNpm(plan) {
       name: row.name,
       existence: row.existence,
       access: row.access,
+      metadata: row.metadata,
       public: row.public,
       trust: row.trust.state,
       stages:
@@ -547,6 +698,7 @@ if (isEntry(process.argv[1], import.meta.url)) {
   const { values } = parseArgs({
     options: {
       apply: { type: 'boolean', default: false },
+      'interactive-auth': { type: 'boolean', default: false },
       'bootstrap-name': { type: 'string', multiple: true, default: [] },
       'npm-cli': { type: 'string' },
       node: { type: 'string' },
@@ -565,23 +717,50 @@ if (isEntry(process.argv[1], import.meta.url)) {
       assert.ok(!values.apply, message);
       console.log(message + `; reading with ${process.version}.`);
     } else if (node !== process.execPath) console.log(`Running npm ${NPM_VERSION} with ${node}`);
-    const nodeBin = node ?? process.execPath,
-      cli = pinnedNpm(values['npm-cli'], nodeBin),
-      npm = (args, options = {}) => run(nodeBin, [cli, ...args, '--registry', REGISTRY], options);
-    let user = null;
+    const nodeBin = node ?? process.execPath;
+    const prepared = pinnedNpm(values['npm-cli'], nodeBin);
     try {
-      user = npm(['whoami'], { stdio: 'pipe' }).trim();
-    } catch {}
-    const state = await inspectNpm(npm, names);
-    const plan = npmSetupPlan(names, state, values['bootstrap-name']);
-    reportNpm(plan);
-    console.log(
-      user ? 'npm: logged in as ' + user + '.' : 'npm: authentication unavailable; owner login required before setup.',
-    );
-    if (values.apply) {
-      assert.ok(user, 'npm login is required to apply');
-      await applyNpm(npm, names, { bootstrapNames: values['bootstrap-name'] });
-    } else if (!user || !plan.every((row) => row.ready)) process.exitCode = 1;
+      const cli = prepared.cli,
+        npm = npmWithInteractiveAuth(
+          (args, options = {}) => run(nodeBin, [cli, ...args, '--registry', REGISTRY], options),
+          (name) =>
+            interactiveTrustResult(
+              spawnSync(nodeBin, [resolve(import.meta.dirname, 'release-setup-auth.mjs'), cli, name], {
+                cwd: root,
+                encoding: 'utf8',
+                stdio: ['inherit', 'inherit', 'inherit', 'pipe'],
+                windowsHide: true,
+                timeout: 5 * 60 * 1000,
+                maxBuffer: 1024 * 1024,
+              }),
+            ),
+          { enabled: values['interactive-auth'] },
+        );
+      const readMetadata = (name) =>
+        run(nodeBin, [resolve(import.meta.dirname, 'release-setup-metadata.mjs'), cli, name], {
+          stdio: 'pipe',
+          timeout: 40_000,
+          maxBuffer: 1024 * 1024,
+        });
+      let user = null;
+      try {
+        user = npm(['whoami'], { stdio: 'pipe' }).trim();
+      } catch {}
+      const state = await inspectNpm(npm, names, registryPackage, readMetadata);
+      const plan = npmSetupPlan(names, state, values['bootstrap-name']);
+      reportNpm(plan);
+      console.log(
+        user
+          ? 'npm: logged in as ' + user + '.'
+          : 'npm: authentication unavailable; owner login required before setup.',
+      );
+      if (values.apply) {
+        assert.ok(user, 'npm login is required to apply');
+        await applyNpm(npm, names, { bootstrapNames: values['bootstrap-name'], readMetadata });
+      } else if (!user || !plan.every((row) => row.ready)) process.exitCode = 1;
+    } finally {
+      prepared.dispose();
+    }
   }
   if (!values['skip-github']) {
     const gh = ghCommand();

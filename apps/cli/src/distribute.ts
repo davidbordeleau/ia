@@ -4,10 +4,10 @@
  *
  * One shape, one set of flags, one plan/apply rule. Without `--apply` the command plans and renders; with
  * `--apply` it plans and applies in one invocation and the installer re-checks every input between the two.
- * Planning and applying are two functions here for the reason §2.8 rule 3 gives: on a terminal without `--yes`
+ * Planning and applying are two functions here for the reason §2.0 gives: on a terminal without `--yes`
  * the change summary is shown and one question is asked between them, and a declined answer leaves the plan
- * unapplied at exit 0. The other half of rule 3 — `--apply` with no terminal and no `--yes`, and `--apply --json`
- * without `--yes`, are usage errors — is enforced at parse time in consumer.ts, which is what keeps §3's promise
+ * unapplied at exit 0. The other half of that rule — `--apply` with no terminal and no `--yes`, and `--apply --json`
+ * without `--yes`, are usage errors — is enforced at parse time in consumer.ts, which is what keeps §1.2's promise
  * that an exit 2 read nothing and wrote nothing. By the time a handler runs, an unconfirmable apply is already
  * gone, so reaching the question here means the question can be both asked and answered.
  *
@@ -29,7 +29,7 @@
  * a workspace that owns a projection for a host — its `<host>-projection.json` state exists — renders the position
  * packet of its admitted records, so a change to the installed set changes the projection. `--apply` refuses before
  * anything is acquired or written when an owned projection file was edited by hand, or when the steward guard the
- * refresh would retire (B11) cannot be removed, because the refresh would refuse either, and re-renders each
+ * refresh would retire cannot be removed, because the refresh would refuse either, and re-renders each
  * registered projection after the install commits through `applyHostProjection`, the one writer of projection files,
  * which retires such a guard before any projection file changes and writes the receipt; the plan, and so the question
  * an apply asks, names each refresh that retires one (`retire`). MCP entries do not depend on the installed set and are
@@ -111,7 +111,7 @@ import {
 } from './render.js';
 
 export type Operation = 'install' | 'update' | 'remove' | 'restore';
-/** §2.8: the id grammar is `provider/name`, and a positional may pin it with `@<range>`. */
+/** The id grammar is `provider/name`, and a positional may pin it with `@<range>`. */
 export const REQUEST = /^([a-z][a-z0-9.-]*\/[a-z][a-z0-9-]*)(?:@(.+))?$/;
 /** A positional with no range asks for whatever the source offers; nothing in the tree supplies another default. */
 export const ANY_VERSION = '*';
@@ -148,7 +148,7 @@ export interface PlanView {
   readonly withdrawn: readonly string[];
   /** The registries this command read, one per provider, sorted; empty when a catalog or the cache was the source. */
   readonly registries: readonly RegistrySource[];
-  /** The exact command that would apply this plan; §7.6's `\` breaks are chosen here, not by the wrapper. */
+  /** The exact command that would apply this plan; its `\` breaks are chosen here, not by the wrapper. */
   readonly invocation: string;
   readonly planOut: string | null;
   /** Hosts whose projection this workspace owns; `applyPlan` refreshes each after the install commits. */
@@ -159,7 +159,7 @@ export interface PlanView {
   }[];
   /**
    * The refreshed hosts that own a steward-guard registration an earlier release made, which their refresh retires
-   * before any projection file changes (B11); a plan lists the retirement.
+   * before any projection file changes; a plan lists the retirement.
    */
   readonly retire: readonly HostName[];
   /** After an apply, the refreshed hosts whose refresh retired that registration; empty before an apply. */
@@ -175,7 +175,10 @@ const SYMBOL: Readonly<Record<ChangeRow['kind'], SymbolName>> = {
   shadowed: 'info',
 };
 
-/** §2.8's join. `changes` carries ids; every other column is looked up, and an absent value is never invented. */
+/**
+ * The change table's join. `changes` carries ids; every other column is looked up, and an absent value is never
+ * invented.
+ */
 export function changeRows(plan: InstallationPlan, previous: DistributionLock | undefined): readonly ChangeRow[] {
   const rows: ChangeRow[] = [];
   const direct = new Set(plan.lock.requests.map((request) => request.id));
@@ -199,7 +202,7 @@ export function changeRows(plan: InstallationPlan, previous: DistributionLock | 
 
 /**
  * Acquisition is the only phase that can reach class 4, so it is the only phase wrapped. A DistributionError keeps
- * its own code (§4.1). The service reports a transport failure — DNS, TLS, or its own 30-second timeout — as
+ * its own code (§4). The service reports a transport failure — DNS, TLS, or its own 30-second timeout — as
  * IA-DIST-ARTIFACT-UNAVAILABLE naming the URL (registry spec §6.4); anything that still arrives without an IA code
  * is reported as a CLI failure at class 4 rather than relabelled with a service code the service never raised.
  *
@@ -212,21 +215,20 @@ export function changeRows(plan: InstallationPlan, previous: DistributionLock | 
  * ("The default registry …", whose message names every other source), a document over the 4 MiB bound ("Registry
  * document …", a limit a retry cannot fix, so another registry is chosen at the level that chose this one), and a
  * directory registry that lists a release whose artifact file it lacks. All of these stay class 4: remote or registry
- * content the user cannot fix in the workspace. Two registry refusals are class 3 and carry the remedy §4 and §7 name
- * for them: an unmapped provider, and a request only a licensed release satisfies.
+ * content the user cannot fix in the workspace. Two registry refusals are class 3 and carry the remedy registry spec
+ * §4 and §7 name for them: an unmapped provider, and a request only a licensed release satisfies.
  *
  * Every other refusal passes through with its code and class, located at the file it names when the service located
- * it (`.path`, e.g. `.ia/registries.json`), so §4.3's `where` is null only when there is genuinely no location.
+ * it (`.path`, e.g. `.ia/registries.json`), so §5's `where` is null only when there is genuinely no location.
  *
- * Design row 27: each remedy names one command, one of this invocation's `Reruns`, so a retry, a repaired registry
- * map or a deleted cache file is followed by a command the user can run as printed.
+ * Each remedy names one command, one of this invocation's `Reruns`, so a retry, a repaired registry map or a deleted
+ * cache file is followed by a command the user can run as printed.
  */
 export type Route = 'catalog' | 'registry';
 /**
- * The commands this invocation's remedies name (design row 27), each spelled from its parsed arguments and runnable
- * as printed. `again` is its plan, without `--apply`, which acquires and verifies once more and applies nothing; it
- * may still fill the archive cache, and `--plan-out` writes the plan file. `restore` has no preview, so its `again` is
- * the apply itself.
+ * The commands this invocation's remedies name, each spelled from its parsed arguments and runnable as printed. `again`
+ * is its plan, without `--apply`, which acquires and verifies once more and applies nothing; it may still fill the
+ * archive cache, and `--plan-out` writes the plan file. `restore` has no preview, so its `again` is the apply itself.
  */
 export interface Reruns {
   readonly again: string;
@@ -260,8 +262,8 @@ const INCOMPLETE_REGISTRY = /^Registry (.+) has no artifacts\//;
 const INCOMPLETE = (dir: string): string =>
   `That registry directory is incomplete: it lists a release whose artifact file is missing. Re-add the release with "ia-distribution registry add --registry ${quote(dir)} --archive <file>".`;
 /**
- * Registry spec §4's remedy for an unmapped provider, as `ia doctor` prints it. The exported 1.x text is unchanged
- * (decision release-bump); a refusal names `UNMAPPED_NEXT` instead, whose one command is the rerun (design row 27).
+ * Registry spec §4's remedy for an unmapped provider, as `ia doctor` prints it. The exported 1.x text is unchanged; a
+ * refusal names `UNMAPPED_NEXT` instead, whose one command is the rerun.
  */
 export const UNMAPPED =
   "Every requested and locked package's provider needs a registry. Map the provider to an HTTPS URL or a workspace directory in .ia/registries.json, or pass --registry <url|dir>.";
@@ -291,7 +293,7 @@ async function acquiring<T>(run: () => Promise<T>, where: string | null, route: 
   } catch (error) {
     const code = codeOf(error, ''),
       message = error instanceof Error ? error.message : String(error);
-    // Only a service refusal (an IA code, §4.1) is located at the file it names. A Node error also carries `.path`, but
+    // Only a service refusal (an IA code, §4) is located at the file it names. A Node error also carries `.path`, but
     // its code is not one the envelope may carry, so it is left to `refusalOf`, which reports it as IA-CLI-FAILED.
     const own = SERVICE_CODE.test(code) ? refusedPath(error) : null;
     const located = own ?? where;
@@ -321,7 +323,7 @@ async function acquiring<T>(run: () => Promise<T>, where: string | null, route: 
     if (code === 'IA-DIST-REGISTRY-UNMAPPED')
       throw new Refusal(code, message, 3, at, `${UNMAPPED_NEXT} Then run "${reruns.again}".`);
     if (code === 'IA-DIST-LICENSE-REQUIRED') throw new Refusal(code, message, 3, at, LICENSED(reruns));
-    // A service refusal the service located keeps its code and class 3, and gains its location (§4.3) and the
+    // A service refusal the service located keeps its code and class 3, and gains its location (§4) and the
     // rerun after the file it names is repaired.
     if (!(error instanceof Refusal) && own !== null)
       throw new Refusal(
@@ -413,8 +415,8 @@ export interface PlanRequest {
   readonly planOut: string | undefined;
   readonly invocation: string;
   /**
-   * The commands this request's remedies name. Optional, so a 1.x request keeps its form (decision release-bump): when
-   * absent they are spelled from the request itself (`requestReruns`).
+   * The commands this request's remedies name. Optional, so a 1.x request keeps its form: when absent they are spelled
+   * from the request itself (`requestReruns`).
    */
   readonly reruns?: Reruns;
   /** Whether the invocation named `--root`; commands printed for a registered projection then carry it. */
@@ -444,7 +446,7 @@ function chooserOf(request: PlanRequest): (id: string) => RegistryChoice {
   return request.choose;
 }
 
-/** §2.8: a positional adds or repins one direct request; `--requests` supplies the whole set the native path reads. */
+/** A positional adds or repins one direct request; `--requests` supplies the whole set the native path reads. */
 export function mergeRequests(previous: DistributionLock | undefined, ids: readonly string[]): readonly Dependency[] {
   const requests = new Map((previous?.requests ?? []).map((request) => [request.id, request.range]));
   for (const supplied of ids) {
@@ -495,16 +497,16 @@ export const registeredProjections = (root: string, operation: Operation): reado
 
 /**
  * Host registration spec §4: `--apply` refuses before any install write when a registered projection would refuse.
- * A hand edit to an owned file is the refusal the refresh would raise (§6.3), so it is found here, before
+ * A hand edit to an owned file is the refusal the refresh would raise (§5), so it is found here, before
  * acquisition, the saved plan or the lock is touched; the remedy is the one `ia doctor` names for it, its rerun
  * `projectionRerun`'s: `ia host <host> --apply` for a registered host, `ia project <host> --apply` for a projection
- * `ia project` wrote without a registration (task ia-project-verb).
+ * `ia project` wrote without a registration.
  * Missing, outdated and unowned files do not block: the refresh rewrites the first two and never touches the third.
  * A file the mechanism cannot read — an unreadable ownership state, an aliased or oversized managed file — would
  * refuse the refresh too, so it is refused here, located at that file, with the repair `ia host` names for it. So is
- * a steward-guard registration the refresh's retirement (B11) would refuse: an unreadable guard state, or a guard
+ * a steward-guard registration the refresh's retirement would refuse: an unreadable guard state, or a guard
  * group changed by hand; a pending host journal that refuses the retirement's plan names its own recovery. So is the
- * hook step the refresh runs (`preflightHooks`, review finding H-R3): an owned hook group deleted, changed or
+ * hook step the refresh runs (`preflightHooks`): an owned hook group deleted, changed or
  * duplicated by hand, or a recorded payload a change of hooks would need, with the repair `ia host` names.
  */
 export function requireProjectionsClean(root: string, hosts: readonly HostName[], rooted: boolean): void {
@@ -528,7 +530,7 @@ export function requireProjectionsClean(root: string, hosts: readonly HostName[]
         hostNext(projectionRepair(host, changed.path, rerun), host, root, rooted),
       );
     // The refresh's file plan and hook step on the current render: a generated skill refused at a populated folder of the
-    // user's (F4), a hook group changed by hand or a payload a change needs (H-R3) refuse here, before any install write.
+    // user's, a hook group changed by hand or a payload a change needs refuse here, before any install write.
     try {
       preflightProjection(root, host);
     } catch (error) {
@@ -539,7 +541,7 @@ export function requireProjectionsClean(root: string, hosts: readonly HostName[]
 
 /**
  * The files the refresh would render for `host`, by the current records: a generated agent among them is written, never
- * previewed as a 1.x file to remove (review finding H-N7). None when the records do not render; the refresh then refuses.
+ * previewed as a 1.x file to remove. None when the records do not render; the refresh then refuses.
  */
 function renderedPaths(root: string, host: HostName): readonly string[] {
   try {
@@ -551,12 +553,12 @@ function renderedPaths(root: string, host: HostName): readonly string[] {
 
 /**
  * Host registration spec §4: after the install committed, a registered projection is re-rendered from the records of
- * the new generation and applied through `applyHostProjection`, which retires an owned steward guard first (B11),
- * re-checks every file itself and writes the receipt (B12); the retirement comes back as `retired`. A refusal comes
- * back rather than being thrown, so every registered host is attempted before the command refuses. A file the mechanism
- * located gets `ia host`'s repair for it; a held host lock names the recovery that clears a dead holder's; a CLI
- * refusal (the workspace no longer admits) keeps its own next action; anything else names the rerun, which is
- * `projectionRerun`'s, as `ia doctor` names it.
+ * the new generation and applied through `applyHostProjection`, which retires an owned steward guard first, re-checks
+ * every file itself and writes the receipt; the retirement comes back as `retired`. A refusal comes back rather than
+ * being thrown, so every registered host is attempted before the command refuses. A file the mechanism located gets
+ * `ia host`'s repair for it; a held host lock names the recovery that clears a dead holder's; a CLI refusal (the
+ * workspace no longer admits) keeps its own next action; anything else names the rerun, which is `projectionRerun`'s,
+ * as `ia doctor` names it.
  */
 function refreshed(view: PlanView, host: HostName): Refusal | 'retired' | 'none' {
   try {
@@ -623,7 +625,7 @@ export async function collectPlan(request: PlanRequest): Promise<PlanView> {
   const reruns = request.reruns ?? requestReruns(request);
   /**
    * A file the invocation named (`--catalog`, `--requests`), read as the service reads it; one that is not there names
-   * the rerun with that one value to correct, the service's code and message carried through unchanged (§4.1).
+   * the rerun with that one value to correct, the service's code and message carried through unchanged (§4).
    */
   const supplied = (path: string, option: 'catalog' | 'requests'): unknown => {
     try {
@@ -826,7 +828,7 @@ export async function collectPlan(request: PlanRequest): Promise<PlanView> {
 }
 
 /**
- * §2.8 rule 2's second half, separated from the first so rule 3's question can sit between them. `collectPlan`
+ * §2.8's apply, separated from its plan so §2.0's question can sit between them. `collectPlan`
  * never writes installation state; this is the only call in the consumer that does, and `applyInstallation`
  * re-runs the installer's own staleness check before it writes anything. Host registration spec §4 then refreshes
  * each registered projection; that writes only the projection's own files and state, never installation state. A
@@ -846,7 +848,7 @@ export function applyPlan(view: PlanView): PlanView {
 }
 
 /**
- * The `--json` envelope (§2.8): `{version: 1, command, plan, applied?, refresh?, retire?, retired?, registries?,
+ * The `--json` envelope: `{version: 1, command, plan, applied?, refresh?, retire?, retired?, registries?,
  * withdrawn?, planOut?}`.
  *
  * - `plan` is the planner's own value, unchanged.
@@ -862,10 +864,10 @@ export function planEnvelope(view: PlanView): unknown {
     version: 1,
     command: view.operation,
     plan: view.plan,
-    // `applied` is applyInstallation's return, its `host: 'pending'` literal included (§2.8).
+    // `applied` is applyInstallation's return, its `host: 'pending'` literal included.
     ...(view.applied === null ? {} : { applied: view.applied }),
     // Host registration spec §4: the registered projections an apply refreshes, those whose refresh retires the
-    // steward guard first (B11), and after an apply those whose refresh retired it.
+    // steward guard first, and after an apply those whose refresh retired it.
     ...(view.refresh.length === 0 ? {} : { refresh: view.refresh, projectionFiles: view.projectionFiles }),
     ...(view.retire.length === 0 ? {} : { retire: view.retire }),
     ...(view.retired.length === 0 ? {} : { retired: view.retired }),
@@ -946,7 +948,7 @@ const withdrawnBlocks = (view: PlanView, caps: Capabilities): readonly (readonly
           caps,
         ),
       ];
-/** §2.8 rule 4's closed path set, which is what makes "only install state" a checkable claim rather than a promise. */
+/** The closed path set, which is what makes "only install state" a checkable claim rather than a promise. */
 const wouldWriteBlocks = (view: PlanView, caps: Capabilities): readonly (readonly string[])[] => {
   const { plan } = view;
   const paths = [
@@ -967,7 +969,7 @@ const wouldWriteBlocks = (view: PlanView, caps: Capabilities): readonly (readonl
 
 /**
  * Host registration spec §4: the plan says which registered projections the apply re-renders, and which of those
- * refreshes first retire the steward guard an earlier release registered (B11), with what that leaves unguarded.
+ * refreshes first retire the steward guard an earlier release registered, with what that leaves unguarded.
  */
 const projectionsBlocks = (view: PlanView, caps: Capabilities): readonly (readonly string[])[] =>
   view.refresh.length === 0
@@ -999,7 +1001,7 @@ const projectionsBlocks = (view: PlanView, caps: Capabilities): readonly (readon
       ];
 /**
  * What an applied plan says about hosts. `applied.host` is applyInstallation's literal and is never presented as
- * configured (§2.8): with no registered projection the installer's host state is "not reported"; with one, the line
+ * configured: with no registered projection the installer's host state is "not reported"; with one, the line
  * names what this command refreshed — a refused refresh never reaches here — and points at doctor for the rest.
  */
 const hostLine = (view: PlanView): string =>
@@ -1060,10 +1062,10 @@ export function renderPlan(view: PlanView, caps: Capabilities, supplied?: string
   return document(blocks, { leadingBlank: true });
 }
 
-/** §2.8 rule 3's one question, asked once and only where an answer can arrive. */
+/** §2.0's one question, asked once and only where an answer can arrive. */
 export const CONFIRMATION = 'Apply these changes? [y/N] ';
 /**
- * The change summary rule 3 requires the question to show: what the preview shows about what would change, without
+ * The change summary §2.0 requires the question to show: what the preview shows about what would change, without
  * the preview's "nothing has been written" note or its next-action footer, because the question *is* the action.
  * It is the same blocks the preview builds, so a column the preview prints and this one does not cannot exist.
  */
@@ -1080,9 +1082,9 @@ export const renderSummary = (view: PlanView, caps: Capabilities): string =>
     },
   );
 /**
- * A declined question is an answer, not a failure: §2.8 rule 3 asked, the user said no, and the command reports
+ * A declined question is an answer, not a failure: §2.0 asked, the user said no, and the command reports
  * that and exits 0. The summary was on stderr, so what stdout carries is the outcome and the way to get the other
- * one. `--plan-out` was already written, because a declined apply is exactly the plan-only run rule 1 describes.
+ * one. `--plan-out` was already written, because a declined apply is exactly the plan-only run §2.8 describes.
  */
 export const renderDeclined = (view: PlanView, caps: Capabilities, supplied?: string, advice?: AdviceContext): string =>
   document(
@@ -1125,7 +1127,7 @@ function invocationOf(
   value('root');
   return parts.join(' ');
 }
-/** Design row 27: the commands this invocation's remedies name, spelled once from what the parser understood. */
+/** The commands this invocation's remedies name, spelled once from what the parser understood. */
 function rerunsOf(context: Context, operation: Operation): Reruns {
   const { args, host } = context;
   // `restore` has no preview: its rerun is the apply, confirmed, as every printed apply is.
@@ -1206,7 +1208,7 @@ export function runDistribute(operation: Operation): (context: Context) => Promi
         : { exitCode: 0, stdout: renderPlan(view, caps, args.value('root'), host), stderr: '' };
     host.signal?.throwIfAborted();
     if (!args.flag('apply')) return rendered(planned);
-    // §2.8 rule 3. Parsing has already refused every `--apply` whose question could not be asked or answered —
+    // §2.0. Parsing has already refused every `--apply` whose question could not be asked or answered —
     // no terminal, or `--json` — so the only two states left here are "answer it" and "`--yes` says skip it".
     // A declined answer therefore cannot occur under `--json`, which is why there is no JSON shape for one.
     if (!args.flag('yes') && !(await confirm(host.interaction, renderSummary(planned, caps), CONFIRMATION)))

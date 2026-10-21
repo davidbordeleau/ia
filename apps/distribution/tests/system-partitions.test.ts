@@ -5,6 +5,8 @@ import { dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 // @ts-expect-error The reviewed public fixture generator is JavaScript.
 import { publicResources } from '../../../tools/distribution/resources.mjs';
+// @ts-expect-error The checked authoring computation is JavaScript; the package test configuration disables allowJs.
+import { authoringResources, AUTHORING_MANIFEST } from '../../../tools/distribution/authoring-resources.mjs';
 import { readNative } from '../../../tools/native/check.js';
 import { systemArchivePartitions } from '../../../tools/release/system-partitions.js';
 import {
@@ -56,6 +58,10 @@ function fixture() {
     json: (path: string, value: unknown) => put(path, json(value)),
     manifest: JSON.parse(readFileSync(resolve(root, 'examples/public-language/manifest.json'), 'utf8')),
   });
+  put(
+    AUTHORING_MANIFEST,
+    authoringResources(root, new Map([...outputs].map(([path, output]) => [path, String(output.bytes)]))).output,
+  );
   const location = {
     placement: { kind: 'authored' as const, band: 100 as const, reach: '' },
     provenance: 'workspace' as const,
@@ -113,6 +119,14 @@ it('atomically admits eleven separate native owners with one shared floor and on
   expect(generation.systems.every((row) => row.bundles.length === 1)).toBe(true);
   expect(packed.every((row) => row.manifest.systems.length === 1)).toBe(true);
   for (const archive of packed) {
+    expect(
+      archive.manifest.files.filter(
+        (file) =>
+          file.path.startsWith('.ia/src/records/') ||
+          file.path === '.ia/src/workspace.ia' ||
+          file.path === '.ia/src/participant.ia',
+      ),
+    ).toEqual([]);
     const path = archive.manifest.systems[0]!.path + '/';
     const expected = input.snapshot.sources
       .filter((source) => source.path.startsWith(path))

@@ -76,8 +76,8 @@ describe('editor source projection', () => {
 });
 
 /**
- * 2.0.0's `draftSource` (6239cbc), reproduced to pin what it wrote: text quoted, every other type written as given
- * (milestone generation-binding review C-R9). The 2.0.0 function admitted no line break and nothing else.
+ * 2.0.0's `draftSource` (6239cbc), reproduced to pin what it wrote: text quoted, every other type written as given.
+ * The 2.0.0 function admitted no line break and nothing else.
  */
 function draftSource200(
   discriminator: string,
@@ -159,7 +159,7 @@ describe('draftSource keeps 2.0.0 spelling', () => {
     // A line break throws a plain Error, as 2.0.0 did; only structure from a condition or comment is SourceEditError.
     expect(() => draftSource('task', 'bad', schema, { 'meaning/says': 'first\nsecond' })).not.toThrow(SourceEditError);
   });
-  it('refuses a value that opens a string, prose or list it does not close (review C-RC2)', () => {
+  it('refuses a value that opens a string, prose or list it does not close', () => {
     // Across two values, an opener and a closer would swallow the rows between them and add a comment.
     expect(() =>
       draftSource('task', 'bad', schema, {

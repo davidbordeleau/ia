@@ -1,17 +1,16 @@
 /**
- * `ia position`: position-and-projection §1, §6 and §7 and design item 10; decisions scope-key-caps and
- * scope-verb-dispatch.
+ * `ia position`: the position body for a scope key (runtime R14 to R17).
  *
  * The consumer verb over the runtime's `position`: body(K) for the scope key the flags name, its digest and the host
  * note. No flag names K0, the repository's workspace with its pointers and tallies only; a key naming any part takes
  * the runtime's defaults for the others (`normalizeScopeKey`). This verb prints the key used and the capture's
  * freshness, then the body's sections and its two widening keys as `ia position` commands, or with `--json` what the
  * Door's `position` operation returns. It is that operation as a consumer verb beside the frozen `ia scope` route,
- * never a machine route (plan amendment A2), and its key is read from closed flags only, so no request text reaches it.
+ * never a machine route, and its key is read from closed flags only, so no request text reaches it.
  *
  * The workspace opens as every read verb opens it, without the db cache, and the position is read through the
  * whole-workspace scope, whose body also names the admission findings on loaded records (db PT5). Nothing is written:
- * a position needs no capture (plan amendment A9), whose state is only the note's freshness.
+ * a position needs no capture, whose state is only the note's freshness.
  */
 import {
   COORDINATE_DOMAINS,
@@ -29,6 +28,7 @@ import type {
   PositionVia,
   ScopeKey,
 } from '@inventarch/runtime';
+import { scopeKeyTextParts } from '@inventarch/runtime/internal/scope-key';
 import type { Context, Result } from './consumer.js';
 import { Refusal, requireRoot, respell } from './consumer.js';
 import type { Capabilities, Token } from './render.js';
@@ -70,6 +70,7 @@ function partialKey(args: Context['args']): Partial<ScopeKey> {
     depth: integer('depth'),
     budget: integer('budget'),
     word: args.value('word'),
+    primitive: args.value('primitive'),
   };
   return Object.fromEntries(Object.entries(parts).filter(([, value]) => value !== undefined)) as Partial<ScopeKey>;
 }
@@ -88,7 +89,7 @@ function positionCommand(key: Partial<ScopeKey>, rooted: string, seat = seatFlag
     [
       'ia position',
       ...(seat === undefined ? [] : [`--seat ${quote(seat)}`]),
-      ...(['shape', 'phase', 'depth', 'budget', 'word'] as const).flatMap((part) =>
+      ...(['shape', 'phase', 'depth', 'budget', 'word', 'primitive'] as const).flatMap((part) =>
         key[part] === undefined ? [] : [`--${part} ${quote(String(key[part]))}`],
       ),
     ].join(' ') + rooted
@@ -160,14 +161,7 @@ const moreFacts = (tally: PointerTally): readonly (readonly Token[])[] => [
 
 /** The key as the note names it: each part, the seat as the caller spelled it or the repository's workspace. */
 function keyText(key: ScopeKey): string {
-  const seat =
-    key.seat === undefined
-      ? "the repository's workspace"
-      : typeof key.seat === 'string'
-        ? key.seat
-        : spelled(key.seat.path);
-  const parts = `seat ${seat}, shape ${key.shape}, phase ${key.phase}, depth ${key.depth}, budget ${key.budget}`;
-  return key.word === undefined ? parts : `${parts}, word ${key.word}`;
+  return scopeKeyTextParts(key).join(', ');
 }
 
 /**
@@ -271,13 +265,13 @@ export function renderPosition(output: PositionOutput, caps: Capabilities, roote
 }
 
 /**
- * Design row 27: the one command after a refusal of the key or of its seat, with the root the invocation gave, which
- * the runtime's own `next` (R14, R15) does not carry. The runtime's `next` names the part it corrects, and this verb
- * names that correction as a command it runs (design §11: the same call with the printed closed set): a shape or phase
- * outside its closed set, or a depth or budget past its cap, is this call again with the closed set or the cap in its
- * place; a word the closure does not register is the vocabulary; a seat of another form, one the workspace does not
- * admit, a path outside it and a seat at runtime placement are the position without it, K0, unless that seat is the one
- * K0 takes, which names the overview of what the workspace admits.
+ * The one command after a refusal of the key or of its seat, with the root the invocation gave, which the runtime's own
+ * `next` (R14, R15) does not carry. The runtime's `next` names the part it corrects, and this verb names that
+ * correction as a command it runs (the same call with the printed closed set): a shape or phase outside its closed set,
+ * or a depth or budget past its cap, is this call again with the closed set or the cap in its place; a word the closure
+ * does not register is the vocabulary; a seat of another form, one the workspace does not admit, a path outside it and
+ * a seat at runtime placement are the position without it, K0, unless that seat is the one K0 takes, which names the
+ * overview of what the workspace admits.
  */
 function positionNext(error: RuntimeError, context: Pick<Context, 'command' | 'args'>, rooted: string): string {
   const [, , part] = (error.next ?? '').split(' ');
@@ -286,6 +280,8 @@ function positionNext(error: RuntimeError, context: Pick<Context, 'command' | 'a
       return `Run "${respell(context, { options: { shape: [`<${COORDINATE_DOMAINS.shape.join('|')}>`] } })}" with one of the five shapes.`;
     case '--phase':
       return `Run "${respell(context, { options: { phase: [`<${COORDINATE_DOMAINS.phase.join('|')}>`] } })}" with one of the four phases.`;
+    case '--primitive':
+      return `Run "${respell(context, { options: { primitive: [`<${COORDINATE_DOMAINS.primitive.join('|')}>`] } })}" with one of the six primitives.`;
     case '--depth':
       return `Run "${respell(context, { options: { depth: [String(SCOPE_KEY_CAPS.depth)] } })}" for the deepest position a key admits.`;
     case '--budget':
@@ -297,7 +293,7 @@ function positionNext(error: RuntimeError, context: Pick<Context, 'command' | 'a
   return `Run "ia position${rooted}" for the position of the repository's workspace, K0.`;
 }
 /**
- * §4.1: the runtime's refusal with its code and message unchanged. The key's form (its closed sets and caps) is
+ * §4: the runtime's refusal with its code and message unchanged. The key's form (its closed sets and caps) is
  * checked before the workspace is read, so its refusal reads nothing and is usage, exit 2; a word or seat the workspace
  * does not answer is exit 1, as `ia inspect` refuses an identity it does not admit, located at the workspace with a
  * seat identity as its identity.

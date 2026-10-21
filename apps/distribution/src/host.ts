@@ -35,6 +35,8 @@ import type { JsonPath } from './json-edit.js';
 import type { Stats } from 'node:fs';
 import type { WorkspaceHost as Host } from './hosts.js';
 import { asWorkspaceHost } from './hosts.js';
+import { sharedOr } from './host-verdict.js';
+import type { HostVerifier } from './host-verdict.js';
 
 interface Cache {
   directory: string;
@@ -104,7 +106,7 @@ export const HOST_CONFIG: Readonly<Record<Host, { readonly file: string; readonl
   codex: { file: '.codex/config.toml', format: 'toml' },
 };
 const configFile = (host: Host): string => HOST_CONFIG[host].file;
-/** Spec §5.1: one registration id per workspace and host for the v2 consumer payload. */
+/** One registration id per workspace and host for the v2 consumer payload. */
 export const HOST_REGISTRATION = 'workspace';
 /** REQ-HRC-2: the only constructor of an IA server's command and arguments, durable or ephemeral. */
 export function doorServer(entrypoint: string, args: readonly string[]): { command: string; args: string[] } {
@@ -364,12 +366,21 @@ export function expectedHostCache(directory: string, release: string): HostCache
     launcher: join(settledDirectory, 'scripts/ia.mjs'),
   };
 }
-/** Descriptive plan: configuration and ownership bytes are always rederived on apply. */
-export function planHost(rootInput: string, hostInput: Host, cacheInput: string | null, removeId?: string): HostPlan {
+/**
+ * Descriptive plan: configuration and ownership bytes are always rederived on apply. `verify`, a command's shared
+ * `hostVerifier`, reuses a verdict it already holds; without it the cache is verified afresh, as `applyHost` does.
+ */
+export function planHost(
+  rootInput: string,
+  hostInput: Host,
+  cacheInput: string | null,
+  removeId?: string,
+  verify?: HostVerifier,
+): HostPlan {
   const root = workspace(rootInput),
     host = asHost(hostInput);
   assertHostRegistrationIdle(root);
-  return planHostWith(root, host, cacheInput === null ? null : verifyHostCache(cacheInput), removeId);
+  return planHostWith(root, host, cacheInput === null ? null : sharedOr(verify, verifyHostCache)(cacheInput), removeId);
 }
 /** `planHost` against an expected, unverified cache (`expectedHostCache`), or against none for a removal. Never reads the cache. */
 export function planHostFor(
@@ -420,7 +431,7 @@ function planHostWith(root: string, host: Host, cache: HostCacheTarget | null, r
     const gone = !server && prior !== null && !Object.hasOwn(servers, key);
     if (!gone && (prior ? json(servers[key]) !== prior.owned : Object.hasOwn(servers, key)))
       fail('LOCAL-MODIFICATION', 'MCP registration changed or collides with an unmanaged server');
-    // In place (spec §5.1): only the owned member changes; every other byte of the file is kept.
+    // In place: only the owned member changes; every other byte of the file is kept.
     existing = prior ? keptPaths(prior.existing, containers) : presentJson(current, containers);
     if (gone) next = current;
     else {
@@ -586,7 +597,7 @@ export function recoverHost(rootInput: string): { status: 'host-recovered' | 'cu
 /**
  * The Node executable a registration records: the running one, except that a Homebrew keg's versioned path
  * (`<prefix>/Cellar/<formula>/<version>/bin/node`), which `brew upgrade` and cleanup delete, is recorded as the formula's
- * stable `<prefix>/opt/<formula>/bin/node` link while that link reaches the same executable (#323).
+ * stable `<prefix>/opt/<formula>/bin/node` link while that link reaches the same executable.
  */
 export function nodeCommand(execPath: string = process.execPath): string {
   const keg = /^(.+)[\\/]Cellar[\\/]([^\\/]+)[\\/][^\\/]+[\\/]bin[\\/](node(?:\.exe)?)$/.exec(execPath);

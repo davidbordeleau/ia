@@ -1,57 +1,57 @@
 import { registryWorkspace } from './adopt.js';
+import { HostPluginError, lowerPlugin, readPlugin } from '@inventarch/workspace-runtime/internal/host-plugin';
 import { adoptedBindings } from '@inventarch/db';
 import { adoptionId, planAdoption, applyAdoption } from '@inventarch/distribution/registry';
 import type { WorkspaceRelease } from '@inventarch/distribution/registry';
 import { readBase, PIN_PATH, PACKAGE_ID, DAMAGED } from './bundled-base.js';
+import { canonical } from './plugin-sources.js';
 import type { Base, BasePin } from './bundled-base.js';
 export { readBase, PIN_PATH, baseArchivePath, PACKAGE_ID } from './bundled-base.js';
 export type { Base, BasePin } from './bundled-base.js';
 /**
  * `ia init`: docs/specs/consumer-cli-contract/README.md §2.1, implementing
- * docs/specs/workspace-initialization-apply/README.md (M5.2) to reach the end state
- * docs/specs/workspace-initialization/README.md (M5.1) fixes.
+ * docs/specs/workspace-initialization-apply/README.md (the apply spec) to reach the end state
+ * docs/specs/workspace-initialization/README.md (the initialization spec) fixes.
  *
- * Without `--apply` it prints the reviewable plan: the owned paths, the target's classification (M5.2 §4.1), the
- * conflicts detected now, the starter it would write, the bundled base pin and the steps. It exits 0 whether or not
+ * Without `--apply` it prints the reviewable plan: the owned paths, the target's classification (the apply spec §1),
+ * the conflicts detected now, the starter it would write, the bundled base pin and the steps. It exits 0 whether or not
  * conflicts were found, because reporting them is the command's job.
  *
- * Milestone position-packet task init-three-records (position-and-projection §3; plan amendments B7 and B13;
- * decisions local-system-at-init and identity-namespace): the starter is three authored records in
- * `.ia/src/workspace.ia` — the `@workspace`, its participant `@agent` and that participant's `@mandate` — and a
- * create-only `.ia/.gitignore`. No local `@system` and no `@distribution` are written unless `--system` asks for
- * them, inside `.ia/src/systems/<name>/`, where the packer finds a release's records; without them the release
- * descriptor names no distribution, so `ia pack` refuses until one is authored.
+ * SPEC `init`: the starter is three authored records in `.ia/src/workspace.ia` — the `@workspace`, its participant
+ * `@agent` and that participant's `@mandate` — and a create-only `.ia/.gitignore`. No local `@system` and no
+ * `@distribution` are written unless `--system` asks for them, inside `.ia/src/systems/<name>/`, where the packer
+ * finds a release's records; without them the release descriptor names no distribution, so `ia pack` refuses until
+ * one is authored.
  *
- * With `--apply` it runs the steps in order — verify the pin, install the bundled base unless it is already
- * installed as planned, author the starter create-only, admit and read the authored identities from the compiled
- * graph, write `.ia/release.json`, the completion point — through the shared install services and `createFile`.
- * No journal is written: a rerun derives from the workspace which steps are done (§4.2). No step performs a network
- * request. `<directory>` is the only way to name the target: this verb never performs root discovery, and `--root`
- * is refused by the grammar rather than silently ignored. Two effects follow the completion point and are reported
- * apart (design §3): the capture, through db's `writeCapture` as `ia capture` writes it, and, only with `--host`, the
- * projection. A later step that fails leaves every earlier result in place and says so, naming its own command.
+ * With `--apply` it runs the steps in order — verify the pin, install the bundled base unless it is already installed
+ * as planned, author the starter create-only, admit and read the authored identities from the compiled graph, write
+ * `.ia/release.json`, the completion point — through the shared install services and `createFile`. No journal is
+ * written: a rerun derives from the workspace which steps are done (the apply spec §5). No step performs a network
+ * request. `<directory>` is the only way to name the target: this verb never performs root discovery, and `--root` is
+ * refused by the grammar rather than silently ignored. Two effects follow the completion point and are reported apart:
+ * the capture, through db's `writeCapture` as `ia capture` writes it, and, only with `--host`, the projection. A later
+ * step that fails leaves every earlier result in place and says so, naming its own command.
  *
  * `--host claude` or `--host codex` (docs/specs/host-registration/README.md §4 "init --host") is the project effect:
  * once the workspace is initialized, after the capture, the `ia host <host> --apply` path runs under the question
- * already answered here, so it never asks a second one, and its projection is written by `applyHostProjection`, the
- * one writer of projection files. It reads the live revision rather than the capture (plan amendment B8), so a capture
- * that fails does not keep it from running; the capture's refusal then says the projection is written. The plan names
- * that step and writes nothing for it — the host plan needs `.ia/release.json`, which only the apply writes. A host
- * step that refuses leaves the workspace initialized: the refusal keeps the service's code, message and location, and
- * its next action names the rerun.
+ * already answered here, so it never asks a second one, and its projection is written by `applyHostProjection`, the one
+ * writer of projection files. It reads the live revision rather than the capture, so a capture that fails does not keep
+ * it from running; the capture's refusal then says the projection is written. The plan names that step and writes
+ * nothing for it — the host plan needs `.ia/release.json`, which only the apply writes. A host step that refuses leaves
+ * the workspace initialized: the refusal keeps the service's code, message and location, and its next action names the
+ * rerun.
  *
- * `--migrate` (milestone position-packet task init-migrate-flag; plan amendments B7, B9 and B11) takes a workspace a
- * 1.1.0 `ia init` wrote instead: one local system folder, `.ia/src/systems/<name>/`, whose `system.ia` holds exactly the
- * starter `@system <name>`, registering no word, and `@agent <name>-steward`, and whose `records/workspace.ia` holds
- * exactly `@workspace <name>` and `@distribution <name>-distribution`. It rewrites it into the three starter records:
- * each other record file moves from the folder's `records/` to `.ia/src/`, where a record's word, not its folder,
- * decides its system, so its identity is unchanged; the local system folder goes and the descriptor names no
- * distribution, unless `--system` keeps the `@system` and its steward and re-roots the `@distribution` at the system.
- * It plans by default, and plan and apply alike refuse a workspace of any other shape before anything is written. The
- * three records use fields only the base this CLI bundles declares, so the apply first installs that base where the
- * workspace has another, as `ia init` installs it; it then captures and re-projects each host whose projection the
- * workspace owns through `applyHostProjection`, which retires the 1.x steward guard and deletes the owned steward agent
- * files (`collectMigration`, `applyMigration`).
+ * `--migrate` takes a workspace a 1.1.0 `ia init` wrote instead: one local system folder, `.ia/src/systems/<name>/`,
+ * whose `system.ia` holds exactly the starter `@system <name>`, registering no word, and `@agent <name>-steward`, and
+ * whose `records/workspace.ia` holds exactly `@workspace <name>` and `@distribution <name>-distribution`. It rewrites
+ * it into the three starter records: each other record file moves from the folder's `records/` to `.ia/src/`, where a
+ * record's word, not its folder, decides its system, so its identity is unchanged; the local system folder goes and the
+ * descriptor names no distribution, unless `--system` keeps the `@system` and its steward and re-roots the
+ * `@distribution` at the system. It plans by default, and plan and apply alike refuse a workspace of any other shape
+ * before anything is written. The three records use fields only the base this CLI bundles declares, so the apply first
+ * installs that base where the workspace has another, as `ia init` installs it; it then captures and re-projects each
+ * host whose projection the workspace owns through `applyHostProjection`, which retires the 1.x steward guard and
+ * deletes the owned steward agent files (`collectMigration`, `applyMigration`).
  */
 import {
   readMigrationJournal,
@@ -75,7 +75,7 @@ import {
   statSync,
   unlinkSync,
 } from 'node:fs';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { inertCommandRoot } from '@inventarch/runtime';
 import {
   decodeReleaseDescriptor,
@@ -154,10 +154,13 @@ import {
 } from './render.js';
 
 export type HostSelection = 'claude' | 'codex' | 'none';
-/** M5.2 §4.1. `recovery-required` is never rendered as a plan: it refuses before anything reasons about the target. */
+/**
+ * How the plan classifies the target. `recovery-required` is never rendered as a plan: it refuses before anything
+ * reasons about the target.
+ */
 export type TargetState = 'fresh' | 'resumable' | 'recovery-required' | 'conflict';
 /**
- * The steps in apply order (position-and-projection §3): the base install, the create-only author step, admission,
+ * The steps in apply order (SPEC `init`): the base install, the create-only author step, admission,
  * the descriptor (the completion point), then the two effects, capture and, only with `--host`, project.
  */
 export type StepId = 'install' | 'author' | 'admission' | 'descriptor' | 'capture' | 'project';
@@ -178,8 +181,8 @@ export interface StarterRecord {
   readonly name: string;
   readonly path: string;
 }
-/** M5.1 §3.2: the pin is the only authority for the bundled bytes. */
-/** M5.1 §2.3's provenance, and which fact was missing when it is the unpublished local form. */
+/** The pin is the only authority for the bundled bytes. */
+/** Provenance read from Git, and which fact was missing when it is the unpublished local form. */
 export type Missing = 'git' | 'checkout' | 'commit' | 'https-remote';
 export interface Source {
   readonly repository: string | null;
@@ -196,8 +199,8 @@ export interface Descriptor {
   readonly id: string;
   readonly version: string;
   /**
-   * The `@distribution` a `--system` starter authors: null in a plan, because M5.1 §2.3 reads it from the compiled
-   * record at apply time and never constructs it. Absent without `--system`, which authors none (plan amendment B7).
+   * The `@distribution` a `--system` starter authors: null in a plan, because it is read from the compiled record at
+   * apply time and never constructed. Absent without `--system`, which authors none.
    */
   readonly distribution?: string | null;
   readonly engine: string;
@@ -207,7 +210,7 @@ export interface Descriptor {
     readonly range: string;
     readonly systems: readonly string[];
   }[];
-  readonly assets: readonly never[];
+  readonly assets: Starter['assets'];
   readonly license: string;
   readonly description: string;
   readonly source: Source;
@@ -222,6 +225,8 @@ export interface Starter {
   readonly files: readonly { readonly path: string; readonly text: string }[];
   /** The records those files hold, in file order: three, or six with `--system`. */
   readonly records: readonly StarterRecord[];
+  /** The assets `--from` lowered; empty otherwise. */
+  readonly assets: readonly { readonly path: string; readonly role: 'asset' | 'documentation' | 'license' }[];
   readonly descriptor: Descriptor | null;
   readonly base: BasePin;
   readonly systems: readonly string[];
@@ -233,7 +238,7 @@ export interface InitView {
   readonly owns: readonly { readonly path: string; readonly purpose: string }[];
   readonly state: TargetState;
   readonly conflicts: readonly Conflict[];
-  /** M5.2 §4.3: temporary files a killed `createFile` left, which apply removes before writing. */
+  /** Temporary files a killed `createFile` left, which apply removes before writing. */
   readonly leftovers: readonly string[];
   /** Starter files already present with the bytes this initialization writes; the author step leaves them be. */
   readonly present: readonly string[];
@@ -259,12 +264,12 @@ export interface ProjectEffect {
   readonly files: readonly { readonly path: string; readonly sha256: string }[];
   readonly receipt: string;
 }
-/** M5.2 §7: `generation` and `counter` are the base install's, whether it ran now or in an earlier invocation. */
+/** `generation` and `counter` are the base install's, whether it ran now or in an earlier invocation. */
 export interface Applied {
   readonly status: 'initialized';
   readonly resumed: boolean;
   readonly id: string;
-  /** The `@distribution` the descriptor names, read from the compiled graph; null without `--system` (B7). */
+  /** The `@distribution` the descriptor names, read from the compiled graph; null without `--system`. */
   readonly distribution: string | null;
   readonly generation: string;
   readonly counter: number;
@@ -272,7 +277,7 @@ export interface Applied {
   readonly authored: readonly string[];
   /** `.ia/.gitignore`: `written` by this apply, or `present`, already there and left as it is. */
   readonly ignore: 'written' | 'present';
-  /** Position-and-projection §3: the two effects after the completion point, each reported apart. */
+  /** SPEC `init`: the two effects after the completion point, each reported apart. */
   readonly effects: {
     readonly capture: CaptureEffect;
     /** `skipped` without `--host`. */
@@ -283,8 +288,9 @@ export interface Applied {
 }
 
 /**
- * Relative to the `@inventarch/cli` package root, as `assets/vocabulary.json` is (vocabulary.ts CATALOGUE_PATH). The base
- * package's id is read from this pin and appears nowhere in this source: M5.1 §3.2 makes the pin the only authority.
+ * Relative to the `@inventarch/cli` package root, as `assets/vocabulary.json` is (vocabulary.ts CATALOGUE_PATH). The
+ * base package's id is read from this pin and appears nowhere in this source: the pin is the only authority for those
+ * bytes.
  */
 export const DESCRIPTOR_PATH = '.ia/release.json';
 export const STARTER_VERSION = '0.1.0';
@@ -292,10 +298,10 @@ export const STARTER_VERSION = '0.1.0';
 export const INSTALL_LOCK = '.ia/distributions/install-lock.json';
 const cachePath = (digest: string): string => `.ia/distributions/cache/${digest}.ia.tgz`;
 const systemFolder = (name: string): string => `.ia/src/systems/${name}`;
-/** Plan amendment C20: where `ia author system <name>` writes a local system, as `ia init --system` does. */
+/** Where a local system lives: `ia init --system` writes it there, and `ia preview system <name>` shows it there. */
 export const systemPath = (name: string): string => `${systemFolder(name)}/system.ia`;
 const distributionPath = (name: string): string => `${systemFolder(name)}/records/distribution.ia`;
-/** Position-and-projection §3: the one file the three starter records share, at the root of the authored source. */
+/** SPEC `init`: the one file the three starter records share, at the root of the authored source. */
 export const WORKSPACE_PATH = '.ia/src/workspace.ia';
 /** Create-only: the local working state each clone makes for itself, never the authored records or the lock. */
 export const IGNORE_PATH = '.ia/.gitignore';
@@ -419,14 +425,14 @@ function migrationGitConflict(root: string, base: Base, lock: DistributionLock):
 /** `packages/db/src/distribution/codec.ts` packageId and identifier: the id rule and the system-name ceiling. */
 const NAME = /^[a-z][a-z0-9-]*$/;
 const NAME_LIMIT = 64;
-/** A local system name `ia init --system` and `ia author system` accept: the id rule and the system-name ceiling. */
+/** A local system name `ia init --system` and `ia preview system` accept: the id rule and the system-name ceiling. */
 export const isSystemName = (name: string): boolean => NAME.test(name) && name.length <= NAME_LIMIT;
-/** M5.2 §4.3: `createFile`'s temporary name, `<target>.<randomUUID()>.tmp` (apps/distribution/src/files.ts:76). */
+/** `createFile`'s temporary name, `<target>.<randomUUID()>.tmp` (apps/distribution/src/files.ts:76). */
 export const LEFTOVER =
   /^(system\.ia|workspace\.ia|distribution\.ia|release\.json|\.gitignore)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
 /** The installation, not the target, is at fault; `ia doctor` names the channel a reinstall goes through. */
 
-/** M5.1 §2.1's paths: the authored source, the ignore file, the descriptor, the install state and the capture. */
+/** The paths init owns: the authored source, the ignore file, the descriptor, the install state and the capture. */
 export function ownedPaths(
   name: string | null,
   system = false,
@@ -443,8 +449,9 @@ export function ownedPaths(
 }
 
 /**
- * §2.1: an existing directory, or a single new segment under an existing directory. Anything else is usage. `rerun`
- * spells the refused invocation for another target (design row 27); `runInit` keeps every other argument it was given.
+ * The initialization spec §2: an existing directory, or a single new segment under an existing directory. Anything else
+ * is usage. `rerun` spells the refused invocation for another target; `runInit` keeps every other argument it was
+ * given.
  */
 export function resolveTarget(
   cwd: string,
@@ -488,12 +495,12 @@ const writable = (path: string): boolean => {
 };
 
 /**
- * M5.1 §3.2 and §5: read the pin and verify the bytes against it, never falling back to another file. A missing
- * archive is read as no bytes, so the archive verifier's own refusal reports it; a pin that cannot be read at all
- * has no digest to verify against and is the CLI's own failure. Either way the next action says the installation is
- * damaged, because nothing the user did to the target can cause it.
+ * Read the pin and verify the bytes against it, never falling back to another file. A missing archive is read as no
+ * bytes, so the archive verifier's own refusal reports it; a pin that cannot be read at all has no digest to verify
+ * against and is the CLI's own failure. Either way the next action says the installation is damaged, because nothing
+ * the user did to the target can cause it.
  */
-/** M5.1 §2.3's normalization: lowercase, every run outside `[a-z0-9-]` becomes `-`, no leading or trailing `-`. */
+/** The name's normalization: lowercase, every run outside `[a-z0-9-]` becomes `-`, no leading or trailing `-`. */
 export const normalizeName = (directory: string): string => {
   const normalized = directory.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
   let start = 0,
@@ -504,7 +511,7 @@ export const normalizeName = (directory: string): string => {
   return normalized.slice(start, end);
 };
 
-/** M5.1 §2.3: valid only if the name, the full id and the public-system rule all hold. Nothing is invented. */
+/** Valid only if the name, the full id and the public-system rule all hold. Nothing is invented. */
 export function starterIdentity(
   root: string,
   supplied: string | undefined,
@@ -523,10 +530,9 @@ export function starterIdentity(
 }
 
 /**
- * `--system`'s local system, the 1.x starter system unchanged (M5.1 §2.2, verbatim in shape): the steward needs
- * `agent-system`, and `governance` is required. `work-system` is required so the system folder can hold `@plan`,
- * `@milestone`, `@task` and `@decision` records with no edit: a system may use only words owned by systems it directly
- * requires (operator decision, 2026-09-25).
+ * `--system`'s local system, the 1.x starter system unchanged (verbatim in shape): the steward needs `agent-system`,
+ * and `governance` is required. `work-system` is required so the system folder can hold `@plan`, `@milestone`, `@task`
+ * and `@decision` records with no edit: a system may use only words owned by systems it directly requires.
  */
 export function starterSystem(name: string): string {
   return [
@@ -552,11 +558,11 @@ export function starterSystem(name: string): string {
   ].join('\n');
 }
 /**
- * Position-and-projection §3's three records, at placement authored (band 100), with only the fields their schemas
- * declare (plan amendment B13). The `@workspace` composes every installed system, so nothing installed is unreachable
- * (M5.1 §2.2), declares the authored root its records are captured under and names the participant as its steward.
- * The participant `@agent` implies no host permission, and its `@mandate` grants it closed moves over that workspace;
- * the mandate's one prose clause claims nothing. Every name is the workspace's (decision identity-namespace).
+ * SPEC `init`'s three records, at placement authored (band 100), with only the fields their schemas declare. The
+ * `@workspace` composes every installed system, so nothing installed is unreachable, declares the authored root its
+ * records are captured under and names the participant as its steward. The participant `@agent` implies no host
+ * permission, and its `@mandate` grants it closed moves over that workspace; the mandate's one prose clause claims
+ * nothing. Every name is the workspace's.
  */
 export function starterRecords(name: string, systems: readonly string[], sources: readonly string[] = []): string {
   return [
@@ -592,7 +598,7 @@ export function starterRecords(name: string, systems: readonly string[], sources
   ].join('\n');
 }
 /**
- * `--system`'s release root (position-and-projection §2 case 3: a distribution's roots are system registrations). It
+ * `--system`'s release root (a distribution's roots are system registrations). It
  * sits in the system folder, so the closure from it stays inside folders the packer can release
  * (apps/distribution/src/snapshot.ts, "Release roots must belong to native system folders").
  */
@@ -611,8 +617,8 @@ export function starterDistribution(name: string): string {
 }
 /**
  * The authored files in the order the author step writes them, and the records they hold, in file order. With
- * `--system` the `@workspace` composes the local system after `systems` (position-and-projection §2 case 2: a
- * repository that owns vocabulary composes its own system), so the packet renders a pointer line for it.
+ * `--system` the `@workspace` composes the local system after `systems` (a repository that owns vocabulary composes
+ * its own system), so the packet renders a pointer line for it.
  */
 export function starterFiles(
   name: string,
@@ -689,10 +695,10 @@ const canonicalHttps = (value: string): boolean => {
 };
 const LOCAL: Source = { repository: null, commit: null, recipe: 'ustar-v1', epoch: 0 };
 /**
- * M5.1 §2.3. Sourced only from a Git checkout with a commit and an HTTPS remote: `origin` when it exists, else the
- * first remote Git lists. The remote's configured URL is read as written, so an SSH remote is "no HTTPS remote" and
- * is never rewritten into a guessed HTTPS one; a URL carrying credentials is refused the same way rather than copied
- * into a file meant to be committed.
+ * The descriptor's provenance. Sourced only from a Git checkout with a commit and an HTTPS remote: `origin` when it
+ * exists, else the first remote Git lists. The remote's configured URL is read as written, so an SSH remote is "no
+ * HTTPS remote" and is never rewritten into a guessed HTTPS one; a URL carrying credentials is refused the same way
+ * rather than copied into a file meant to be committed.
  */
 export function readProvenance(git: Git): Provenance {
   const local = (missing: Missing): Provenance => ({ source: LOCAL, missing });
@@ -726,8 +732,8 @@ const baseDependencies = (base: Base): Descriptor['dependencies'] => [
   { id: base.pin.id, range: `^${base.pin.version}`, systems: base.systems },
 ];
 /**
- * M5.1 §2.3's table. With `--system`, `distribution` stays null until the compiled record is read (§3.1 step 6);
- * without it, `undefined` leaves the key out, because a default starter authors no `@distribution` (plan amendment B7).
+ * The release descriptor init writes. With `--system`, `distribution` stays null until admission reads the compiled
+ * record; without it, `undefined` leaves the key out, because a default starter authors no `@distribution`.
  */
 export function starterDescriptor(
   id: string,
@@ -735,6 +741,7 @@ export function starterDescriptor(
   base: Base,
   provenance: Provenance,
   distribution?: string | null,
+  assets: Starter['assets'] = [],
 ): Descriptor {
   return {
     formatVersion: 1,
@@ -744,7 +751,7 @@ export function starterDescriptor(
     engine: `^${DISTRIBUTION_ENGINE_VERSION}`,
     language: ['1.0'],
     dependencies: baseDependencies(base),
-    assets: [],
+    assets,
     license: 'UNLICENSED',
     description: `The ${name} workspace.`,
     source: provenance.source,
@@ -753,7 +760,7 @@ export function starterDescriptor(
 /** Two-space JSON with a final newline; `decodeReleaseDescriptor` requires the dependency rows sorted, as they are. */
 export const descriptorText = (descriptor: Descriptor): string => JSON.stringify(descriptor, null, 2) + '\n';
 
-/** M5.2 §4.1: exactly the one request and the one package the pin describes. */
+/** Exactly the one request and the one package the pin describes. */
 export const locksBase = (lock: DistributionLock | undefined, pin: BasePin): boolean =>
   lock !== undefined &&
   lock.requests.length === 1 &&
@@ -782,6 +789,64 @@ function filesBelow(root: string, path: string): readonly string[] {
   return found;
 }
 
+/** Whether `path` is `base` or lies below it; an in-base name that only begins with `..`, such as `..x`, is below it. */
+const within = (base: string, path: string): boolean => {
+  const here = relative(base, path);
+  return here === '' || (here !== '..' && !here.startsWith(`..${sep}`) && !isAbsolute(here));
+};
+
+/**
+ * `--from`: lower the plugin; any unresolved construct refuses before anything is planned or written, with every entry
+ * in the refusal's details. A target that is the plugin directory or lies inside it is refused before the plugin is
+ * read, since lowering would write into its own source; a target that contains the plugin is legal.
+ */
+function lowerFrom(
+  from: string,
+  root: string,
+  name: string | null,
+  lower: boolean,
+): ReturnType<typeof lowerPlugin> | null {
+  const plugin = resolve(from);
+  let plan: ReturnType<typeof lowerPlugin> | null = null;
+  try {
+    // The plugin is always read, so an input error refuses at once; lowering needs a name and a target free of conflicts.
+    if (statSync(plugin, { throwIfNoEntry: false })?.isDirectory() !== true)
+      throw new HostPluginError('IA-PLUGIN-INPUT', `${from} is not a plugin directory`);
+    if (within(canonical(plugin), canonical(root)))
+      throw new Refusal(
+        'IA-PLUGIN-INPUT',
+        `${root} is the plugin directory or lies inside it; lowering never writes into its own source`,
+        1,
+        { path: plugin },
+        `Choose a target directory outside the plugin, then run "ia init <directory> --from ${quote(plugin)}".`,
+      );
+    const inventory = readPlugin(plugin);
+    if (lower && name !== null) plan = lowerPlugin(inventory, name);
+  } catch (error) {
+    if (error instanceof HostPluginError)
+      throw new Refusal(
+        error.code,
+        error.message,
+        1,
+        { path: plugin },
+        'Run "ia init --help" for what a plugin directory may hold.',
+      );
+    throw error;
+  }
+  if (plan !== null && plan.unresolved.length > 0)
+    throw new Refusal(
+      'IA-LOWER-UNRESOLVED',
+      `${plan.unresolved.length} construct(s) cannot be lowered yet: ${plan.unresolved.slice(0, 20).join('; ')}${plan.unresolved.length > 20 ? '; ...' : ''}`,
+      1,
+      { path: plugin },
+      'Nothing was written; run "ia init --help" for what a plugin directory may hold.',
+      null,
+      undefined,
+      plan.unresolved,
+    );
+  return plan;
+}
+
 export interface InitRequest {
   readonly adoption?: { readonly id: string; readonly release: WorkspaceRelease };
   readonly root: string;
@@ -789,13 +854,16 @@ export interface InitRequest {
   readonly id?: string | undefined;
   /** `--system`: also author the local `@system`, its steward and the `@distribution` rooted at it. */
   readonly system?: boolean | undefined;
+  /** `--from`: a plugin directory lowered into the new workspace as a kit. */
+  readonly from?: string | undefined;
   readonly packageRoot: string;
   readonly git: Git;
   readonly invocation?: string;
 }
 /**
- * M5.2 §4.1. The starter bytes compared are what this invocation would write for its resolved id: they depend only
- * on the name, `--system` and the bundled manifest, so they are recomputed on every run instead of being journaled.
+ * The plan: the target's classification, its conflicts and the steps. The starter bytes compared are what this
+ * invocation would write for its resolved id: they depend only on the name, `--system` and the bundled manifest, so
+ * they are recomputed on every run instead of being journaled.
  */
 export function collectInit(request: InitRequest): InitView {
   const { root, host } = request;
@@ -815,9 +883,30 @@ export function collectInit(request: InitRequest): InitView {
     const source = `.ia/open/${adoptionId(request.adoption.id)}/${request.adoption.release.revision}/.ia/src @open`;
     if (!sources.includes(source)) sources.push(source);
   }
+  // An initialized target keeps init's own conflict report; only a target free of conflicts is lowered.
+  const lowered =
+    request.from === undefined
+      ? null
+      : lowerFrom(request.from, root, name, identity.conflict === null && !existsSync(resolve(root, DESCRIPTOR_PATH)));
   const { files, records } =
-    name === null ? { files: [], records: [] } : starterFiles(name, base.systems, system, sources);
-  // M5.2 §4.3: a temporary file `createFile` left beside one of this initialization's own targets.
+    name === null
+      ? { files: [], records: [] }
+      : lowered !== null
+        ? {
+            files: [
+              { path: WORKSPACE_PATH, text: starterRecords(name, [...base.systems, name], sources) },
+              ...lowered.files.map((file) => ({ path: file.path, text: file.bytes.toString('utf8') })),
+            ],
+            records: [
+              { word: 'workspace', name, path: WORKSPACE_PATH },
+              { word: 'agent', name, path: WORKSPACE_PATH },
+              { word: 'mandate', name: `${name}-mandate`, path: WORKSPACE_PATH },
+              ...lowered.records,
+            ],
+          }
+        : starterFiles(name, base.systems, system, sources);
+  const assets = lowered?.assets ?? [];
+  // A temporary file `createFile` left beside one of this initialization's own targets.
   const targets = new Set([...files.map((file) => file.path), IGNORE_PATH, DESCRIPTOR_PATH]);
   // `.<uuid>.tmp` is 41 characters: the dot, a 36-character UUID and `.tmp`.
   const leftover = (path: string): boolean => LEFTOVER.test(basename(path)) && targets.has(path.slice(0, -41));
@@ -826,11 +915,11 @@ export function collectInit(request: InitRequest): InitView {
   let lock = false,
     installed = false;
   if (present) {
-    // readInstalledState refuses while `.ia/distributions/pending.json` exists, which is M5.2 §4.1's
-    // recovery-required: an interrupted apply must be recovered before anything reasons about this workspace.
-    // Its rows are held back so the plan lists authored source, then the lock, then install state, as M4 did.
+    // readInstalledState refuses while `.ia/distributions/pending.json` exists, which is recovery-required: an
+    // interrupted apply must be recovered before anything reasons about this workspace. Its rows are held back so the
+    // plan lists authored source, then the lock, then install state, as before.
     const installation: Conflict[] = [];
-    // M5.2 §4.1: a held or abandoned install lock is recovery-required too. A process killed inside
+    // A held or abandoned install lock is recovery-required too. A process killed inside
     // applyInstallation skips the `finally` that releases it (apps/distribution/src/install.ts:67-97), before
     // `pending` exists and after it is removed. `ia recover installation` clears a dead holder's lock and refuses a
     // live one (`acquire(root, true)`, install.ts:71), so it is the remedy whether or not a journal exists; the
@@ -891,7 +980,7 @@ export function collectInit(request: InitRequest): InitView {
         reason: 'A lock already names direct requests and resolved versions',
       });
     conflicts.push(...installation);
-    // M5.2 §4.1: a completed initialization is a conflict, because the starter now belongs to the user (band 100).
+    // A completed initialization is a conflict, because the starter now belongs to the user (band 100).
     if (existsSync(resolve(root, DESCRIPTOR_PATH)))
       conflicts.push({ path: DESCRIPTOR_PATH, reason: 'The target is already initialized' });
   }
@@ -935,8 +1024,11 @@ export function collectInit(request: InitRequest): InitView {
       system,
       files,
       records,
+      assets,
       descriptor:
-        id === null || name === null ? null : starterDescriptor(id, name, base, provenance, system ? null : undefined),
+        id === null || name === null
+          ? null
+          : starterDescriptor(id, name, base, provenance, system ? null : undefined, assets),
       base: base.pin,
       systems: base.systems,
       provenance,
@@ -954,7 +1046,7 @@ export interface ApplyOptions {
   /**
    * Called with every `applyInstallation` checkpoint name (`store:*`, `manifest:*`, `generation:*`, `pending`,
    * `portable-lock`, `active`, `complete`) and with `init:<step>` after each of the install, author, admission,
-   * descriptor and capture steps completes, so a test can interrupt at exactly the boundaries M5.2 §8 item 2 names.
+   * descriptor and capture steps completes, so a test can interrupt at exactly those boundaries.
    */
   readonly checkpoint?: (name: string) => void;
   /**
@@ -972,20 +1064,20 @@ export interface Projected {
 /**
  * The sentence the next action of a step that fails or is interrupted once the descriptor is written opens with:
  * initialization is complete, so running `ia init` again refuses the target, and each effect is finished by its own
- * command (design §3). The project effect's also says whether the capture before it was taken.
+ * command. The project effect's also says whether the capture before it was taken.
  */
 const INITIALIZED = 'The workspace is initialized.';
 const CAPTURED = 'The workspace is initialized and captured.';
 const UNCAPTURED = 'The workspace is initialized but not captured.';
 /**
- * M5.2 §3.1's steps, in position-and-projection §3's order. Each step before the descriptor either completes or leaves
- * a state `collectInit` classifies as resumable or recovery-required. The signal is observed at step boundaries (§5):
- * before the first write it is the plain interruption and the target is byte-identical; after one, the interruption
- * names the rerun that finishes. Two effects follow the completion point, each reported apart, and each that fails or
- * is interrupted leaves the workspace initialized and names its own command: the capture, `ia capture`, and, only when
- * `options.project` is given (`--host`), the project effect, `ia host`. The project effect reads the live revision,
- * never the capture (plan amendment B8), so it runs after a capture that failed too, and that failure is then refused
- * with the capture's own repair, after a sentence saying the projection is written.
+ * The apply's steps, in SPEC `init`'s order. Each step before the descriptor either completes or leaves a state
+ * `collectInit` classifies as resumable or recovery-required. The signal is observed at step boundaries (the apply spec
+ * §5): before the first write it is the plain interruption and the target is byte-identical; after one, the
+ * interruption names the rerun that finishes. Two effects follow the completion point, each reported apart, and each
+ * that fails or is interrupted leaves the workspace initialized and names its own command: the capture, `ia capture`,
+ * and, only when `options.project` is given (`--host`), the project effect, `ia host`. The project effect reads the
+ * live revision, never the capture, so it runs after a capture that failed too, and that failure is then refused with
+ * the capture's own repair, after a sentence saying the projection is written.
  */
 export async function applyInit(view: InitView, options: ApplyOptions): Promise<Applied> {
   const { root, starter } = view;
@@ -998,7 +1090,7 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
     checkpoint(`init:${step}`);
     if (options.signal?.aborted) throw resume;
   };
-  // Step 2. The pin is read again rather than trusted from the plan, and must still be the one the plan showed.
+  // The pin is read again rather than trusted from the plan, and must still be the one the plan showed.
   const base = readBase(options.packageRoot);
   if (base.pin.archive !== starter.base.archive || base.pin.manifest !== starter.base.manifest)
     throw new Refusal(
@@ -1009,36 +1101,38 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
       DAMAGED,
     );
   options.signal?.throwIfAborted();
-  // The last point at which the target is byte-identical to its state before the command (§5).
+  // The last point at which the target is byte-identical to its state before the command.
   mkdirSync(root, { recursive: true });
   for (const path of view.leftovers) unlinkSync(resolve(root, path));
   const step = (id: StepId): Step => view.steps.find((row) => row.id === id)!;
-  // Step 3: the bundled base, installed as the workspace's one request.
+  // The install step: the bundled base, installed as the workspace's one request.
   if (step('install').status === 'pending')
     await installBase(root, base, 'install', { signal: options.signal, checkpoint }, resume);
   boundary('install');
   if (view.adoption) applyAdoption(planAdoption(root, view.adoption.id, view.adoption.release, false));
-  // Step 4, author: create-only, so a starter file already present with these bytes is skipped and nothing is ever
+  // The author step: create-only, so a starter file already present with these bytes is skipped and nothing is ever
   // rewritten. The ignore file is written only where none exists; one the target already holds is its own.
   for (const file of starter.files)
     if (!view.present.includes(file.path)) createFile(root, file.path, Buffer.from(file.text));
   const ignore = existsSync(resolve(root, IGNORE_PATH)) ? 'present' : 'written';
   if (ignore === 'written') createFile(root, IGNORE_PATH, Buffer.from(IGNORE_TEXT));
   boundary('author');
-  // Step 5, admission: the identities are read from the compiled graph, never string-constructed (M5.1 §2.3).
+  // The admission step: the identities are read from the compiled graph, never string-constructed.
   const { compiled } = admitStarter(root, starter.records, 'initialized', '');
   const authored = compiled.map((record) => record.identity),
     distribution = compiled.find((record) => record.discriminator === 'distribution')?.identity ?? null;
   boundary('admission');
-  // Step 6, the completion point (§4.1). A default starter's descriptor names no distribution (plan amendment B7).
+  // The descriptor, the completion point (the apply spec §5). A default starter's descriptor names no distribution.
   createFile(
     root,
     DESCRIPTOR_PATH,
-    Buffer.from(descriptorText(starterDescriptor(id, name, base, starter.provenance, distribution ?? undefined))),
+    Buffer.from(
+      descriptorText(starterDescriptor(id, name, base, starter.provenance, distribution ?? undefined, starter.assets)),
+    ),
   );
   checkpoint('init:descriptor');
   const installed = readInstalledState({ root });
-  // Step 7, the capture effect: `ia capture` on the workspace just initialized, written through db's writeCapture. A
+  // The capture effect: `ia capture` on the workspace just initialized, written through db's writeCapture. A
   // failure is refused as `ia capture` refuses it, located and with its repair (`captureFailure`), for this root.
   const recapture = `ia capture --root ${quote(root)}`;
   let capture: CaptureEffect | undefined, failed: Refusal | undefined;
@@ -1052,7 +1146,7 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
       failed = refusalOf(captureFailure(error, root, recapture));
     }
   if (capture !== undefined) checkpoint('init:capture');
-  // Step 8, the project effect, only with `--host`: after a capture that failed too. A signal the capture stopped for,
+  // The project effect, only with `--host`: after a capture that failed too. A signal the capture stopped for,
   // it observes itself, naming `ia host`, the effect this invocation asked for, after saying the capture was not taken.
   const projected = options.project?.(capture === undefined ? UNCAPTURED : CAPTURED);
   if (failed !== undefined)
@@ -1079,8 +1173,8 @@ export async function applyInit(view: InitView, options: ApplyOptions): Promise<
 }
 
 /**
- * M5.1 §4's three calls, offline, resolved the way `ia install` resolves (distribute.ts collectPlan): the bundled base
- * is cached, resolved from that one archive and installed as the workspace's one request, by `ia init` into a new
+ * The installer's three calls, offline, resolved the way `ia install` resolves (distribute.ts collectPlan): the bundled
+ * base is cached, resolved from that one archive and installed as the workspace's one request, by `ia init` into a new
  * workspace and by `ia init --migrate` in place of a 1.x base. A signal during it is `resume`.
  */
 async function installBase(
@@ -1108,7 +1202,7 @@ async function installBase(
   } catch (error) {
     if (options.signal?.aborted) throw resume;
     // collectInit already refuses a lock present at planning time; this is another installer taking it between
-    // planning and apply. The installer's code is kept (§4.1 of the contract); the next action names the recovery
+    // planning and apply. The installer's code is kept (§4 of the contract); the next action names the recovery
     // that clears the lock if that installer has since died.
     if (codeOf(error, '') === 'IA-DIST-INSTALL-BUSY')
       throw new Refusal(
@@ -1127,7 +1221,7 @@ const conflictMessage = (conflicts: readonly Conflict[], blocked: string): strin
   conflicts.length === 1
     ? `${conflicts[0]!.reason}: ${conflicts[0]!.path}`
     : `${conflicts.length} conflicts block ${blocked}: ${conflicts.map((row) => `${row.path} (${row.reason})`).join('; ')}`;
-/** M5.2 §4.1: every conflict is listed; `--apply` refuses at class 3 and writes nothing. */
+/** Every conflict is listed; `--apply` refuses at class 3 and writes nothing. */
 function initializedNext(view: InitView): string | null {
   if (!view.conflicts.some((row) => row.path === DESCRIPTOR_PATH && row.reason === 'The target is already initialized'))
     return null;
@@ -1241,7 +1335,7 @@ const provenanceText = (provenance: Provenance): string =>
   provenance.missing === null
     ? `${provenance.source.repository} at ${provenance.source.commit!.slice(0, 12)}`
     : `Unpublished local; ${MISSING[provenance.missing]}`;
-/** M5.1 §7 item 4: the starter row carries the real contents rather than the plan task that specified them. */
+/** The starter rows name the records, release and provenance this initialization would write. */
 const starterRows = (view: InitView, caps: Capabilities): readonly string[] => {
   const { starter } = view,
     pin = starter.base;
@@ -1395,7 +1489,7 @@ export function renderInit(view: InitView, caps: Capabilities, supplied?: string
     { leadingBlank: true },
   );
 }
-/** §2.8 rule 3's change summary for `init`: the plan's own blocks without the preview note or the footer. */
+/** Contract §2.0's change summary for `init`: the plan's own blocks without the preview note or the footer. */
 export const renderInitSummary = (view: InitView, caps: Capabilities): string =>
   document([headerLine('Plan', 'init', [{ text: view.root, column: 50 }], caps), ...planBlocks(view, caps)], {
     leadingBlank: true,
@@ -1459,7 +1553,7 @@ export function renderApplied(view: InitView, applied: Applied, caps: Capabiliti
         { depth: 1, symbol: 'success' },
         caps,
       ),
-      // Position-and-projection §3: the records authored, then each effect, reported apart.
+      // SPEC `init`: the records authored, then each effect, reported apart.
       authoredEntry(applied, caps),
       capturedEntry(applied.effects.capture, caps),
       applied.effects.project === 'skipped'
@@ -1476,7 +1570,7 @@ export function renderApplied(view: InitView, applied: Applied, caps: Capabiliti
             caps,
           ),
       stepRows(view, () => 'success', caps),
-      // Spec §5.3 and §5.4: the notes `ia host` prints after a registration, from the same function.
+      // Host registration spec §4: the notes `ia host` prints after a registration, from the same function.
       ...(applied.host === undefined || view.host === 'none' ? [] : hostNotes(view.host, caps)),
       closingEntry(applied.distribution, caps),
     ],
@@ -1506,7 +1600,8 @@ function invocationOf(context: Context): string {
   const parts = ['ia init', ...args.positionals.map(quote)];
   const id = args.value('id'),
     host = args.value('host');
-  for (const option of ['adopt', 'registry']) {
+  // `--from` too, as typed: without it the apply, resume and conflict commands would initialize a plain starter.
+  for (const option of ['adopt', 'registry', 'from']) {
     const value = args.value(option);
     if (value !== undefined) parts.push(`--${option}`, quote(value));
   }
@@ -1522,15 +1617,15 @@ export async function runInit(context: Context): Promise<Result> {
   const id = args.value('id');
   if (args.value('registry') !== undefined && args.value('adopt') === undefined)
     throw new UsageError('ia init --registry requires --adopt');
-  // A malformed identity is usage (§3), decided before the target is read.
+  // A malformed identity is usage (the initialization spec §2), decided before the target is read.
   if (id !== undefined && (!PACKAGE_ID.test(id) || id.includes('..')))
     throw new UsageError(`--id must be <provider/name>; got ${id}`);
   const root = resolveTarget(host.cwd, args.positionals[0], (target) => respell(context, { positionals: [target] }));
   try {
     return await initialize(context, root, id);
   } catch (error) {
-    // Design row 27: this verb's target is `<directory>`, which `--root` cannot carry, so a service refusal with no
-    // remedy of its own is given the fallback for that directory rather than for the cwd, which may not be it.
+    // This verb's target is `<directory>`, which `--root` cannot carry, so a service refusal with no remedy of its own
+    // is given the fallback for that directory rather than for the cwd, which may not be it.
     if (error instanceof Refusal || error instanceof Interrupted || error instanceof UsageError || host.signal?.aborted)
       throw error;
     throw refusalOf(error, { command: 'init', root });
@@ -1563,7 +1658,9 @@ async function initialize(context: Context, root: string, id: string | undefined
     root,
     host: selected,
     id,
-    system: args.flag('system'),
+    system: args.value('from') === undefined && args.flag('system'),
+    // Read against the invocation's directory, as the target is, so `--from .` names the directory it was typed in.
+    from: args.value('from') === undefined ? undefined : resolve(host.cwd, args.value('from')!),
     packageRoot: host.packageRoot,
     git: gitIn(existing, host.env),
     invocation: invocationOf(context),
@@ -1577,13 +1674,13 @@ async function initialize(context: Context, root: string, id: string | undefined
             applied === null ? renderInit(view, caps, args.positionals[0], host) : renderApplied(view, applied, caps),
           stderr: '',
         };
-  // §2.1: conflicts are reported inside the plan and are not an error class, so a plan is always exit 0.
+  // The apply spec §1: conflicts are reported inside the plan and are not an error class, so a plan is always exit 0.
   if (!apply) return rendered(null);
   if (view.state !== 'fresh' && view.state !== 'resumable') throw conflictRefusal(view);
-  // §2.8 rule 3, as `ia install` asks it: parsing already refused every `--apply` whose question cannot be answered.
+  // Contract §2.0, as `ia install` asks it: parsing already refused every `--apply` whose question cannot be answered.
   if (!args.flag('yes') && !(await confirm(host.interaction, renderInitSummary(view, caps), CONFIRMATION)))
     return { exitCode: 0, stdout: renderDeclined(view, caps, args.positionals[0], host), stderr: '' };
-  // The project effect, last (position-and-projection §3): the `ia host` path, whose apply writes the receipt.
+  // The project effect, last (SPEC `init`): the `ia host` path, whose apply writes the receipt.
   const project = selected === 'none' ? undefined : (done: string) => registerHost(context, selected, root, done);
   try {
     return rendered(await applyInit(view, { packageRoot: host.packageRoot, signal: host.signal, project }));
@@ -1599,7 +1696,7 @@ async function initialize(context: Context, root: string, id: string | undefined
  * Its arguments come from `ia host`'s own grammar rather than a hand-built object, so the host step reads exactly
  * what `ia host` would. `--yes` stands for the answer this invocation already gave, by flag or at the prompt, so
  * the step never asks a second question. Every failure here happens after initialization completed: the workspace
- * stays initialized, and each refusal keeps the service's code, message and location (contract §4.1).
+ * stays initialized, and each refusal keeps the service's code, message and location (contract §4).
  *
  * Its next action is `ia host`'s own remedy for that refusal, after `done`, the sentence saying what initialization
  * completed, the capture included or not. Every `ia host` command the remedy names gains `--root <root>`, because
@@ -1614,7 +1711,7 @@ function registerHost(context: Context, selected: 'claude' | 'codex', root: stri
     recover = `Run "${host}" for the recovery it names, then run it again to finish host registration.`;
   const composed = (next: string | null): string =>
     `${done} ${next === null ? finish : next.endsWith(THEN_RERUN) ? recover : rootedNext(next, selected, root)}`;
-  // M5.2 §5: a signal observed after the last init write interrupts a command that has written, so it names the rerun.
+  // A signal observed after the last init write interrupts a command that has written, so it names the rerun.
   if (context.host.signal?.aborted) throw new Interrupted(composed(null));
   const command = findCommand('host')!;
   const args = parseArguments([selected, '--root', root, '--apply', '--yes'], command.grammar);
@@ -1624,7 +1721,7 @@ function registerHost(context: Context, selected: 'claude' | 'codex', root: stri
       context.host.packageRoot,
       context.host.signal,
     );
-    // A host apply that returns has projected, and `applyHostProjection` wrote the receipt (B12) before it returned.
+    // A host apply that returns has projected, and `applyHostProjection` wrote the receipt before it returned.
     const receipt = readReceipt(root, selected)!;
     return { effect: { host: selected, files: receipt.files, receipt: STATE.receipt(selected) }, host: applied };
   } catch (error) {
@@ -1667,7 +1764,7 @@ export interface MigrationConflict {
   readonly host?: HostName;
   readonly code?: string;
 }
-/** A host whose projection this workspace owns, and what `applyHostProjection` plans for it (B9, B11). */
+/** A host whose projection this workspace owns, and what `applyHostProjection` plans for it. */
 export interface MigrationHost {
   readonly host: HostName;
   readonly guard: 'retire' | 'none';
@@ -1699,8 +1796,8 @@ export interface MigrationView {
   /** `--system`: the `@system` and its steward stay, and the `@distribution` is re-rooted at the system. */
   readonly system: boolean;
   /**
-   * The bundled base the three records are written against (M5.1 §3.2), and the base the workspace has installed,
-   * which the install step replaces when it is another archive: a 1.x base declares none of their new fields.
+   * The bundled base the three records are written against, and the base the workspace has installed, which the install
+   * step replaces when it is another archive: a 1.x base declares none of their new fields.
    */
   readonly base: { readonly pin: BasePin; readonly installed: { readonly version: string; readonly archive: string } };
   readonly conflicts: readonly MigrationConflict[];
@@ -2011,7 +2108,8 @@ export function collectMigration(request: MigrationRequest): MigrationView {
           path: found.source.path,
           reason: `Holds @${record.word} ${record.name}, which the migration authors in ${record.path}`,
         });
-  // Spec §8: a pending host journal refuses the whole verb and names the recovery that clears it, as `ia host` does.
+  // Host registration spec §6: a pending host journal refuses the whole verb and names the recovery that clears it, as
+  // `ia host` does.
   if (!system) {
     const removedRecords = [...local, ...starter.filter((record) => record.discriminator === 'distribution')];
     const references = (value: unknown, word: string, name: string, identity: string): boolean => {
@@ -2057,7 +2155,7 @@ export function collectMigration(request: MigrationRequest): MigrationView {
   for (const host of projected)
     try {
       const guard = planRetirement(root, host) === null ? 'none' : 'retire';
-      // The hook step the projection effect runs (review finding H-R3), found before the migration plans its writes.
+      // The hook step the projection effect runs, found before the migration plans its writes.
       preflightHooks(root, host);
       hosts.push({ host, guard, files: migratedFiles(root, host) });
     } catch (error) {
@@ -2183,7 +2281,7 @@ const MIGRATED_CAPTURED = 'The workspace is migrated and captured.';
 const MIGRATED_UNCAPTURED = 'The workspace is migrated but not captured.';
 /**
  * The admission step `ia init` and `ia init --migrate` share: zero error findings, then each planned starter record as
- * the compiled graph holds it at its path, never string-constructed (M5.1 §2.3), with every record the graph holds.
+ * the compiled graph holds it at its path, never string-constructed, with every record the graph holds.
  * `done` opens each refusal's next action with what the command completed before it, if anything.
  */
 function admitStarter(
@@ -2479,7 +2577,7 @@ export function migrationEnvelope(view: MigrationView, apply: boolean, applied: 
   };
 }
 
-/** One row per file: its path, then what the migration does to it, each row on one content column (§6.4 rule 2). */
+/** One row per file: its path, then what the migration does to it, each row on one content column. */
 const fileRows = (
   rows: readonly { readonly symbol: SymbolName; readonly path: string; readonly text: string }[],
   caps: Capabilities,
@@ -2657,7 +2755,7 @@ export function renderMigration(view: MigrationView, caps: Capabilities, supplie
     { leadingBlank: true },
   );
 }
-/** §2.8 rule 3's change summary: the plan's own blocks without the preview note or the footer. */
+/** Contract §2.0's change summary: the plan's own blocks without the preview note or the footer. */
 const renderMigrationSummary = (view: MigrationView, caps: Capabilities): string =>
   document([migrationHeader(view, caps), ...migrationBlocks(view, caps)], { leadingBlank: true });
 export function renderMigrated(view: MigrationView, applied: Migrated, caps: Capabilities): string {
@@ -2756,7 +2854,7 @@ async function migrate(context: Context, root: string): Promise<Result> {
 /**
  * A finished git run's answer, or null when git is not really there: it could not start, or it is the macOS stub
  * `/usr/bin/git`, which only asks for the Xcode Command Line Tools and fails; reading that as "not a Git checkout" would
- * send the user after the wrong fix (#323).
+ * send the user after the wrong fix.
  */
 export function gitAnswer(result: {
   readonly error?: Error | undefined;

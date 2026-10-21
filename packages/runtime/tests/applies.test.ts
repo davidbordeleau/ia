@@ -6,13 +6,13 @@ import { readInputs } from '@inventarch/db';
 import type { Handle } from '@inventarch/db';
 import { stableSerialize } from '@inventarch/graph';
 import type { Location } from '@inventarch/language';
+import { PRIMITIVES } from '@inventarch/language';
 import { normalizeScopeKey, positionBody, readBody, resolveScopeKey } from '../src/index.js';
 import type { PositionBody, ScopeKey } from '../src/index.js';
 import { database, declare, law, lawId, lawPath, methodPath, playbook, put, workspace } from './workspace.js';
 
-// R17 (position-and-projection §6 and §7, rows 18 and 19; plan amendments A4 and A8; decision scope-key-caps): the
-// rules and playbooks that apply by word to body(K)'s loaded set, their cells at (P, primitive(H)), the blocking rules
-// reserved by word whatever the budget truncates, and the mandates that govern the seat.
+// R17: the rules and playbooks that apply by word to body(K)'s loaded set, their cells at (P, primitive(H)), the
+// blocking rules reserved by word whatever the budget truncates, and the mandates that govern the seat.
 const foundation = 'workspace-system/definition/workspace/foundation-workspace',
   governanceSystem = 'floor/definition/system/governance-system',
   check = 'compliance-system/check/gate/instance-schema-check',
@@ -62,6 +62,59 @@ function mandateOf(name: string, authority: string): string {
 /** A mandate whose `authority.scope` names the foundation workspace. */
 const SCOPED =
   '#! ia 1.0\n@mandate scoped-mandate\n  meaning\n    says "A mandate scoped to the foundation workspace."\n    answers "Where does it apply?"\n  governance\n    requires "Fixture statement."\n  authority\n    participant @agent agent-steward\n    scope [@workspace foundation-workspace]\n';
+
+it('delivers every explicitly selected primitive and preserves it on widening and re-seat keys', () => {
+  const root = workspace(),
+    name = 'all-primitives',
+    identity = `governance-system/definition/procedure/${name}`;
+  put(
+    root,
+    `${records}/${name}.ia`,
+    playbook(
+      name,
+      '  subject\n    subject-kind definition\n',
+      '    orient\n      primary Attention\n' +
+        PRIMITIVES.map((primitive) => `      ${primitive} means "${primitive} selected."\n`).join(''),
+    ),
+  );
+  const db = database(root);
+  expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+  for (const primitive of PRIMITIVES) {
+    const body = bodyOf(db, { primitive, phase: 'orient' });
+    expect(body.cells).toContainEqual({
+      playbook: identity,
+      address: `${identity}#orient/${primitive}`,
+      text: `${primitive} selected.`,
+    });
+    expect(body.widening.deeper?.primitive).toBe(primitive);
+    expect(body.widening.reseat.primitive).toBe(primitive);
+    expect(body.appliesByWord.find((entry) => entry.identity === identity)?.reseat.primitive).toBe(primitive);
+  }
+});
+
+it('uses the explicit primitive for conditional relations and nearest-cell advice', () => {
+  const root = workspace(),
+    name = 'memory-only',
+    identity = `governance-system/definition/procedure/${name}`;
+  put(
+    root,
+    `${records}/${name}.ia`,
+    procedureOf(name, { orient: 'Memory' }) +
+      '  relationships\n    cites @contract foundation-authoring-contract when primitive is Memory\n',
+  );
+  const db = database(root);
+  expect(db.report.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+  const derived = bodyOf(db, { seat: identity, phase: 'learn' }),
+    explicit = bodyOf(db, { seat: identity, primitive: 'Memory', phase: 'learn' });
+  expect(ids(derived.loaded)).not.toContain(contract);
+  expect(ids(explicit.loaded)).toContain(contract);
+  expect(explicit.cells).toContainEqual({
+    playbook: identity,
+    missing: `${identity}#learn/Memory`,
+    nearest: 'orient',
+    message: 'no cell; nearest phase with a cell: orient',
+  });
+});
 /**
  * A root adopting the conformance corpus at band 90 from `vendor/foundation`, `edit` applied to that copy before it is
  * pinned, with a local workspace capturing `.ia/src`.
@@ -127,9 +180,8 @@ it("delivers the fixture playbook's plan cell at phase plan, as ia read reads it
   expect(bodyOf(db, { shape: 'context', phase: 'plan' }).cells).toEqual([
     { playbook: procedure, address: `${procedure}#plan/Attention`, text: 'Sample fixture statement 10.' },
   ]);
-  // Here the phase changes only the cell delivered and the keys it is spelled in (design §6, routing): no conditional
-  // row bears on this body. A row whose condition holds at one phase only moves the loaded set (decision
-  // conditional-relations-in-delivery; tests/position.test.ts).
+  // Here the phase changes only the cell delivered and the keys it is spelled in: no conditional row bears on this
+  // body. A row whose condition holds at one phase only moves the loaded set (R15; tests/position.test.ts).
   const orient = bodyOf(db, { shape: 'governance', phase: 'orient' });
   expect(orient.cells).toEqual([
     { playbook: procedure, address: `${procedure}#orient/Inference`, text: 'Sample fixture statement 5.' },
@@ -530,7 +582,7 @@ it("delivers the mandates that claim a location seat or whose authority.scope na
     via: { by: 'field', from: foundation, field: 'authority.scope', direction: 'in' },
   });
   // At K0 the workspace is the seat: the scoped mandate governs it, and the sample mandate, which claims docs/** and
-  // names no scope, does not; no participant is matched before milestone position-packet.
+  // names no scope, does not; a body matches no participant (R17).
   expect(bodyOf(db).mandates).toEqual([scoped]);
   expect(bodyOf(plain).mandates).toEqual([]);
   // A record seat's workspace is the one whose closure holds it.
@@ -630,7 +682,7 @@ it('filters only what loads, lists and tallies by the word: rules, applies by wo
   expect(ids(laws.loaded)).toContain(lawRule);
   expect(laws.loaded.slice(1).every((entry) => 'word' in entry && entry.word === 'law')).toBe(true);
   expect([...laws.pointers, ...laws.pointerTallies].every((entry) => entry.word === 'law')).toBe(true);
-  // Decision scope-key-caps reserves blockers outside n and restricts seeds and tallies: the blocking convention, a
+  // Blockers are reserved outside n and the word restricts seeds and tallies: the blocking convention, a
   // word member of the @system, governs the seat whatever the word, so it stays in `rules`; the rules, the cells and
   // the mandates are those of the body without the word, and the applies-by-word section lists the same rules and
   // playbooks, of every word, since each here applies to the seat or to a reserved rule.

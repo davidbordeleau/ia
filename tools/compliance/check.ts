@@ -1,4 +1,5 @@
 import '../temp/physical-temp.mjs';
+import { parseOptions } from '../shared/args.mjs';
 import { publicSystemNames } from '../native/public-systems.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -11,15 +12,16 @@ import {
   evaluate,
   fixtureCoverage,
   runLanguageFixture,
-  verdict,
+  verifyKernel,
+  verifyFixtures,
 } from '../../packages/compliance/src/index.js';
 import type { Finding, LanguageFixture } from '../../packages/compliance/src/index.js';
 import { assess } from '../../packages/compliance/src/types.js';
-import { inputs as fixtureInputs } from '../../packages/compliance/tests/native.js';
+import { conformanceInputs } from './corpus.js';
 import { compileNative } from '../native/compile.js';
-import { observeFoundationAuthoring } from '../native/fixture-authoring.js';
+import { observeFoundationAuthoring } from './fixture-authoring.js';
 import { foundationAdoptionEvaluators } from './foundation-adoption.js';
-import { generateKernel, readKernel } from '../kernel/generate.js';
+import { checkKernel, readKernel } from '../kernel/generate.js';
 import { runRefusalFixtures } from '../../packages/compliance/fixtures/refusals.js';
 import { HOOK_CODES, PUBLICATION_CODES, RUNTIME_CODES, RUNTIME_ESCALATIONS } from '../../packages/runtime/src/index.js';
 import {
@@ -30,9 +32,10 @@ import {
   runRuntimeFixtures,
 } from './runtime-fixtures.js';
 import { runEvidenceFixtures } from './evidence-fixtures.js';
+import { INVENTORY_PATH, checkInventory } from './inventory.js';
 import { runHookFixtures } from './hook-fixtures.js';
-import { EXEC_CODES } from '../systems/types.js';
-import { executionFixtureCodes, runExecutionFixtures } from '../systems/refusal-fixtures.js';
+import { EXEC_CODES } from '@inventarch/runtime/authoring-execution';
+import { executionFixtureCodes, runExecutionFixtures } from './execution-fixtures.js';
 import { publicationFixtureCodes, runPublicationFixtures } from './publication-fixtures.js';
 
 export function readFixtures(root: string): { fixtures: LanguageFixture[]; strays: string[] } {
@@ -94,9 +97,36 @@ export function readFixtures(root: string): { fixtures: LanguageFixture[]; stray
   }
   return { fixtures: fixtures.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)), strays: strays.sort() };
 }
+/** The package-v1 inventory gate: drift between the tree and the generated inventory fails COMP-FIXTURES. */
+function inventoryFindings(root: string): Finding[] {
+  try {
+    checkInventory(root);
+    return [];
+  } catch (error) {
+    return [
+      {
+        code: 'IA-COMP-FIXTURE-MISMATCH',
+        severity: 'error',
+        path: INVENTORY_PATH,
+        line: 1,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ];
+  }
+}
 export function checkCompliance(root: string) {
+  const floor = readKernel(root);
   const native = {
-      inputs: fixtureInputs,
+      inputs: [
+        ...floor.map((source) => ({
+          ...source,
+          location: {
+            placement: { kind: 'floor' as const, band: 10 as const, reach: '' },
+            provenance: 'bootstrap' as const,
+          },
+        })),
+        ...conformanceInputs(root).filter((source) => !source.path.startsWith('.ia/src/floor/')),
+      ],
       folders: publicSystemNames(root),
     },
     corpus = compileNative(native.inputs);
@@ -165,15 +195,11 @@ export function checkCompliance(root: string) {
         message: 'Unexpected fixture entry or orphan companion',
       }),
     ),
+    ...inventoryFindings(root),
   ]);
   const kernelFindings: Finding[] = [];
   try {
-    const generated = generateKernel(readKernel(root));
-    if (
-      generated.text !==
-      readFileSync(resolve(root, 'packages/language/src/kernel.generated.ts'), 'utf8').replaceAll('\r\n', '\n')
-    )
-      throw new Error('Generated kernel differs from the checked-in module');
+    checkKernel(root);
   } catch (error) {
     kernelFindings.push({
       code: 'IA-COMP-FIXTURE-MISMATCH',
@@ -189,10 +215,12 @@ export function checkCompliance(root: string) {
       sourceDiagnostics: corpus.diagnostics,
       folders,
       adoptionEvaluators,
-      evidence: new Map([
-        ['COMP-FIXTURES', verdict(fixtures, graph.revision)],
-        ['COMP-KERNEL', verdict(assess('COMP-KERNEL', 'floor', kernelFindings), graph.revision)],
-      ]),
+      conformance: {
+        inputs: { sources: native.inputs, kernelDigest: KERNEL_DIGEST, languageVersion: LANGUAGE_VERSION },
+        kernel: verifyKernel(floor),
+        fixtures: verifyFixtures(),
+      },
+      admission: [fixtures, assess('COMP-KERNEL', 'repository-generated', kernelFindings)],
     }),
     fixtures: results.length,
     boundaries: boundaries.length,
@@ -200,19 +228,31 @@ export function checkCompliance(root: string) {
   };
 }
 if (isEntry(process.argv[1], import.meta.url)) {
-  const { report, fixtures, boundaries, qualification } = checkCompliance(resolve(import.meta.dirname, '../..'));
-  if (process.argv.includes('--json'))
-    process.stdout.write(JSON.stringify({ ...report, qualification }, null, 2) + '\n');
-  else {
-    process.stdout.write(
-      `${report.outcome}: ${report.verdicts.length} verdicts, ${fixtures} language fixtures, ${boundaries} boundary fixtures; revision ${report.revision}\n`,
-    );
-    if (qualification.deferredPlatformCodes.length)
-      process.stdout.write(
-        `Platform qualification (${qualification.platform}): ${qualification.reason} Not observed here: ${qualification.deferredPlatformCodes.join(', ')}\n`,
-      );
-    for (const v of report.verdicts.filter((v) => v.outcome !== 'pass'))
-      process.stdout.write(`${v.outcome} ${v.check} ${v.scope}: ${v.findings.map((f) => f.message).join('; ')}\n`);
+  let options: ReturnType<typeof parseOptions> | undefined;
+  try {
+    options = parseOptions(process.argv.slice(2), { booleans: ['json'] });
+  } catch (error) {
+    console.error(String(error));
+    process.exitCode = 2;
   }
-  if (report.outcome === 'fail') process.exitCode = 1;
+  if (options)
+    try {
+      const { report, fixtures, boundaries, qualification } = checkCompliance(resolve(import.meta.dirname, '../..'));
+      if (options.has('json')) process.stdout.write(JSON.stringify({ ...report, qualification }, null, 2) + '\n');
+      else {
+        process.stdout.write(
+          `${report.outcome}: ${report.verdicts.length} verdicts, ${fixtures} language fixtures, ${boundaries} boundary fixtures; revision ${report.revision}\n`,
+        );
+        if (qualification.deferredPlatformCodes.length)
+          process.stdout.write(
+            `Platform qualification (${qualification.platform}): ${qualification.reason} Not observed here: ${qualification.deferredPlatformCodes.join(', ')}\n`,
+          );
+        for (const v of report.verdicts.filter((v) => v.outcome !== 'pass'))
+          process.stdout.write(`${v.outcome} ${v.check} ${v.scope}: ${v.findings.map((f) => f.message).join('; ')}\n`);
+      }
+      if (report.outcome !== 'pass') process.exitCode = 1;
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
 }

@@ -38,17 +38,17 @@ export interface Capabilities {
   readonly width: number;
 }
 
-/** §6.4: 80 is the ceiling; below 40 a label/value block drops its value column; below 60 header pairs split. */
+/** 80 is the ceiling; below 40 a label/value block drops its value column; below 60 header pairs split. */
 export const MAX_WIDTH = 80;
 export const NARROW_WIDTH = 40;
 export const HEADER_WIDTH = 60;
-/** §6.4: a bare digest field shows 12 hex characters and an explicit ellipsis. */
+/** A bare digest field shows 12 hex characters and an explicit ellipsis. */
 export const DIGEST_CHARACTERS = 12;
 
 const UTF8 = /utf-?8/i;
 const LOCALE_NAMES = ['LC_ALL', 'LC_CTYPE', 'LANG'] as const;
 
-/** §6.7 colour precedence and §6.3's ASCII rule, resolved from an explicit environment rather than from the process. */
+/** §6's colour precedence and ASCII rule, resolved from an explicit environment rather than from the process. */
 export function resolveCapabilities(terminal: Terminal, flags: RenderFlags = {}): Capabilities {
   const env = terminal.env,
     force = env['FORCE_COLOR'];
@@ -74,7 +74,7 @@ export function resolveCapabilities(terminal: Terminal, flags: RenderFlags = {})
 
 const SGR: Readonly<Record<Role, string>> = { bold: '1', dim: '2', red: '31', yellow: '33', green: '32', cyan: '36' };
 
-/** §6.1: a styled run is reset at its end and never left open across a newline, so each line is styled on its own. */
+/** A styled run is reset at its end and never left open across a newline, so each line is styled on its own. */
 export function style(text: string, role: Role | null | undefined, color: boolean): string {
   if (!color || !role) return text;
   return text
@@ -104,7 +104,7 @@ const SYMBOLS: Readonly<Record<SymbolName, SymbolDefinition>> = {
   removed: { unicode: '-', ascii: '-', role: null },
   updated: { unicode: '~', ascii: '~', role: null },
 };
-/** Every symbol is one UTF-16 unit per display column, so length is the declared §6.3 width; no emoji is admitted. */
+/** Every symbol is one UTF-16 unit per display column, so length is its display width; no emoji is admitted. */
 export function statusSymbol(name: SymbolName, ascii: boolean): StatusSymbol {
   const definition = SYMBOLS[name],
     text = ascii ? definition.ascii : definition.unicode;
@@ -136,9 +136,9 @@ export function words(text: string, role: Role | null = null, gap = 1): readonly
 /** A command quoted in prose: a program this CLI names and its arguments, one with a space JSON-quoted (`quote`). */
 const QUOTED_COMMAND = /"(?:ia|ia-distribution|pnpm)(?: (?:"(?:[^"\\]|\\.)*"|[^\s"]+))*"/g;
 /**
- * §6.4 for prose that quotes a command, such as a refusal's next action (design row 27): the words wrap as `words`
- * splits them, and each quoted command, with the punctuation touching it, is one `atom`, so a line break never falls
- * inside the command and it stays copy-pasteable, overrunning the width when it must.
+ * For prose that quotes a command, such as a refusal's next action: the words wrap as `words` splits them, and
+ * each quoted command, with the punctuation touching it, is one `atom`, so a line break never falls inside the command
+ * and it stays copy-pasteable, overrunning the width when it must.
  */
 export function remedyWords(text: string, role: Role | null = null, gap = 1): readonly Token[] {
   const tokens: Token[] = [];
@@ -158,8 +158,9 @@ export function remedyWords(text: string, role: Role | null = null, gap = 1): re
 }
 
 /**
- * §6.4: words wrap at the effective width; a token is never split, so an over-wide identifier overruns its line whole.
- * `firstColumn` differs from `column` only where a value starts past its label and then hangs back at rule 3's column.
+ * Words wrap at the effective width; a token is never split, so an over-wide identifier overruns its line whole.
+ * `firstColumn` differs from `column` only where a value starts past its label and then hangs back at the entry's
+ * content column.
  */
 export function wrapTokens(
   tokens: readonly Token[],
@@ -201,18 +202,18 @@ export interface Placement {
 export interface EntryOptions extends Placement {
   readonly symbol?: SymbolName | undefined;
   /**
-   * §6.4 rule 2: the width of the widest symbol in this block, so every row of a block shares one content column.
-   * It never reaches a nested action, whose column is rule 3's `parent + width(its own symbol) + 2`.
+   * The width of the widest symbol in this block, so every row of a block shares one content column.
+   * It never reaches a nested action, whose column is `parent + width(its own symbol) + 2`.
    */
   readonly symbolWidth?: number | undefined;
 }
 
-/** §6.4 rule 1. */
+/** A block's indent: two spaces per depth. */
 export const indentOf = (depth: Depth): number => 2 * depth;
-/** The widest symbol of a block, which rule 2 measures the whole block's content column from. */
+/** The widest symbol of a block, which the whole block's content column is measured from. */
 export const blockSymbolWidth = (names: readonly (SymbolName | undefined)[], ascii: boolean): number =>
   Math.max(0, ...names.map((name) => (name === undefined ? 0 : statusSymbol(name, ascii).width)));
-/** §6.4 rule 2: `2·d + width + 2`, where width is the block's widest symbol and never less than this row's own. */
+/** Content column: `2·d + width + 2`, where width is the block's widest symbol and never less than this row's own. */
 export const contentColumn = (base: number, symbol: StatusSymbol | null, symbolWidth = 0): number =>
   base + (symbol === null ? 0 : Math.max(symbolWidth, symbol.width) + 2);
 export const entryColumn = (options: EntryOptions, ascii: boolean): number =>
@@ -223,8 +224,8 @@ export const entryColumn = (options: EntryOptions, ascii: boolean): number =>
   );
 
 /**
- * One entry: block indent, the status symbol, two spaces, then its facts. §6.4 rule 3 hangs every continuation —
- * a wrapped line or a further fact — at the entry's content column.
+ * One entry: block indent, the status symbol, two spaces, then its facts. Every continuation — a wrapped line
+ * or a further fact — hangs at the entry's content column.
  */
 export function entry(
   facts: readonly (readonly Token[])[],
@@ -246,7 +247,7 @@ export interface Field {
   readonly label: string;
   readonly value: readonly Token[];
   readonly symbol?: SymbolName | undefined;
-  /** A next action nested under this row, at the row's content column, per rule 3. */
+  /** A next action nested under this row, at the row's content column. */
   readonly action?: readonly Token[] | null | undefined;
   /**
    * Further prose about this row, on its own lines under it and hanging at the block's value column (two past the
@@ -255,9 +256,9 @@ export interface Field {
   readonly note?: readonly Token[] | null | undefined;
 }
 /**
- * §6.4 rule 4: one value column per block at `max(len(label)) + 2`, never shared across a blank line, over the one
- * content column rule 2 gives the block. A value that wraps hangs at the entry's content column, which is rule 3 and
- * not the value column. Below 40 columns, or when the padding would leave no room for a value, the block drops the
+ * One value column per block at `max(len(label)) + 2`, never shared across a blank line, over the block's one
+ * content column. A value that wraps hangs at the entry's content column, not the value column. Below 40 columns,
+ * or when the padding would leave no room for a value, the block drops the
  * value column and each field renders as `label  value`.
  */
 export function fieldRows(fields: readonly Field[], options: Placement, caps: Capabilities): readonly string[] {
@@ -301,10 +302,10 @@ export function fieldRows(fields: readonly Field[], options: Placement, caps: Ca
 
 export interface HeaderItem {
   readonly text: string;
-  /** The column this item starts at; §6.4 rule 5 only fixes the minimum gap of four spaces. */
+  /** The column this item starts at; only the minimum gap of four spaces is fixed. */
   readonly column?: number | undefined;
 }
-/** §6.4 rule 5: bold label, two spaces, value; further pairs share the line until the width drops below 60. */
+/** Bold label, two spaces, value; further pairs share the line until the width drops below 60. */
 export function headerLine(
   label: string,
   value: string,
@@ -326,10 +327,10 @@ export function headerLine(
 export const sectionLabel = (text: string, caps: Capabilities): string => style(text, 'bold', caps.color);
 
 export interface DocumentOptions {
-  /** §7's report blocks open with one blank line; the standalone error blocks do not. */
+  /** Report blocks open with one blank line; the standalone error blocks do not. */
   readonly leadingBlank?: boolean | undefined;
 }
-/** §6.4 rule 6: exactly one blank line between blocks, never two, and no trailing blank before the process exits. */
+/** Exactly one blank line between blocks, never two, and no trailing blank before the process exits. */
 export function document(blocks: readonly (readonly string[])[], options: DocumentOptions = {}): string {
   const body = blocks
     .filter((block) => block.length > 0)
@@ -535,7 +536,7 @@ export function terminalSafe<T>(value: T): T {
   return value;
 }
 
-/** §6.4: a command is unbreakable prose. The caller chooses the `\` break so every line stays runnable. */
+/** A command is unbreakable prose. The caller chooses the `\` break so every line stays runnable. */
 export function commandFacts(
   lead: string,
   command: string,
@@ -566,7 +567,7 @@ export function commandFacts(
 
 const BARE_DIGEST = /^[0-9a-f]+$/i;
 /**
- * §6.4: only a bare digest field is truncated. A value carrying a path, URL or any other separator is returned whole,
+ * Only a bare digest field is truncated. A value carrying a path, URL or any other separator is returned whole,
  * because truncating a digest inside an identifier destroys the identifier.
  */
 export const truncateDigest = (value: string, ascii: boolean): string =>
@@ -580,7 +581,7 @@ export interface MessageContext {
   readonly identity?: string | null | undefined;
 }
 /**
- * §6.5: strip what the block already shows. Findings embed `path:line: identity: `; RuntimeError and DbError embed
+ * Strip what the block already shows. Findings embed `path:line: identity: `; RuntimeError and DbError embed
  * `code: `; DistributionError embeds nothing. Without this, two of the three families print their code twice.
  */
 export function stripMessage(message: string, context: MessageContext): string {
@@ -606,7 +607,7 @@ export interface ErrorElements {
   /** The block's widest symbol, when this finding shares a block with wider ones. */
   readonly symbolWidth?: number | undefined;
 }
-/** §6.5: location, identity, cause, next action, in that order, with nothing interleaved. */
+/** Location, identity, cause, next action, in that order, with nothing interleaved. */
 export function errorBlock(error: ErrorElements, options: Placement, caps: Capabilities): readonly string[] {
   const placement: EntryOptions = {
     ...options,
@@ -618,7 +619,7 @@ export function errorBlock(error: ErrorElements, options: Placement, caps: Capab
   if (error.check) head.push(atom(error.check, null, 2));
   const facts: (readonly Token[])[] = [head];
   if (error.identity) facts.push([atom(error.identity, 'cyan', 0)]);
-  // §6.1 colours a warning code yellow and an error code red; the element order is the same either way.
+  // A warning code is yellow and an error code red; the element order is the same either way.
   const codeRole: Role = error.severity === 'warning' ? 'yellow' : 'red';
   facts.push([atom(error.code, codeRole, 0), ...words(stripMessage(error.message, error), null, 2)]);
   const lines = [...entry(facts, placement, caps)];
@@ -637,7 +638,7 @@ export interface Progress {
   readonly done: (text: string) => void;
 }
 /**
- * §6.6: progress lives on the sink the caller supplies, which is stderr — never structured stdout. It is rewritten in
+ * §6: progress lives on the sink the caller supplies, which is stderr — never structured stdout. It is rewritten in
  * place only on a TTY, degrades to one appended line per phase otherwise, is erased before the result is written, and
  * never carries the completion: `done` always emits a terminal state line as text.
  */

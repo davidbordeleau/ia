@@ -51,7 +51,7 @@ export function purposeOf(node: Node): string | undefined {
   return fields.length === 0 ? undefined : childrenText(fields);
 }
 /**
- * The record's own body (`ia read`, position-and-projection row 23): the part of what recordText renders that the record
+ * The record's own body (`ia read`, the body reader): the part of what recordText renders that the record
  * states rather than structures, its `meaning.says`. A `@system`, which has no meaning section, states its head
  * `describes`; a record that states neither (a `@schema`) has an empty body.
  */

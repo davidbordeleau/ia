@@ -30,7 +30,7 @@ it('renders a host-native invocation only where the row declares one', () => {
   expect(invocation('vim', 'init', ['ia', 'init', '.'])).toBe('ia init .');
 });
 it('gives every workspace host exactly one MCP configuration file and format', () => {
-  // Architecture review of #317: host behaviour derives from the table, so a new workspace row needs a HOST_CONFIG entry
+  // Architecture review of crowncodes/ia#317: host behaviour derives from the table, so a new workspace row needs a HOST_CONFIG entry
   // (a type error without one) rather than inheriting Claude's JSON or Codex's TOML by a two-way ternary.
   expect(Object.keys(HOST_CONFIG).sort()).toEqual([...WORKSPACE_HOSTS].sort());
   expect(HOST_CONFIG).toEqual({

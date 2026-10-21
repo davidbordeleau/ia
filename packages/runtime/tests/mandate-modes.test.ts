@@ -93,7 +93,7 @@ it('reads the authority section of the compiled conformance mandate and refuses 
   expect(mandateRefusal(stewardship, 're-seat', ['hook'])).toBeUndefined();
   const agent = records.find((r) => r.discriminator === 'agent' && r.name === 'agent-steward')!;
   expect(() => mandateAuthorityOf(agent)).toThrow('IA-RUNTIME-REQUEST-INVALID');
-  // Admission refuses an authored `moves []` (compliance C05; lane D); the reader still refuses one it is handed, as
+  // Admission refuses an authored `moves []` (compliance C05); the reader still refuses one it is handed, as
   // defence in depth, locating it as data.
   const emptied = JSON.parse(JSON.stringify(mandate)) as CompiledRecord;
   const movesField = emptied.sections

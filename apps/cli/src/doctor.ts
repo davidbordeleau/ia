@@ -6,41 +6,38 @@
  * not be performed and is never reported as `ok` — which is why every installation row is `unknown` without a
  * workspace rather than a cheerful pass.
  *
- * Host state is observed, never assumed (docs/specs/host-registration/README.md §7). `readInstalledState`
- * with `hosts: true` compares each host's ownership state against the files it wrote and against this installation's
- * payload pin: `registered` is `ok` and its detail says "written; not observed answering", because doctor never
- * starts a server and a written registration is not a server that answered; `stale` is `fail`, so doctor exits 1
- * (REQ-HRC-5), and its detail names each reason and the repair that works for it; no host state at all is `info`.
- * Projection drift is read from the receipt the projection apply wrote (B12, milestone position-packet): one row per
- * listed file that is missing or changed, one when the records render another packet, one `ok` row when it found none of
- * these, and one listing the legacy files it removed and the foreign ones it left. A projection `ia project` wrote
- * without a host registration is read the same way, its remedies naming `ia project <host> --apply` as the install
- * refresh's do (`projectionRerun`, task ia-project-verb), and it leaves the host unregistered in the briefing. An
- * installation that carries no host payload is a note, not a crash:
- * the release comparison is skipped and the row says so. Observation is total — a malformed state file is a `fail`
- * row, never an exception — and nothing here writes, the host home included. Repairs are worded by `ia host`'s own
- * `stateRepair` and `modifiedRepair`, so the two verbs cannot disagree, and every `ia host` or `ia project` command
- * printed carries `--root` when doctor was given one.
+ * Host state is observed, never assumed (docs/specs/host-registration/README.md §7). `readInstalledState` with
+ * `hosts: true` compares each host's ownership state against the files it wrote and against this installation's payload
+ * pin: `registered` is `ok` and its detail says "written; not observed answering", because doctor never starts a server
+ * and a written registration is not a server that answered; `stale` is `fail`, so doctor exits 1, and its detail names
+ * each reason and the repair that works for it; no host state at all is `info`. Projection drift is read from the
+ * receipt the projection apply wrote: one row per listed file that is missing or changed, one when the records render
+ * another packet, one `ok` row when it found none of these, and one listing the legacy files it removed and the foreign
+ * ones it left. A projection `ia project` wrote without a host registration is read the same way, its remedies naming
+ * `ia project <host> --apply` as the install refresh's do (`projectionRerun`), and it leaves the host unregistered in
+ * the briefing. An installation that carries no host payload is a note, not a crash: the release comparison is skipped
+ * and the row says so. Observation is total — a malformed state file is a `fail` row, never an exception — and nothing
+ * here writes, the host home included. Repairs are worded by `ia host`'s own `stateRepair` and `modifiedRepair`, so the
+ * two verbs cannot disagree, and every `ia host` or `ia project` command printed carries `--root` when doctor was given
+ * one.
  *
- * Milestone generation-binding (plan amendments C16 and C24, design item 9) adds an `implementations` row for the
- * installed-implementation catalog of the payload this installation pins, read through its release pins and checked
- * against the handler bytes the payload ships, and a `join-<host>` row per join receipt `ia host` recorded, compared
- * with the catalog of the payload that host's registration names. Both only read; no handler is imported or run.
+ * Doctor also adds an `implementations` row for the installed-implementation catalog of the payload this installation
+ * pins, read through its release pins and checked against the handler bytes the payload ships, and a `join-<host>` row
+ * per join receipt `ia host` recorded, compared with the catalog of the payload that host's registration names. Both
+ * only read; no handler is imported or run.
  *
  * The support row compares an observed platform and version against the declaration at
  * docs/specs/host-registration/README.md §7. It says "matches the declared target", never "qualified", because
  * that declaration says the minimum must be validated before being advertised. A platform outside it is `warn`,
  * never `fail`, and the word "unsupported" is not used about it.
  *
- * The environment is a parameter rather than a read of the process, so this verb is testable and so the contract's
- * §7 examples can state which machine's Node version and platform they show.
+ * The environment is a parameter rather than a read of the process, so this verb is testable.
  *
  * docs/specs/host-plugin-distribution/README.md §7.3 adds rows that exist with or without a workspace
  * (`doctor-user.ts`: install channel, IA home, Claude plugin, §11's cached update check and local language
  * compatibility, initialization decision) and, per host, a warning when
  * a registration pins its payload outside the current IA home (§3). `--host <id>` adds §8.2's `session` briefing and
- * §7.3's `nextActions` to the JSON envelope (`briefing.ts`); neither adds a write, so doctor stays read-only
- * (Amendment item 4).
+ * §7.3's `nextActions` to the JSON envelope (`briefing.ts`); neither adds a write, so doctor stays read-only.
  *
  * docs/specs/registry/README.md §4 ("Doctor") adds a `registry-<provider>` row for each provider the
  * workspace's lock names in its requests and packages: the base §4's precedence chooses and the level that chose it.
@@ -51,7 +48,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-// `within` judges nesting on disk, so a home or cache spelled in another case or normalization is still where it is (#315).
+// `within` judges nesting on disk, so a home or cache spelled in another case or normalization is still where it is.
 import { pathKey, within } from '@inventarch/db';
 import { decodeDistributionJson, INSTALL_PATHS } from '@inventarch/db/distribution';
 import type { DistributionLock } from '@inventarch/db/distribution';
@@ -141,7 +138,7 @@ export interface Runtime {
 }
 export interface DoctorRequest {
   readonly cwd: string;
-  /** The supplied `--root`, or undefined to discover one. Absence is a check result, not a refusal (§2.0). */
+  /** The supplied `--root`, or undefined to discover one. Absence is a check result, not a refusal (§2.12). */
   readonly root?: string | undefined;
   readonly packageRoot: string;
   readonly runtime: Runtime;
@@ -152,7 +149,7 @@ export interface DoctorRequest {
   readonly version?: string;
   /** `--host`: adds the §8.2 session briefing and §7.3 next actions for this host. */
   readonly host?: string | undefined;
-  /** The clock a `declined-today` decision is compared against (§9.1); now by default. */
+  /** The clock a `declined-today` decision is compared against (§7.2); now by default. */
   readonly now?: Date;
   /** The install channel as observed (§5); detected from `packageRoot` when absent. The contract's examples supply it. */
   readonly channel?: Channel | undefined;
@@ -160,7 +157,7 @@ export interface DoctorRequest {
   readonly discover?: typeof discoverRoot;
 }
 
-/** decisions.md:13. Linux and Windows on x64 and macOS on arm64, on Node 22 with 22.22.0 the initial minimum; pnpm is contributor-only. */
+/** The supported targets: Linux and Windows on x64 and macOS on arm64, on Node 22 with 22.22.0 the initial minimum; pnpm is contributor-only. */
 export const SUPPORTED_TARGETS: readonly { readonly platform: string; readonly arch: string }[] = [
   { platform: 'linux', arch: 'x64' },
   { platform: 'win32', arch: 'x64' },
@@ -306,9 +303,9 @@ const commandsFor = (root: string | undefined): Commands => {
 };
 
 /**
- * §3.3: the payload this installation pins, and whether the host home holds it. Cheap on purpose — one stat and
- * one directory listing, no verification (each host row verifies the payload its registration uses). A `.stage-*`
- * directory is an unfinished materialization, never a payload, so only 64-hex names are listed.
+ * Spec §3: the payload this installation pins, and whether the host home holds it. Cheap on purpose — one stat and one
+ * directory listing, no verification (each host row verifies the payload its registration uses). A `.stage-*` directory
+ * is an unfinished materialization, never a payload, so only 64-hex names are listed.
  */
 function payloadRow(request: DoctorRequest, pinned: Pinned): Check {
   if (pinned.release === null)
@@ -354,7 +351,7 @@ function payloadRow(request: DoctorRequest, pinned: Pinned): Check {
 }
 
 /**
- * Spec §8: the host lock and the three host journals, as the install lock and journal have their rows. A held lock is
+ * Spec §7: the host lock and the three host journals, as the install lock and journal have their rows. A held lock is
  * `warn`, because a live run holds it too; its recovery clears only a dead holder's. A journal is `fail`, because
  * every `ia host` plan refuses until its own recovery runs (`assertHostRegistrationIdle`).
  */
@@ -395,7 +392,7 @@ function parses(root: string, path: string): boolean {
 /**
  * `launcher-unverified` covers two different facts: a payload that fails verification, and one that verifies as another
  * release than the state recorded. `verify` is the report's one shared verification (`hostVerifier`, a memo), so it
- * answers exactly what observation saw without scanning the payload again (review finding B2-N9): its failure, or the
+ * answers exactly what observation saw without scanning the payload again: its failure, or the
  * release it verified as, which observation found differs from the recorded one.
  */
 function unverified(cache: string | null, recorded: string | null, verify: HostVerifier): string {
@@ -446,8 +443,8 @@ function repairOf(root: string, observed: HostObservation): string {
     ...(observed.reasons.includes('mcp-modified') ? (['mcp'] as const) : []),
     ...(observed.reasons.includes('guard-modified') ? (['hooks'] as const) : []),
   ];
-  // B11: the remedy retires the guard, so a guard group changed by hand alone is deleted first, as `ia host` names it;
-  // an MCP entry changed by hand still needs the removal and a new registration.
+  // The remedy's apply retires the steward guard, so a guard group changed by hand alone is deleted first, as `ia host`
+  // names it; an MCP entry changed by hand still needs the removal and a new registration.
   if (modified.length === 0) return '';
   return modified.includes('mcp') ? modifiedRepair(host, modified) : projectionRepair(host, SETTINGS, apply);
 }
@@ -503,7 +500,7 @@ function hostRow(
   return installation(`host-${host}`, `Host ${host}`, 'fail', detail, commands.apply(host));
 }
 
-/** Generation's own reason beside a kept group's (review finding F3), as a trailing clause, or nothing. */
+/** Generation's own reason beside a kept group's, as a trailing clause, or nothing. */
 const keptBeside = (reason: string): string => {
   const other = reason
     .split('; ')
@@ -512,11 +509,11 @@ const keptBeside = (reason: string): string => {
   return other === '' ? '' : ` (${other})`;
 };
 /**
- * Spec §7 and B12: the projection rows for one host that owns a projection, read from the receipt
+ * Host registration spec §7: the projection rows for one host that owns a projection, read from the receipt
  * `applyHostProjection` wrote. Each file it lists is compared with the disk: `missing` is what the next apply writes
  * again, `changed` (a hand edit) makes apply refuse, so it fails and names the repair `ia host` does. The receipt's
  * packet digest is compared with a fresh render: another packet is `outdated`, and a render that fails is `unknown`.
- * With none of these, one `ok` row says the projection has no drift (task ia-project-verb). The legacy files it
+ * With none of these, one `ok` row says the projection has no drift. The legacy files it
  * removed and the foreign files it left are listed in one info row and never checked. No receipt — a projection
  * written by a 1.x release, or a receipt deleted — is `unknown`, and the remedy writes one. The ownership state and
  * the files it lists are read as `ia host` reads them first, so a file apply would refuse to read is a fail row here
@@ -547,7 +544,7 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
   try {
     planRetirement(root, host);
     observedDrift = observeProjection({ root, host, artifacts: null, marker: PACKET_MARKER });
-    // The hook groups the workspace owns (milestone generation-binding, C9): read-only, as the planner reads them.
+    // The hook groups the workspace owns: read-only, as the planner reads them.
     hookDrift = host === 'claude' ? observeHookRegistration(root) : [];
   } catch (error) {
     return [unreadable(error, STATE.projection(host))];
@@ -601,8 +598,8 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
         ),
       );
   }
-  // A group deleted, changed or duplicated by hand is one apply refuses to put back on its own (guard review finding
-  // G-N2): the remedy removes the registration, and the next apply registers the workspace's hooks again.
+  // A group deleted, changed or duplicated by hand is one apply refuses to put back on its own: the remedy removes the
+  // registration, and the next apply registers the workspace's hooks again.
   const reregister = commands.apply(host, `ia host ${host} --remove --apply`),
     again = `"ia host ${host} --apply" then registers the workspace's hooks again`;
   for (const { hook, drift } of hookDrift)
@@ -628,10 +625,10 @@ function projectionRows(root: string, host: HostName, commands: Commands): reado
             reregister,
           ),
     );
-  // An authored @hook the last apply could not register guards nothing (review finding H-N4): `ia host` registers it, or,
-  // where disableAllHooks turned hooks off, nothing does until that setting changes.
-  // A kept group is the other way round (review finding N2): an obsolete group that still guards, until hooks are back on
-  // or the payload it was registered against is materialized again; no command is sure to remove it.
+  // An authored @hook the last apply could not register guards nothing: `ia host` registers it, or, where
+  // disableAllHooks turned hooks off, nothing does until that setting changes.
+  // A kept group is the other way round: an obsolete group that still guards, until hooks are back on or the payload
+  // it was registered against is materialized again; no command is sure to remove it.
   for (const row of receipt.unsupported ?? [])
     if (row.word === 'hook')
       checks.push(
@@ -755,9 +752,10 @@ function hostRows(
 }
 
 /**
- * Host plugin distribution spec §3 and §7.3 `ia-home` warn: a registration made before the IA home moved still pins
- * its payload where it was materialized, usually M5.3's per-OS data directory. It keeps working, so the row warns;
- * re-applying materializes the payload in the current home and re-pins it. No command moves or deletes the old one.
+ * Host plugin distribution spec §3 and §7.3 `ia-home` warn: a registration made before the IA home moved still pins its
+ * payload where it was materialized, usually the per-OS data directory that was the legacy host home. It keeps working,
+ * so the row warns; re-applying materializes the payload in the current home and re-pins it. No command moves or
+ * deletes the old one.
  */
 function movedRows(request: DoctorRequest, observed: readonly HostObservation[], commands: Commands): readonly Check[] {
   const user = request.home ?? homedir();
@@ -776,14 +774,14 @@ function movedRows(request: DoctorRequest, observed: readonly HostObservation[],
             `ia-home-moved-${host.host}`,
             'IA home moved',
             'warn',
-            `Host ${host.host} pins its payload under ${host.cache}, outside the IA home ${home}${inside(legacy, host.cache) ? ' (the M5.3 per-OS location)' : ''}`,
+            `Host ${host.host} pins its payload under ${host.cache}, outside the IA home ${home}${inside(legacy, host.cache) ? ' (the per-OS location earlier releases used)' : ''}`,
             commands.apply(host.host),
           ),
         ],
   );
 }
 
-// ---- Installed implementations: plan amendments C16 and C24, design item 9 -------------------------------------
+// ---- Installed implementations ---------------------------------------------------------------------------------
 
 /** One read of a payload's catalog: the catalog, or the refusal that kept it from being read. */
 type CatalogRead =
@@ -791,7 +789,7 @@ type CatalogRead =
   | { readonly ok: false; readonly error: unknown };
 /**
  * Reads each payload's catalog once per report: the catalog row and a join row usually name the same payload, and the
- * payload is verified through `verify`, the one verification the host rows share (review finding B-N7).
+ * payload is verified through `verify`, the one verification the host rows share.
  */
 function catalogReader(verify: HostVerifier): (directory: string, release: string) => CatalogRead {
   const seen = new Map<string, CatalogRead>();
@@ -824,7 +822,7 @@ function operationFacts(catalog: InstalledImplementations): string {
 }
 
 /**
- * C16 and C24: the installed-implementation catalog of the payload this installation pins, as the IA home holds it.
+ * The installed-implementation catalog of the payload this installation pins, as the IA home holds it.
  * Present is `ok`, or `warn` when it lists an operation unavailable or revoked; a payload that carries no catalog (one built
  * before the catalog existed) is an `info` note, and so is one not materialized yet. A payload that fails host
  * verification (a file its inventory does not list, a missing or changed one, a link), or a catalog whose pins disagree
@@ -892,8 +890,8 @@ function catalogRow(
 }
 
 /**
- * The trust `ia validate` binds a join through (review finding B2-RC1): the payload this installation pins, in the IA home
- * the request resolves; null when it pins none or the home cannot be resolved.
+ * The trust `ia validate` binds a join through: the payload this installation pins, in the IA home the request
+ * resolves; null when it pins none or the home cannot be resolved.
  */
 function doctorTrust(request: DoctorRequest, pinned: Pinned): HostTrust | null {
   if (pinned.release === null) return null;
@@ -904,14 +902,14 @@ function doctorTrust(request: DoctorRequest, pinned: Pinned): HostTrust | null {
   }
 }
 /**
- * Design item 9: one row per consumer join `.ia/distributions/hosts/joins.json` records, compared with the catalog of the
- * payload this installation pins, as `ia validate` binds through it (review finding B2-RC1): a registration of another
- * release or naming another directory, or another spelling of it, is `warn` with the apply that registers this
- * installation's payload, and nothing it names is opened. `ok` (present) when the join names that catalog, digest and release;
- * `warn` (drifted) when it names another, when that payload carries none, or when the consumer is not registered, each
- * naming the apply that records or drops the join; `unknown` when the registration or its catalog cannot be read, which
- * the host row reports. A registered host with no join is an `info` row (unavailable) naming the apply that records
- * one. Receipts that cannot be read are `fail`, repaired by deleting them. Never throws, and only reads.
+ * One row per consumer join `.ia/distributions/hosts/joins.json` records, compared with the catalog of the payload this
+ * installation pins, as `ia validate` binds through it: a registration of another release or naming another directory,
+ * or another spelling of it, is `warn` with the apply that registers this installation's payload, and nothing it names
+ * is opened. `ok` (present) when the join names that catalog, digest and release; `warn` (drifted) when it names
+ * another, when that payload carries none, or when the consumer is not registered, each naming the apply that records
+ * or drops the join; `unknown` when the registration or its catalog cannot be read, which the host row reports. A
+ * registered host with no join is an `info` row (unavailable) naming the apply that records one. Receipts that cannot
+ * be read are `fail`, repaired by deleting them. Never throws, and only reads.
  */
 function joinRows(
   root: string,
@@ -1098,7 +1096,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
   if (usable) checks.push(...sourceBindingRows(root));
   const pending = usable && existsSync(resolve(root, INSTALL_PATHS.pending));
   const pinned = pinnedRelease(request.packageRoot);
-  // One verification per payload directory for the whole report: host, catalog and join rows share it (B-N7).
+  // One verification per payload directory for the whole report: host, catalog and join rows share it.
   const verify = hostVerifier();
   // The observed hosts, or the code that kept the installed state from being read; undefined until it is read.
   let observed: readonly HostObservation[] | string | undefined;
@@ -1238,7 +1236,7 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
   }
 
   // Host plugin distribution spec §7.3 and §8.2: rows that exist with or without a workspace, and the briefing. One
-  // report has one root. Without --root it was discovered upward from the cwd, which is how the §8.1 hook runs doctor.
+  // report has one root. Without --root it was discovered upward from the cwd, which is how the §8.2 hook runs doctor.
   // A supplied --root is literal, as for every other verb: it is a workspace only when it holds .ia/src itself. When it
   // does not but lies inside a workspace, that workspace is only named (`enclosing`), never described or offered init.
   const workspaceRoot =
@@ -1292,14 +1290,21 @@ export function collectDoctor(request: DoctorRequest): DoctorView {
  * §8.2's host state from the rows already collected. `unknown` when the host set was not observed — an interrupted
  * installation, or installed state that could not be read — so the briefing never calls a host missing that doctor did
  * not look at. Stale covers the host row itself, a payload pinned outside the IA home (§3 names re-applying as its
- * remedy) and any failing projection row of a registered host, which `ia host <host> --apply` also repairs. A
+ * remedy) and any failing projection row of a registered host, which `ia host <host> --apply` also repairs, except a
+ * hook group deleted, changed or duplicated by hand: an apply refuses to put that back on its own, so `removeFirst`
+ * tells the briefing to name the removal first, as that row's remedy does. A
  * projection `ia project` wrote without a registration is no registration to call stale: the host stays `absent`, and
- * its failing rows name their own repair, `ia project <host> --apply` (task ia-project-verb).
+ * its failing rows name their own repair, `ia project <host> --apply`.
  */
 function hostState(
   host: string,
   checks: readonly Check[],
-): { readonly status: BriefInput['hostStatus']; readonly detail: string | null; readonly recovery: string | null } {
+): {
+  readonly status: BriefInput['hostStatus'];
+  readonly detail: string | null;
+  readonly recovery: string | null;
+  readonly removeFirst?: boolean;
+} {
   const pending = checks.find((check) => check.id === 'pending');
   const unobserved = checks.find((check) => check.id === 'host' && check.status === 'unknown');
   if (unobserved !== undefined || pending?.status === 'fail')
@@ -1316,7 +1321,12 @@ function hostState(
       (hostCheck !== undefined && check.id.startsWith(`projection-${host}`) && check.status === 'fail'),
   );
   if (failing.length > 0)
-    return { status: 'stale', detail: failing.map((check) => check.detail).join('; '), recovery: null };
+    return {
+      status: 'stale',
+      detail: failing.map((check) => check.detail).join('; '),
+      recovery: null,
+      ...(failing.some((check) => check.id.startsWith(`projection-${host}-hook:`)) ? { removeFirst: true } : {}),
+    };
   return { status: hostCheck === undefined ? 'absent' : 'registered', detail: null, recovery: null };
 }
 
@@ -1341,7 +1351,8 @@ function briefingFor(
     hostStatus: state.status,
     hostDetail: state.detail,
     recovery: state.recovery,
-    // §11.1 and Amendment item 4: the cached check and the refresh argv, both read without writing anything.
+    ...(state.removeFirst === true ? { removeFirst: true } : {}),
+    // The cached update check and the refresh argv (host plugin distribution spec §11), both read without writing.
     updates: user.facts.updates,
     refresh: user.facts.refresh,
   });

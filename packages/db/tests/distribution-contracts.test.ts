@@ -109,7 +109,7 @@ it('round-trips frozen closed release metadata with stable canonical bytes', () 
   expect(satisfies('1.3.0-rc.1', '>=1.3.0-rc.0 <1.3.0')).toBe(true);
 });
 it('decodes a release descriptor that names no distribution, and a bundle manifest only with one', () => {
-  // Position-packet plan amendment B7: a default `ia init` authors no @distribution, so its descriptor omits the key.
+  // A default `ia init` authors no @distribution, so its descriptor omits the key.
   const { distribution: _distribution, ...unnamed } = { ...common, dependencies: [], assets: [] };
   const descriptor = decodeReleaseDescriptor(unnamed);
   expect(Object.hasOwn(descriptor, 'distribution')).toBe(false);
@@ -258,7 +258,7 @@ it('retains only the released exact lock marker as a legacy 0.1 compatibility li
   expect(supportsDistributionLockEngine(DISTRIBUTION_ENGINE_VERSION, '^0.1.0')).toBe(true);
 });
 
-it('shapes an installed-implementation catalog once for its reader and its binders (review finding B-N9)', () => {
+it('shapes an installed-implementation catalog once for its reader and its binders', () => {
   const available = {
     id: 'captured-source-read-v1',
     status: 'available',
@@ -309,8 +309,8 @@ it('shapes an installed-implementation catalog once for its reader and its binde
     ],
   ] as const)
     expect(checkInstalledImplementations(bad)).toEqual({ ok: false, reason: expect.stringContaining(reason) });
-  // Review finding B2-N11: the checked value is a frozen plain-data copy, so a later change to the input, or an
-  // accessor that answers differently when read again, cannot alter what was checked.
+  // The checked value is a frozen plain-data copy, so a later change to the input, or an accessor that answers
+  // differently when read again, cannot alter what was checked.
   const input = catalog([{ ...available }]),
     copy = checkInstalledImplementations(input);
   expect(copy.ok && Object.isFrozen(copy.value.operations[0])).toBe(true);

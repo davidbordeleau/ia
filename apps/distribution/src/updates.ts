@@ -4,7 +4,7 @@ import { SUPPORTED_VERSIONS } from '@inventarch/language';
 import { readHomeFile, writeHomeFile } from './ia-home.js';
 import { findProgram, programEnv, programHome, windowsShell, windowsShellArgs } from './program.js';
 
-/** Host plugin distribution spec §11 and Amendment item 4. Public layer only: `account` is written by the private layer and kept as found; `nudgedOn` lives in the hook's plugin data, never here. */
+/** Host plugin distribution spec §11. Public layer only: `account` is written by the private layer and kept as found; `nudgedOn` lives in the hook's plugin data, never here. */
 export const UPDATE_CHECK = 'state/update-check.json';
 export const IA_CONFIG = 'config.json';
 export type UpdateChannel = 'checkout' | 'npm' | 'unknown';
@@ -80,13 +80,13 @@ export function readIaConfig(home: string): { readonly updateCheck?: boolean } |
     return null;
   }
 }
-/** §11.1: at most once per 24 h. A timestamp that does not parse, or lies in the future, is due. */
+/** §11: at most once per 24 h. A timestamp that does not parse, or lies in the future, is due. */
 export const refreshDue = (check: Pick<UpdateCheck, 'checkedAt'> | null, now: Date): boolean => {
   if (check === null) return true;
   const age = now.getTime() - Date.parse(check.checkedAt);
   return !(age >= 0 && age < DAY);
 };
-/** §11.1: `IA_NO_UPDATE_CHECK=1`, a non-empty `CI`, or `updateCheck: false` in the IA home's config.json. */
+/** §11: `IA_NO_UPDATE_CHECK=1`, a non-empty `CI`, or `updateCheck: false` in the IA home's config.json. */
 export const updateCheckDisabled = (
   env: Readonly<Record<string, string | undefined>>,
   config: { readonly updateCheck?: boolean } | null,
@@ -155,7 +155,7 @@ export interface RefreshInput {
   readonly checkout: string | null;
   readonly now: Date;
 }
-/** §11.1: one refresh. npm is asked only for the npm channel; a checkout is counted against its upstream as of the last fetch, and nothing fetches. An unavailable source is `checked: false`, never "up to date". Packages wait for the registry. */
+/** §11: one refresh. npm is asked only for the npm channel; a checkout is counted against its upstream as of the last fetch, and nothing fetches. An unavailable source is `checked: false`, never "up to date". Packages wait for the registry. */
 export function refreshUpdates(input: RefreshInput, sources: Sources = liveSources): UpdateCheck {
   let latest: string | null = null,
     behind: number | null = null;
@@ -220,7 +220,7 @@ export const compareVersions = (a: string, b: string): number => {
   }
   return 0;
 };
-/** §11.2: local only. A workspace language newer than anything this ia reads fails; an older one it no longer reads warns. */
+/** §7.3: local only. A workspace language newer than anything this ia reads fails; an older one it no longer reads warns. */
 export function compatibility(
   workspace: readonly string[],
   supported: readonly string[] = SUPPORTED_VERSIONS,

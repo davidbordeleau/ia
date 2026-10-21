@@ -1,8 +1,8 @@
 /**
  * `ia format`: docs/specs/consumer-cli-contract/README.md §2.3.
  *
- * `--check` is the default and writes nothing; `--write` is the new in-place mode `decisions.md:65` requires be
- * specified rather than inherited, and it is never implied. Every rewrite goes through the replace-by-rename
+ * `--check` is the default and writes nothing; `--write` is the in-place mode, which is always stated rather than
+ * inherited, and it is never implied. Every rewrite goes through the replace-by-rename
  * primitive, so a file is whole or untouched; there is no cross-file atomicity and none is claimed. The two
  * phases below are what keeps a refusal from leaving a mixture: nothing is written until every selected file has
  * a verified draft, and the formatter's own staleness recheck runs inside each of those drafts.
@@ -33,7 +33,7 @@ export interface FormatView {
 }
 
 /**
- * §2.3 names IA-DIST-PATH-UNSAFE for a path resolving outside --root; a directory never reaches a service. `retry`
+ * A path resolving outside --root refuses as IA-DIST-PATH-UNSAFE; a directory never reaches a service. `retry`
  * spells the refused invocation with `<path>` in place of the path it refuses.
  */
 const contain = (supplied: string, retry: (supplied: string) => string): string => {
@@ -67,7 +67,7 @@ function walk(root: string, path: string): readonly string[] {
 }
 /** The rerun an unsafe path names when the caller spells none: a check of the corrected path in this root. */
 const checkAgain = (root: string) => (): string => `ia format <path> --root ${quote(root)}`;
-/** §2.3: the default selection is `.ia/src`; a positional is a file or a directory relative to the root. */
+/** The default selection is `.ia/src`; a positional is a file or a directory relative to the root. */
 export function selectSources(
   root: string,
   filters: readonly string[],
@@ -139,7 +139,7 @@ export function collectFormat(
 }
 
 const refused = (view: FormatView): readonly FormatFile[] => view.files.filter((file) => file.status === 'refused');
-/** §2.3: 1 when a file differs under --check or the formatter refused a document; --write rewrote them, so 0. */
+/** Exit 1 when a file differs under --check or the formatter refused a document; --write rewrote them, so 0. */
 export const formatExit = (view: FormatView): 0 | 1 =>
   refused(view).length > 0 || (view.mode === 'check' && view.changed > 0) ? 1 : 0;
 
@@ -238,7 +238,7 @@ export function renderFormat(view: FormatView, caps: Capabilities): string {
 
 export function runFormat(context: Context): Result {
   const { args, caps, json } = context;
-  // Design row 27: the refused path's rerun keeps every other argument, the root and the mode included.
+  // The refused path's rerun keeps every other argument, the root and the mode included.
   const retry = (supplied: string): string =>
     respell(context, { positionals: args.positionals.map((path) => (path === supplied ? '<path>' : path)) });
   const view = collectFormat(requireRoot(context), args.positionals, args.flag('write'), retry);

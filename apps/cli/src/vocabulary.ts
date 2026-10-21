@@ -58,7 +58,7 @@ export interface Word {
   readonly schema: WordSchema;
   readonly kernelMembers: readonly string[];
   readonly consumer: string;
-  /** Absent from every word the generator emits today; §2.2 and §8 both record that. */
+  /** Absent from every word the generator emits today. */
   readonly example?: string;
 }
 export interface Catalogue {
@@ -224,8 +224,8 @@ export function runVocabulary(context: Context): Result {
       requested,
       catalogue.words.map((word) => word.word),
     );
-    // Design row 27: one command, the nearest word with the rest of the invocation as understood; any other near word
-    // is named, not offered as a command.
+    // One command, the nearest word with the rest of the invocation as understood; any other near word is named, not
+    // offered as a command.
     const others = also.length === 0 ? '' : ` Also near: ${also.map((name) => `@${name}`).join(', ')}.`;
     throw new Refusal(
       'IA-CLI-USAGE',

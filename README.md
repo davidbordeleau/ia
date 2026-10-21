@@ -15,7 +15,13 @@
 - **Open and method-neutral.** Everything here runs locally, and initialization and validation need no network connection. You can define your own words, systems, workspaces and methods with the same public contracts IA uses for its own vocabulary.
 
 > [!NOTE]
-> **IA 3.0** adds a governed write path (`ia preview`, then `ia author`), commands checked against the acting participant's mandates, check bindings whose passes and failures `ia validate` records as evidence, host agents, skills and hook guards generated from authored records, registry kits, source-only workspace adoption (`ia adopt`) and the local `ia-runner`.
+> **IA 3.3** adds reusable knowledge packages and bounded local readers through `ia kb` and five MCP tools. Database and editor readers can opt into kernel and fixture conformance verification. Position requests can select a primitive explicitly, and the shipped authoring guides and native operation cases are expanded. See the [knowledge guide](packages/kb/README.md) and [database guide](packages/db/README.md) for the APIs and their limits.
+>
+> **IA 3.2** lets a host make every durable session write pass its own admission check, so authority revoked mid-run refuses the write. Registry and archive downloads accept only credential-free HTTPS URLs, and the vocabulary, the shipped guides and `ia doctor` correct several descriptions and repairs. Native archives are now versioned by content within a major: this release moves them to 3.1.2.
+>
+> **IA 3.1** turns a Claude Code, Codex or Grok plugin into a kit workspace (`ia init --from`) and renders the workspace back into the plugin (`ia project --product plugin`), with a check that the round trip is exact. [`@inventarch/compliance`](packages/compliance/README.md) can now produce its own kernel and fixture conformance evidence, on request.
+>
+> **IA 3.0** added a governed write path (`ia preview`, then `ia author`), commands checked against the acting participant's mandates, check bindings whose passes and failures `ia validate` records as evidence, host agents, skills and hook guards generated from authored records, registry kits, source-only workspace adoption (`ia adopt`) and the local `ia-runner`.
 
 > [!IMPORTANT]
 > **Upgrading from 2.x.** `ia compile` is removed; use `ia capture`. `ia read`, `next`, `validate`, `preview`, `author`, `capture`, `project` and a workspace `host --apply` now refuse when the acting participant's mandates do not grant the move, and a `@mandate` that fails admission, including one stating `authority.moves []`, closes all of them. `ia validate` can write evidence under `.ia/work/evidence/`, so a CI job needs a writable `.ia/work`. The first applied `init`, `install` or `update` moves the workspace lock to a distribution engine the 2.x CLI cannot read, so commit or back up `.ia/` first. Read the [3.0.0 changelog](CHANGELOG.md#300) before upgrading.
@@ -206,7 +212,7 @@ Host registration is optional. Preview it, then rerun the same command with `--a
 | **Claude Code** | `ia host claude` registers the MCP server and writes the position packet (`.claude/rules/ia-workspace.md`), the `ia-authoring` skill, and the agents, skills and edit guards generated from your authored `@agent-profile`, playbook and `@hook` records. |
 | **Codex** | `ia host codex` registers the MCP server in `.codex/config.toml` and writes the position packet (`AGENTS.md`), the `ia-authoring` skill and skills generated from authored records. It reports generated agents and hooks as unsupported. |
 | **Packet files only** | `ia project claude` or `ia project codex` writes the position packet and skill without registering an MCP server. |
-| **Any MCP client** | `ia-mcp-door --root .`, from [`@inventarch/mcp-door`](apps/mcp-door/README.md), serves twelve read-only tools over stdio, including `ia_position`, `ia_next` and `ia_read`. |
+| **Any MCP client** | `ia-mcp-door --root .`, from [`@inventarch/mcp-door`](apps/mcp-door/README.md), serves seventeen read-only tools over stdio, including `ia_position`, `ia_next` and `ia_read`. |
 
 Every plan lists the files it will create, update or retire. `ia host` treats the files it writes as machine-local; do not commit them. `ia doctor` compares the installed projection with a fresh render, so an edited record shows up as an outdated projection.
 
@@ -241,10 +247,10 @@ The extension analyzes files locally, without an account or hosted service. See 
 | **Word and system** | The public vocabulary has 44 words. Eleven systems own 28 domain words; the language floor defines the other 16, `@system`, `@schema` and fourteen taxonomy words such as `@kind` and `@phase`. Each system names a steward accountable for its words, schemas and permitted relationships. |
 | **Workspace** | A `@workspace` composes systems and declares its authored sources. It grants no account or filesystem permission and need not define vocabulary of its own. |
 | **Participant and mandate** | An `@agent` acts under the `@mandate` records that govern it: its moves, the workspaces they apply in, and optional excluded words, covered paths and execution limits. IA's mandate-checked commands and the generated edit guard apply them as cooperative restrictions. They are not authentication or a sandbox: anyone who can edit `.ia/src` can change them. |
-| **Position** | `ia position` returns the body for a scope key of seat, shape, phase, depth, budget and word. The body is a pure function of the key and the admitted records, with a digest, so two agents asking the same question read the same context. |
+| **Position** | `ia position` returns the body for a scope key of seat, shape, phase, depth, budget and word, with optional explicit primitive selection. The body is a pure function of the key and the admitted records, with a digest, so two agents asking the same question read the same context. |
 | **Projection** | `ia project` and `ia host` render the position packet, the `ia-authoring` skill and the agents and skills generated from authored records, with a receipt that `ia doctor` checks. Only `ia host` registers the MCP server and the hook groups. |
 | **Evidence** | `ia validate` binds each `@check` to its evaluator, built in or from the installed catalog, and records the ones that passed or failed as `@observation` evidence under `.ia/work/evidence/`. Evidence never changes the authored revision. |
-| **Distribution and kit** | `ia pack` builds digest-named archives with pinned closures; `ia install` resolves and installs them, including kits that group several requests. `ia adopt` mounts a pinned, source-only workspace from a registry directory or URL you name with `--registry` or configure. |
+| **Distribution and kit** | `ia pack` builds digest-named archives with pinned closures; `ia install` resolves and installs them, including kits that group several requests. `ia adopt` mounts a pinned, source-only workspace from a registry directory or URL you name with `--registry` or configure. `ia init --from` turns an existing Claude Code, Codex or Grok plugin into a kit workspace, and `ia project --product plugin` renders it back. |
 | **Runner** | `ia-runner`, from [`@inventarch/runner`](apps/runner/README.md), runs one admitted agent profile with bounded local execution and a durable journal. It selects no model provider and creates no credentials. |
 
 ---
@@ -280,7 +286,7 @@ IA keeps declared, checked, executed and authorized apart. Read each result for 
 
 ## 🔓 Open by design
 
-Every IA component is in this repository: the language and its kernel, the vocabulary and canonical schemas, authoring and validation, workspace composition, distribution packing and installation, a generic local runtime and runner, neutral host adapters for Claude Code and Codex, an MCP server and a VS Code extension. Its 23 npm packages and the extension are all licensed under Apache-2.0.
+Every IA component is in this repository: the language and its kernel, the vocabulary and canonical schemas, authoring and validation, workspace composition, distribution packing and installation, a generic local runtime and runner, neutral host adapters for Claude Code and Codex, an MCP server and a VS Code extension. Its 24 npm packages and the extension are all licensed under Apache-2.0.
 
 IA is method-neutral. It defines what records mean, how they compose and what a result does and does not establish. It ships no curated design method, expert agent team or quality rubric. You write those yourself, as words, playbooks, contracts, checks and agent profiles in your own systems, then package them as distributions or kits that can be public or private. IA handles them the same way either way.
 
@@ -294,7 +300,7 @@ IA is method-neutral. It defines what records mean, how they compose and what a 
 | `apps/` | CLI, MCP server, runner, edit-guard hook, distribution tooling and VS Code extension | [Apps](#%EF%B8%8F-apps) |
 | `.ia/src/floor/` | The closed language kernel: domains, predicate pairs and routing vocabulary | [Kernel README](.ia/src/floor/README.md) · [contract](.ia/src/floor/SPEC.md) |
 | `.ia/src/systems/` | The eleven public vocabulary owners, their canonical schemas and system implementations | [Native systems](#-native-systems) |
-| `docs/` | Language reference, vocabulary catalogue, architecture reference and implemented specifications | [Documentation map](#-documentation-map) |
+| `docs/` | Language reference, vocabulary catalogue, architecture and package references, and implemented specifications | [Documentation map](#-documentation-map) |
 | `examples/` | Authoring examples and executable conformance fixtures | [Public-language examples](examples/public-language/README.md) |
 | `distributions/` | The optional product-structure distribution | [Distribution README](distributions/product-structure/README.md) |
 | `releases/`, `tools/` | Release inputs, and the build, generation, documentation and qualification tools | [Release process](releases/README.md) · [repository contract](SPEC.md) |
@@ -307,6 +313,7 @@ IA is method-neutral. It defines what records mean, how they compose and what a 
 | [`@inventarch/graph`](packages/graph/SPEC.md) | Typed graph, identity resolution, queries, revisions and the canonical digest codec |
 | [`@inventarch/compliance`](packages/compliance/SPEC.md) | Schema checks, contract assessment with supplied evaluators, and explicit refusals |
 | [`@inventarch/db`](packages/db/SPEC.md) | Workspace readers, scoped views, cache, preview, adoption, check bindings and evidence |
+| [`@inventarch/kb`](packages/kb/SPEC.md) | Selected knowledge packages, bounded record and document reads, search, relationships and citations |
 | [`@inventarch/runtime`](packages/runtime/SPEC.md) | Position and delivery views, mandate resolution, host packets and the Door machine protocol |
 | [`@inventarch/workspace-runtime`](packages/workspace-runtime/SPEC.md) | Capture, adoption, teaching resources, lifecycle, templates, publication, operation binding and host-artifact generation |
 | [`@inventarch/service-contracts`](packages/service-contracts/SPEC.md) | Browser-safe service wire contracts and structural validation |
@@ -346,13 +353,16 @@ The [language floor](.ia/src/floor/README.md) supplies the kernel. These systems
 | --- | --- |
 | **Authoring and checking** | `init`, `preview`, `author`, `validate`, `capture`, `format` |
 | **Reading and navigating** | `position`, `next`, `read`, `inspect`, `vocabulary` |
+| **Knowledge** | `kb check`, `kb search`, `kb read`, `kb resolve`, `kb traverse`, `kb pack` |
 | **Hosts** | `project`, `host`, `doctor` |
 | **Distributions** | `pack`, `install`, `adopt`, `update`, `remove`, `restore`, `recover` |
 | **Machine protocol** | `scope`, `context`, `select`, `get`, `records`, `resolve`, `search`, `traverse`, `report`: frozen, JSON in through `--params`, one JSON line out |
 
 `init`, `install`, `adopt`, `update`, `remove`, `project` and `host` show a plan and act only with `--apply`, plus `--yes` without a terminal; `restore` also needs `--apply` but has no preview yet. The other commands that write say so in their flags: `ia author` writes after checking `--digest`, `ia capture` writes its snapshot unless given `--preview`, `ia format --write` rewrites files, `ia pack` writes an archive, `ia recover` repairs an interrupted transaction, and `ia validate` can record check evidence under `.ia/work/evidence/`.
 
-`--json` returns one structured value, and every consumer-command refusal names the one command to run next. `read`, `next`, `validate`, `preview`, `author`, `capture`, `project` and a workspace `host --apply` (not `--remove` or `--user`) are checked against the acting participant's mandates; `--actor <agent>` names which authored participant is acting. `ia --help` and `ia <command> --help` give the full syntax, and the [CLI guide](apps/cli/README.md) and [consumer CLI contract](docs/specs/consumer-cli-contract/README.md) give the detail.
+`ia init <directory> --from <plugin-directory>` lowers a host plugin into a kit workspace, and `ia project <claude|codex> --product plugin` renders that kit back into a plugin (`--out`) or checks the round trip without writing (`--check`).
+
+`--json` returns one structured value, and every consumer-command refusal names the one command to run next. `read`, `next`, `validate`, `preview`, `author`, `capture`, `project`, all `kb` subcommands and a workspace `host --apply` (not `--remove` or `--user`) are checked against the acting participant's mandates; `--actor <agent>` names which authored participant is acting. `ia --help` and `ia <command> --help` give the full syntax, and the [CLI guide](apps/cli/README.md) and [consumer CLI contract](docs/specs/consumer-cli-contract/README.md) give the detail.
 
 ---
 
@@ -362,9 +372,10 @@ The [language floor](.ia/src/floor/README.md) supplies the kernel. These systems
 | --- | --- |
 | **Language and identity** | [Language guide](docs/reference/language/README.md) · [language contract](docs/reference/language/SPEC.md) |
 | **Words, fields and relationships** | [Vocabulary catalogue](docs/reference/language/vocabulary.md) · [machine-readable catalogue](docs/reference/language/vocabulary.json) |
-| **Packages, ownership and enforcement** | [Architecture reference](docs/reference/architecture/README.md) |
+| **Packages, ownership and enforcement** | [Architecture reference](docs/reference/architecture/README.md) · [package reference](docs/reference/packages/README.md) |
 | **Command and host behavior** | [Implemented specifications](docs/specs/README.md) · [CLI guide](apps/cli/README.md) · [MCP server](apps/mcp-door/README.md) · [runner](apps/runner/README.md) · [VS Code extension](apps/vscode/README.md) |
 | **Worked examples** | [Public-language examples](examples/public-language/README.md) · [conformance fixtures](examples/conformance/SPEC.md) |
+| **Reusable knowledge** | [Knowledge guide](packages/kb/README.md) · [worked knowledge example](examples/knowledge/README.md) |
 | **Changing this repository** | [Contributing guide](CONTRIBUTING.md) · [repository contract](SPEC.md) and the nearest package or system `SPEC.md` |
 | **Releases** | [Latest release](https://github.com/inventarch/ia/releases/latest) · [changelog](CHANGELOG.md) · [release process](releases/README.md) · [CI results](https://github.com/inventarch/ia/actions/workflows/platform-quality.yml) |
 | **Help and security** | [Support](SUPPORT.md) · [security policy](SECURITY.md) · [code of conduct](CODE_OF_CONDUCT.md) |

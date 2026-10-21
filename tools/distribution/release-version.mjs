@@ -1,14 +1,21 @@
+import { gitText } from '../shared/git.mjs';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseArgs } from 'node:util';
+import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { isEntry } from '../entry/is-entry.mjs';
 import { PUBLIC_INPUTS, publicPackageInputs, refreshPublicPackageInputs } from '../release/public-pack.mjs';
 import { REGISTRY } from './npm-release.mjs';
 import {
+  nativeMajorAlignment,
+  nativeNotesPending,
+  prepareNativeSelection,
+  releaseNativeVersions,
+  selectedNativeVersions,
+} from '../release/native-selectors.mjs';
+import {
   RELEASE_POLICY,
-  SYSTEM_PACKAGE_POLICY,
+  changeApplies,
   baselineVersion,
   changesetPath,
   collectChanges,
@@ -28,12 +35,41 @@ import { publicPackages } from './release-packages.mjs';
 export const EDITOR_MANIFEST = 'apps/vscode/package.json';
 export const EDITOR_NOTICES = 'apps/vscode/THIRD_PARTY_NOTICES.txt';
 const json = (root, path) => JSON.parse(readFileSync(resolve(root, path), 'utf8'));
-const git = (root, ...args) =>
-  execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 }).trim();
+const git = (root, ...args) => gitText(root, args);
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const sentence = (text) => text.trim().replace(/\.?$/, '.');
 const generatedSummary = (version, count, titles) =>
   `Coordinated ${version} release of the ${count} public npm packages: ${titles.map((t) => t.trim().replace(/\.$/, '')).join('; ')}.`;
+
+/** The cohort package summary the versioner generates: package-only, at a new major, or within a major. */
+const COHORT_SUMMARY = {
+  packages: 'Package version metadata aligned with the coordinated cohort.',
+  major:
+    'Package version metadata aligned with the coordinated cohort; any native artifact version aligns to the new major.',
+  content:
+    'Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content.',
+};
+/** Every cohort summary the versioner generates, including the one it used before natives versioned by content. */
+const GENERATED_COHORT_SUMMARIES = [
+  'Package and native artifact version metadata aligned with the coordinated cohort.',
+  ...Object.values(COHORT_SUMMARY),
+];
+/**
+ * Generated prose for version-only coverage. Package versions follow the coordinated release; native artifact versions
+ * align to a new major's x.0.0 and otherwise follow their own archive content, so the prose says which applies.
+ */
+function alignmentProse(version, published, natives) {
+  const kind = !natives ? 'packages' : nativeMajorAlignment(version, published) ? 'major' : 'content';
+  const clause = {
+    packages: '',
+    major: `, and every native artifact version aligns to ${version}`,
+    content: '; each native artifact version follows its own archive content',
+  }[kind];
+  return {
+    change: `Package version metadata follows the coordinated ${version} release${clause}.`,
+    cohort: COHORT_SUMMARY[kind],
+  };
+}
 
 /** Rewrite one top-level manifest version and prove nothing else changed. */
 function setManifestVersion(root, path, from, to) {
@@ -46,16 +82,6 @@ function setManifestVersion(root, path, from, to) {
     before = JSON.parse(text),
     after = JSON.parse(next);
   assert.deepEqual({ ...after, version: before.version }, before, `${path}: version rewrite changed other fields`);
-  writeFileSync(file, next);
-}
-function setPolicyVersions(root, from, to) {
-  const file = resolve(root, SYSTEM_PACKAGE_POLICY),
-    text = readFileSync(file, 'utf8'),
-    next = text.replaceAll(`"npmVersion": "${from}"`, `"npmVersion": "${to}"`),
-    before = JSON.parse(text),
-    after = JSON.parse(next);
-  for (const owner of before.owners) owner.npmVersion = to;
-  assert.deepEqual(after, before, `${SYSTEM_PACKAGE_POLICY}: every npmVersion must move from ${from} to ${to}`);
   writeFileSync(file, next);
 }
 function setNoticeVersions(root, names, from, to) {
@@ -143,7 +169,13 @@ export async function versionRelease(root, projects, options = {}) {
     if (!refresh) return none(`${policy.version} is prepared; pass --refresh to re-collect it`);
     try {
       releaseChanges(root, projects);
-      return none(`${policy.version} is prepared and current`);
+      const selectors = prepareNativeSelection(
+        root,
+        policy.version,
+        releaseNativeVersions(root, policy.baseline.version, policy.version),
+      );
+      if ([...selectors].every(([path, bytes]) => readFileSync(resolve(root, path), 'utf8') === bytes))
+        return none(`${policy.version} is prepared and current`);
     } catch {}
   }
   const baseline = published ? { commit: published, version: policy.version } : policy.baseline,
@@ -155,7 +187,23 @@ export async function versionRelease(root, projects, options = {}) {
   const bump = maxBump(bumps),
     version = bumpVersion(baseline.version, bump),
     action = published ? 'version' : notes.length ? 'amend' : 'refresh';
-  const plan = { action, state, previous: policy.version, version, bump, baseline, notes: notes.map(({ id }) => id) };
+  // Validate the complete native selector surface before any write, including explicit same-version refreshes. Native
+  // versions move here only for a new major; within one, `pnpm native:version --write` selects them by content.
+  const natives = releaseNativeVersions(root, baseline.version, version),
+    selectors = prepareNativeSelection(root, version, natives),
+    selectorWrites = [...selectors].filter(([path, bytes]) => readFileSync(resolve(root, path), 'utf8') !== bytes),
+    nativesMove = natives !== undefined && !isDeepStrictEqual(natives, selectedNativeVersions(root));
+  const plan = {
+    action,
+    state,
+    previous: policy.version,
+    version,
+    bump,
+    baseline,
+    notes: notes.map(({ id }) => id),
+    nativeRegenerationRequired:
+      selectors.size > 0 && (nativesMove || nativeNotesPending(root, baseline.version, baseline.commit)),
+  };
   if (!write) return plan;
 
   const kept = (existing?.changes ?? []).filter((change) => !GENERATED_CHANGES.includes(change.id)),
@@ -177,20 +225,15 @@ export async function versionRelease(root, projects, options = {}) {
     directories = new Map(projects.map((project) => [project.manifest.name, project.directory])),
     cohort = names.filter((name) => !named.has(name)),
     changes = [...authored];
-  if (cohort.length)
-    changes.push({
-      id: 'cohort-alignment',
-      title: 'Coordinated version alignment',
-      summary: `Packages without their own changes move to ${version} with the cohort; their contents are unchanged.`,
-      packages: cohort,
-      paths: cohort.map((name) => directories.get(name) + '/package.json'),
-    });
-  const claimed = (row) => changes.some((change) => change.paths.some((prefix) => row.path.startsWith(prefix)));
-  // Refuse before writing. Version bumps only add cohort-only manifest rows, which never need a note.
+  const applies = (entries, row) => {
+    const owner = packageOwner(projects, row.path);
+    return entries.some((change) => changeApplies(change, row) && (!owner || change.packages.includes(owner)));
+  };
+  // Authored scopes alone must cover semantic package changes before any generated alignment entries exist.
   const orphaned = new Map();
   for (const row of trackedChanges(root, { ...policy, version, baseline })) {
     const owner = packageOwner(projects, row.path);
-    if (owner && !row.cohortOnly && (!named.has(owner) || !claimed(row)))
+    if (owner && !row.cohortOnly && (!named.has(owner) || !applies(authored, row)))
       orphaned.set(owner, [...(orphaned.get(owner) ?? []), row.path]);
   }
   assert.equal(
@@ -200,12 +243,12 @@ export async function versionRelease(root, projects, options = {}) {
       [...orphaned].map(([name, paths]) => `  ${name}: ${paths.slice(0, 3).join(', ')}`).join('\n'),
   );
 
-  const touched = [RELEASE_POLICY],
+  const touched = [RELEASE_POLICY, ...selectorWrites.map(([path]) => path)],
     removed = notes.map(({ path }) => path),
     path = changesetPath(version);
   if (version !== policy.version) {
     touched.push(...projects.map((project) => project.directory + '/package.json'));
-    for (const optional of [EDITOR_MANIFEST, EDITOR_NOTICES, SYSTEM_PACKAGE_POLICY])
+    for (const optional of [EDITOR_MANIFEST, EDITOR_NOTICES])
       if (existsSync(resolve(root, optional))) touched.push(optional);
     if (existing) removed.push(changesetPath(policy.version));
   }
@@ -215,11 +258,26 @@ export async function versionRelease(root, projects, options = {}) {
         setManifestVersion(root, project.directory + '/package.json', policy.version, version);
       if (touched.includes(EDITOR_MANIFEST)) setManifestVersion(root, EDITOR_MANIFEST, policy.version, version);
       if (touched.includes(EDITOR_NOTICES)) setNoticeVersions(root, names, policy.version, version);
-      if (touched.includes(SYSTEM_PACKAGE_POLICY)) setPolicyVersions(root, policy.version, version);
     }
+    for (const [path, bytes] of selectorWrites) writeFileSync(resolve(root, path), bytes);
     if (removed.length) git(root, 'rm', '--quiet', '--', ...removed);
     writeFileSync(resolve(root, RELEASE_POLICY), JSON.stringify({ ...policy, version, baseline }, null, 2) + '\n');
-    const unclaimed = trackedChanges(root, { ...policy, version, baseline }).filter((row) => !claimed(row));
+    const rows = trackedChanges(root, { ...policy, version, baseline }),
+      prose = alignmentProse(version, baseline.version, selectors.size > 0);
+    const alignmentPaths = new Set(cohort.map((name) => directories.get(name) + '/package.json'));
+    for (const row of rows)
+      if (row.cohortOnly && packageOwner(projects, row.path) && !applies(authored, row)) alignmentPaths.add(row.path);
+    if (alignmentPaths.size) {
+      const paths = [...alignmentPaths].sort();
+      changes.push({
+        id: 'cohort-alignment',
+        title: 'Coordinated version alignment',
+        summary: prose.change,
+        packages: [...new Set(paths.map((path) => packageOwner(projects, path)))].sort(),
+        paths,
+      });
+    }
+    const unclaimed = rows.filter((row) => !applies(changes, row));
     if (unclaimed.length)
       changes.push({
         id: 'repository-maintenance',
@@ -235,10 +293,11 @@ export async function versionRelease(root, projects, options = {}) {
         const prior = existing?.packages[name],
           previous = baselineVersion(root, baseline, released, { name, directory: directories.get(name) });
         if (!named.has(name)) {
+          // A reviewed summary stays; a generated one is regenerated, since an amended release may cross a major.
           const summary =
-            prior?.kind === 'cohort'
+            prior?.kind === 'cohort' && !GENERATED_COHORT_SUMMARIES.includes(prior.summary)
               ? prior.summary
-              : 'No package changes; version aligned with the coordinated cohort.';
+              : prose.cohort;
           return [name, { previous, kind: 'cohort', summary }];
         }
         // Keep a reviewed summary and append new note titles; otherwise summarize every change naming the package.
@@ -293,6 +352,9 @@ const PR_BODY_MAX_BYTES = 60_000;
 
 export function pullRequestBody(root, result) {
   const notes = result.notes.length ? result.notes.map((id) => `\`${id}\``).join(', ') : 'none';
+  const nativeReview = result.nativeRegenerationRequired
+    ? '\nNative archive regeneration and qualification are still required. Run `pnpm vocabulary:generate`, `pnpm public:generate` and `pnpm authoring:generate`, then `pnpm native:version --write`. Repeat generation and native selection to a fixed point, regenerate projections. After all source/generated bytes are final, commit them and run `pnpm release:version --write --refresh`, which re-collects coverage, including the generated alignment of any native version the selection moved, and reseals the inputs; commit its changes, confirm `pnpm release:check --strict`, then qualify the final prepared head with `pnpm platform:qualify` and `pnpm npm:prepare`. On `release/next`, give both preparation commits the message line `IA-Release-Preparation: v1`; a later main push replaces that preparation, so regenerate and qualify again if main moves. Selector updates do not qualify archives or authorize publication.\n'
+    : '';
   const render = (prose, consumed) => `## Release ${result.version}
 
 ${prose}
@@ -308,7 +370,7 @@ ${prose}
 ### Review
 
 Check that the release prose matches the diff since the baseline. Edit the changeset prose on this branch if needed, then run \`pnpm release:collect\` and \`pnpm npm:inputs\`.
-
+${nativeReview}
 ### After merge
 
 Merging changes \`releases/current.json\` and the changeset. **Publish npm packages** then waits for Public quality on the merge commit, prepares and preflights the exact archives, and pauses for \`npm\` environment approval. After registry verification it tags \`${releaseTag(result.version)}\` and creates the GitHub release.

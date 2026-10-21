@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { publicOutputs } from './generate-public.mjs';
+import { authoringGuidanceFor } from './resources.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const GUIDE = 'LANGUAGE.md',
@@ -33,7 +34,8 @@ it('generates every shipped LANGUAGE.md as the one public-language guide and fin
   expect(systems).toHaveLength(11);
   // A package that starts shipping the guide joins LANGUAGE_GUIDE_COPIES, so no copy is kept by hand.
   expect(copies.sort()).toEqual(shippedCopies());
-  expect(copies).toHaveLength(13);
+  expect(copies).toHaveLength(14);
+  expect(copies).toContain('packages/kb/LANGUAGE.md');
   const guide = systems[0]![1];
   expect(guide).toMatch(/^# Public IA language\n/);
   for (const [path, bytes] of guides) {
@@ -63,4 +65,40 @@ it('escapes angle-bracket placeholders in every generated word reference', () =>
         .match(/(?<!\\)<[A-Za-z]/g),
       path,
     ).toBeNull();
+});
+
+it('helps authors distinguish neighboring roles in both native guides and installed references', () => {
+  const generated = publicOutputs(root).generated;
+  const records = String(generated.get(SYSTEMS + 'authoring-system/records/public-guides.ia'));
+  const selections = [...records.matchAll(/select-when "([^"]+)"/g)].map((match) => match[1]);
+  expect(selections).toHaveLength(44);
+  expect(new Set(selections).size).toBe(44);
+  expect(records).not.toContain('The intended record has a different semantic role.');
+  expect(records).not.toContain('Check required fields and references; declaration is not execution evidence.');
+  for (const [word, alternatives] of [
+    ['law', ['@principle', '@convention']],
+    ['check', ['@case', '@observation']],
+    ['case', ['@check', '@observation']],
+    ['task', ['@milestone', '@spec']],
+    ['template', ['@operation']],
+  ] as const) {
+    const reference = String(generated.get(SYSTEMS + `authoring-system/reference/${word}.md`));
+    expect(reference).toContain('Select when:');
+    expect(reference).toContain('Avoid when:');
+    expect(reference).toContain('Before authoring:');
+    for (const alternative of alternatives) expect(reference).toContain(alternative);
+  }
+});
+
+it('requires a deliberate guidance entry for newly registered words', () => {
+  expect(() => authoringGuidanceFor('unreviewed-word')).toThrow(/authoring guidance/i);
+});
+
+it('describes governance and authority-facet contracts in the authority lane', () => {
+  const advice = authoringGuidanceFor('lane').consider;
+  expect(advice).toContain('governance records and authority-facet contracts');
+  expect(advice).not.toContain('reserved for contracts');
+  const generated = publicOutputs(root).generated;
+  for (const path of ['records/public-guides.ia', 'reference/lane.md'])
+    expect(generated.get(SYSTEMS + 'authoring-system/' + path)).toContain(advice);
 });

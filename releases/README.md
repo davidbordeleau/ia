@@ -34,14 +34,14 @@ Consumed means allocated to a release. Publication to the registry is separate, 
 
 | Command | When | What it does |
 | --- | --- | --- |
-| `pnpm release:check` | CI, on every pull request and push | Refuses a changed public package without a note, an invalid note, mismatched cohort versions and a published changeset that differs from its tagged bytes |
+| `pnpm release:check` | CI, on every pull request and push | Refuses a changed public package without a note, an invalid note, mismatched cohort versions, a published changeset that differs from its tagged bytes and, while a release is prepared, native version metadata its coverage does not match, including a recorded path restored to baseline |
 | `pnpm release:check --strict` | Before preparing archives | Also refuses pending notes and incomplete or stale changed-file coverage |
 | `pnpm release:version` | Any time as a dry run; `--write` by the release workflow or a maintainer | Computes the next version and, with `--write`, applies it |
 | `pnpm release:collect` | After editing release prose by hand | Re-derives coverage and regenerates `CHANGELOG.md` |
-| `pnpm native:version` | When a native archive changes | Previews the native versions that archive content selects; `--write` applies them |
+| `pnpm native:version` | When the npm target or a native archive changes | Previews the native selection, aligned to the npm target at a new major and content-driven within one; `--write` applies it |
 | `pnpm native:release:check` | In `pnpm platform:qualify` and `pnpm npm:prepare` | Rebuilds every native archive and refuses a stale selection, changed bytes under a published version or a stale ledger |
 
-Native archive versions, for the language base and each native system, are independent of the npm version. `pnpm native:version --write` updates the system declarations, their public language copies, the native policy and `native/current.json`; it never publishes or changes npm versions. A change that alters a native archive's bytes needs its own entry in `native/notes.json` before the selection can be written. The native check reads its baseline from the latest `v<version>` tag reachable from `HEAD`, so fetch the release tags first.
+Native archive versions, for the language base and each native system, align with the npm target in `current.json` only at a new major, as every archive did at 3.0.0. Within a major they are content-driven: an archive whose bytes changed, directly or through a changed exact dependency, moves from its last published version by its own entry in `native/notes.json`, and every other archive keeps its published version and bytes. No native version passes the npm target, so a major-impact note needs a major npm release. Syntax, format, engine and protocol versions stay independent. `pnpm native:version --write` updates the system declarations, their public language copies, the native policies and `native/current.json`; it never publishes or changes npm versions. A change that alters a native archive's bytes needs its note before the selection can be written. The native check reads its baseline from the latest `v<version>` tag reachable from `HEAD`, so fetch the release tags first.
 
 ## What the checks do not establish
 
@@ -53,3 +53,5 @@ The tooling establishes completeness and freshness, not accuracy. A reviewer jud
 - [Release tooling contract](../tools/release/SPEC.md): coordinated and native versioning rules
 - [Contributing guide](../CONTRIBUTING.md#release-notes) and the [changelog](../CHANGELOG.md)
 - [Root README](../README.md)
+
+The maintained [publishing guide](../tools/distribution/NPM-PUBLISHING.md) owns the release sequence. [Setup](../tools/distribution/SETUP.md) covers account and repository readiness separately. Ordinary tooling validation does not authorize a new release seal, publication or a release-branch amendment.

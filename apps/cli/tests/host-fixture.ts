@@ -19,11 +19,14 @@ export const read = (root: string, path: string): string => readFileSync(resolve
 /**
  * A workspace named `demo` as a default `ia init --apply` leaves it: the three starter records in
  * `.ia/src/workspace.ia` (`@workspace demo`, its participant `@agent demo` and `@mandate demo-mandate`), no local
- * system, and its capture.
+ * system, and its capture. Each call makes a new IA home unless `home` names one: a test that makes many workspaces
+ * against the same payload passes the first one's, so the host payload is written once rather than on every pass.
  */
-export async function initialized(): Promise<{ root: string; env: { IA_HOST_HOME: string } }> {
+export async function initialized(home?: {
+  IA_HOST_HOME: string;
+}): Promise<{ root: string; env: { IA_HOST_HOME: string } }> {
   const root = resolve(scratch('host'), 'demo'),
-    env = { IA_HOST_HOME: scratch('host-home') };
+    env = home ?? { IA_HOST_HOME: scratch('host-home') };
   const result = await run(['init', root, '--apply', '--yes', '--json']);
   expect(result.exitCode, result.stdout).toBe(0);
   return { root, env };
@@ -49,8 +52,8 @@ export const doctor = async (root: string, env: Record<string, string>) => {
 };
 export const row = (checks: readonly Row[], id: string): Row | undefined => checks.find((check) => check.id === id);
 /**
- * Doctor's one projection row when it finds no drift (task ia-project-verb): every file the receipt lists is as
- * written and the records render the packet it names.
+ * Doctor's one projection row when it finds no drift: every file the receipt lists is as written and the records
+ * render the packet it names.
  */
 export const noDrift = (name = 'claude') =>
   expect.objectContaining({ id: `projection-${name}`, status: 'ok', detail: expect.stringContaining('No drift: ') });
@@ -72,7 +75,7 @@ export const LEGACY_FILES: Readonly<Record<string, string>> = {
   [STEWARD]: `---\nname: demo-steward\ndescription: "Use for authoring, reviewing or repairing records owned by demo."\n---\n\n${LEGACY_MARKER}\n\nSource revision: 1.x\n\n# demo-steward\n\nOwns the demo system and its records.\n`,
 };
 /**
- * A workspace as a 1.x `ia host claude --apply` left it (milestone position-packet's upgrade fixture): the steward
+ * A workspace as a 1.x `ia host claude --apply` left it (the upgrade fixture): the steward
  * guard registered by apps/distribution's own guard registration against the materialized payload — its group in
  * `.claude/settings.local.json` and `claude-guard-workspace.json` — and a projection state owning the 1.x rules file,
  * skill and `demo-steward.md`, each written with the 1.x marker. The payload is the one `ia host` materializes.

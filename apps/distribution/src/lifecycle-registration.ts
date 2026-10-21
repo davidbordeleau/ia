@@ -108,8 +108,8 @@ function identityMismatch(row: Record<string, unknown>, profile: LifecycleProfil
 }
 /**
  * Probe a verified emitted artifact for the binding's own profile row. A caller-supplied digest string is never accepted
- * as executable evidence. Review finding B-RC4: only the verified cache's launcher is read, so a 2.0.0 caller's value of
- * the narrower verified-cache shape still type-checks.
+ * as executable evidence. Only the verified cache's launcher is read, so a 2.0.0 caller's value of the narrower
+ * verified-cache shape still type-checks.
  */
 export function probeContextHookImplementation(
   cache: Pick<ReturnType<typeof verifyHostCache>, 'launcher'>,
@@ -197,7 +197,7 @@ function saved(content: string | null, root: string, id: string): State | null {
     )
       fail('INPUT-INVALID', 'Invalid owned hook timeout');
     // The recorded Node is kept as written, as the guard's is, so a registration made under another Node (or before the Homebrew
-    // `opt` link was recorded) is still owned and re-applying rewrites it; it must still be an absolute path (#323).
+    // `opt` link was recorded) is still owned and re-applying rewrites it; it must still be an absolute path.
     const command = handler['command'];
     if (
       typeof command !== 'string' ||
@@ -310,7 +310,7 @@ export function planLifecycleRegistration(
     const projectHooks = project['hooks'] === undefined ? {} : plain(project['hooks']);
     if (projectHooks[event] !== undefined && collision(projectHooks[event], target))
       fail('LOCAL-MODIFICATION', 'Context binding already appears in project settings');
-    // In place (spec §5.1): replace or append the owned group, or remove it by index; every other byte is kept.
+    // In place: replace or append the owned group, or remove it by index; every other byte is kept.
     edited = editJson(edited, ['hooks', event, prior ? matching[0]! : -1], owned ? owned[event] : undefined, existing);
   }
   const nextConfig = prior?.created && emptyJson(edited!) ? null : edited;

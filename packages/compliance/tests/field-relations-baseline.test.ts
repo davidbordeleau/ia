@@ -4,7 +4,7 @@ import { load } from '@inventarch/graph';
 import { validateConsent } from '../src/index.js';
 import { inputs, records, registry } from './native.js';
 
-// The @spec composition-field-relations baseline guard (§4.1), consent half. It
+// The @spec composition-field-relations baseline guard, consent half. It
 // pins COMP-CONSENT to the exact diagnostic list it reads, so a second relation
 // channel cannot add or drop a finding without failing here by name rather than
 // by count. The graph half of the guard lives in packages/graph/tests.

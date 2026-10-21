@@ -224,7 +224,7 @@ async function resolveWithPins(
     ...(request.named ?? requests.map((r) => r.id)),
     ...(request.preferredExcept === undefined ? [] : [request.preferredExcept]),
   ]);
-  // §5.1: the closure follows only releases selection could pick for some known constraint: not withdrawn, admitted by the
+  // §5.2: the closure follows only releases selection could pick for some known constraint: not withdrawn, admitted by the
   // engine, and inside a range a request or a followed release places on the id. A locked version counts as known, so the
   // pin stays selectable and preferred. Licensed releases are followed too, so a licensed-only need can be named (§7).
   const known = new Map<string, { readonly ranges: Set<string>; readonly pinned: Set<string> }>(),

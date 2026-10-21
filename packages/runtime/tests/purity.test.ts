@@ -8,17 +8,19 @@ import { K0, context, normalizeScopeKey, position, positionBody, resolveScopeKey
 import type { PositionBody, PositionOutput, ScopeKey } from '../src/index.js';
 import { database, law, lawId, lawPath, put, workspace } from './workspace.js';
 
-// R16 (position-and-projection §1 and item 11; plan amendment A9): position(handle, within, partial) returns body(K),
+// R16: position(handle, within, partial) returns body(K),
 // its digest and the host note. The body is a function of the key and the admitted revision alone: no root, token,
-// request text or capture enters it, and no record at runtime placement (band 0) does (decision evidence-placement),
-// nor does a runtime-band source move its revision, the authored one (plan amendment C13), though admission's findings
-// still read every placement (R15, R16: the limits pinned below).
+// request text or capture enters it, and no record at runtime placement (band 0) does, nor does a runtime-band source
+// move its revision, the authored one, though admission's findings still read every placement (R15, R16: the limits
+// pinned below).
 const governanceSystem = 'floor/definition/system/governance-system',
   foundation = 'workspace-system/definition/workspace/foundation-workspace',
   check = 'compliance-system/check/gate/instance-schema-check',
   records = '.ia/src/systems/governance-system/records';
 const KEYS: Readonly<Record<string, Partial<ScopeKey>>> = {
   k0: {},
+  memory: { primitive: 'Memory' },
+  escalation: { shape: 'governance', primitive: 'Escalation' },
   'governance-at-law': { seat: lawId, shape: 'governance' },
   'sequence-depth-2': { shape: 'sequence', depth: 2 },
   'word-law': { seat: governanceSystem, shape: 'governance', word: 'law' },
@@ -153,8 +155,8 @@ it('moves only the host note when a capture is written, and names no capture rev
 });
 
 it('keeps a capture current across a runtime-band source, and stale after an authored edit', () => {
-  // Plan amendment C13: the note compares the capture's authored revision with the handle's, so evidence appearing at
-  // runtime placement neither stales the capture nor moves a revision the note names, while the handle's revision moves.
+  // The note compares the capture's authored revision with the handle's, so evidence appearing at runtime placement
+  // neither stales the capture nor moves a revision the note names, while the handle's revision moves.
   const root = workspace(),
     evidenceFile = '.ia/src/systems/learning-system/records/runtime-evidence.ia',
     db = database(root, { locations: { [evidenceFile]: RUNTIME } }),
@@ -303,7 +305,7 @@ it("leaves records at runtime placement out of every body, its revision and dige
       control = at(authored, partial);
     expect(text({ ...control.body, revision: before.body.revision }), name).not.toBe(text(before.body));
     // Placed at runtime, the body is byte-equal, and so is its digest: its revision is the authored revision, which
-    // leaves runtime-placed sources out (graph authoredRevisionOf; decision evidence-placement).
+    // leaves runtime-placed sources out (graph authoredRevisionOf).
     expect(text(after.body), name).toBe(text(before.body));
     expect(after.digest, name).toBe(before.digest);
     expect(after.body.revision, name).toBe(placed.authoredRevision);
@@ -393,7 +395,7 @@ it('reads admission over every placement: a runtime-band record an authored refe
   // an authored law's `enforced-by` names, and a runtime-band observation that a task's `work.exit-evidence` names (the
   // evidence flow an `ia validate` will write), resolve them. Each record's missing-target or missing-field-reference
   // finding leaves its body, and the row to the runtime-band record is dropped, so the body names the relation nowhere.
-  // The revision the body names leaves runtime-band sources out (the authored revision, plan amendment C13); an
+  // The revision the body names leaves runtime-band sources out (the authored revision); an
   // admission view without them for the findings is not built.
   const needsFile = `${records}/needs-check.ia`,
     workFile = '.ia/src/systems/work-system/records/fixture-work.ia',

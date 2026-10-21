@@ -1,7 +1,7 @@
 /**
- * Plan amendment C21 (milestone generation-binding task check-runner-join-validate): structural `@check` admission is
- * the validate path's alone. The nine frozen machine routes and `ia scope` keep strict admission, under which a check
- * naming an evaluator that is not built in is IA-COMP-CHECK-UNKNOWN and is not admitted, as every released reader has it.
+ * Structural `@check` admission is the validate path's alone. The nine frozen machine routes and `ia scope` keep strict
+ * admission, under which a check naming an evaluator that is not built in is IA-COMP-CHECK-UNKNOWN and is not
+ * admitted, as every released reader has it.
  * Each route is answered over an unknown-runner fixture by the CLI's machine route, by a door opened with strict
  * admission named explicitly, and by one opened structurally: the first two agree byte for byte, and the structural one
  * differs, which proves the fixture tells the two admissions apart.
@@ -59,7 +59,7 @@ const served = (root: string, options: Partial<DoorOptions>) =>
     }
   });
 
-it('answers the nine machine routes and ia scope over an unknown evaluator as strict admission does (C21)', () => {
+it('answers the nine machine routes and ia scope over an unknown evaluator as strict admission does', () => {
   const root = workspace();
   writeFileSync(resolve(root, '.ia/src/systems/compliance-system/checks/typing-check.ia'), UNKNOWN);
   expect(REQUESTS.map(([operation]) => operation)).toEqual([...LEGACY_OPERATIONS]);

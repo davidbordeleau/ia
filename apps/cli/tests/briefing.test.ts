@@ -153,6 +153,27 @@ it('stale: the model is told the reasons doctor found', () => {
     'Host Claude: stale — stale (release): registered for release 000000000000. Run ia host claude --apply.',
   );
 });
+it('a hook group changed or deleted by hand names its removal first, since an apply alone refuses it', () => {
+  const detail = 'the hook group for h in .claude/settings.local.json changed since it was registered';
+  const { session, nextActions } = brief({
+    ...base,
+    root: '/w',
+    records: 'x',
+    hostStatus: 'stale',
+    hostDetail: detail,
+    removeFirst: true,
+  });
+  expect(session.notice).toBe(
+    'IA: a Claude hook group for this workspace was changed or deleted by hand; run ia host claude --remove --apply, then ia host claude --apply',
+  );
+  expect(session.context).toContain(
+    `Host Claude: stale — ${detail}. Run ia host claude --remove --apply, then ia host claude --apply.`,
+  );
+  expect(nextActions).toEqual([
+    { intent: 'host', argv: ['ia', 'host', 'claude', '--remove', '--apply'], host: 'ia host claude --remove --apply' },
+    { intent: 'host', argv: ['ia', 'host', 'claude', '--apply'], host: 'ia host claude --apply' },
+  ]);
+});
 it('an interrupted installation names recovery, never ia host', () => {
   const recover = 'ia-distribution recover --root /w';
   const { session, nextActions } = brief({

@@ -37,7 +37,7 @@ it('retains captured bytes after filesystem changes without reading a caller-sel
 });
 
 it('refuses to pack a release descriptor that names no distribution', () => {
-  // db decodes such a descriptor (position-packet plan amendment B7); it releases nothing, so the packer refuses it.
+  // db decodes such a descriptor; it releases nothing, so the packer refuses it.
   const snapshot = distributionSnapshot(sourceInput(fixture.input)),
     { distribution: _distribution, ...unnamed } = descriptor;
   expect(() => packSnapshot(snapshot, unnamed, new Map([['LICENSE', fixture.license]]))).toThrow(

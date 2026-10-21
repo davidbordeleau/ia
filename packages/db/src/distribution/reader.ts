@@ -1,6 +1,7 @@
-import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import { join, parse, resolve } from 'node:path';
 import type { RevisionSource } from '@inventarch/graph';
+import { lstatNamed, readOpened } from '../named.js';
 import {
   canonicalDistributionJson,
   DISTRIBUTION_LIMITS,
@@ -68,20 +69,44 @@ function safe(root: string, path: string): string {
   }
   return absolute;
 }
+/**
+ * The bytes of the installed file at `path`, or null when there is none. It must be a regular file with one link and at
+ * most `max` bytes. It is opened before it is judged, so the judgment and the bytes are of one file (CodeQL
+ * js/file-system-race), and it must still be that file, at that name and size, after the read.
+ */
 function read(root: string, path: string, max: number = DISTRIBUTION_LIMITS.metadata): Buffer | null {
-  const target = safe(root, path);
-  let stat;
-  try {
-    stat = lstatSync(target);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
-  }
-  if (!stat.isFile() || stat.nlink !== 1 || stat.size > max)
-    corrupt(`Expected bounded unaliased regular file: ${path}`);
-  const bytes = readFileSync(target);
-  if (bytes.length > max) corrupt('Installed file grew beyond limit');
-  return bytes;
+  const target = safe(root, path),
+    unaliased = (): never => corrupt(`Expected bounded unaliased regular file: ${path}`);
+  return readOpened(target, {
+    unopened: (error) => {
+      if (error.code === 'ENOENT') return null;
+      // A link the open refused, a socket, or anything else whose open fails is judged by its name: refuse it as an
+      // opened one is refused.
+      const named = lstatSync(target, { bigint: true });
+      if (!named.isFile() || named.nlink !== 1n || named.size > BigInt(max)) unaliased();
+      throw error;
+    },
+    opened: (opened) => {
+      if (!opened.isFile() || opened.nlink !== 1n || opened.size > BigInt(max)) unaliased();
+    },
+    grew: () => corrupt('Installed file grew beyond limit'),
+    read: ({ opened, bytes, after }) => {
+      // On Windows, which opens through a link, the name's identity is the only guard against a link placed after the
+      // path check. A name that names nothing now, a parent turned file included, no longer names the file.
+      const named = lstatNamed(target);
+      if (
+        BigInt(bytes.length) !== opened.size ||
+        after.size !== opened.size ||
+        after.nlink !== 1n ||
+        named?.isFile() !== true ||
+        named.nlink !== 1n ||
+        named.dev !== opened.dev ||
+        named.ino !== opened.ino
+      )
+        unaliased();
+      return bytes;
+    },
+  });
 }
 function utf8(bytes: Buffer): string {
   try {
@@ -293,6 +318,6 @@ export function readInstalledGeneration(root: string, candidate?: ActivationPoin
 /**
  * Files a platform writes into any directory it opens, which never belong to a payload: Finder's `.DS_Store`, and the
  * AppleDouble `._<name>` files macOS writes beside files on volumes without extended attributes (exFAT, SMB). A strict
- * inventory skips one only when it is not pinned; a pinned file of such a name is verified like any other (#323).
+ * inventory skips one only when it is not pinned; a pinned file of such a name is verified like any other.
  */
 export const platformDebris = (name: string): boolean => name === '.DS_Store' || name.startsWith('._');

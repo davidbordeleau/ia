@@ -34,7 +34,7 @@ Consumed means allocated to a release. Publication to the registry is separate, 
 
 | Command | When | What it does |
 | --- | --- | --- |
-| `pnpm release:check` | CI, on every pull request and push | Refuses a changed public package without a note, an invalid note, mismatched cohort versions, a published changeset that differs from its tagged bytes and, while a release is prepared, a version-only change its coverage does not name |
+| `pnpm release:check` | CI, on every pull request and push | Refuses a changed public package without a note, an invalid note, mismatched cohort versions, a published changeset that differs from its tagged bytes and, while a release is prepared, native version metadata its coverage does not match, including a recorded path restored to baseline |
 | `pnpm release:check --strict` | Before preparing archives | Also refuses pending notes and incomplete or stale changed-file coverage |
 | `pnpm release:version` | Any time as a dry run; `--write` by the release workflow or a maintainer | Computes the next version and, with `--write`, applies it |
 | `pnpm release:collect` | After editing release prose by hand | Re-derives coverage and regenerates `CHANGELOG.md` |

@@ -339,7 +339,7 @@ export function committedChanges(root) {
 /**
  * The pull-request check. It never asks a contributor to rewrite the consumed changeset: package changes outside
  * the prepared release must carry a pending note, and `pnpm release:version` folds notes into the next release.
- * While a release is prepared but untagged, it also refuses version-only files the changeset does not cover. Only
+ * While a release is prepared but untagged, it also refuses native version metadata the changeset does not cover. Only
  * the release branch refreshes the changeset; any other branch, refused here between the release merge and its tag,
  * waits for the tag.
  */
@@ -379,20 +379,27 @@ export function releaseStatus(root, projects) {
   );
   const noted = new Set(notes.flatMap(({ note }) => note.packages)),
     rows = trackedChanges(root, policy, published ?? policy.baseline.commit);
-  // Publication's strict check reads the release merge commit and refuses a version-only change it does not cover, so
+  // Publication's strict check reads the release merge commit and refuses native version metadata it does not cover, so
   // refuse that in the release pull request instead of after merge. Main stays prepared from the release merge until
   // the tag, so an ordinary branch, such as one whose `pnpm native:version --write` moved a native version, is refused
   // in that window too; once the tag exists, the native check refuses the same branch until its notes name that tag.
   if (!published) {
-    const uncovered = rows
-      .filter((row) => row.cohortOnly && !covered.has(row.path + '\0' + row.sha256))
-      .map((row) => row.path);
+    // Manifest byte changes can be formatting alone; npm versions are checked above. Native metadata has a
+    // separate version-only proof. Do not turn an ordinary semantic edit with a pending note into strict coverage.
+    const nativeOnly = (row) => row.cohortOnly && !row.path.endsWith('/package.json');
+    const actualPaths = new Set(rows.map((row) => row.path));
+    const uncovered = [
+      ...new Set([
+        ...rows.filter((row) => nativeOnly(row) && !covered.has(row.path + '\0' + row.sha256)).map((row) => row.path),
+        ...entry.coverage.filter((row) => nativeOnly(row) && !actualPaths.has(row.path)).map((row) => row.path),
+      ]),
+    ].sort();
     assert.ok(
       !uncovered.length,
-      `Prepared release ${policy.version} does not cover ${uncovered.length} version-only file(s): ` +
+      `Prepared release ${policy.version} does not cover ${uncovered.length} native version file(s): ` +
         `${uncovered.slice(0, 3).join(', ')}${uncovered.length > 3 ? ` and ${uncovered.length - 3} more` : ''}. ` +
         'On the release branch, run pnpm release:version --write --refresh. ' +
-        `On any other branch, wait for ${releaseTag(policy.version)} to be tagged, then update from main.`,
+        `On any other branch, wait for ${releaseTag(policy.version)} to be tagged, then update from main, retarget native notes to that tag, and regenerate native selections.`,
     );
   }
   const outside = rows.filter((row) => !row.cohortOnly && !covered.has(row.path + '\0' + row.sha256));

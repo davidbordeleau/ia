@@ -93,7 +93,7 @@ jobs:
       - name: Check dependency advisories
         run: pnpm audit --audit-level=moderate
       # Cohort versions, the published changeset's integrity, a pending release note for every changed package and, while
-      # a release is prepared, coverage of its version-only changes. Other exact file coverage is checked only where a
+      # a release is prepared, coverage of its native version changes. Other exact file coverage is checked only where a
       # publication is prepared (pnpm release:check --strict).
       - name: Validate cohort versions and pending release notes
         run: pnpm release:check

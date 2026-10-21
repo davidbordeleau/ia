@@ -842,11 +842,8 @@ describe('native release writer', () => {
     expect(nativeRelease(root, 'check').archives).toEqual(result.archives);
   }, 120_000);
 
-  it.each([
-    ['3.0.0', '3.1.0'],
-    ['3.1.0', '3.2.0'],
-    ['3.14.0', '3.15.0'],
-  ])(
+  // Planner cases cover the smaller within-major boundaries; one real pack pins retained bytes.
+  it.each([['3.14.0', '3.15.0']])(
     'keeps unchanged 3.0.0 archives and their published bytes when npm %s advances only to %s',
     (tag, target) => {
       const { root, retained, published } = realNativeReleaseFixture({ tag });
@@ -1036,10 +1033,10 @@ describe('native release writer', () => {
     expect(refusal(() => releaseStatus(root, projects()))).toEqual({
       code: 'ERR_ASSERTION',
       message:
-        'Prepared release 3.2.0 does not cover 13 version-only file(s): ' +
+        'Prepared release 3.2.0 does not cover 13 native version file(s): ' +
         '.ia/src/systems/agent-composition-system/system.ia, .ia/src/systems/authoring-system/system.ia, ' +
         '.ia/src/systems/hook-authoring-system/system.ia and 10 more. On the release branch, run pnpm ' +
-        'release:version --write --refresh. On any other branch, wait for v3.2.0 to be tagged, then update from main.',
+        'release:version --write --refresh. On any other branch, wait for v3.2.0 to be tagged, then update from main, retarget native notes to that tag, and regenerate native selections.',
     });
     expect(() => releaseChanges(root, projects())).toThrow(
       expect.objectContaining({

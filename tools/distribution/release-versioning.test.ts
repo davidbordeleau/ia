@@ -1214,10 +1214,10 @@ it('refuses a prepared release whose coverage misses a version-only change, befo
     select('3.0.1', natives('3.0.1', '3.0.1'));
     await commit('Select a session-system native version after preparing');
     const message =
-      'Prepared release 3.0.1 does not cover 3 version-only file(s): .ia/src/systems/session-system/system.ia, ' +
+      'Prepared release 3.0.1 does not cover 3 native version file(s): .ia/src/systems/session-system/system.ia, ' +
       'examples/public-language/contracts/session-system.ia, tools/distribution/system-package-policy.json. ' +
       'On the release branch, run pnpm release:version --write --refresh. ' +
-      'On any other branch, wait for v3.0.1 to be tagged, then update from main.';
+      'On any other branch, wait for v3.0.1 to be tagged, then update from main, retarget native notes to that tag, and regenerate native selections.';
     expect(() => releaseStatus(root, projects())).toThrow(refusal(message));
     expect(() => releaseChanges(root, projects())).toThrow(/^Changeset coverage is missing or stale for 3 file/);
     expect(
@@ -1226,6 +1226,88 @@ it('refuses a prepared release whose coverage misses a version-only change, befo
     await commit('Refresh 3.0.1');
     expect(releaseStatus(root, projects())).toMatchObject({ state: 'prepared', pendingNotes: [] });
     expect(() => releaseChanges(root, projects())).not.toThrow();
+  });
+}, 120_000);
+
+it('refuses recorded native coverage restored to baseline and accepts its refresh', async () => {
+  await withAlignedRelease(async ({ root, write, read, commit, projects, note }) => {
+    const path = 'examples/public-language/versions.json';
+    const fixture = 'apps/cli/tests/fixtures/composition-workspace/.ia/release.json';
+    const baseline = readFileSync(resolve(root, path), 'utf8');
+    const baselineFixture = readFileSync(resolve(root, fixture), 'utf8');
+    write(path, { ...read(path), language: '3.0.1' });
+    await commit('Select a newer language archive');
+    await note();
+    const prepared = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    await commit('Prepare release with native coverage');
+    expect(read(prepared.changeset!).coverage.find((row: { path: string }) => row.path === path)).toMatchObject({
+      cohortOnly: true,
+    });
+    write(path, baseline);
+    write(fixture, baselineFixture);
+    await commit('Restore language selection to its baseline');
+    expect(trackedChanges(root, read('releases/current.json')).some((row: { path: string }) => row.path === path)).toBe(
+      false,
+    );
+    expect(() => releaseStatus(root, projects())).toThrow(
+      /Prepared release 3.0.1.*examples\/public-language\/versions.json/,
+    );
+    expect(() => releaseChanges(root, projects())).toThrow(/coverage is missing or stale/);
+    await versionRelease(root, projects(), { write: true, registry: null, refresh: true, sealInputs: false });
+    await commit('Refresh restored native coverage');
+    expect(releaseStatus(root, projects())).toMatchObject({ state: 'prepared' });
+    expect(() => releaseChanges(root, projects())).not.toThrow();
+  });
+}, 120_000);
+
+it.each(['public key order', 'private version', 'private formatting'])(
+  'keeps %s outside the native coverage guard after preparation',
+  async (change) => {
+    await withAlignedRelease(async ({ root, write, read, commit, projects, note }) => {
+      await note();
+      await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+      await commit('Prepare release');
+      const path =
+        change === 'public key order'
+          ? 'apps/cli/package.json'
+          : nativeOwner('agent-system') + '/system.ia-extra/package.json';
+      const before = read(path);
+      write(
+        path,
+        change === 'private version'
+          ? { ...before, version: '9.0.0' }
+          : JSON.stringify(Object.fromEntries(Object.entries(before).reverse())) + '\n',
+      );
+      await commit('Change manifest without native selection');
+      expect(
+        trackedChanges(root, read('releases/current.json')).find((row: { path: string }) => row.path === path),
+      ).toMatchObject({ cohortOnly: true });
+      expect(releaseStatus(root, projects())).toMatchObject({ state: 'prepared', pendingNotes: [] });
+      // Publication still requires exact bytes; this change only narrows the contributor-facing native guard.
+      expect(() => releaseChanges(root, projects())).toThrow(/coverage is missing or stale/);
+    });
+  },
+  120_000,
+);
+
+it('allows a noted semantic edit to previously covered native version metadata', async () => {
+  await withAlignedRelease(async ({ root, write, commit, projects, note }) => {
+    await note(true, 'major');
+    await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+    await commit('Prepare a major with native alignment coverage');
+    const path = nativeOwner('agent-system') + '/system.ia';
+    write(path, readFileSync(resolve(root, path), 'utf8').replace('Retained meaning', 'Revised meaning'));
+    write('releases/pending/agent-meaning.json', {
+      format: 'ia.npm-change-note.v1',
+      bump: 'patch',
+      title: 'Revise meaning',
+      summary: 'Agent meaning is revised.',
+      packages: ['@inventarch/agent-system'],
+      paths: [path],
+    });
+    await commit('Describe a semantic edit for the next release');
+    expect(releaseStatus(root, projects())).toMatchObject({ state: 'prepared', pendingNotes: ['agent-meaning'] });
+    expect(() => releaseChanges(root, projects())).toThrow();
   });
 }, 120_000);
 
@@ -1258,10 +1340,10 @@ it('refuses an ordinary branch that moves a version-only field between a release
     await commit('Revise the agent guide');
     expect(() => releaseStatus(root, projects())).toThrow(
       refusal(
-        'Prepared release 3.0.1 does not cover 3 version-only file(s): .ia/src/systems/agent-system/system.ia, ' +
+        'Prepared release 3.0.1 does not cover 3 native version file(s): .ia/src/systems/agent-system/system.ia, ' +
           'examples/public-language/contracts/agent-system.ia, tools/distribution/system-package-policy.json. ' +
           'On the release branch, run pnpm release:version --write --refresh. ' +
-          'On any other branch, wait for v3.0.1 to be tagged, then update from main.',
+          'On any other branch, wait for v3.0.1 to be tagged, then update from main, retarget native notes to that tag, and regenerate native selections.',
       ),
     );
     // Once the release is tagged on main, the same branch needs only its pending note.
@@ -1515,6 +1597,10 @@ it.each([false, true])(
       // A content-driven native selection changes version fields after the changeset was written, which only a
       // refresh can cover: collecting alone cannot add the generated alignment coverage.
       expect(body).toContain('commit them');
+      expect(body.indexOf('`pnpm release:version --write --refresh`')).toBeLessThan(
+        body.indexOf('`pnpm platform:qualify`'),
+      );
+      expect(body).toContain('IA-Release-Preparation: v1');
       expect(body).toContain('fixed point');
       expect(body).toContain('regenerate projections');
       expect(body).toContain('After all source/generated bytes are final');

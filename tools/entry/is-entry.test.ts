@@ -79,8 +79,22 @@ it('compares real paths when a file link reaches the tool', (context) => {
   });
 });
 
+it('throws rather than answering "not the entry" when a path is a link loop', (context) => {
+  // Answering false would let a tool exit 0 having done nothing.
+  scratch((base) => {
+    const main = resolve(base, 'main.mjs'),
+      url = pathToFileURL(main).href;
+    writeFileSync(main, '');
+    if (!fileLink(resolve(base, 'b'), resolve(base, 'a')))
+      return context.skip('Windows denied file symlink creation (EPERM)');
+    symlinkSync(resolve(base, 'a'), resolve(base, 'b'), 'file');
+    expect(() => isEntry(resolve(base, 'a'), url)).toThrow(/ELOOP/);
+  });
+});
+
+// A Windows mode keeps only the read-only attribute, so it cannot make a directory unreadable.
 it.skipIf(process.platform === 'win32')(
-  'throws rather than answering "not the entry" when a path fails to resolve for a reason other than absence',
+  'throws rather than answering "not the entry" when a directory on the path cannot be read',
   () => {
     // Answering false would let a tool exit 0 having done nothing.
     scratch((base) => {
@@ -88,9 +102,6 @@ it.skipIf(process.platform === 'win32')(
         url = pathToFileURL(main).href,
         locked = resolve(base, 'locked');
       writeFileSync(main, '');
-      symlinkSync(resolve(base, 'b'), resolve(base, 'a'));
-      symlinkSync(resolve(base, 'a'), resolve(base, 'b'));
-      expect(() => isEntry(resolve(base, 'a'), url)).toThrow(/ELOOP/);
       // Root reads a directory whatever its mode; the gate has no skip condition for root, so the case returns early
       // instead.
       if (process.getuid?.() === 0) return;
@@ -224,19 +235,22 @@ it('refuses a missing launcher with its stat error and a directory as not a regu
   });
 });
 
-// File links need a privilege on Windows, which has no FIFOs.
-it.skipIf(process.platform === 'win32')(
-  'refuses a dangling launcher with its stat error and a FIFO as not a regular file',
-  () => {
-    scratch((base) => {
-      symlinkSync(resolve(base, 'missing'), resolve(base, 'dangling'));
-      expect(() => packageManagerCommand(resolve(base, 'dangling'), [])).toThrow(MISSING_LAUNCHER);
-      const fifo = resolve(base, 'pnpm fifo');
-      expect(spawnSync('mkfifo', [fifo], { timeout: 10_000 }).status).toBe(0);
-      expect(() => packageManagerCommand(fifo, [])).toThrow(NOT_REGULAR_LAUNCHER);
-    });
-  },
-);
+it('refuses a dangling launcher with its stat error', (context) => {
+  scratch((base) => {
+    if (!fileLink(resolve(base, 'missing'), resolve(base, 'dangling')))
+      return context.skip('Windows denied file symlink creation (EPERM)');
+    expect(() => packageManagerCommand(resolve(base, 'dangling'), [])).toThrow(MISSING_LAUNCHER);
+  });
+});
+
+// Windows has no FIFOs.
+it.skipIf(process.platform === 'win32')('refuses a FIFO launcher as not a regular file', () => {
+  scratch((base) => {
+    const fifo = resolve(base, 'pnpm fifo');
+    expect(spawnSync('mkfifo', [fifo], { timeout: 10_000 }).status).toBe(0);
+    expect(() => packageManagerCommand(fifo, [])).toThrow(NOT_REGULAR_LAUNCHER);
+  });
+});
 
 it('follows a link to a launcher and judges the file it reaches', (context) => {
   scratch((base) => {

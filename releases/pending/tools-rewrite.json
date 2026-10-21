@@ -2,7 +2,7 @@
   "format": "ia.npm-change-note.v1",
   "bump": "patch",
   "title": "Harden tooling and shipped compliance fixtures",
-  "summary": "Ship self-contained compliance refusal fixtures and preserve workspace runtime fixture behavior while making generated resources, cold task prerequisites, archive qualification and release ownership checks explicit.",
+  "summary": "Ship the compliance language fixtures; stop shipping repository-only fixtures/loop and fixtures/refusals.ts, which are not exported API or installed runtime prerequisites. Preserve workspace runtime fixture behavior while making generated resources, cold task prerequisites, archive qualification and release ownership checks explicit.",
   "packages": [
     "@inventarch/compliance",
     "@inventarch/workspace-runtime"

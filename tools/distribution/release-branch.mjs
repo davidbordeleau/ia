@@ -4,6 +4,7 @@ import { isEntry } from '../entry/is-entry.mjs';
 import { gitText } from '../shared/git.mjs';
 
 const branch = 'refs/heads/release/next';
+const main = 'refs/remotes/origin/main';
 const marker = 'IA-Release-Automation: v1';
 /** Marks a maintainer's release-preparation commit on top of the automation commit. The next update replaces it. */
 export const PREPARATION_MARKER = 'IA-Release-Preparation: v1';
@@ -43,13 +44,18 @@ function automationBase(root, commit) {
  */
 export function inspectReleaseBranch(root) {
   const remote = git(root, 'ls-remote', '--heads', 'origin', branch);
-  if (!remote) return '';
-  const expected = remote.split(/\s+/)[0];
+  // ls-remote patterns also match ref suffixes; only the exact advertised branch establishes ownership.
+  const selected = remote
+    .split('\n')
+    .map((line) => line.split(/\s+/))
+    .find(([, ref]) => ref === branch);
+  if (!selected) return '';
+  const expected = selected[0];
   if (!expected || !SHA.test(expected)) throw new Error('Invalid release branch commit');
   git(root, 'fetch', '--quiet', '--no-tags', 'origin', branch);
   if (git(root, 'rev-parse', 'FETCH_HEAD') !== expected) throw new Error('release/next changed during inspection');
   // Oldest first. A merged branch can be replaced.
-  const commits = git(root, 'rev-list', '--topo-order', '--reverse', `origin/main..${expected}`)
+  const commits = git(root, 'rev-list', '--topo-order', '--reverse', `${main}..${expected}`)
     .split('\n')
     .filter(Boolean);
   if (!commits.length) return expected;
@@ -67,7 +73,7 @@ export function inspectReleaseBranch(root) {
       'Refusing unrecognized release/next commits; preserve and reconcile maintainer amendments ' +
         `(release preparation commits carry the line "${PREPARATION_MARKER}")`,
     );
-  git(root, 'merge-base', '--is-ancestor', base, 'origin/main');
+  git(root, 'merge-base', '--is-ancestor', base, main);
   return expected;
 }
 
@@ -75,7 +81,7 @@ export function inspectReleaseBranch(root) {
 export function updateReleaseBranch(root, version) {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Stable version required');
   const base = git(root, 'rev-parse', 'HEAD');
-  if (base !== git(root, 'rev-parse', 'origin/main')) throw new Error('Release update must start at origin/main');
+  if (base !== git(root, 'rev-parse', main)) throw new Error('Release update must start at origin/main');
   const previous = inspectReleaseBranch(root);
   git(
     root,
@@ -110,12 +116,12 @@ if (isEntry(process.argv[1], import.meta.url)) {
     args = parseArgs({ allowPositionals: true, options: { version: { type: 'string' } } });
     if (
       args.positionals.length !== 1 ||
-      !['update', 'delete'].includes(args.positionals[0] ?? '') ||
+      !['update', 'delete', 'inspect'].includes(args.positionals[0] ?? '') ||
       (args.positionals[0] === 'update' ? !args.values.version : args.values.version !== undefined)
     )
       throw new Error();
   } catch {
-    console.error('Usage: release-branch.mjs update --version <stable-version> | delete');
+    console.error('Usage: release-branch.mjs update --version <stable-version> | delete | inspect');
     process.exitCode = 2;
   }
   if (args && !process.exitCode)
@@ -124,7 +130,9 @@ if (isEntry(process.argv[1], import.meta.url)) {
         JSON.stringify(
           args.positionals[0] === 'update'
             ? updateReleaseBranch(process.cwd(), args.values.version ?? '')
-            : deleteReleaseBranch(process.cwd()),
+            : args.positionals[0] === 'inspect'
+              ? { previous: inspectReleaseBranch(process.cwd()) }
+              : deleteReleaseBranch(process.cwd()),
         ),
       );
     } catch (error) {

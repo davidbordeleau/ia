@@ -90,6 +90,27 @@ it('refuses missing outputs beneath aliased parents and nonportable file names',
   });
 });
 
+it('refuses a read whose change time moves even when size and modification time stay fixed', async () => {
+  await withTemporaryDirectory('read metadata ', async (root) => {
+    writeFileSync(join(root, 'data.txt'), 'alpha');
+    const probe = `import fs from 'node:fs';import assert from 'node:assert/strict';import {syncBuiltinESMExports} from 'node:module';
+const original=fs.fstatSync;let calls=0;
+fs.fstatSync=(...args)=>{const stat=original(...args);if(++calls===2)stat.ctimeNs+=1n;return stat;};
+syncBuiltinESMExports();const {readRegular}=await import(process.argv[1]);
+assert.throws(()=>readRegular(process.argv[2],'data.txt',5),/File changed during read/);assert.equal(calls,2);`;
+    const run = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', probe, new URL('./paths.mjs', import.meta.url).href, root],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 30000,
+      },
+    );
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+  });
+});
+
 it('allows an explicit empty option only when its contract names that option', () => {
   expect(parseOptions(['--sha', ''], { values: ['sha'], allowEmpty: ['sha'] }).value('sha')).toBe('');
   expect(() => parseOptions(['--sha'], { values: ['sha'], allowEmpty: ['sha'] })).toThrow('Missing');

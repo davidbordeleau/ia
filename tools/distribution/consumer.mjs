@@ -19,6 +19,8 @@ import { packageManagerCommand } from '../entry/package-manager.mjs';
 import { parseOptions } from '../shared/args.mjs';
 import { checkWrite } from '../shared/check-write.mjs';
 import { containedFile, readRegular } from '../shared/paths.mjs';
+import { qualificationPath } from '../shared/qualification-path.mjs';
+export { qualificationPath } from '../shared/qualification-path.mjs';
 import {
   COMPATIBILITY,
   packPublicPackages,
@@ -37,14 +39,6 @@ const shape = (value, keys) =>
   typeof value === 'object' &&
   !Array.isArray(value) &&
   Object.keys(value).sort().join(',') === keys.sort().join(',');
-/** The producer owns this stable pointer; each cohort below it remains an immutable artifact set.
- * @param {string} root
- */
-export function qualificationPath(root, run = process.env['IA_TEST_ORCHESTRATION']) {
-  if (run !== undefined) assert(/^[a-f0-9-]{36}$/.test(run), 'Invalid qualification run');
-  return resolve(root, 'artifacts/qualification/packed', process.platform, ...(run ? [run] : []), 'qualification.json');
-}
-
 /** Describe already-produced archives; this function does not pack or seal release inputs.
  * @param {string} root @param {string} directory @param {readonly {name:string,filename:string,sha256:string}[]} packed
  */

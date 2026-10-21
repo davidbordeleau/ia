@@ -30,7 +30,7 @@ export function containedFile(root, path, { allowMissing = false } = {}) {
     try {
       const stat = lstatSync(current);
       if (stat.isSymbolicLink() || (stat.isFile() && stat.nlink !== 1))
-        throw new Error('Aliased or hardlinked path: ' + current);
+        throw new Error('Aliased or hardlinked path: ' + current + '; use a canonical root and unaliased files');
       if (current === target ? !stat.isFile() : !stat.isDirectory())
         throw new Error('Unexpected file kind: ' + current);
     } catch (error) {
@@ -78,6 +78,7 @@ export function readRegular(root, path, limit) {
           value.dev !== stat.dev ||
           value.size !== stat.size ||
           value.mtimeNs !== stat.mtimeNs ||
+          value.ctimeNs !== stat.ctimeNs ||
           value.nlink !== 1n,
       )
     )

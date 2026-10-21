@@ -13,7 +13,7 @@ catalog:
   typescript: ^5.9.3
   vitest: ^4.1.4
 nodeLinker: hoisted
-# Pin patched transitive dependencies.
+# Pin patched tooling dependencies.
 overrides:
   "vite": "8.3.3"
   "follow-redirects": "1.16.1"

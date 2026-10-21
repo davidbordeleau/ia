@@ -21,7 +21,6 @@
       "cli:test-init": 111,
       "cli:test-init-migrate": 154,
       "cli:test-installed": 66,
-      "cli:test-kb": 15,
       "cli:test-registry": 35,
       "cli:test-unit": 2,
       "cli:test-workspace": 84,
@@ -45,7 +44,6 @@
       "graph:test": 8,
       "graph:typecheck": 3,
       "host-payload:generate": 1,
-      "kb:test": 9,
       "kernel:check": 0,
       "language-base:generate": 1,
       "language:build": 2,
@@ -107,9 +105,7 @@
       "vscode:typecheck": 1,
       "workspace-runtime:build": 3,
       "workspace-runtime:test": 41,
-      "workspace-runtime:typecheck": 7,
-      "tools:test-sdk-consumer": 12,
-      "tools:test-shared": 2
+      "workspace-runtime:typecheck": 7
     },
     "windows": {
       "agent-composition-system:build": 2,
@@ -131,7 +127,6 @@
       "cli:test-init": 349,
       "cli:test-init-migrate": 582,
       "cli:test-installed": 126,
-      "cli:test-kb": 40,
       "cli:test-registry": 137,
       "cli:test-unit": 4,
       "cli:test-workspace": 216,
@@ -155,7 +150,6 @@
       "graph:test": 7,
       "graph:typecheck": 3,
       "host-payload:generate": 1,
-      "kb:test": 20,
       "kernel:check": 0,
       "language-base:generate": 1,
       "language:build": 2,
@@ -217,9 +211,7 @@
       "vscode:typecheck": 1,
       "workspace-runtime:build": 2,
       "workspace-runtime:test": 149,
-      "workspace-runtime:typecheck": 8,
-      "tools:test-sdk-consumer": 30,
-      "tools:test-shared": 3
+      "workspace-runtime:typecheck": 8
     },
     "macos": {
       "agent-composition-system:build": 2,
@@ -241,7 +233,6 @@
       "cli:test-init": 173,
       "cli:test-init-migrate": 229,
       "cli:test-installed": 65,
-      "cli:test-kb": 18,
       "cli:test-registry": 45,
       "cli:test-unit": 4,
       "cli:test-workspace": 105,
@@ -265,7 +256,6 @@
       "graph:test": 7,
       "graph:typecheck": 2,
       "host-payload:generate": 2,
-      "kb:test": 10,
       "kernel:check": 0,
       "language-base:generate": 1,
       "language:build": 2,
@@ -327,9 +317,7 @@
       "vscode:typecheck": 2,
       "workspace-runtime:build": 2,
       "workspace-runtime:test": 46,
-      "workspace-runtime:typecheck": 6,
-      "tools:test-sdk-consumer": 14,
-      "tools:test-shared": 2
+      "workspace-runtime:typecheck": 6
     }
   }
 }

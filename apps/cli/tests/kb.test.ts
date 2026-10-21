@@ -1,4 +1,5 @@
-import { afterAll, expect, it } from 'vitest';
+import { afterAll, expect, it, vi } from 'vitest';
+import { captureKnowledge, KnowledgeError } from '@inventarch/kb';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, cpSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, run, scratch, cli, repository } from './workspace-fixture.js';
@@ -9,6 +10,7 @@ import { dirname } from 'node:path';
 import { symlinkSync, unlinkSync } from 'node:fs';
 import { dispatch } from '../src/consumer.js';
 import { makeHost } from './workspace-fixture.js';
+vi.mock('@inventarch/kb', { spy: true });
 function installedKnowledge() {
   const root = scratch('kb-pack');
   const installation = JSON.parse(
@@ -217,6 +219,76 @@ function knowledge() {
   );
   return root;
 }
+it.each([
+  ['IA-KB-INVALID', 1, 'Run "ia kb read --help" for the accepted input and limits.'],
+  ['IA-KB-UNAVAILABLE', 1, 'Run "ia kb search --help" to find an identity selected in this scope.'],
+  ['IA-KB-RESPONSE-LIMIT', 1, 'Run "ia kb read --help" for the accepted input and limits.'],
+  ['IA-KB-SNAPSHOT-UNAVAILABLE', 3, 'Run "ia kb read --help" and read the identity again for a current citation.'],
+  ['IA-KB-SCOPE-STALE', 3, 'Run "ia kb read --help" and retry once the workspace stops changing.'],
+  ['IA-KB-SNAPSHOT-CHANGED', 3, 'Run "ia kb read --help" and retry once the workspace stops changing.'],
+  ['IA-KB-SOURCE-UNAVAILABLE', 3, 'Run "ia doctor" for the observed runtime, workspace and repository state.'],
+] as const)('preserves %s through the CLI refusal boundary', async (code, exit, next) => {
+  const root = knowledge();
+  for (const json of [true, false]) {
+    vi.mocked(captureKnowledge).mockImplementationOnce(() => {
+      throw new KnowledgeError(code, 'Selected knowledge refused');
+    });
+    const result = await dispatch(
+      ['kb', 'read', ID, '--root', root, ...(json ? ['--json'] : [])],
+      makeHost({ cwd: root }),
+      () => {
+        throw Error('Unexpected machine route');
+      },
+      [],
+    );
+    expect(result.exitCode).toBe(exit);
+    if (json) {
+      expect(JSON.parse(result.stdout)).toMatchObject({ version: 1, ok: false, code, exit, next });
+      expect(result.stderr).toBe('');
+    } else {
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain(code);
+      expect(result.stderr.replace(/\s+/g, ' ')).toContain(next);
+    }
+  }
+});
+it('refuses an unknown committed revision as an input error with pack guidance', async () => {
+  const { root, args } = installedKnowledge();
+  const argv = args('export.json');
+  argv[argv.indexOf('--commit') + 1] = '0123456789012345678901234567890123456789';
+  const result = await dispatch(
+    argv,
+    makeHost({ cwd: root }),
+    () => {
+      throw Error('Unexpected machine route');
+    },
+    [],
+  );
+  expect(result.exitCode).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    code: 'IA-KB-INVALID',
+    exit: 1,
+    next: 'Run "ia kb pack --help" for the accepted input and limits.',
+  });
+});
+it('classifies malformed persisted selection JSON as invalid input', async () => {
+  const root = knowledge();
+  writeFileSync(join(root, '.ia/knowledge.json'), '{');
+  const result = await dispatch(
+    ['kb', 'read', ID, '--root', root, '--json'],
+    makeHost({ cwd: root }),
+    () => {
+      throw Error('Unexpected machine route');
+    },
+    [],
+  );
+  expect(result.exitCode).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    code: 'IA-KB-INVALID',
+    exit: 1,
+    next: 'Run "ia kb read --help" for the accepted input and limits.',
+  });
+});
 it('shows nested help without opening a workspace and refuses wrong nested grammar', async () => {
   const cwd = scratch('kb-help');
   const help = await run(['kb', 'pack', '--help'], { cwd });

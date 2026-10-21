@@ -414,6 +414,8 @@ it(
       'packages/graph/src/cache-added.ts',
       'packages/graph/package.json',
       'apps/runner/src/context.ts',
+      'apps/runner/package.json',
+      '.ia/src/systems/session-system/package.json',
       '.ia/src/systems/session-system/src/index.ts',
     ]) {
       const path = resolve(root, file),
@@ -455,6 +457,8 @@ it(
     for (const [file, affected] of [
       ['apps/vscode/vitest.config.mts', ['tools:test-testing', 'tools:test-temp']],
       ['apps/runner/vitest.config.mts', ['tools:test-testing', 'tools:test-temp']],
+      ['packages/graph/vitest.config.mts', ['tools:test-testing', 'tools:test-temp']],
+      ['.ia/src/systems/session-system/vitest.config.mts', ['tools:test-testing', 'tools:test-temp']],
       // tools:test-temp reads the plain-JavaScript scripts beside app and package tests.
       ['apps/cli/tests/fake-doctor.mjs', ['tools:test-temp']],
       ['packages/runtime/tests/golden/write.mjs', ['tools:test-temp']],

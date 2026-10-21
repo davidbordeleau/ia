@@ -51,6 +51,8 @@ interface Script {
   readonly started: unknown;
   /** The advance receipts, one per advance, or one receipt for every advance. */
   readonly advances?: Reply | Reply[];
+  /** The reply to a cancel of the started review; by default the review is cancelled. */
+  readonly cancelled?: Reply;
   /** The PR as the delivery reads it; the run and collection read `pr`. */
   readonly delivered?: unknown;
   /** The PR's existing reviews as the delivery lists them. */
@@ -95,7 +97,7 @@ function routes(script: Script): Record<string, Reply | Reply[]> {
     [`POST ${api}/v1/reviews`]: { body: script.started },
     // Only the started review has these routes; a request for any other id is answered 599 and stays in the log.
     [`POST ${api}/v1/reviews/${STARTED}/advance`]: script.advances ?? [],
-    [`POST ${api}/v1/reviews/${STARTED}/cancel`]: { body: { state: 'cancelled' } },
+    [`POST ${api}/v1/reviews/${STARTED}/cancel`]: script.cancelled ?? { body: { state: 'cancelled' } },
     [`POST ${api}/v1/reviews/${STARTED}/delivery`]: { body: {} },
   };
 }
@@ -163,6 +165,7 @@ async function runMain(script: Script) {
 }
 const SETUP = ['PUT /v1/reviews/artifacts/<digest>', 'POST /v1/reviews'];
 const advance = `POST /v1/reviews/${STARTED}/advance`,
+  cancel = `POST /v1/reviews/${STARTED}/cancel`,
   delivery = `POST /v1/reviews/${STARTED}/delivery`;
 const settle = bound + 5_000;
 
@@ -235,7 +238,7 @@ it(
     expect(advances.length).toBeGreaterThanOrEqual(290);
     expect(advances.length).toBeLessThanOrEqual(300);
     expect(advances.every((request) => request === advance)).toBe(true);
-    expect(run.review.at(-1)).toBe(`POST /v1/reviews/${STARTED}/cancel`);
+    expect(run.review.at(-1)).toBe(cancel);
     expect(run.comments).toEqual([]);
     expect(run.summary).toBeUndefined();
     expect(run.retained).toBeUndefined();
@@ -268,18 +271,37 @@ it.each([
   ['another review still running', { id: OTHER, state: 'running' }],
   ['a malformed id with a result', { id: '../x', state: 'completed', result }],
 ])(
-  'refuses an advance that returns %s before any further request, comment or summary',
+  'cancels the review it started and refuses an advance that returns %s, with no other request, comment or summary',
   async (_, receipt) => {
     const run = await runMain({
       started: { id: STARTED, state: 'queued' },
       advances: [{ body: receipt }, { body: { id: STARTED, state: 'completed', result } }],
     });
-    expect(run.review).toEqual([...SETUP, advance]);
+    // The cancel names the started review, as the deadline's does; nothing is requested for the id the advance returned.
+    expect(run.review).toEqual([...SETUP, advance, cancel]);
     expect(run.comments).toEqual([]);
     expect(run.summary).toBeUndefined();
     expect(run.retained).toBeUndefined();
     expect(run.status).toBe(1);
     expect(run.stderr).toContain('Review receipt identity required');
+  },
+  settle,
+);
+
+it(
+  'refuses an advance for another review with the identity error when the cancel of the started review fails',
+  async () => {
+    const run = await runMain({
+      started: { id: STARTED, state: 'queued' },
+      advances: { body: { id: OTHER, state: 'running' } },
+      cancelled: { status: 503 },
+    });
+    expect(run.review).toEqual([...SETUP, advance, cancel]);
+    expect(run.comments).toEqual([]);
+    expect(run.summary).toBeUndefined();
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('Review receipt identity required');
+    expect(run.stderr).not.toContain('review request failed');
   },
   settle,
 );
@@ -305,6 +327,27 @@ it.each([
     expect(run.summary).toBeUndefined();
     // The refused result stays retained for inspection.
     expect(run.retained).toEqual({ ...result, id: OTHER, subject: run.subjectDigest });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('Review result identity required');
+  },
+  settle,
+);
+
+it.each([
+  // An undefined id is dropped when the script is written, so the result reaches main() without one.
+  ['no id', { ...result, id: undefined }],
+  ['a malformed id', { ...result, id: '../x' }],
+  ['a string in place of the result object', 'APPROVE'],
+])(
+  'refuses a result with %s as one that does not name the started review, once it is retained and before any delivery read',
+  async (_, refused) => {
+    // Before the identity check, such a result failed in rendering as an invalid retained result; it now fails here.
+    const run = await runMain({ started: { id: STARTED, state: 'completed', result: refused } });
+    expect(run.review).toEqual(SETUP);
+    expect(run.prReads).toBe(2);
+    expect(run.comments).toEqual([]);
+    expect(run.summary).toBeUndefined();
+    expect(run.retained).toEqual(typeof refused === 'object' ? { ...refused, subject: run.subjectDigest } : refused);
     expect(run.status).toBe(1);
     expect(run.stderr).toContain('Review result identity required');
   },

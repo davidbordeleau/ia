@@ -72,3 +72,5 @@ The published compliance package includes `fixtures/language` for runtime fixtur
 ## Package-v1 inventory
 
 `inventory.ts --check|--write` regenerates `packages/compliance/src/conformance/inventory.generated.ts` from the language fixtures, the conformance corpus, the boundary suites and the code inventories ([compliance C31](../../packages/compliance/SPEC.md)). `compliance:check` runs the check: any fixture, companion or corpus edit fails COMP-FIXTURES until `--write` runs.
+
+Repository runtime and execution fixtures are reused by native and systems tests to exercise the same refusal oracles. These test imports create Nx dependencies on tools-compliance, so compliance source changes also invalidate tests/builds whose dependency-source inputs reach those owners. This conservative cache cost is intentional; moving copies back would split the shared oracles.

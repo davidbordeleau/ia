@@ -33,6 +33,12 @@ it('requires guarded release-branch updates in the workflow', () => {
   expect(workflow).not.toContain('git push --force origin');
   expect(workflow).toContain('release-branch.mjs update');
   expect(workflow).not.toContain('--delete-branch');
+  const inspect = workflow.indexOf('release-branch.mjs inspect'),
+    close = workflow.indexOf('gh pr close'),
+    remove = workflow.indexOf('release-branch.mjs delete');
+  expect(inspect).toBeGreaterThan(-1);
+  expect(inspect).toBeLessThan(close);
+  expect(close).toBeLessThan(remove);
 });
 
 it('preserves foreign branch commits and updates only an identified automation commit', async () => {
@@ -212,6 +218,76 @@ async function clauseFixture(root: string) {
   const automation = (parent = base) => `Release 1.1.0\n\nIA-Release-Automation: v1\nIA-Release-Base: ${parent}`;
   return { first, base, commit, publish, automation };
 }
+
+it.each([false, true])(
+  'ignores suffix-matching remote branches when release/next exists: %s',
+  async (present) => {
+    const { inspectReleaseBranch, updateReleaseBranch } = await import('./release-branch.mjs');
+    await inRepository(async (root) => {
+      const { first, base, commit, publish, automation } = await clauseFixture(root);
+      await git(root, 'push', '--quiet', 'origin', `${first}:refs/heads/a/refs/heads/release/next`);
+      const release = commit([base], automation());
+      if (present) await publish(release);
+      expect(inspectReleaseBranch(root)).toBe(present ? release : '');
+      writeFileSync(resolve(root, 'version.txt'), 'next\n');
+      await git(root, 'add', 'version.txt');
+      expect(updateReleaseBranch(root, '1.2.0').previous).toBe(present ? release : '');
+      expect(await git(root, 'ls-remote', 'origin', 'refs/heads/a/refs/heads/release/next')).toBe(
+        `${first}\trefs/heads/a/refs/heads/release/next`,
+      );
+    });
+  },
+  60000,
+);
+
+it('does not treat a tag named origin/main as proof that a maintainer amendment was merged', async () => {
+  const { deleteReleaseBranch } = await import('./release-branch.mjs');
+  await inRepository(async (root) => {
+    const { base, commit, publish, automation } = await clauseFixture(root);
+    const amended = commit([base], automation(), { committer: maintainer });
+    await publish(amended);
+    await git(root, 'tag', 'origin/main', amended);
+    expect(() => deleteReleaseBranch(root)).toThrow('unrecognized release/next commits');
+    expect(await git(root, 'ls-remote', 'origin', 'refs/heads/release/next')).toBe(
+      `${amended}\trefs/heads/release/next`,
+    );
+  });
+}, 60000);
+
+it('updates from the remote main even when a tag named origin/main points elsewhere', async () => {
+  const { updateReleaseBranch } = await import('./release-branch.mjs');
+  await inRepository(async (root) => {
+    const { first } = await clauseFixture(root);
+    await git(root, 'tag', 'origin/main', first);
+    writeFileSync(resolve(root, 'version.txt'), 'next\n');
+    await git(root, 'add', 'version.txt');
+    const updated = updateReleaseBranch(root, '1.2.0');
+    expect(updated.previous).toBe('');
+    expect(await git(root, 'ls-remote', 'origin', 'refs/heads/release/next')).toBe(
+      `${updated.head}\trefs/heads/release/next`,
+    );
+  });
+}, 60000);
+
+it('drafts release notes against the remote main rather than a same-named tag', async () => {
+  const { draftNote } = await import('./release-notes.mjs');
+  await inRepository(async (root) => {
+    const { first, base } = await clauseFixture(root);
+    await git(root, 'tag', 'origin/main', first);
+    const drafted = draftNote(
+      root,
+      [{ directory: 'packages/test', manifest: { name: '@inventarch/test', version: '1.0.0' } }],
+      {
+        packages: ['@inventarch/test'],
+        bump: 'patch',
+        title: 'Fixture',
+        summary: 'Fixture',
+      },
+    );
+    expect(drafted.evidence.mergeBase).toBe(base);
+    expect(drafted.evidence.messages).toEqual([]);
+  });
+}, 60000);
 
 // One case per recognition clause: each differs from an accepted automation commit in that clause alone.
 it.each([

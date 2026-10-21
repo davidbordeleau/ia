@@ -57,6 +57,13 @@ it('exits nonzero for a covered requirement whose structural evaluator is unavai
     // This probe changes evaluator availability, not build prerequisites. The hook corpus executes this built host.
     cpSync(resolve(root, 'apps/steward-hook/dist'), resolve(candidate, 'apps/steward-hook/dist'), { recursive: true });
     symlinkSync(resolve(root, 'node_modules'), resolve(candidate, 'node_modules'), 'junction');
+    // Surface a missing transitive build directly instead of the hook adapter's deliberately generic deny message.
+    execFileSync(process.execPath, ['--input-type=module', '-e', "await import('./apps/steward-hook/dist/main.js')"], {
+      cwd: candidate,
+      encoding: 'utf8',
+      timeout: 30000,
+      windowsHide: true,
+    });
     const files = execFileSync('git', ['grep', '-l', 'REQ-FOUNDATION-VALID', '--', 'examples/conformance/native'], {
       cwd: candidate,
       encoding: 'utf8',

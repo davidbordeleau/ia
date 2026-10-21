@@ -1,9 +1,13 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { gitFiles } from '../docs/check.js';
 import {
   discoverProjects,
+  takeInventory,
   qualificationLeaves,
   readManifest,
   scriptLeaves,
@@ -143,6 +147,34 @@ it('refuses input profiles whose Nx definition is missing, cyclic or refers to a
   ).toContain('cyclic Nx input profile');
   expect(check([task()], { namedInputs: { 'owner-source': ['{projectRoot}/**/*', { env: 'CI' }] } })).toEqual([]);
 });
+it('checks actual Nx definitions through repository inventory while manifest loading stays independent', async () => {
+  const parent = realpathSync(tmpdir()),
+    candidate = mkdtempSync(resolve(parent, 'ia-inventory-inputs-'));
+  try {
+    execFileSync('git', ['init', '--quiet'], { cwd: candidate, windowsHide: true });
+    writeFileSync(resolve(candidate, '.gitignore'), 'node_modules/\n');
+    symlinkSync(resolve(root, 'node_modules'), resolve(candidate, 'node_modules'), 'junction');
+    mkdirSync(resolve(candidate, 'tools/testing'), { recursive: true });
+    writeFileSync(resolve(candidate, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+    writeFileSync(resolve(candidate, 'package.json'), JSON.stringify({ scripts: { 'platform:qualify': LEAVES[0] } }));
+    writeFileSync(
+      resolve(candidate, 'vitest.tools.config.mts'),
+      "export default { test: { include: ['probe.test.ts'] } };\n",
+    );
+    writeFileSync(resolve(candidate, 'probe.test.ts'), "import { it } from 'vitest'; it('probe', () => {});\n");
+    const declared = manifest([task({ project: '.', files: ['probe.test.ts'] })]);
+    writeFileSync(resolve(candidate, 'tools/testing/tasks.json'), JSON.stringify(declared));
+    const nx = resolve(candidate, 'nx.json');
+    writeFileSync(nx, JSON.stringify({ namedInputs: { 'owner-source': ['{projectRoot}/**/*'] } }));
+    expect(takeInventory(candidate).findings).toEqual([]);
+    writeFileSync(nx, JSON.stringify({ namedInputs: {} }));
+    expect(readManifest(candidate)).toEqual(declared);
+    expect(takeInventory(candidate).findings).toEqual(['owner-source: missing Nx input profile']);
+  } finally {
+    if (dirname(candidate) !== parent) throw new Error('Unsafe inventory fixture cleanup');
+    await rm(candidate, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  }
+}, 30_000);
 it('validates object references using the same project boundary as Nx named inputs', () => {
   expect(check([task()], { namedInputs: { 'owner-source': [{ input: 'missing' }] } }).join('\n')).toContain(
     'unknown Nx input profile missing',

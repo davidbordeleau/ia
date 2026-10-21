@@ -151,7 +151,7 @@ function branchEvidence(root, base) {
   return { mergeBase, files: [...files].sort(), messages };
 }
 function defaultBase(root) {
-  for (const ref of ['origin/main', 'main'])
+  for (const ref of ['refs/remotes/origin/main', 'refs/heads/main'])
     try {
       git(root, 'rev-parse', '--verify', '--quiet', ref + '^{commit}');
       return ref;

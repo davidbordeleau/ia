@@ -93,7 +93,7 @@ const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
-function repository() {
+function repository(objectFormat: 'sha1' | 'sha256' = 'sha1') {
   const root = mkdtempSync(join(tmpdir(), 'ia knowledge '));
   roots.push(root);
   mkdirSync(join(root, '.ia/src'), { recursive: true });
@@ -103,7 +103,7 @@ function repository() {
       ['-c', 'core.hooksPath=' + join(root, '.git/disabled'), '-c', 'commit.gpgsign=false', '-C', root, ...args],
       { encoding: 'utf8', windowsHide: true },
     ).trim();
-  git('init', '--quiet');
+  git('init', '--quiet', '--object-format=' + objectFormat);
   git('config', 'core.autocrlf', 'false');
   writeFileSync(
     join(root, '.ia/src/notes.ia'),
@@ -160,6 +160,64 @@ it('refuses an unreadable repository as operational, not as invalid input', () =
   roots.push(root);
   expect(() => committedReader(root, '1'.repeat(40))).toThrow(
     expect.objectContaining({ code: 'IA-KB-SOURCE-UNAVAILABLE' }),
+  );
+});
+it('refuses a missing commit or non-commit object as invalid input in a readable repository', () => {
+  const { root, commit, git } = repository();
+  const revision = commit();
+  for (const object of ['0123456789012345678901234567890123456789', git('rev-parse', revision + ':README.md')])
+    expect(() => committedReader(root, object)).toThrow(expect.objectContaining({ code: 'IA-KB-INVALID' }));
+});
+it('refuses malformed committed selection JSON as invalid input', () => {
+  const { root, commit } = repository();
+  writeFileSync(join(root, 'selection.json'), '{');
+  expect(() =>
+    packageFromCommit({ repository: root, commit: commit(), selection: 'selection.json', foundation }),
+  ).toThrow(expect.objectContaining({ code: 'IA-KB-INVALID' }));
+});
+it('requires the complete SHA-256 commit rather than its 40-character abbreviation', () => {
+  const { root, commit } = repository('sha256'),
+    revision = commit();
+  expect(revision).toHaveLength(64);
+  expect(committedReader(root, revision).read('README.md').text).toContain('Committed needle.');
+  expect(() => committedReader(root, revision.slice(0, 40))).toThrow(
+    expect.objectContaining({ code: 'IA-KB-INVALID' }),
+  );
+});
+it('classifies a real overflowing native tree listing as an operational source limit', () => {
+  const { root, commit, git } = repository();
+  const revision = commit(),
+    blob = git('rev-parse', revision + ':README.md');
+  const tree = (input: string) =>
+    execFileSync('git', ['-C', root, 'mktree'], {
+      input,
+      encoding: 'utf8',
+      windowsHide: true,
+    }).trim();
+  // Synthetic Git objects avoid thousands of host files while exercising real ls-tree output and ENOBUFS.
+  const native = tree(
+    Array.from(
+      { length: 6000 },
+      (_, i) => '100644 blob ' + blob + '\t' + String(i).padStart(5, '0') + 'x'.repeat(200) + '.ia\n',
+    ).join(''),
+  );
+  const ia = tree('040000 tree ' + native + '\tsrc\n');
+  const top = tree('040000 tree ' + ia + '\t.ia\n');
+  const large = git(
+    '-c',
+    'user.name=Test',
+    '-c',
+    'user.email=test@example.invalid',
+    'commit-tree',
+    top,
+    '-m',
+    'Large tree',
+  );
+  expect(() => committedReader(root, large).nativePaths()).toThrow(
+    expect.objectContaining({
+      code: 'IA-KB-SOURCE-UNAVAILABLE',
+      message: 'Repository output byte limit exceeded',
+    }),
   );
 });
 it('reads a committed file of exactly the byte limit and refuses larger files by their byte limit', () => {

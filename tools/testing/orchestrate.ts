@@ -1,4 +1,4 @@
-import { qualificationPath } from '../distribution/consumer.mjs';
+import { qualificationPath } from '../shared/qualification-path.mjs';
 import { parseOptions } from '../shared/args.mjs';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';

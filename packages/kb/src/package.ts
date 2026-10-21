@@ -37,7 +37,14 @@ export interface KnowledgePackage {
   readonly digest: string;
 }
 export function verifySelection(input: unknown): KnowledgeSelection {
-  const s = closed<KnowledgeSelection>(data(input, 64 * 1024), ['format', 'sourceId', 'records', 'resources']);
+  let parsed: unknown;
+  try {
+    parsed = data(input, 64 * 1024);
+  } catch (error) {
+    if (error instanceof SyntaxError) return fail('Knowledge selection is not valid JSON');
+    throw error;
+  }
+  const s = closed<KnowledgeSelection>(parsed, ['format', 'sourceId', 'records', 'resources']);
   if (s.format !== 'ia.kb.selection.v1') fail('Invalid knowledge selection format');
   slug(s.sourceId);
   if (

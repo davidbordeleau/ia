@@ -14,6 +14,7 @@ Provide checked built-in-only arguments, bounded Git, stable versions, contained
 - [contracts.test.ts](contracts.test.ts) — behavior and refusal coverage.
 - [git.mjs](git.mjs).
 - [semver.mjs](semver.mjs).
+- [qualification-path.mjs](qualification-path.mjs) — built-in-only pointer shared by distribution consumers and test orchestration.
 
 ## Commands
 
@@ -47,17 +48,19 @@ Owner policy, archive trust, installation and fixtures are not generic helpers. 
 
 ## Detailed behavior
 
-This owner contains built-in-only mechanisms used by more than one tooling owner. It does not decide release policy, install consumers, read package production code or import a test runner. Callers own their repository root and effects.
+This owner contains built-in-only mechanisms with multiple concrete callers. It does not decide release policy, install consumers, read package production code or import a test runner. Callers own their repository root and effects.
 
 | Module | Contract and callers |
 | --- | --- |
 | `args.mjs` | `parseOptions` accepts named string/boolean options, required options and mutually exclusive groups. It refuses unknown, repeated, missing, conflicting and positional argv before effects. Explicit empty strings require a named allowance, such as absent CI commit coordinates; missing argv items always refuse. Testing's runner and orchestrator use it. |
 | `git.mjs` | `gitText` invokes Git with an argument array, a finite positive timeout (60 seconds by default), a 16 MiB output limit and trimmed UTF-8 output. Release notes, changes and versioning use it. Callers distinguish expected Git failures from refusal. |
 | `semver.mjs` | `stableVersion` and `compareVersions` preserve stable three-part numeric package-version semantics. Release notes and changes use them; prerelease/tag syntax is refused. |
-| `paths.mjs` | Rejects traversal, aliases, hardlinks and nonportable names; reads stable regular-file descriptors up to explicit byte ceilings. Authoring and output writing share these guards. |
+| `paths.mjs` | Rejects traversal, aliases, hardlinks and nonportable names; reads stable regular-file descriptors up to explicit byte ceilings, rechecking identity, size, link count, modification time and change time. Authoring and output writing share these guards. |
 | `check-write.mjs` | Validates complete output maps in check and write modes; public/standalone authoring and declaration generation share it. Reports changed/written paths and limits each text output to 32 MiB. |
 | `contracts.test.ts` | Exercises parser refusals, bounded Git and paths containing spaces, launcher safety, no-install closure and a deliberately ill-typed JavaScript implementation. |
 
 There are no public CLI entries. Output destinations belong to caller maps. `pnpm tools:typecheck-js` checks these implementations and the entry helpers through `tsconfig.tools-js.json`; sibling declarations do not mask them. `tools:test-shared` owns behavior tests on Linux, Windows and macOS. The tooling input profile hashes these sources; shared runtime/config coordinates remain in Nx's shared globals.
 
-A helper enters this owner only with two real consumers. Owner-specific manifest schemas, artifact trust, fixture allocation and compatibility policy stay with their owners. JSON schema policy stays with its owner; path/check-write guards serve both authoring generators and entry declarations. Git child commands may themselves launch subprocesses; test process trees with cancellation belong to testing's subprocess owner.
+A helper enters this owner only with two real consumers (call sites may share a tooling owner). Git serves release-branch and release-notes; semver serves release-notes and release-changes. Owner-specific manifest schemas, artifact trust, fixture allocation and compatibility policy stay with their owners. JSON schema policy stays with its owner; path/check-write guards serve both authoring generators and entry declarations. Git child commands may themselves launch subprocesses; test process trees with cancellation belong to testing's subprocess owner.
+
+Containment refuses aliased roots, including a platform temporary-directory alias; callers canonicalize their owned root before calling. The release extraction helpers remain separate because they admit directory targets and missing ancestors and enforce separation between source and output trees; `containedFile` instead requires a portable relative regular-file path. These contracts are not interchangeable.

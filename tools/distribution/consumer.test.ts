@@ -185,6 +185,49 @@ it('KB qualification removes its owned consumer after an installation failure', 
   });
 });
 
+it('KB qualification retains a replaced output and preserves the installation error as its cause', () => {
+  inQualifiedCohort((directory, archives) => {
+    const manifest = resolve(directory, 'qualification.json');
+    writeFileSync(manifest, JSON.stringify(qualificationManifest(checkout, directory, archives)));
+    const temporary = mkdtempSync(resolve(realpathSync(tmpdir()), 'ia-kb-replaced-test-'));
+    const launcher = resolve(temporary, 'replace.cjs');
+    writeFileSync(
+      launcher,
+      `const fs=require('node:fs'),path=require('node:path');
+const output=path.dirname(process.cwd());
+process.chdir(path.dirname(output));
+fs.renameSync(output,output+'-original');fs.mkdirSync(output);
+fs.writeFileSync(path.join(output,'keep.txt'),'replacement');
+console.error('intentional-installation-failure');process.exit(17);`,
+    );
+    try {
+      const probe = `process.argv=['node','--manifest',process.argv[1]];
+try { await import(${JSON.stringify(new URL('./qualify-kb.mjs', import.meta.url).href)}); process.exitCode=9; }
+catch(error) { console.log(JSON.stringify({message:error.message,causeStatus:error.cause?.status,causeStderr:String(error.cause?.stderr)})); }`;
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e', probe, manifest], {
+        cwd: checkout,
+        env: childEnvironment(launcher, temporary),
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 30000,
+      });
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      const failure = JSON.parse(result.stdout);
+      expect(failure.message).toContain('KB qualification failed; cleanup refused');
+      expect(failure.message).toContain('KB output changed before cleanup');
+      expect(failure.causeStatus).toBe(17);
+      expect(failure.causeStderr).toContain('intentional-installation-failure');
+      const retained = readdirSync(temporary).filter(
+        (name) => name.startsWith('ia-kb-installed-') && !name.endsWith('-original'),
+      );
+      expect(retained).toHaveLength(1);
+      expect(readFileSync(resolve(temporary, retained[0]!, 'keep.txt'), 'utf8')).toBe('replacement');
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+});
+
 it('hands the same identified archives to multiple consumers without packing again', () => {
   inQualifiedCohort((directory, archives) => {
     const manifest = qualificationManifest(checkout, directory, archives);

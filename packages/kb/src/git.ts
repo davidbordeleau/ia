@@ -13,18 +13,23 @@ export function committedReader(repository: string, commit: string, timeout = 10
     GIT_NO_LAZY_FETCH: '1',
     GIT_TERMINAL_PROMPT: '0',
   });
-  /** A Git failure or timeout is operational; output past the buffer is the caller's byte-limit refusal. */
-  const git = (args: string[], overLimit = 'Repository output byte limit exceeded'): Buffer => {
+  /** Repository failures and discovery overflow are operational; selected blob limits are request refusals. */
+  const git = (args: string[], blob = false, input?: string): Buffer => {
     try {
       return execFileSync('git', ['--no-replace-objects', '--literal-pathspecs', '-C', repository, ...args], {
         maxBuffer: LIMITS.fileBytes + 1024,
         timeout,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+        ...(input === undefined ? {} : { input }),
         windowsHide: true,
         env,
       });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException | null)?.code === 'ENOBUFS') return fail(overLimit);
+      if ((error as NodeJS.ErrnoException | null)?.code === 'ENOBUFS')
+        return fail(
+          blob ? 'Selected file byte limit exceeded' : 'Repository output byte limit exceeded',
+          blob ? 'IA-KB-INVALID' : 'IA-KB-SOURCE-UNAVAILABLE',
+        );
       return fail('Selected committed data unavailable or repository command timed out', 'IA-KB-SOURCE-UNAVAILABLE');
     }
   };
@@ -35,12 +40,14 @@ export function committedReader(repository: string, commit: string, timeout = 10
     .trim();
   if (fold(realpathSync(repository)) !== fold(realpathSync(declaredRoot)))
     fail('Repository must be its Git working-tree or bare repository root');
+  // Batch mode distinguishes a missing object from a failed Git process without parsing localized stderr.
   if (
-    git(['rev-parse', '--verify', commit + '^{commit}'])
+    git(['cat-file', '--batch-check=%(objectname) %(objecttype)'], false, commit + '\n')
       .toString('utf8')
-      .trim() !== commit
+      .trim() !==
+    commit + ' commit'
   )
-    fail('Exact full commit required');
+    fail('Exact existing commit required');
   const read = (path: string) => {
     portablePath(path);
     const rows = git(['ls-tree', '-z', commit, '--', path]).toString('utf8').split('\0').filter(Boolean);
@@ -48,7 +55,7 @@ export function committedReader(repository: string, commit: string, timeout = 10
       fail('Selected committed regular non-executable blob unavailable');
     const blob = /^100644 blob ([a-f0-9]{40,64})\t/.exec(rows[0]!)?.[1];
     if (!blob) return fail('Selected committed blob identity unavailable');
-    const raw = git(['cat-file', 'blob', blob], 'Selected file byte limit exceeded');
+    const raw = git(['cat-file', 'blob', blob], true);
     if (raw.length > LIMITS.fileBytes) fail('Selected file byte limit exceeded');
     let text: string;
     try {

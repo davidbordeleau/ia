@@ -75,6 +75,7 @@ jobs:
           set -euo pipefail
           number="$(gh pr list --head release/next --base main --state open --json number --jq '.[0].number // empty')"
           if [ -n "$number" ]; then
-            node tools/distribution/release-branch.mjs delete
+            node tools/distribution/release-branch.mjs inspect
             gh pr close "$number" --comment "Main has no pending release notes."
+            node tools/distribution/release-branch.mjs delete
           fi

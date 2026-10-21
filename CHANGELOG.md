@@ -2,6 +2,70 @@
 
 Generated from reviewed release changesets. Entries describe intended releases; publication is a separate action.
 
+## 3.3.0
+
+Coordinated 3.3.0 release of the 24 public npm packages: Database readers can verify COMP-KERNEL and COMP-FIXTURES when asked; Keep a terminal at a name `@inventarch/db` reads from becoming the controlling terminal; Align the documentation with IA 3.3; Judge installed state, workspace manifests, package sources and publications on the opened file; Add reusable knowledge packages and local CLI/MCP readers; Complete native authoring and consumer contracts; Pin that publication inspection throws for a name gone after its read; Declare the platform-only steward-hook tests as skips; Harden tooling and shipped compliance fixtures; Cover the user host lock's stale-lock claim and busy-create wait in tests.
+
+### Database readers can verify COMP-KERNEL and COMP-FIXTURES when asked
+
+`open(root, options)` from `@inventarch/db`, and `EditorDatabase` and `EditorSnapshot` from `@inventarch/db/editor`, accept `conformance: 'verify'`. With it, every report, including `preview` drafts, refreshes, editor candidates and updates, carries COMP-KERNEL and COMP-FIXTURES verdicts verified in-process by `@inventarch/compliance`'s `package-v1` profile, with `basis: 'verified'` and a `conformance` summary, instead of leaving both not-evaluated. COMP-KERNEL is checked against the floor the workspace selected (embedded, explicit or local), so a local floor whose content differs from the embedded one fails it, and the report with it. Results are kept per process: the fixture profile runs once, and the kernel once per floor for the 16 most recently used floors. Only reports change: records, revisions, the graph cache and the `ia validate` evidence a reader admits are the same with or without the option. When you record validation evidence, bind the checks from a report without verification, such as `EditorSnapshot.inspect().unverified` or a reader opened without the option, or readers may refuse that evidence. Readers that do not pass the option run nothing new and get the same reports.
+
+Packages: `@inventarch/db`.
+
+### Keep a terminal at a name `@inventarch/db` reads from becoming the controlling terminal
+
+`@inventarch/db` opens installed distribution files, `.ia/workspace.json`, authored package sources, the workspace file `readWorkspaceBytes` reads and the check evidence file `.ia/work/evidence/<authored revision>.ia` before it judges them. A terminal device put at one of those names could, on some POSIX systems, become the process's controlling terminal when it was opened. It now cannot; the device is still refused, or for evidence ignored, as before.
+
+Packages: `@inventarch/db`.
+
+### Align the documentation with IA 3.3
+
+Document the knowledge commands and package, their mandate checks and MCP error envelope. Correct native version guidance and retain the current quick start and upgrade contracts. Documentation only; no package behavior, export or dependency changes.
+
+Packages: `@inventarch/cli`, `@inventarch/mcp-door`.
+
+### Judge installed state, workspace manifests, package sources and publications on the opened file
+
+Installed distribution files, `.ia/workspace.json` and authored package sources (`@inventarch/db`), and the marker and files `inspectPublication` checks on Windows (`@inventarch/runtime`), are now opened before they are judged and read through that descriptor, without waiting on a FIFO. A link put at the name after the path checks is refused: by the open's no-follow flag where the platform has one, otherwise (Windows) by an identity check after the read. A file that grows or shrinks while it is read, or whose name passes to another file or a link, is refused, or reported unknown or partial, instead of being accepted, as is one whose name is gone by the end of the read, a directory on the way turned into a file included, except that a publication marker or file then throws. An installed file that grows while read is `Installed file grew beyond limit` even within its bound. Outside such a concurrent change, every result and refusal keeps its code and message.
+
+Packages: `@inventarch/db`, `@inventarch/runtime`.
+
+### Add reusable knowledge packages and local CLI/MCP readers
+
+Read admitted records and bound documents without a .kb folder. Export explicitly selected committed knowledge, preserve legacy portable validation, and expose bounded reads through ia kb and five MCP tools. Central policy and lifecycle remain host owned.
+
+Packages: `@inventarch/cli`, `@inventarch/kb`, `@inventarch/mcp-door`.
+
+### Complete native authoring and consumer contracts
+
+Add explicit primitive selection with protocol-2 compatibility, actionable per-word authoring guidance and executable native operation cases. Normalize captured-read refusals, allow structured templates to omit unused legacy fields, and omit unknown journal phases while retaining legacy schemas and record identities. Release qualification and publication remain separate.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/distribution`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
+### Pin that publication inspection throws for a name gone after its read
+
+No change for package consumers. A new Windows test pins that `inspectPublication` throws, as documented, when the name of a marker or file it has read is gone by the time it checks that name again.
+
+Packages: `@inventarch/runtime`.
+
+### Declare the platform-only steward-hook tests as skips
+
+Tests only. The consumer guard and context binding tests of `@inventarch/steward-hook` that returned early on Windows now declare a skip there (the file-link cases only where Windows denies the link), and a new test covers a code file replaced by a directory after its directory is listed. Nothing changes for consumers: the package's code, behavior and API are the same.
+
+Packages: `@inventarch/steward-hook`.
+
+### Harden tooling and shipped compliance fixtures
+
+Ship the compliance language fixtures; stop shipping repository-only fixtures/loop and fixtures/refusals.ts, which are not exported API or installed runtime prerequisites. Preserve workspace runtime fixture behavior while making generated resources, cold task prerequisites, archive qualification and release ownership checks explicit.
+
+Packages: `@inventarch/compliance`, `@inventarch/workspace-runtime`.
+
+### Cover the user host lock's stale-lock claim and busy-create wait in tests
+
+Tests only. New tests cover the lock that `ia host claude --user` holds in the IA home. A stale lock is removed while the run's claim on it still stands, and the lock's name is compared with the lock file the run judged before that claim and again under it, both times while that file is still open. A claim older than 10 seconds is abandoned and a younger one is not. While nothing holds the lock's name, an exclusive create of the lock refused with a busy code (EBUSY, and on Windows also EPERM and EACCES) is retried with a growing backoff until 250 milliseconds have passed, then twice more, and then refuses `IA-DIST-INPUT-INVALID`; off Windows, EPERM and EACCES refuse `IA-DIST-INPUT-INVALID` at once. A lock naming pid 1 or 2147483647, the ends of the owner range, is judged by whether that pid runs until it is a day old. Nothing changes for consumers: the package's code, behavior and API are the same.
+
+Packages: `@inventarch/distribution`.
+
 ## 3.2.2
 
 Coordinated 3.2.2 release of the 23 public npm packages: Judge a held user host lock from one opened file; Take over a live user host lock only after a day, and release only a run's own; Take over a stale user host lock under a claim; Reuse one IA home across the checkpoint convergence test passes; Verify the host payload once per ia host apply.

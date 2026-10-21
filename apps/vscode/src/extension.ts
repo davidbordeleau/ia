@@ -6,10 +6,14 @@ const clients = new Map<string, LanguageClient>();
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const start = async (folder: vscode.WorkspaceFolder): Promise<void> => {
     if (folder.uri.scheme !== 'file' || clients.has(folder.uri.toString())) return;
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, '.ia/**/*.ia'));
+    // The lock and the active pointer change on restore, so a folder whose installation was refused is read again.
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(folder, '.ia/{**/*.ia,distributions.lock.json,distributions/active.json}'),
+    );
+    // One server per folder: the folder name tells their output channels and messages apart.
     const client = new LanguageClient(
       `ia-${folder.index}`,
-      'IA language',
+      `IA language (${folder.name})`,
       {
         module: resolve(context.extensionPath, 'dist/server.cjs'),
         transport: TransportKind.stdio,
@@ -27,9 +31,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(watcher);
     try {
       await client.start();
-    } catch (error) {
+    } catch {
+      // The client has already reported the failure under the folder's name; other folders keep their servers.
       clients.delete(folder.uri.toString());
-      throw error;
     }
   };
   context.subscriptions.push(
@@ -40,8 +44,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         clients.delete(key);
         void client?.stop();
       }
-      for (const folder of event.added)
-        void start(folder).catch((error) => vscode.window.showErrorMessage(String(error)));
+      for (const folder of event.added) void start(folder);
     }),
   );
   await Promise.all((vscode.workspace.workspaceFolders ?? []).map(start));

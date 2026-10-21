@@ -389,6 +389,7 @@ export function openRunner(options: RunnerOptions) {
           {
             seat: manifest.workspace,
             shape,
+            primitive: ctx.coordinate.primitive,
             phase,
             depth: Math.min(2, grant.limits.depth),
             budget: Math.min(64, ctx.records, grant.limits.steps),

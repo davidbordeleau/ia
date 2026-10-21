@@ -4,9 +4,11 @@
 import { spawn } from 'node:child_process';
 import {
   chmodSync,
+  constants,
   existsSync,
   linkSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -780,3 +782,20 @@ it('replaces the evidence file while another process holds it open, as a concurr
   expect(readFileSync(path, 'utf8')).toBe('#! ia 1.0\n# second\n');
   expect(readdirSync(resolve(root, EVIDENCE_DIRECTORY))).toEqual([`${revision}.ia`]);
 });
+it.skipIf(!constants.O_NOCTTY)(
+  'opens an evidence file with the no-controlling-terminal flag where the platform has it',
+  () => {
+    const root = workspace(false),
+      path = `${EVIDENCE_DIRECTORY}/${'0'.repeat(64)}.ia`,
+      file = resolve(root, path);
+    put(root, path, '#! ia 1.0\n');
+    vi.mocked(openSync).mockClear();
+    expect(readEvidence(root, path)).toBe('#! ia 1.0\n');
+    const flags = vi
+      .mocked(openSync)
+      .mock.calls.filter(([target]) => String(target) === file)
+      .map(([, flags]) => Number(flags));
+    expect(flags).toHaveLength(1);
+    expect(flags[0]! & constants.O_NOCTTY).toBe(constants.O_NOCTTY);
+  },
+);

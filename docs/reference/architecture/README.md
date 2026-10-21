@@ -17,6 +17,7 @@ IA keeps three things apart: vocabulary declarations in `.ia` files, the toolcha
 | [`@inventarch/runtime`](../../../packages/runtime/README.md) | Read records, deliver position and plan views, resolve mandates, render host packets and serve the Door protocol. | Root; `./editor`, `./authoring`, `./authoring-execution`, `./entry` |
 | [`@inventarch/workspace-runtime`](../../../packages/workspace-runtime/README.md) | Capture and adopt workspaces; resolve teaching resources, lifecycle, templates and publication; join execution bindings with installed implementations. | Root; `./corpus`, `./bind`, `./candidate`, `./publication`, `./templates`, `./projections`, `./task-capture-format`, and the resource, authoring, lifecycle, source and store subpaths (`./sources`, `./local-store`, `./adapters`, `./installed-catalog`); its README lists each |
 | [`@inventarch/service-contracts`](../../../packages/service-contracts/README.md) | Validate service request and response shapes, including sources, tenancy, sessions, source application, marketplace and installation. | Root; `./sources`, `./tenancy`, `./session-lifecycle`, `./source-apply`, `./marketplace`, `./installation` |
+| [`@inventarch/kb`](../../../packages/kb/README.md) | Select committed knowledge; validate graph/resource closure; read and search immutable document views with citations. | Root; `./legacy`, `./protocol` |
 
 The main dependency direction is `language → graph → compliance → db → runtime → workspace-runtime`: each package consumes the mechanisms to its left, and some also import earlier layers directly. The executable native packages sit inside this stack: `session-system` builds on `graph`, `agent-system` on `session-system`, and `authoring-system` and `template-system` on `runtime`; `workspace-runtime` imports those four, and `agent-composition-system` builds on `workspace-runtime`. `service-contracts` stands apart: it depends only on Zod and is browser-safe. Its schemas validate message shape; an application host supplies authentication, authorization, disclosure and native execution.
 
@@ -24,8 +25,8 @@ The apps consume these packages:
 
 | App | Built on | Role |
 | --- | --- | --- |
-| `ia` ([`@inventarch/cli`](../../../apps/cli/README.md)) | `db`, `runtime`, `workspace-runtime`, `compliance`, `distribution` | Authors, validates, reads and positions; plans and applies workspace, distribution and host effects; serves the machine protocol |
-| `ia-mcp-door` ([`@inventarch/mcp-door`](../../../apps/mcp-door/README.md)) | `runtime` | Serves scoped, read-only runtime calls over stdio |
+| `ia` ([`@inventarch/cli`](../../../apps/cli/README.md)) | `db`, `runtime`, `workspace-runtime`, `compliance`, `distribution`, `kb` | Authors, validates, reads and positions; plans and applies workspace, distribution and host effects; serves the machine protocol |
+| `ia-mcp-door` ([`@inventarch/mcp-door`](../../../apps/mcp-door/README.md)) | `runtime`, `kb` | Serves scoped, read-only runtime and knowledge calls over stdio |
 | [VS Code extension](../../../apps/vscode/README.md) | `runtime` | Uses the runtime editor surface |
 | `ia-distribution` ([`@inventarch/distribution`](../../../apps/distribution/README.md)) | `db`, `graph`, `language`, `workspace-runtime`, `authoring-system` and the steward hook | Packs, installs, adopts, restores and recovers archives with the `db` distribution contracts, and registers hosts and their edit-guard groups |
 | `ia-runner` ([`@inventarch/runner`](../../../apps/runner/README.md)) | `db`, `runtime`, `workspace-runtime` and the executable systems | Runs one admitted agent profile with a durable journal |

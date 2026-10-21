@@ -223,7 +223,8 @@
         "db:build",
         "distribution:build",
         "runtime:build",
-        "workspace-runtime:build"
+        "workspace-runtime:build",
+        "kb:build"
       ],
       "outputs": [
         "apps/cli/dist",
@@ -282,7 +283,8 @@
       "mode": "source",
       "inputProfile": "workspace-records",
       "dependsOn": [
-        "runtime:build"
+        "runtime:build",
+        "kb:build"
       ],
       "outputs": [
         "apps/mcp-door/dist",
@@ -1526,7 +1528,8 @@
       "project": "apps/mcp-door",
       "files": [
         "tests/protocol.test.ts",
-        "tests/stdio.test.ts"
+        "tests/stdio.test.ts",
+        "tests/kb.test.ts"
       ],
       "profile": "installed",
       "platforms": [
@@ -2167,6 +2170,20 @@
       ],
       "skips": [
         {
+          "case": "tests/check-evidence.test.ts > opens an evidence file with the no-controlling-terminal flag where the platform has it",
+          "reason": "Windows defines no O_NOCTTY flag, as it has no controlling terminal; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "case": "tests/inputs.test.ts > opens installation state with the no-controlling-terminal flag where the platform has it",
+          "reason": "Windows defines no O_NOCTTY flag, as it has no controlling terminal; Linux and macOS run the case.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
           "case": "tests/inputs.test.ts > refuses a FIFO or a socket among package sources by its listed type, opening neither",
           "reason": "FIFOs and Unix socket files have no Windows equivalent; Linux and macOS run the case.",
           "platforms": [
@@ -2583,6 +2600,14 @@
         },
         {
           "case": "tests/publication.test.ts > qualified local NTFS publication throws for a file that vanishes after it is listed, with the error of the lstat that finds it gone",
+          "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
+        },
+        {
+          "case": "tests/publication.test.ts > qualified local NTFS publication throws for a marker or a file whose name is gone after its read, with the error of the lstat that finds it gone",
           "reason": "Requires the qualified local Windows NTFS publication/root-identity primitive; Linux and macOS exercise the explicit unsupported-platform refusal instead.",
           "platforms": [
             "linux",
@@ -4443,6 +4468,168 @@
             "windows"
           ]
         }
+      ]
+    },
+    {
+      "id": "kb:build",
+      "kind": "command",
+      "project": "packages/kb",
+      "command": "pnpm build",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "language:build",
+        "graph:build",
+        "db:build",
+        "runtime:build",
+        "workspace-runtime:build",
+        "session-system:build"
+      ],
+      "outputs": [
+        "packages/kb/dist",
+        "artifacts/tests/kb-build"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm -r build"
+      ]
+    },
+    {
+      "id": "kb:typecheck",
+      "kind": "command",
+      "project": "packages/kb",
+      "command": "pnpm typecheck",
+      "profile": "unit",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "kb:build"
+      ],
+      "outputs": [
+        "artifacts/tests/kb-typecheck"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "io",
+      "covers": [
+        "pnpm -r typecheck"
+      ]
+    },
+    {
+      "id": "kb:test",
+      "kind": "vitest",
+      "project": "packages/kb",
+      "files": [
+        "tests/legacy.test.ts",
+        "tests/foundation.test.ts",
+        "tests/installation.test.ts",
+        "tests/package.test.ts",
+        "tests/local.test.ts",
+        "tests/protocol.test.ts",
+        "tests/limits.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "kb:build"
+      ],
+      "outputs": [
+        "artifacts/tests/kb-test"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "cli:test-kb",
+      "kind": "vitest",
+      "project": "apps/cli",
+      "files": [
+        "tests/kb.test.ts"
+      ],
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "source",
+      "inputProfile": "workspace-records",
+      "dependsOn": [
+        "cli:build"
+      ],
+      "outputs": [
+        "artifacts/tests/cli-test-kb"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "pnpm --workspace-concurrency=1 -r test --maxWorkers=1"
+      ]
+    },
+    {
+      "id": "kb:qualify",
+      "kind": "command",
+      "project": ".",
+      "command": "pnpm kb:qualify",
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "emitted",
+      "inputProfile": "emitted",
+      "dependsOn": [
+        "agent-composition-system:build",
+        "agent-system:build",
+        "authoring-system:build",
+        "session-system:build",
+        "template-system:build",
+        "cli:build",
+        "distribution:build",
+        "mcp-door:build",
+        "steward-hook:build",
+        "vscode:build",
+        "compliance:build",
+        "db:build",
+        "graph:build",
+        "language:build",
+        "runtime:build",
+        "service-contracts:build",
+        "kb:build"
+      ],
+      "outputs": [
+        "artifacts/tests/kb-qualify"
+      ],
+      "cache": true,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "node tools/distribution/qualify-kb.mjs"
       ]
     }
   ]

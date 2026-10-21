@@ -796,7 +796,7 @@ it.skipIf(!constants.O_NOCTTY)(
       .mocked(openSync)
       .mock.calls.filter(([target]) => String(target) === file)
       .map(([, flags]) => Number(flags));
-    // The flags readOpened opens with, so neither open can drift from the other.
+    // The flags every reader that opens a name before it judges it shares, so no open can drift from the others.
     expect(flags).toEqual([OPENED_READ_FLAGS]);
     expect(flags[0]! & constants.O_NOCTTY).toBe(constants.O_NOCTTY);
   },

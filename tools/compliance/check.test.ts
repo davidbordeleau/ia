@@ -57,14 +57,15 @@ it('exits nonzero for a covered requirement whose structural evaluator is unavai
     // Keep the emitted host in its original dependency context: copying dist loses package-local workspace links.
     // The hook still evaluates the candidate workspace supplied by its explicit --root argument.
     symlinkSync(resolve(root, 'apps/steward-hook/dist'), resolve(candidate, 'apps/steward-hook/dist'), 'junction');
-    symlinkSync(resolve(root, 'node_modules'), resolve(candidate, 'node_modules'), 'junction');
-    // Surface a missing transitive build directly instead of the hook adapter's deliberately generic deny message.
+    // Before linking candidate dependencies, prove the host uses its original build context. A copied dist cannot
+    // rely on the candidate workspace-link layout to conceal its missing dependency context.
     execFileSync(process.execPath, ['--input-type=module', '-e', "await import('./apps/steward-hook/dist/main.js')"], {
       cwd: candidate,
       encoding: 'utf8',
       timeout: 30000,
       windowsHide: true,
     });
+    symlinkSync(resolve(root, 'node_modules'), resolve(candidate, 'node_modules'), 'junction');
     const files = execFileSync('git', ['grep', '-l', 'REQ-FOUNDATION-VALID', '--', 'examples/conformance/native'], {
       cwd: candidate,
       encoding: 'utf8',

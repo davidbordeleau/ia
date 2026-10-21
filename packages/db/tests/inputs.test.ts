@@ -38,6 +38,7 @@ import {
 } from '../src/index.js';
 import type { InputSnapshot } from '../src/index.js';
 import { readInstalledGeneration } from '../src/distribution/index.js';
+import { OPENED_READ_FLAGS } from '../src/named.js';
 import {
   blockingOpens,
   coarseTimes,
@@ -728,7 +729,8 @@ it.skipIf(!constants.O_NOCTTY)(
       .mocked(openSync)
       .mock.calls.filter(([path]) => String(path) === state)
       .map(([, flags]) => Number(flags));
-    expect(flags).toHaveLength(1);
+    // The flags the evidence reader opens with, so neither open can drift from the other.
+    expect(flags).toEqual([OPENED_READ_FLAGS]);
     expect(flags[0]! & constants.O_NOCTTY).toBe(constants.O_NOCTTY);
   },
 );

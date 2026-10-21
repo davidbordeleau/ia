@@ -16,6 +16,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fileSymlinksAvailable } from '../testing/report.js';
 import { runBounded } from '../testing/subprocess.js';
 import { bundleSystemPackages } from './system-packages.js';
 import * as nativeArchiveModule from './native-archives.js';
@@ -854,22 +855,23 @@ describe('system package input reads', () => {
     );
   });
 
-  // File links need a privilege on Windows, and chmod 0o000 never denies a read there.
-  it.skipIf(process.platform === 'win32')(
-    'refuses a linked input before reading it and rethrows the open error for one it cannot read',
-    () => {
-      const root = temporary();
-      write(root, '.ia/src/a.ia', 'native source');
-      symlinkSync('a.ia', resolve(root, '.ia/src/link.ia'));
-      expect(() => bundle(root, '.ia/src/link.ia', digest('native source'))).toThrow(
-        /^Link\/junction is not allowed: /,
-      );
-      // Root reads a file whatever its mode; the gate has no skip condition for root, so the case returns early instead.
-      if (process.getuid?.() === 0) return;
-      chmodSync(resolve(root, '.ia/src/a.ia'), 0o000);
-      expect(() => bundle(root, '.ia/src/a.ia', digest('native source'))).toThrow(/^EACCES: permission denied, open /);
-    },
-  );
+  it('refuses a linked input before reading it', (context) => {
+    const root = temporary();
+    write(root, '.ia/src/a.ia', 'native source');
+    if (!fileSymlinksAvailable()) return context.skip('Windows denied file symlink creation (EPERM)');
+    symlinkSync('a.ia', resolve(root, '.ia/src/link.ia'), 'file');
+    expect(() => bundle(root, '.ia/src/link.ia', digest('native source'))).toThrow(/^Link\/junction is not allowed: /);
+  });
+
+  // chmod 0o000 never denies a read on Windows.
+  it.skipIf(process.platform === 'win32')('rethrows the open error for an input it cannot read', () => {
+    const root = temporary();
+    write(root, '.ia/src/a.ia', 'native source');
+    // Root reads a file whatever its mode; the gate has no skip condition for root, so the case returns early instead.
+    if (process.getuid?.() === 0) return;
+    chmodSync(resolve(root, '.ia/src/a.ia'), 0o000);
+    expect(() => bundle(root, '.ia/src/a.ia', digest('native source'))).toThrow(/^EACCES: permission denied, open /);
+  });
 
   it('refuses an input over 2147483647 bytes before allocating a buffer for it', () => {
     const root = temporary(),
@@ -898,35 +900,52 @@ describe('system package input reads', () => {
       rmSync(big, { force: true });
     }
   });
-  // Its buffer is 2 ** 31 bytes: zeroed lazily on Linux and macOS, but committed in full on Windows.
-  it.skipIf(process.platform === 'win32')(
-    'reads at most 2147483647 bytes at a time, so an input reported at that size refuses as changed',
-    () => {
-      const root = temporary(),
-        target = resolve(root, '.ia/src/a.ia');
-      write(root, '.ia/src/a.ia', 'native source');
-      const open = fs.openSync,
-        fstat = fs.fstatSync;
-      let selected: number | undefined;
-      vi.spyOn(fs, 'openSync').mockImplementation((...args: Parameters<typeof fs.openSync>) => {
-        const fd = Reflect.apply(open, fs, args) as number;
-        if (String(args[0]) === target) selected = fd;
-        return fd;
-      });
-      // The input's descriptor reports 2147483647 bytes before and after its read: one read may ask for all of them, the
-      // read stops at the real end, and the input refuses as changed. Asking for one byte more throws ERR_OUT_OF_RANGE.
-      vi.spyOn(fs, 'fstatSync').mockImplementation(((...args: Parameters<typeof fs.fstatSync>) => {
-        const stat = Reflect.apply(fstat, fs, args);
-        if (args[0] === selected && typeof stat?.size === 'bigint') (stat as { size: bigint }).size = 0x7fffffffn;
-        return stat;
-      }) as typeof fs.fstatSync);
-      syncBuiltinESMExports();
-      expect(() => bundle(root, '.ia/src/a.ia', digest('native source'))).toThrow(
-        /^System package input changed while it was read: \.ia\/src\/a\.ia$/,
-      );
-      expect(selected).toBeDefined();
-    },
-  );
+  it('reads at most 2147483647 bytes at a time, so an input reported at that size refuses as changed', () => {
+    const root = temporary(),
+      target = resolve(root, '.ia/src/a.ia');
+    write(root, '.ia/src/a.ia', 'native source');
+    const open = fs.openSync,
+      fstat = fs.fstatSync,
+      read = fs.readSync,
+      alloc = Buffer.alloc,
+      allocated: number[] = [],
+      asked: number[] = [];
+    let selected: number | undefined;
+    vi.spyOn(fs, 'openSync').mockImplementation((...args: Parameters<typeof fs.openSync>) => {
+      const fd = Reflect.apply(open, fs, args) as number;
+      if (String(args[0]) === target) selected = fd;
+      return fd;
+    });
+    // The input's descriptor reports 2147483647 bytes before and after its read.
+    vi.spyOn(fs, 'fstatSync').mockImplementation(((...args: Parameters<typeof fs.fstatSync>) => {
+      const stat = Reflect.apply(fstat, fs, args);
+      if (args[0] === selected && typeof stat?.size === 'bigint') (stat as { size: bigint }).size = 0x7fffffffn;
+      return stat;
+    }) as typeof fs.fstatSync);
+    // Its buffer, one byte longer, is 2 ** 31 bytes. None is allocated here: a stand-in of that length is handed back
+    // and the input's reads are recorded instead of made. The first returns no bytes, so the input refuses as changed.
+    vi.spyOn(Buffer, 'alloc').mockImplementation((...args: Parameters<typeof Buffer.alloc>) => {
+      if (args[0] <= 0x7fffffff) return Reflect.apply(alloc, Buffer, args) as ReturnType<typeof Buffer.alloc>;
+      allocated.push(args[0]);
+      const standIn = Reflect.apply(alloc, Buffer, [1]) as ReturnType<typeof Buffer.alloc>;
+      return Object.defineProperty(standIn, 'length', { value: args[0] });
+    });
+    // Parameters<typeof fs.readSync> is the three-argument overload, so the mock takes its arguments untyped: it is called
+    // as readSync(fd, buffer, offset, length, position), and only the input's lengths are recorded.
+    vi.spyOn(fs, 'readSync').mockImplementation((...args: unknown[]) => {
+      if (args[0] !== selected) return Reflect.apply(read, fs, args) as number;
+      asked.push(args[3] as number);
+      return 0;
+    });
+    syncBuiltinESMExports();
+    expect(() => bundle(root, '.ia/src/a.ia', digest('native source'))).toThrow(
+      /^System package input changed while it was read: \.ia\/src\/a\.ia$/,
+    );
+    expect(selected).toBeDefined();
+    // The read asked for 2147483647 bytes, not 2147483648, which Node refuses.
+    expect(allocated).toEqual([2147483648]);
+    expect(asked).toEqual([0x7fffffff]);
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     syncBuiltinESMExports();
@@ -967,7 +986,7 @@ describe('system package input reads', () => {
         return () => rmSync(target);
       },
       /^System package input is aliased: \.ia\/src\/a\.ia$/,
-      'Windows has no O_NOFOLLOW, so its open follows the link and fails with ENOENT; its file links need a privilege',
+      'Windows has no O_NOFOLLOW, so its open follows the link and fails with ENOENT',
     ],
     [
       'an input gone before the open with the open error',

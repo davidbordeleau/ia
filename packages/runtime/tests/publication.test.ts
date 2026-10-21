@@ -308,6 +308,28 @@ describe.skipIf(process.platform !== 'win32')('qualified local NTFS publication'
       message: `ENOENT: no such file or directory, lstat '${file}'`,
     });
   });
+  it('throws for a marker or a file whose name is gone after its read, with the error of the lstat that finds it gone', async () => {
+    const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+    const root = temp(),
+      marker = resolve(root, destination, 'result.json'),
+      file = resolve(root, destination, files[0]!.path);
+    mkdirSync(resolve(root, destination, 'nested'), { recursive: true });
+    for (const gone of [marker, file]) {
+      writeFileSync(file, files[0]!.text);
+      writeFileSync(marker, metadata);
+      // Removes the name just before the reader's own full-width lstat of it, its recheck after the read; the checks of
+      // the path before the open are not full-width.
+      vi.mocked(lstatSync).mockImplementation((...args: Parameters<typeof lstatSync>) => {
+        const full = (args[1] as { bigint?: boolean } | undefined)?.bigint === true;
+        if (String(args[0]) === gone && full && actual.existsSync(gone)) actual.rmSync(gone);
+        return actual.lstatSync(...args);
+      });
+      await expect(inspectPublication(root, destination, files, metadata, current)).rejects.toMatchObject({
+        code: 'ENOENT',
+        message: `ENOENT: no such file or directory, lstat '${gone}'`,
+      });
+    }
+  });
   it('refuses a second destination owner, preexisting empty directories, and a late destination race', () => {
     const root = temp(),
       prepared = preparePublication(root, destination, files, metadata);

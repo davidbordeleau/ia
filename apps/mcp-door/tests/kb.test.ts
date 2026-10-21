@@ -3,10 +3,12 @@ import { cpSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } fro
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Door } from '@inventarch/runtime';
-import { LIMITS } from '@inventarch/kb';
+import { captureKnowledge, LIMITS, selectableKnowledgeRecord } from '@inventarch/kb';
+import { readWorkspaceBytes } from '@inventarch/db';
 import { knowledgeTool, MEMBERSHIP } from '../src/kb.js';
 import { Protocol, PROTOCOL_VERSION } from '../src/protocol.js';
 vi.mock('../src/kb.js', { spy: true });
+vi.mock('@inventarch/db', { spy: true });
 const roots: string[] = [],
   servers: Protocol[] = [];
 afterEach(() => {
@@ -119,11 +121,60 @@ it('adds five read tools and restricts body reads to original Door membership', 
     value: { results: [] },
   });
   const denied = call('ia_kb_read', { within, locator: HIDDEN });
-  expect(denied).toMatchObject({ ok: false });
+  expect(denied).toMatchObject({ ok: false, error: { code: 'IA-KB-UNAVAILABLE' } });
   expect(JSON.stringify(denied)).not.toContain(HIDDEN);
   expect(call('ia_kb_read', { within: 'forged', locator: ID })).toMatchObject({ ok: false });
   expect(call('ia_kb_search', { query: 'x', root: 'elsewhere' })).toMatchObject({ ok: false });
   expect(existsSync(join(root, '.kb'))).toBe(false);
+});
+it('refuses a body excluded by the persisted resource selection without reading it', () => {
+  const { root, call } = fixture();
+  const select = (resources: string[]) =>
+    writeFileSync(
+      join(root, '.ia/knowledge.json'),
+      JSON.stringify({
+        format: 'ia.kb.selection.v1',
+        sourceId: 'workspace',
+        records: [ID],
+        resources,
+      }),
+    );
+  select(['alpha.md']);
+  vi.mocked(readWorkspaceBytes).mockClear();
+  expect(call('ia_kb_read', { locator: ID })).toMatchObject({ ok: true });
+  expect(readWorkspaceBytes).toHaveBeenCalledWith(root, 'alpha.md', LIMITS.fileBytes);
+  select([]);
+  vi.mocked(readWorkspaceBytes).mockClear();
+  expect(call('ia_kb_read', { locator: ID })).toMatchObject({ ok: false, error: { code: 'IA-KB-UNAVAILABLE' } });
+  expect(vi.mocked(readWorkspaceBytes).mock.calls.some(([, path]) => path === 'alpha.md')).toBe(false);
+});
+it.each(['{}', '{'])('rejects invalid persisted selection %s before reading body resources', (selection) => {
+  const { root, call } = fixture();
+  writeFileSync(join(root, '.ia/knowledge.json'), selection);
+  vi.mocked(readWorkspaceBytes).mockClear();
+  expect(call('ia_kb_read', { locator: ID })).toMatchObject({ ok: false, error: { code: 'IA-KB-INVALID' } });
+  expect(vi.mocked(readWorkspaceBytes).mock.calls.some(([, path]) => path === 'alpha.md' || path === 'hidden.md')).toBe(
+    false,
+  );
+});
+it('budgets the persisted selection inside Door membership, not every authored record', () => {
+  const { root, call } = fixture(1001);
+  writeFileSync(
+    join(root, '.ia/knowledge.json'),
+    JSON.stringify({
+      format: 'ia.kb.selection.v1',
+      sourceId: 'workspace',
+      records: [ID],
+      resources: ['alpha.md'],
+    }),
+  );
+  expect(captureKnowledge(root).records.map((record) => record.identity)).toEqual([ID]);
+  expect(call('ia_kb_read', { locator: ID })).toMatchObject({ ok: true, value: { identity: ID } });
+  const within = call('ia_scope', { identities: [HIDDEN] })['result'].token;
+  expect(call('ia_kb_read', { within, locator: ID })).toMatchObject({
+    ok: false,
+    error: { code: 'IA-KB-UNAVAILABLE' },
+  });
 });
 it('refuses a stale citation and a native scope whose graph changed', () => {
   const { root, call } = fixture(),
@@ -178,12 +229,7 @@ function membership(root: string) {
   try {
     const records = (door.request({ operation: 'records', params: {} }) as { result: { records: any[] } }).result
       .records;
-    const authored = records.filter(
-      (r) =>
-        r.placement.kind === 'authored' &&
-        r.source.path.startsWith('.ia/src/') &&
-        !r.source.path.startsWith('.ia/src/floor/'),
-    );
+    const authored = records.filter((record) => selectableKnowledgeRecord(record));
     return { total: records.length, authored };
   } finally {
     door.close();

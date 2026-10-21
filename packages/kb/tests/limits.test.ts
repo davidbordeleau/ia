@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { Foundation } from '../src/foundation.js';
 import { digest, LIMITS } from '../src/format.js';
 import { captureKnowledge } from '../src/local.js';
+import { selectableKnowledgeRecord } from '../src/selection.js';
 import type { KnowledgeSelection } from '../src/package.js';
 import { executeKnowledge } from '../src/protocol.js';
 import { openKnowledgeView } from '../src/view.js';
@@ -52,6 +53,26 @@ const outcome = (root: string, options: { selection?: KnowledgeSelection } = {})
   return { records: snapshot.records.length, unavailable: snapshot.unavailable.map((u) => u.code) };
 };
 
+it.each([
+  ['authored', '.ia/src/notes.ia', identity(0), true],
+  ['floor', '.ia/src/notes.ia', identity(0), false],
+  ['adopted', '.ia/src/notes.ia', identity(0), false],
+  ['authored', '.ia/src/floor/notes.ia', identity(0), false],
+  ['authored', 'notes.ia', identity(0), false],
+  ['authored', '.ia/src/notes.ia', identity(1), false],
+] as const)('selects %s %s %s only when eligible', (kind, path, id, expected) => {
+  expect(
+    selectableKnowledgeRecord(
+      { identity: id, placement: { kind }, source: { path } },
+      {
+        format: 'ia.kb.selection.v1',
+        sourceId: 'example',
+        records: [identity(0)],
+        resources: [],
+      },
+    ),
+  ).toBe(expected);
+});
 it('reads a body listed in the selection and leaves an unlisted one unavailable', () => {
   const root = workspace();
   bound(root, 1, () => 1);
@@ -64,7 +85,10 @@ it('reads a body listed in the selection and leaves an unlisted one unavailable'
   expect(outcome(root, { selection: selection(['bodies/k000.md']) })).toEqual({ records: 1, unavailable: [] });
   expect(readWorkspaceBytes).toHaveBeenCalledWith(root, 'bodies/k000.md', LIMITS.fileBytes);
   vi.mocked(readWorkspaceBytes).mockClear();
-  expect(outcome(root, { selection: selection([]) })).toMatchObject({ records: 0, unavailable: [expect.any(String)] });
+  expect(outcome(root, { selection: selection([]) })).toEqual({
+    records: 0,
+    unavailable: ['IA-RUNTIME-READ-UNREACHABLE'],
+  });
   expect(vi.mocked(readWorkspaceBytes).mock.calls.some(([, path]) => path === 'bodies/k000.md')).toBe(false);
 });
 

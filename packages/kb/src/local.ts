@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { readWorkspaceBytes } from '@inventarch/db';
 import type { InputOptions } from '@inventarch/db';
 import { EditorSnapshot } from '@inventarch/db/editor';
@@ -14,6 +12,7 @@ import { nativeInput } from './foundation.js';
 import { digest, fail, frozen, hash, LIMITS, selectedPath } from './format.js';
 import { verifySelection } from './package.js';
 import type { KnowledgeSelection } from './package.js';
+import { readKnowledgeSelection, selectableKnowledgeRecord } from './selection.js';
 import type { validateContent } from './validate.js';
 export type KnowledgeRecord = ReturnType<typeof validateContent>['records'][number];
 export interface KnowledgeSnapshot {
@@ -44,11 +43,7 @@ export function requireSnapshot(value: KnowledgeSnapshot): void {
 }
 /** Reads only bound resources of admitted, selected authored records; no index or directory creation. */
 export function captureKnowledge(root: string, options: KnowledgeOptions = {}): KnowledgeSnapshot {
-  const selector =
-    options.selection ??
-    (existsSync(join(root, '.ia/knowledge.json'))
-      ? verifySelection(Buffer.from(readWorkspaceBytes(root, '.ia/knowledge.json', 64 * 1024)).toString('utf8'))
-      : undefined);
+  const selector = options.selection ?? readKnowledgeSelection(root);
   const selection = selector === undefined ? undefined : verifySelection(selector);
   if (
     options.identities !== undefined &&
@@ -65,10 +60,7 @@ export function captureKnowledge(root: string, options: KnowledgeOptions = {}): 
     const all = reader.records(),
       nodes = all.filter(
         (n) =>
-          n.placement.kind === 'authored' &&
-          n.source.path.startsWith('.ia/src/') &&
-          !n.source.path.startsWith('.ia/src/floor/') &&
-          (selection === undefined || selection.records.includes(n.identity)) &&
+          selectableKnowledgeRecord(n, selection) &&
           (options.identities === undefined || options.identities.includes(n.identity)),
       );
     if (selection?.records.some((id) => !all.some((n) => n.identity === id)))

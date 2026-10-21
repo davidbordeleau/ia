@@ -382,13 +382,32 @@ it('refuses unparsable or too many evidence entries and a missing, linked or non
     writeFileSync(resolve(root, 'evidence/task/evidence.json'), 'not JSON');
     expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow(SyntaxError);
     rmSync(resolve(root, 'evidence/task/evidence.json'));
-    for (let index = 0; index < 1999; index++) writeFileSync(resolve(root, 'evidence/task', `log-${index}.txt`), '');
-    // The task directory and 1,999 logs are 2,000 entries: at the bound, with no report to disclose.
-    const atBound: string[] = [];
-    expect(evidenceFiles(resolve(root, 'evidence'), atBound)).toEqual([]);
-    expect(atBound).toEqual(['No task-level execution evidence disclosed']);
-    writeFileSync(resolve(root, 'evidence/task/log-1999.txt'), '');
-    expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow('Evidence inventory exceeds disclosure bound');
+    const task = resolve(root, 'evidence/task');
+    writeFileSync(resolve(task, 'log.txt'), '');
+    const list = fs.readdirSync,
+      [log] = list(task, { withFileTypes: true });
+    let count = 1999;
+    // Only the large listing is synthetic: distinct entries retain a real file's Dirent classification. Creating
+    // and deleting 2,000 files made this inventory-bound assertion depend on Windows disk/scanner throughput.
+    const listing = vi.spyOn(fs, 'readdirSync').mockImplementation(((...args: Parameters<typeof fs.readdirSync>) => {
+      if (String(args[0]) !== task) return Reflect.apply(list, fs, args);
+      expect(args[1]).toEqual({ withFileTypes: true });
+      return Array.from({ length: count }, (_, index) =>
+        Object.assign(Object.create(Object.getPrototypeOf(log)), log, { name: `log-${index}.txt` }),
+      );
+    }) as typeof fs.readdirSync);
+    try {
+      syncBuiltinESMExports();
+      // The real task directory and 1,999 logs are exactly 2,000 entries, with no report to disclose.
+      const atBound: string[] = [];
+      expect(evidenceFiles(resolve(root, 'evidence'), atBound)).toEqual([]);
+      expect(atBound).toEqual(['No task-level execution evidence disclosed']);
+      count = 2000;
+      expect(() => evidenceFiles(resolve(root, 'evidence'), [])).toThrow('Evidence inventory exceeds disclosure bound');
+    } finally {
+      listing.mockRestore();
+      syncBuiltinESMExports();
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -9,6 +9,8 @@ export interface NativeReleaseTarget {
   cycles: string[][];
 }
 export function readNativeReleaseTarget(root: string): NativeReleaseTarget;
+/** The `x.0.0` every native identity aligns to at a new npm major, or null within a major. */
+export function nativeMajorAlignment(target: string, published: string): string | null;
 export function declarationVersion(text: string, from: string, to: string): string;
 /** Each native identity, `inventarch/language` included, to its native version. */
 export type NativeVersions = Readonly<Record<string, string>>;

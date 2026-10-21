@@ -27,6 +27,22 @@ const compare = (a, b) => {
   return 0;
 };
 
+const major = (version) => Number(version.split('.')[0]);
+/**
+ * The version every native identity aligns to when an npm release starts a new major, or null within a major. A new
+ * major aligns natives to its `x.0.0`, so a target past `x.0.0` (reachable only by editing `releases/current.json`
+ * by hand) refuses rather than aligning natives to it.
+ */
+export function nativeMajorAlignment(target, published) {
+  assert.ok(stable(target) && stable(published), 'Native release requires stable npm versions');
+  if (major(target) <= major(published)) return null;
+  assert.ok(
+    target === major(target) + '.0.0',
+    `A new npm major aligns native archives to ${major(target)}.0.0; target ${target} skips it`,
+  );
+  return target;
+}
+
 export function readNativeReleaseTarget(root) {
   const policy = parse(root, 'releases/current.json');
   assert.equal(policy.format, 'ia.npm-cohort.v1', 'Invalid npm release target');
@@ -161,9 +177,8 @@ export function releaseNativeVersions(root, published, target) {
   assert.ok(stable(published) && stable(target), 'Native release requires stable npm versions');
   const current = selectedNativeVersions(root);
   if (!current) return undefined;
-  return Number(target.split('.')[0]) > Number(published.split('.')[0])
-    ? Object.fromEntries(Object.keys(current).map((id) => [id, target]))
-    : current;
+  const alignment = nativeMajorAlignment(target, published);
+  return alignment ? Object.fromEntries(Object.keys(current).map((id) => [id, alignment])) : current;
 }
 /** Whether `releases/native/notes.json` describes native changes against the published `v<published>` tag. */
 export function nativeNotesPending(root, published, commit) {

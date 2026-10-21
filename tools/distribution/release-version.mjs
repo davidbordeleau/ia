@@ -7,6 +7,7 @@ import { isEntry } from '../entry/is-entry.mjs';
 import { PUBLIC_INPUTS, publicPackageInputs, refreshPublicPackageInputs } from '../release/public-pack.mjs';
 import { REGISTRY } from './npm-release.mjs';
 import {
+  nativeMajorAlignment,
   nativeNotesPending,
   prepareNativeSelection,
   releaseNativeVersions,
@@ -39,6 +40,36 @@ const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const sentence = (text) => text.trim().replace(/\.?$/, '.');
 const generatedSummary = (version, count, titles) =>
   `Coordinated ${version} release of the ${count} public npm packages: ${titles.map((t) => t.trim().replace(/\.$/, '')).join('; ')}.`;
+
+/** The cohort package summary the versioner generates: package-only, at a new major, or within a major. */
+const COHORT_SUMMARY = {
+  packages: 'Package version metadata aligned with the coordinated cohort.',
+  major:
+    'Package version metadata aligned with the coordinated cohort; any native artifact version aligns to the new major.',
+  content:
+    'Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content.',
+};
+/** Every cohort summary the versioner generates, including the one it used before natives versioned by content. */
+const GENERATED_COHORT_SUMMARIES = [
+  'Package and native artifact version metadata aligned with the coordinated cohort.',
+  ...Object.values(COHORT_SUMMARY),
+];
+/**
+ * Generated prose for version-only coverage. Package versions follow the coordinated release; native artifact versions
+ * align to a new major's x.0.0 and otherwise follow their own archive content, so the prose says which applies.
+ */
+function alignmentProse(version, published, natives) {
+  const kind = !natives ? 'packages' : nativeMajorAlignment(version, published) ? 'major' : 'content';
+  const clause = {
+    packages: '',
+    major: `, and every native artifact version aligns to ${version}`,
+    content: '; each native artifact version follows its own archive content',
+  }[kind];
+  return {
+    change: `Package version metadata follows the coordinated ${version} release${clause}.`,
+    cohort: COHORT_SUMMARY[kind],
+  };
+}
 
 /** Rewrite one top-level manifest version and prove nothing else changed. */
 function setManifestVersion(root, path, from, to) {
@@ -231,7 +262,8 @@ export async function versionRelease(root, projects, options = {}) {
     for (const [path, bytes] of selectorWrites) writeFileSync(resolve(root, path), bytes);
     if (removed.length) git(root, 'rm', '--quiet', '--', ...removed);
     writeFileSync(resolve(root, RELEASE_POLICY), JSON.stringify({ ...policy, version, baseline }, null, 2) + '\n');
-    const rows = trackedChanges(root, { ...policy, version, baseline });
+    const rows = trackedChanges(root, { ...policy, version, baseline }),
+      prose = alignmentProse(version, baseline.version, selectors.size > 0);
     const alignmentPaths = new Set(cohort.map((name) => directories.get(name) + '/package.json'));
     for (const row of rows)
       if (row.cohortOnly && packageOwner(projects, row.path) && !applies(authored, row)) alignmentPaths.add(row.path);
@@ -240,7 +272,7 @@ export async function versionRelease(root, projects, options = {}) {
       changes.push({
         id: 'cohort-alignment',
         title: 'Coordinated version alignment',
-        summary: `Package and native artifact version metadata follows the coordinated ${version} release.`,
+        summary: prose.change,
         packages: [...new Set(paths.map((path) => packageOwner(projects, path)))].sort(),
         paths,
       });
@@ -261,10 +293,11 @@ export async function versionRelease(root, projects, options = {}) {
         const prior = existing?.packages[name],
           previous = baselineVersion(root, baseline, released, { name, directory: directories.get(name) });
         if (!named.has(name)) {
+          // A reviewed summary stays; a generated one is regenerated, since an amended release may cross a major.
           const summary =
-            prior?.kind === 'cohort'
+            prior?.kind === 'cohort' && !GENERATED_COHORT_SUMMARIES.includes(prior.summary)
               ? prior.summary
-              : 'Package and native artifact version metadata aligned with the coordinated cohort.';
+              : prose.cohort;
           return [name, { previous, kind: 'cohort', summary }];
         }
         // Keep a reviewed summary and append new note titles; otherwise summarize every change naming the package.

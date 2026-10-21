@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
-import { PHASES, PRIMITIVE_ANCHORS, SHAPE_ROWS } from '@inventarch/language';
+import { PHASES, PRIMITIVES, PRIMITIVE_ANCHORS, SHAPE_ROWS } from '@inventarch/language';
 import type { Location } from '@inventarch/language';
 import { expect, it } from 'vitest';
 import {
@@ -10,11 +10,13 @@ import {
   context,
   normalizeScopeKey,
   prepareCoordinate,
+  position,
   resolveScopeKey,
   rootRelative,
   select,
 } from '../src/index.js';
 import type { ScopeKey, Shape } from '../src/index.js';
+import { scopeKeyTextParts } from '../src/scope-key.js';
 import { database, lawId, lawPath, methodId, put, workspace } from './workspace.js';
 
 // R14: the scope key, its caps, defaults and K0,
@@ -22,6 +24,21 @@ import { database, lawId, lawPath, methodId, put, workspace } from './workspace.
 const foundation = 'workspace-system/definition/workspace/foundation-workspace',
   governanceSystem = 'floor/definition/system/governance-system',
   sampleMandate = 'agent-system/policy/mandate/sample-mandate';
+
+it('retains declared primitive provenance even when the shape derives the same coordinate', () => {
+  const db = database(workspace()),
+    within = db.resolveScope().token,
+    derived = normalizeScopeKey({ shape: 'execution' }),
+    declared = normalizeScopeKey({ shape: 'execution', primitive: 'Decision' }),
+    derivedCoordinate = resolveScopeKey(db, within, derived).coordinate,
+    declaredCoordinate = resolveScopeKey(db, within, declared).coordinate;
+  expect(declaredCoordinate.values).toEqual(derivedCoordinate.values);
+  expect(derivedCoordinate.sources.primitive).toBe('derived');
+  expect(declaredCoordinate.sources.primitive).toBe('declared');
+  expect(position(db, within, declared).digest).not.toBe(position(db, within, derived).digest);
+  expect(position(db, within, declared)).toEqual(position(db, within, { ...derived, primitive: 'Decision' }));
+  expect(scopeKeyTextParts(declared)).toEqual([...scopeKeyTextParts(derived), 'primitive Decision']);
+});
 /** A key refusal, and, when `next` is given, the one command it names. */
 const invalid = (message: string, next?: string) =>
   expect.objectContaining({
@@ -39,6 +56,26 @@ it('publishes the scope key caps and K0', () => {
   // K0 = (workspace seat, context, orient, 0, 0, no word): no seat or word is named.
   expect(K0).toEqual({ shape: 'context', phase: 'orient', depth: 0, budget: 0 });
   expect(Object.isFrozen(K0) && Object.isFrozen(SCOPE_KEY_CAPS)).toBe(true);
+});
+
+it('allows all six explicit primitives while retaining absent overrides and legacy coordinates', () => {
+  const db = database(workspace()),
+    within = db.resolveScope().token;
+  expect(normalizeScopeKey(partial({ primitive: undefined }))).toBe(K0);
+  expect(normalizeScopeKey({ shape: 'context' })).not.toHaveProperty('primitive');
+  for (const primitive of PRIMITIVES) {
+    const key = normalizeScopeKey({ primitive });
+    expect(key).toEqual({ shape: 'context', phase: PRIMITIVE_ANCHORS[primitive], depth: 1, budget: 16, primitive });
+    const resolved = resolveScopeKey(db, within, key);
+    expect(resolved.coordinate.values.primitive).toBe(primitive);
+    expect(resolved.coordinate.sources.primitive).toBe('declared');
+    expect(normalizeScopeKey({ primitive, phase: 'learn' }).phase).toBe('learn');
+    expect(prepareCoordinate('', { shape: 'context', phase: 'orient' }).values.primitive).toBeUndefined();
+  }
+  for (const primitive of ['memory', 'invented', null, 3])
+    expect(() => normalizeScopeKey(partial({ primitive }))).toThrow(
+      invalid('Scope key primitive must be one of', `ia position --primitive <${PRIMITIVES.join('|')}>`),
+    );
 });
 
 it('completes a partial key with its defaults, an empty one being K0', () => {
@@ -101,10 +138,13 @@ it('resolves a key that names only a shape, and refuses depth 3 or budget 65 bef
 
 it('refuses a partial key outside the closed sets, caps and seat form, and reads nothing to complete one', () => {
   const normalizing = (part: Readonly<Record<string, unknown>>) => () => normalizeScopeKey(partial(part));
-  // An unknown part is refused even where nothing else is named; a key never declares its primitive.
-  for (const part of ['primitive', 'text', 'within'])
+  // An unknown part is refused even where nothing else is named.
+  for (const part of ['text', 'within'])
     expect(normalizing({ [part]: undefined })).toThrow(
-      invalid(`Unknown scope key part '${part}'; admitted: seat, shape, phase, depth, budget, word`, 'ia position'),
+      invalid(
+        `Unknown scope key part '${part}'; admitted: seat, shape, phase, depth, budget, word, primitive`,
+        'ia position',
+      ),
     );
   for (const key of [null, [], 'K0'])
     expect(() => normalizeScopeKey(key as unknown as Partial<ScopeKey>)).toThrow(
@@ -251,10 +291,8 @@ it('refuses a shape, phase or part outside the closed sets, and reads only throu
     );
   for (const phase of ['review', 'Orient', undefined])
     expect(resolving({ phase })).toThrow(invalid('Scope key phase must be one of orient, plan, act, learn'));
-  // The primitive is derived, never declared on a key.
-  expect(resolving({ primitive: 'Memory' })).toThrow(
-    invalid("Unknown scope key part 'primitive'; admitted: seat, shape, phase, depth, budget, word", 'ia position'),
-  );
+  for (const primitive of ['memory', 'invented', null, 3])
+    expect(resolving({ primitive })).toThrow(invalid('Scope key primitive must be one of'));
   for (const key of [null, [], 'K0'])
     expect(() => resolveScopeKey(db, within, key as unknown as ScopeKey)).toThrow(
       invalid('A scope key must be an object', 'ia position'),

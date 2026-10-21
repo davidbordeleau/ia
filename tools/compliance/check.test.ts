@@ -54,8 +54,9 @@ it('exits nonzero for a covered requirement whose structural evaluator is unavai
   try {
     execFileSync('git', ['clone', '--quiet', '--no-local', root, candidate], { timeout: 120_000, windowsHide: true });
     cpSync(resolve(root, 'tools'), resolve(candidate, 'tools'), { recursive: true });
-    // This probe changes evaluator availability, not build prerequisites. The hook corpus executes this built host.
-    cpSync(resolve(root, 'apps/steward-hook/dist'), resolve(candidate, 'apps/steward-hook/dist'), { recursive: true });
+    // Keep the emitted host in its original dependency context: copying dist loses package-local workspace links.
+    // The hook still evaluates the candidate workspace supplied by its explicit --root argument.
+    symlinkSync(resolve(root, 'apps/steward-hook/dist'), resolve(candidate, 'apps/steward-hook/dist'), 'junction');
     symlinkSync(resolve(root, 'node_modules'), resolve(candidate, 'node_modules'), 'junction');
     // Surface a missing transitive build directly instead of the hook adapter's deliberately generic deny message.
     execFileSync(process.execPath, ['--input-type=module', '-e', "await import('./apps/steward-hook/dist/main.js')"], {

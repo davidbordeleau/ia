@@ -622,6 +622,20 @@ describe('published native evidence and candidate ledger', () => {
     git('tag', 'v3.2.4');
     expect(nativeBaseline(root).archives.find((row) => row.id === 'inventarch/core')!.version).toBe('3.2.4');
   });
+  it('refuses a published tag that lacks a native archive ledger, though a later commit adds one', () => {
+    const root = temporary(),
+      git = init(root),
+      previous = commit(root, 'Earlier published source');
+    write(root, 'releases/current.json', releasePolicy('3.0.0', '2.9.0', previous));
+    commit(root, 'Published without a native ledger');
+    git('tag', 'v3.0.0');
+    write(root, NATIVE_CURRENT, { format: 'ia.native-release.v1', archives });
+    commit(root, 'Ledger added after publication');
+    expect(refusal(() => nativeBaseline(root))).toEqual({
+      code: 'ERR_ASSERTION',
+      message: 'Published tag lacks a native archive ledger',
+    });
+  });
   it('retains the unchanged published ledger but refuses stale baseline and notes on an npm-only future target', () => {
     const { root, retained, published } = realNativeReleaseFixture();
     expect(nativeRelease(root, 'check').changed).toEqual([]);

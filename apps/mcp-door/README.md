@@ -59,7 +59,7 @@ The second response line carries the result as `structuredContent` (shortened he
 
 The first eight tools were introduced in machine-protocol version 1 and `ia_read`, `ia_next` and `ia_position` in version 2. The server uses the latest protocol, version 3, whose `ia_position` schema additionally accepts `primitive`. A runtime Door explicitly serving version 2 still refuses that parameter. The protocol's `report` operation has no tool; run `ia report` from the CLI.
 
-Every result carries its JSON as `structuredContent` and as text. A refusal sets `isError: true` and returns `ok: false` with a `code`. Refusals from the three version 2 tools can also carry `next`, the one command to run:
+Every result carries its JSON as `structuredContent` and as text. A refusal sets `isError: true`. Door tools return `ok: false` with a top-level `code`; knowledge tools return `{version: 1, ok: false, error: {code, message}}`. Refusals from the three version 2 tools can also carry `next`, the one command to run:
 
 - `ia_read`: `IA-RUNTIME-READ-UNADMITTED` for a locator no admitted record in the scope answers. Through a narrowed token it names nothing outside the scope; through the whole workspace it says what the sources hold there, such as a record whose admission was refused.
 - `ia_next`: `IA-RUNTIME-NEXT-SEAT`, `-NO-PLAN`, `-AMBIGUOUS` or `-CYCLE`, with the `plans` or the `cycle` concerned.
@@ -77,7 +77,7 @@ The `ia_position` body is a pure function of the key and the admitted records. I
 
 ## 📚 Learn more
 
-Five additional read tools—`ia_kb_check`, `ia_kb_search`, `ia_kb_read`, `ia_kb_resolve`, and `ia_kb_traverse`—read selected native records and their bound documents through [the knowledge foundation](../../packages/kb/README.md). They accept an optional `within` issued by this server. The original Door validates membership, and a matching graph revision is required before any body read. A stale, foreign or unsupported narrowed scope refuses; there is no workspace fallback. Responses are bounded to 48 KiB. Local citations resolve only while current captured bytes still match. These tools create no index or `.kb` directory.
+Five additional read tools—`ia_kb_check`, `ia_kb_search`, `ia_kb_read`, `ia_kb_resolve`, and `ia_kb_traverse`—read selected native records and their bound documents through [the knowledge foundation](../../packages/kb/README.md). They accept an optional `within` issued by this server. The original Door validates membership, and a matching graph revision is required before any body read. A stale, foreign or unsupported narrowed scope refuses; there is no workspace fallback. The complete knowledge-tool result envelope, including both text and structured content, is bounded to 48 KiB; an oversized request id instead receives a JSON-RPC error. Local citations resolve only while current captured bytes still match. These tools create no index or `.kb` directory.
 
 - [SPEC.md](SPEC.md): the package contract
 - [LANGUAGE.md](LANGUAGE.md): the packaged summary of the words this release ships

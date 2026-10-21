@@ -158,7 +158,7 @@ ia project claude --product plugin --check --compare my-plugin --root my-kit
 ia project claude --product plugin --out rendered --root my-kit --apply --yes
 ```
 
-A successful check prints `Round trip: content-exact and a fixed point.` Lowering accepts only what rendering writes back: hooks, MCP and LSP configuration, `commands/`, and frontmatter or manifest forms the renderer would not reproduce are refused with `IA-LOWER-UNRESOLVED`, which counts and names them, and nothing is written. A drifted round trip fails with `IA-ROUNDTRIP-DRIFT`; `--json` carries the full report in `details`. The kit's release descriptor keeps the `UNLICENSED` license whatever the plugin's manifest states. The rules are in the [package contract](SPEC.md#host-plugins).
+The example with `--compare` prints `Round trip: content-exact and a fixed point.` Lowering accepts only what rendering writes back: hooks, MCP and LSP configuration, `commands/`, and frontmatter or manifest forms the renderer would not reproduce are refused with `IA-LOWER-UNRESOLVED`, which counts and names them, and nothing is written. A drifted round trip fails with `IA-ROUNDTRIP-DRIFT`; `--json` carries the full report in `details`. The kit's release descriptor keeps the `UNLICENSED` license whatever the plugin's manifest states. The rules are in the [package contract](SPEC.md#host-plugins).
 
 ### 📦 Distributions
 
@@ -180,7 +180,19 @@ ia pack --root my-lib --descriptor .ia/release.json
 ia recover --root .
 ```
 
-`.ia/.gitignore` keeps `.ia/distributions/` out of version control, so commands in a fresh clone refuse until `ia restore --apply --yes` rebuilds it from `.ia/distributions.lock.json`. `--plan-out <file>` saves an install, update or remove plan under `.ia/work/`. A refusal that needs recovery names `ia recover … --root <directory>`, which runs the distribution recovery directly, so a global install needs no `ia-distribution` binary on `PATH`. Native package ids, such as `inventarch/language`, are separate from npm package names. In 3.x the bundled language base and the public native systems take the coordinated release version, and IA syntax remains 1.0.
+`.ia/.gitignore` keeps `.ia/distributions/` out of version control, so commands in a fresh clone refuse until `ia restore --apply --yes` rebuilds it from `.ia/distributions.lock.json`. `--plan-out <file>` saves an install, update or remove plan under `.ia/work/`. A refusal that needs recovery names `ia recover … --root <directory>`, which runs the distribution recovery directly, so a global install needs no `ia-distribution` binary on `PATH`. Native package ids, such as `inventarch/language`, are separate from npm package names. Native archives align with the npm target at a new major; within that major, their versions follow changed content and exact native dependencies, so they need not equal the CLI version. IA syntax remains 1.0.
+
+### 📚 Knowledge
+
+`ia kb` reads admitted records and their bound Markdown/text documents through an in-memory view. Local reads need no `.kb` directory or persistent index. An optional `.ia/knowledge.json` limits the selection; exports require an explicit selector committed with the selected records and documents.
+
+```sh
+ia kb check --root . --json
+ia kb search "response format" --root . --json
+ia kb read work-system/definition/decision/api-response-format --root . --json
+```
+
+`resolve` checks a citation and `traverse` follows native relationships. `ia kb pack --commit <full-sha> --selection .ia/knowledge.json --out knowledge.json` previews a committed export; add `--apply --yes` to write it. Existing identical output is unchanged; different bytes refuse. Read commands require Observation, check and pack preview require Verification, and applied pack requires Execution. Every subcommand supports `--actor`. See the [knowledge guide](https://github.com/inventarch/ia/blob/main/packages/kb/README.md) for selectors, citations, bounds and foundation ownership.
 
 ### 🤖 Machine protocol
 
@@ -232,8 +244,6 @@ Mandates are cooperative restrictions, not authentication or a sandbox. Anyone w
 - **It needs no account or hosted service.** Initialization and validation run offline; `ia read` never fetches a URL.
 
 ## 📚 Learn more
-
-Use `ia kb check|search|read|resolve|traverse` for admitted records and bound documents. `ia kb pack` previews an explicit committed selection; `--apply --yes` creates a package at `--out` without overwriting it. Read commands use Observation, check and pack preview use Verification, and applied pack uses Execution. Every subcommand supports `--actor`. See the [knowledge guide](../../packages/kb/README.md). No `.kb` directory is required.
 
 - [Package contract](SPEC.md): every command's behavior, refusals and JSON shapes
 - [Packaged language summary](LANGUAGE.md): the words this package ships

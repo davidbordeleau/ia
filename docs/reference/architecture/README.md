@@ -106,10 +106,10 @@ The CLI checks commands against the acting participant's mandates:
 
 | Commands | Move the mandate must grant |
 | --- | --- |
-| `ia read`, `ia next` | Observation |
-| `ia validate`, `ia preview` | Verification |
+| `ia read`, `ia next`, `ia kb search/read/resolve/traverse` | Observation |
+| `ia validate`, `ia preview`, `ia kb check` and `ia kb pack` preview | Verification |
 | `ia author` | Synthesis |
-| `ia capture`, `ia project`, and `ia host --apply` for a workspace | Execution |
+| `ia capture`, `ia project`, `ia kb pack --apply`, and `ia host --apply` for a workspace | Execution |
 | Every other command, including `ia position`, `ia inspect`, `ia init`, an `ia host` plan, `--remove` or `--user`, and the machine protocol | None: never checked, so the command a refusal names always runs |
 
 `--actor <agent>` names the acting participant; by default it is the workspace steward or its one participant. `ia preview` and `ia author` also check the record's word and the target path. A refusal is `IA-RUNTIME-MANDATE-MOVE` or `IA-RUNTIME-MANDATE-WORD`. `ia author` also refuses the administrative words `workspace`, `agent`, `mandate`, `system`, `schema`, `agent-profile` and `hook` with `IA-CLI-EDIT-AUTHORITY`. The generated edit guard refuses an edit a `@hook` selects when a `@mandate` governs the path and none grants the acting agent Synthesis. It does not judge excluded words or execution limits; `ia preview` and `ia author` enforce excluded words. Mandates are cooperative restrictions, not authentication or a sandbox: naming an actor is a local declaration, and the host still owns authentication and filesystem permissions.

@@ -4,8 +4,8 @@ import { expect, it, vi } from 'vitest';
 import { inRepository, git } from './release-fixtures.js';
 
 const race = vi.hoisted(() => ({
-  beforePush: undefined as (() => void) | undefined,
-  beforeFetch: undefined as (() => void) | undefined,
+  push: undefined as (() => void) | undefined,
+  fetch: undefined as (() => void) | undefined,
 }));
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
@@ -14,16 +14,14 @@ vi.mock('node:child_process', async (importOriginal) => {
     execFileSync: (...args: Parameters<typeof actual.execFileSync>) => {
       // Advance the remote before push starts, including before its advertisement.
       // A pre-push hook runs too late to distinguish --force from an expected-head lease.
-      if (args[0] === 'git' && Array.isArray(args[1]) && args[1][0] === 'push' && race.beforePush) {
-        const advance = race.beforePush;
-        race.beforePush = undefined;
-        advance();
-      }
-      // Advance the remote between the inspection's ls-remote and its fetch.
-      if (args[0] === 'git' && Array.isArray(args[1]) && args[1][0] === 'fetch' && race.beforeFetch) {
-        const advance = race.beforeFetch;
-        race.beforeFetch = undefined;
-        advance();
+      // For fetch, advance between the inspection's ls-remote and its fetch.
+      if (args[0] === 'git' && Array.isArray(args[1])) {
+        const command: unknown = args[1][0];
+        if (command === 'push' || command === 'fetch') {
+          const advance = race[command];
+          race[command] = undefined;
+          advance?.();
+        }
       }
       return actual.execFileSync(...args);
     },
@@ -104,7 +102,7 @@ it.each(['update', 'delete'] as const)(
       await git(root, 'switch', '--quiet', '--detach', base);
       writeFileSync(resolve(root, 'version.txt'), 'next\n');
       await git(root, 'add', 'version.txt');
-      race.beforePush = () => {
+      race.push = () => {
         execFileSync('git', ['--git-dir', remote, 'update-ref', 'refs/heads/release/next', human, first.head], {
           timeout: 10000,
         });
@@ -113,14 +111,14 @@ it.each(['update', 'delete'] as const)(
         expect(() =>
           operation === 'update' ? updateReleaseBranch(root, '1.0.2') : deleteReleaseBranch(root),
         ).toThrow();
-        expect(race.beforePush).toBeUndefined();
+        expect(race.push).toBeUndefined();
         expect(await git(root, 'ls-remote', 'origin', 'refs/heads/release/next')).toContain(human);
         // The race is gone; a recognized branch can be deleted and repeated deletion is harmless.
         await git(root, '--git-dir', remote, 'update-ref', 'refs/heads/release/next', first.head, human);
         expect(deleteReleaseBranch(root).previous).toBe(first.head);
         expect(deleteReleaseBranch(root).previous).toBe('');
       } finally {
-        race.beforePush = undefined;
+        race.push = undefined;
       }
     });
   },
@@ -171,6 +169,8 @@ it.each(['update', 'delete'] as const)(
 );
 
 const bot = '41898282+github-actions[bot]@users.noreply.github.com';
+const maintainer = 'maintainer@example.com';
+const byMaintainer = { author: maintainer, committer: maintainer };
 /** A remote whose main has two commits, plus a commit factory with explicit author and committer identities. */
 async function clauseFixture(root: string) {
   const { execFileSync } = await import('node:child_process');
@@ -236,12 +236,12 @@ it.each([
         base: () => commit([base], automation(first)),
         marker: () => commit([base], `Release 1.1.0\n\nIA-Release-Base: ${base}`),
         subject: () => commit([base], automation().replace('1.1.0', '1.1')),
-        author: () => commit([base], automation(), { author: 'maintainer@example.com' }),
-        committer: () => commit([base], automation(), { committer: 'maintainer@example.com' }),
+        author: () => commit([base], automation(), { author: maintainer }),
+        committer: () => commit([base], automation(), { committer: maintainer }),
         unmarked: () => commit([valid()], 'Regenerate assets'),
         'preparation-merge': () =>
           commit([valid(), first], 'Regenerate assets\n\nIA-Release-Preparation: v1', {
-            author: 'maintainer@example.com',
+            author: maintainer,
           }),
         'preparation-only': () => commit([base], 'Regenerate assets\n\nIA-Release-Preparation: v1'),
       }[clause]();
@@ -263,9 +263,12 @@ it.each(['update', 'delete'] as const)(
     const { PREPARATION_MARKER, updateReleaseBranch, deleteReleaseBranch } = await import('./release-branch.mjs');
     await inRepository(async (root) => {
       const { base, commit, publish, automation } = await clauseFixture(root);
-      const maintainer = { author: 'maintainer@example.com', committer: 'maintainer@example.com' };
-      const prepared = commit([commit([base], automation())], `Regenerate assets\n\n${PREPARATION_MARKER}`, maintainer);
-      const refreshed = commit([prepared], `Refresh coverage\n\n${PREPARATION_MARKER}`, maintainer);
+      const prepared = commit(
+        [commit([base], automation())],
+        `Regenerate assets\n\n${PREPARATION_MARKER}`,
+        byMaintainer,
+      );
+      const refreshed = commit([prepared], `Refresh coverage\n\n${PREPARATION_MARKER}`, byMaintainer);
       await publish(refreshed);
       if (operation === 'update') {
         writeFileSync(resolve(root, 'version.txt'), 'next\n');
@@ -286,7 +289,7 @@ it.each(['update', 'delete'] as const)(
 const unrecognized =
   'Refusing unrecognized release/next commits; preserve and reconcile maintainer amendments ' +
   '(release preparation commits carry the line "IA-Release-Preparation: v1")';
-const byMaintainer = { author: 'maintainer@example.com', committer: 'maintainer@example.com' };
+
 type Clauses = Awaited<ReturnType<typeof clauseFixture>>;
 
 // Near misses the per-clause table leaves open: each refused head differs from the accepted head beside it in one
@@ -318,17 +321,11 @@ it.each<[string, (fixture: Clauses) => [refused: string, accepted: string]]>([
   [
     // An in-place amend keeps the bot author and makes the maintainer the committer.
     'a legacy commit a maintainer amended in place',
-    ({ base, commit }) => [
-      commit([base], 'Release 1.1.0', { committer: 'maintainer@example.com' }),
-      commit([base], 'Release 1.1.0'),
-    ],
+    ({ base, commit }) => [commit([base], 'Release 1.1.0', { committer: maintainer }), commit([base], 'Release 1.1.0')],
   ],
   [
     'a legacy commit a maintainer authored',
-    ({ base, commit }) => [
-      commit([base], 'Release 1.1.0', { author: 'maintainer@example.com' }),
-      commit([base], 'Release 1.1.0'),
-    ],
+    ({ base, commit }) => [commit([base], 'Release 1.1.0', { author: maintainer }), commit([base], 'Release 1.1.0')],
   ],
 ])(
   'refuses a near miss with %s',
@@ -403,20 +400,20 @@ it('refuses and preserves release/next when it moves between listing and fetch',
     await publish(listed);
     await git(root, 'push', '--quiet', 'origin', `${moved}:refs/heads/moved`);
     const remote = await git(root, 'remote', 'get-url', 'origin');
-    race.beforeFetch = () => {
+    race.fetch = () => {
       const move = ['--git-dir', remote, 'update-ref', 'refs/heads/release/next', moved, listed];
       execFileSync('git', move, { timeout: 10_000 });
     };
     try {
       expect(() => deleteReleaseBranch(root)).toThrow(new Error('release/next changed during inspection'));
-      expect(race.beforeFetch).toBeUndefined();
+      expect(race.fetch).toBeUndefined();
       expect(await git(root, 'ls-remote', 'origin', 'refs/heads/release/next')).toBe(
         `${moved}\trefs/heads/release/next`,
       );
       // With the race over, the moved head is recognized and deleted.
       expect(deleteReleaseBranch(root).previous).toBe(moved);
     } finally {
-      race.beforeFetch = undefined;
+      race.fetch = undefined;
     }
   });
 }, 60_000);

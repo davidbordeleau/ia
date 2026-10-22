@@ -451,6 +451,12 @@ export interface SessionOptions {
   readonly root: string;
   /** `structural` admits a check whatever evaluator it names, for binding; `strict`, the default, is unchanged. */
   readonly checks?: 'strict' | 'structural';
+  /**
+   * `verify` passes db `OpenOptions.conformance` (db D10a): the reader's report verifies COMP-KERNEL and COMP-FIXTURES
+   * in-process, and only the report changes. `checks()` and `recordValidation` bind from that report, so evidence is
+   * recorded from a session opened without it, as `ia validate --verify-conformance` does.
+   */
+  readonly conformance?: 'verify';
 }
 export interface WorkspaceSession {
   readonly reader: Handle;
@@ -508,6 +514,7 @@ export function openWorkspaceSession(options: SessionOptions): WorkspaceSession 
     reader = open(root, {
       cache: false,
       ...(options.checks === 'structural' ? { checks: 'structural' as const } : {}),
+      ...(options.conformance === 'verify' ? { conformance: 'verify' as const } : {}),
     });
   // One read of the joined catalog per session and trust, shared by execution and check bindings.
   const joined = new Map<string, ReturnType<typeof joinedCatalog>>();

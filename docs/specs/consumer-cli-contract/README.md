@@ -40,6 +40,8 @@ Every `--apply` (`init`, `adopt`, `install`, `update`, `remove`, `restore`, `pro
 
 `validate` reports language and contract findings, then execution bindings and checks separately. A check with no bound evaluator is `not-evaluated`, never a pass. `validate` records the bound checks that passed or failed as evidence under `.ia/work/evidence/`, keyed to the authored revision it checked. A refused validation records and prunes nothing. `validate` never writes authored records.
 
+`validate --verify-conformance` verifies COMP-KERNEL and COMP-FIXTURES in-process with compliance's `package-v1` profile and reports them with `basis: 'verified'`, plus the profile and the suites it does not run. A floor that differs from the embedded one fails COMP-KERNEL and exits 1. The evidence it records is what `validate` without the flag records, even when verification refuses the report. Without the flag the output is unchanged.
+
 ### 2.6 Inspection and 2.7 packing
 
 `inspect`, `read`, `position` and `next` are observations and write nothing. `read` returns the body behind a locator with its digest. A position packet is a navigable context surface, not a body.

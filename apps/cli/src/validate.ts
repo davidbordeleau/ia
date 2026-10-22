@@ -110,6 +110,22 @@ const ACTIONS: Readonly<Record<string, string>> = {
     'Declare the owning system as a direct requirement, or move the record to a system that already requires it.',
 };
 
+/** The next action for a check verification did not evaluate: its evaluator is built in, so there is none to supply. */
+const UNVERIFIED =
+  'A not-evaluated result is not a pass; the Conformance section says why verification did not evaluate it.';
+/** A next action that reruns `ia validate` keeps `--verify-conformance` when this run verified, or a rerun would not. */
+const rerun = (view: ValidationView, action: string): string =>
+  view.conformance === undefined ? action : action.replaceAll('"ia validate', '"ia validate --verify-conformance');
+/** Under `--verify-conformance`, whether `findings` hold not-evaluated ones and each is COMP-KERNEL's or COMP-FIXTURES'. */
+const unverifiedOnly = (view: ValidationView, findings: readonly Finding[]): boolean => {
+  const unevaluated = findings.filter((finding) => NOT_EVALUATED.has(finding.code));
+  return (
+    view.conformance !== undefined &&
+    unevaluated.length > 0 &&
+    unevaluated.every((finding) => CONFORMANCE_CHECKS.includes(view.checks.get(findingKey(finding)) ?? ''))
+  );
+};
+
 export const locationOf = (finding: Finding): string | null =>
   finding.path === '' ? null : `${finding.path}:${finding.line}`;
 const countsOf = (findings: readonly Finding[]) => ({
@@ -372,7 +388,11 @@ const checksSection = (view: ValidationView, caps: Capabilities): readonly strin
     symbol: CHECK_SYMBOL(check),
     identity: check.identity,
     result: `${check.runner ?? 'no evaluator'}: ${check.status}, ${check.outcome}`,
-    reason: check.reason,
+    // db D10a: a check is bound from the report without verification, which never evaluates these two runners.
+    reason:
+      view.conformance !== undefined && check.runner !== null && CONFORMANCE_CHECKS.includes(check.runner)
+        ? `${check.reason}; checks bind from the report without verification, so Conformance above has the verified result`
+        : check.reason,
   }));
   const evidence =
     recorded.path === null
@@ -508,16 +528,21 @@ const severitySection = (view: ValidationView, rows: readonly Finding[], caps: C
     caps.ascii,
   );
   const collapsed = collapseByRecord(rows);
-  const lines: string[] = [];
+  const lines: string[] = [],
+    /** The findings of the current run of one code, which its action closes. */
+    run: Finding[] = [];
   for (const [index, group] of collapsed.entries()) {
     const column = contentColumn(2, statusSymbol(group.head.severity, caps.ascii), width);
     lines.push(...errorBlock(element(view, group.head, width), { depth: 1 }, caps));
     if (group.rest.length > 0)
       lines.push(...entry([[atom(collapseTail(group.rest), 'dim', 0)]], { column, symbol: 'info' }, caps));
-    const action = ACTIONS[group.head.code];
+    run.push(group.head, ...group.rest);
     // The action closes the run, so a code that appears several times in a row carries one action, not one each.
-    if (action !== undefined && collapsed[index + 1]?.head.code !== group.head.code)
-      lines.push(...entry([words(action)], { column, symbol: 'step' }, caps));
+    if (collapsed[index + 1]?.head.code === group.head.code) continue;
+    const action =
+      group.head.code === 'IA-COMP-NOT-EVALUATED' && unverifiedOnly(view, run) ? UNVERIFIED : ACTIONS[group.head.code];
+    run.length = 0;
+    if (action !== undefined) lines.push(...entry([words(rerun(view, action))], { column, symbol: 'step' }, caps));
   }
   return lines;
 };
@@ -528,6 +553,9 @@ const severitySection = (view: ValidationView, rows: readonly Finding[], caps: C
  * replacing what the intact catalog revokes. A not-evaluated check is never a pass.
  */
 function closing(view: ValidationView, errors: number, revoked: number, notEvaluated: number): string {
+  return rerun(view, closingAction(view, errors, revoked, notEvaluated));
+}
+function closingAction(view: ValidationView, errors: number, revoked: number, notEvaluated: number): string {
   const damaged = [view.bindings.catalog, view.checkBindings.catalog].find((catalog) => catalog?.status === 'damaged'),
     structural = structurallyAdmitted(view.checkBindings),
     revokedChecks = view.checkBindings.results
@@ -545,7 +573,9 @@ function closing(view: ValidationView, errors: number, revoked: number, notEvalu
   if (revoked > 0)
     return 'Replace each implementation the installed catalog revokes above with one it does not, then run "ia validate" again.';
   if (view.outcome === 'not-evaluated')
-    return 'A not-evaluated result is not a pass. Supply the named evaluator to obtain one.';
+    return unverifiedOnly(view, view.findings)
+      ? UNVERIFIED
+      : 'A not-evaluated result is not a pass. Supply the named evaluator to obtain one.';
   if (notEvaluated > 0) return 'A not-evaluated check is not a pass; each check above says why it was not evaluated.';
   return 'Every declared structural obligation is satisfied at this revision.';
 }
@@ -604,7 +634,9 @@ export function renderValidation(view: ValidationView, options: ValidationOption
   if (view.outcome === 'not-evaluated')
     summary.push(
       words(
-        `Admission outcome: not-evaluated. No evaluator was supplied for ${total.notEvaluated} checks, so this run is not a pass.`,
+        unverifiedOnly(view, view.findings)
+          ? `Admission outcome: not-evaluated. Verification did not evaluate ${total.notEvaluated} checks, so this run is not a pass.`
+          : `Admission outcome: not-evaluated. No evaluator was supplied for ${total.notEvaluated} checks, so this run is not a pass.`,
       ),
     );
   const blocks: (readonly string[])[] = [

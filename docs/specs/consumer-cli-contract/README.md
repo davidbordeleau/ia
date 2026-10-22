@@ -38,7 +38,7 @@ Every `--apply` (`init`, `adopt`, `install`, `update`, `remove`, `restore`, `pro
 
 `ia compile` is removed. Every invocation returns `IA-CLI-USAGE` (exit 2) and names `ia capture --help` before it opens a workspace. It is absent from help and the catalog, and its token stays reserved so an extension cannot take it over. The published internal compile helpers keep their signatures for programmatic callers.
 
-`validate` reports language and contract findings, then execution bindings and checks separately. A check with no bound evaluator is `not-evaluated`, never a pass. `validate` records the bound checks that passed or failed as evidence under `.ia/work/evidence/`, keyed to the authored revision it checked. A refused validation records and prunes nothing. `validate` never writes authored records.
+`validate` reports language and contract findings, then execution bindings and checks separately. A check with no bound evaluator is `not-evaluated`, never a pass. `validate` records the bound checks that passed or failed as evidence under `.ia/work/evidence/`, keyed to the authored revision it checked. A validation whose admission is refused records and prunes nothing; under `--verify-conformance` that is the admission without verification. `validate` never writes authored records.
 
 `validate --verify-conformance` verifies COMP-KERNEL and COMP-FIXTURES in-process with compliance's `package-v1` profile and reports them with `basis: 'verified'`, plus the profile and the suites it does not run. A floor that differs from the embedded one fails COMP-KERNEL and exits 1. The evidence it records is what `validate` without the flag records, even when verification refuses the report. Without the flag the output is unchanged.
 

@@ -23,6 +23,8 @@ import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { open, readInputs } from '@inventarch/db';
 import { openWorkspaceSession } from '@inventarch/distribution/services';
+import { resolveCapabilities } from '../src/render.js';
+import { checkNames, collectValidation, DEFAULT_OPTIONS, renderValidation } from '../src/validate.js';
 import { doctor, host, initialized, put } from './host-fixture.js';
 import { cleanup, repository, run, scratch } from './workspace-fixture.js';
 
@@ -568,6 +570,11 @@ it('verifies COMP-KERNEL and COMP-FIXTURES with --verify-conformance and records
   expect(human.text).toContain(
     'Profile package-v1, which does not run HOOK, RUNTIME, escalation, EXEC and PUBLICATION: a pass says nothing about them.',
   );
+  // The kernel check is not-evaluated beside a verified pass, and says why.
+  expect(human.text).toContain(
+    `${ID('kernel-check')} COMP-KERNEL: bound, not-evaluated built-in COMP-KERNEL: 1 selected verdict, not-evaluated; checks bind from the report without verification, so Conformance above has the verified result`,
+  );
+  expect((await validate(root, env)).text).not.toContain('checks bind from the report without verification');
 });
 
 it('fails a verified COMP-KERNEL for a local floor one byte away, and still records what a plain validate records', async () => {
@@ -606,11 +613,53 @@ it('fails a verified COMP-KERNEL for a local floor one byte away, and still reco
     'COMP-KERNEL fail, verified Kernel verification: KERNEL_DIGEST differs from regeneration',
   );
   expect(human.text).toContain(`Recorded 1 observation in ${plain.envelope.evidence.path}, unchanged.`);
+  // A rerun without the flag would not verify, so the next action keeps it.
+  expect(human.text).toContain('Fix the errors above and run "ia validate --verify-conformance" again.');
   // With nothing to record, it says why from the admission it records from, which verification did not refuse.
   put(changed.root, '.ia/src/checks.ia', `#! ia 1.0\n\n${check('kernel-check', 'COMP-KERNEL', '*')}`);
   const unrecorded = await validate(changed.root, changed.env, '--verify-conformance');
   expect(unrecorded.exitCode).toBe(1);
   expect(unrecorded.text).toContain('No evidence recorded: no bound check passed or failed.');
+});
+
+it('points a check verification did not evaluate to the Conformance section, not to an evaluator to supply', async () => {
+  const { root } = await initialized();
+  const caps = resolveCapabilities({ env: {}, isTTY: false }, {}),
+    flat = (text: string) => text.replace(/\s+/g, ' ');
+  // Without the flag, the two not-evaluated checks ask for their evaluator.
+  const plain = flat(renderValidation(collectValidation(root, null), DEFAULT_OPTIONS, caps));
+  expect(plain).toContain('A not-evaluated result is not a pass. Supply the named evaluator to obtain one.');
+  // A verifying view whose COMP-KERNEL verification could not evaluate, as a floor C31 cannot bind would leave it.
+  const view = collectValidation(root, null, undefined, true),
+    conformance = view.conformance!,
+    finding = {
+      code: 'IA-COMP-NOT-EVALUATED' as const,
+      severity: 'warning' as const,
+      path: '',
+      line: 1,
+      message: 'COMP-KERNEL: the floor sources are not all at floor placement',
+    };
+  const unverified = {
+    ...view,
+    outcome: 'not-evaluated' as const,
+    findings: [...view.findings, finding],
+    checks: checkNames([{ check: 'COMP-KERNEL', findings: [finding] }]),
+    conformance: {
+      profile: conformance.profile!,
+      toolchain: conformance.toolchain!,
+      fixtures: conformance.fixtures!,
+      verdicts: [conformance.verdicts[0]!, { check: 'COMP-KERNEL', outcome: 'not-evaluated' as const, basis: null }],
+    },
+  };
+  const rendered = flat(renderValidation(unverified, DEFAULT_OPTIONS, caps));
+  expect(rendered).toContain(
+    'Admission outcome: not-evaluated. Verification did not evaluate 1 checks, so this run is not a pass.',
+  );
+  expect(rendered).toContain(
+    'COMP-KERNEL not-evaluated, not verified the floor sources are not all at floor placement',
+  );
+  expect(rendered.split('the Conformance section says why verification did not evaluate it.')).toHaveLength(3);
+  expect(rendered).not.toContain('Supply the');
 });
 
 it('prints exactly what it printed before when --verify-conformance is absent', async () => {

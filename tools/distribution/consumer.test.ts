@@ -87,12 +87,18 @@ it.each(['explicit', 'orchestration'])(
         'agent-composition-system',
       ].map((name) => '@inventarch/' + name),
     );
+    // The direct dependencies each adapter selects by name; the package adapter installs the whole cohort directly.
+    const adapters = new Map<string, ReadonlySet<string> | undefined>([
+      ['./qualify-packages.mjs', undefined],
+      ['../projections/qualify-resources.mjs', resourceNames],
+      ['../projections/qualify-projections.mjs', resourceNames],
+      [
+        './qualify-conformance.mjs',
+        new Set(['cli', 'language', 'graph', 'compliance', 'db'].map((name) => '@inventarch/' + name)),
+      ],
+    ]);
     try {
-      for (const entry of [
-        './qualify-packages.mjs',
-        '../projections/qualify-resources.mjs',
-        '../projections/qualify-projections.mjs',
-      ]) {
+      for (const [entry, names] of adapters) {
         vi.resetModules();
         install.mockClear();
         select.mockClear();
@@ -101,20 +107,14 @@ it.each(['explicit', 'orchestration'])(
         expect(select).toHaveBeenCalledOnce();
         expect(install).toHaveBeenCalledOnce();
         // Every adapter overrides the whole verified cohort: packed system manifests depend on unselected members
-        // at the candidate version, which the registry may not have. The resource adapters select their direct
+        // at the candidate version, which the registry may not have. The other adapters select their direct
         // dependencies by name.
         expect(install.mock.calls[0]![1]).toEqual(selected.packed);
-        if (entry !== './qualify-packages.mjs')
-          expect(new Set(((install.mock.calls[0] as unknown[])[3] as { names: string[] }).names)).toEqual(
-            resourceNames,
-          );
+        if (names !== undefined)
+          expect(new Set(((install.mock.calls[0] as unknown[])[3] as { names: string[] }).names)).toEqual(names);
       }
       writeFileSync(selected.packed[0]!.filename, 'substituted before adapter entry');
-      for (const entry of [
-        './qualify-packages.mjs',
-        '../projections/qualify-resources.mjs',
-        '../projections/qualify-projections.mjs',
-      ]) {
+      for (const entry of adapters.keys()) {
         vi.resetModules();
         install.mockClear();
         process.argv = [process.execPath, entry, ...(mode === 'explicit' ? ['--manifest', manifest] : [])];

@@ -105,7 +105,7 @@ const sandbox = () => ({
   writeDenied: denied(() => writeFileSync(probe + '.written', '')),
   writeGranted: process.permission?.has('fs.write') ?? true,
 });
-const heap = () => ({ used: process.memoryUsage().heapUsed, limit: getHeapStatistics().heap_size_limit });`;
+const heap = () => { const statistics = getHeapStatistics(); return { used: statistics.used_heap_size, total: statistics.total_heap_size, limit: statistics.heap_size_limit, maxRss: process.resourceUsage().maxRSS * 1024 }; };`;
 const PRODUCERS = `${SANDBOX}
 const { verifyFixtures, verifyKernel } = await import('@inventarch/compliance');
 let started = performance.now();
@@ -155,7 +155,8 @@ const sandboxed = (program, probe, input = '') => {
     'The worker was not confined to reading node_modules',
   );
   assert.ok(result.heap.limit < 2 * HEAP_MB * 1024 * 1024, `The worker's heap limit is ${result.heap.limit} bytes`);
-  assert.ok(result.heap.used < HEAP_MB * 1024 * 1024, `The worker used ${result.heap.used} bytes of heap`);
+  // The cap enforces the budget; the committed heap shows how far below it the worker stayed.
+  assert.ok(result.heap.total < HEAP_MB * 1024 * 1024, `The worker committed ${result.heap.total} bytes of heap`);
   return result;
 };
 
@@ -186,7 +187,12 @@ try {
     const install = packageManagerCommand(pnpm, ['install', '--ignore-scripts', '--lockfile=false']);
     execFileSync(install.command, install.args, {
       cwd: consumer,
-      env: { ...env, npm_config_registry: REGISTRY },
+      // Only the npm registry: no inherited npm or pnpm setting, such as a mirror, may choose where the packages come from.
+      env: {
+        ...Object.fromEntries(Object.entries(env).filter(([key]) => !/^p?npm_config_/i.test(key))),
+        npm_config_registry: REGISTRY,
+        pnpm_config_registry: REGISTRY,
+      },
       encoding: 'utf8',
       windowsHide: true,
       timeout: 300_000,
@@ -266,7 +272,7 @@ for (const source of KERNEL_SOURCES) {
   console.log(
     JSON.stringify({
       format: 'ia.conformance-sandbox.v1',
-      source: registry === undefined ? 'packed' : 'registry',
+      source: registry === undefined ? 'packed' : REGISTRY,
       packages: Object.fromEntries([...expected].filter(([name]) => name !== CLI)),
       node: process.version,
       platform: process.platform,
@@ -277,7 +283,9 @@ for (const source of KERNEL_SOURCES) {
         fixturesMs: Math.round(producers.fixturesMs),
         budgetMs: PRODUCER_BUDGET_MS,
         heapUsedMb: megabytes(producers.heap.used),
+        heapCommittedMb: megabytes(producers.heap.total),
         heapLimitMb: megabytes(producers.heap.limit),
+        maxRssMb: megabytes(producers.heap.maxRss),
       },
       corpora: Object.fromEntries(
         Object.entries(results).map(([name, result]) => [
@@ -287,7 +295,8 @@ for (const source of KERNEL_SOURCES) {
             kernel: result.verdicts.find((verdict) => verdict.check === 'COMP-KERNEL').outcome,
             fixtures: result.verdicts.find((verdict) => verdict.check === 'COMP-FIXTURES').outcome,
             snapshotMs: Math.round(result.ms),
-            heapUsedMb: megabytes(result.heap.used),
+            heapCommittedMb: megabytes(result.heap.total),
+            maxRssMb: megabytes(result.heap.maxRss),
           },
         ]),
       ),

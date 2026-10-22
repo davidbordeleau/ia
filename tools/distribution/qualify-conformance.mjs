@@ -60,8 +60,10 @@ const temporaryRoot = realpathSync(tmpdir()),
   consumer = join(temporary, 'consumer with spaces'),
   home = join(temporary, 'home'),
   corpora = join(temporary, 'corpora');
+// Every child prints JSON, so no color setting is passed on: Node 22.22.0 warns on stderr at every console.log when
+// FORCE_COLOR, which CI sets, and NO_COLOR are both present.
 const env = {
-  ...process.env,
+  ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:FORCE_COLOR|NO_COLOR)$/i.test(key))),
   HOME: home,
   USERPROFILE: home,
   IA_HOME: join(home, 'ia'),
@@ -78,7 +80,6 @@ const env = {
   NODE_AUTH_TOKEN: '',
   NPM_TOKEN: '',
   NODE_OPTIONS: '',
-  NO_COLOR: '1',
 };
 /** Runs Node on the host side, outside the sandbox. @param {readonly string[]} args @param {string} [input] */
 const host = (args, input) =>

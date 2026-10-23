@@ -21,13 +21,18 @@ import {
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
-import { open } from '@inventarch/db';
+import { open, readInputs } from '@inventarch/db';
+import { openWorkspaceSession } from '@inventarch/distribution/services';
+import { resolveCapabilities } from '../src/render.js';
+import { checkNames, collectValidation, DEFAULT_OPTIONS, renderValidation } from '../src/validate.js';
 import { doctor, host, initialized, put } from './host-fixture.js';
 import { cleanup, repository, run, scratch } from './workspace-fixture.js';
 
 vi.setConfig({ testTimeout: 240_000 });
 // Every node:fs export calls through; a test can make one unlink fail as a file the process may not remove would.
 vi.mock('node:fs', { spy: true });
+// Sessions open as they always do; a test can make the verifying one see another revision, as a concurrent edit would.
+vi.mock('@inventarch/distribution/services', { spy: true });
 const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
 afterAll(cleanup, 120_000);
 
@@ -485,4 +490,272 @@ it('keeps prior times only from a file the writer itself would write', async () 
   expect(rewritten).not.toContain('planted');
   // The writer's own file, by contrast, lends its times: a third validate writes nothing.
   expect((await json(root, env)).envelope.evidence).toMatchObject({ written: false });
+});
+
+/** A passing built-in check and a whole-workspace check that runs COMP-KERNEL. */
+const KERNEL_CHECK = `#! ia 1.0
+
+${check('demo-schema-check', 'COMP-SCHEMA', '*')}
+${check('kernel-check', 'COMP-KERNEL', '*')}`;
+/** COMP-FIXTURES and COMP-KERNEL as `--verify-conformance` reports them when both were verified. */
+const verified = (kernel: 'pass' | 'fail') => [
+  { check: 'COMP-FIXTURES', outcome: 'pass', basis: 'verified' },
+  { check: 'COMP-KERNEL', outcome: kernel, basis: 'verified' },
+];
+const verifying = async (root: string, env: Record<string, string>) => {
+  const result = await run(['validate', '--root', root, '--verify-conformance', '--json'], { env });
+  return { exitCode: result.exitCode, envelope: JSON.parse(result.stdout) };
+};
+/** Writes the embedded floor into the workspace as its local floor, with one byte of one `says` text changed if asked. */
+function localFloor(root: string, change: boolean): void {
+  const floor = readInputs(root).sources.filter((source) => source.path.startsWith('.ia/src/floor/')),
+    [changed] = floor.filter((source) => source.text.includes('says "'));
+  expect(floor.length).toBeGreaterThan(0);
+  for (const source of floor) {
+    const at = source.text.indexOf('says "') + 'says "'.length;
+    put(
+      root,
+      source.path,
+      change && source === changed
+        ? source.text.slice(0, at) + (source.text[at] === 'x' ? 'y' : 'x') + source.text.slice(at + 1)
+        : source.text,
+    );
+  }
+}
+
+it('verifies COMP-KERNEL and COMP-FIXTURES with --verify-conformance and records what a plain validate records', async () => {
+  const { root, env } = await initialized();
+  put(root, '.ia/src/checks.ia', KERNEL_CHECK);
+  const plain = await json(root, env);
+  expect(plain.exitCode).toBe(0);
+  expect(plain.envelope).not.toHaveProperty('conformance');
+  expect(plain.envelope.reportOutcome).toBe('not-evaluated');
+  const path = resolve(root, plain.envelope.evidence.path),
+    bytes = readFileSync(path);
+  const { exitCode, envelope } = await verifying(root, env);
+  expect(exitCode).toBe(0);
+  expect(envelope).toMatchObject({
+    status: 'admitted',
+    reportOutcome: 'pass',
+    revision: plain.envelope.revision,
+    authoredRevision: plain.envelope.authoredRevision,
+    counts: { errors: 0, warnings: plain.envelope.counts.warnings - 2, notEvaluated: 0 },
+  });
+  expect(envelope.conformance.verdicts).toEqual(verified('pass'));
+  expect(envelope.conformance).toMatchObject({
+    profile: 'package-v1',
+    kernel: { floorDigest: expect.stringMatching(/^[0-9a-f]{64}$/) },
+    fixtures: { inventoryDigest: expect.stringMatching(/^[0-9a-f]{64}$/) },
+  });
+  expect(envelope.conformance.fixtures.outOfProfile.map((suite: { suite: string }) => suite.suite)).toEqual([
+    'HOOK',
+    'RUNTIME',
+    'escalation',
+    'EXEC',
+    'PUBLICATION',
+  ]);
+  // Checks are bound, and evidence recorded, from the report without verification (db D10a): the kernel check stays
+  // not-evaluated, and the evidence file is the one a plain validate wrote, unchanged.
+  expect(envelope.checks).toEqual(plain.envelope.checks);
+  expect(envelope.checks.results.find((row: { name: string }) => row.name === 'kernel-check')).toMatchObject({
+    outcome: 'not-evaluated',
+  });
+  expect(envelope.evidence).toEqual({ ...plain.envelope.evidence, written: false });
+  expect(readFileSync(path)).toEqual(bytes);
+  const human = await validate(root, env, '--verify-conformance');
+  expect(human.exitCode).toBe(0);
+  expect(human.text).toContain('Admitted.');
+  expect(human.text).toContain('Conformance ✔ COMP-FIXTURES pass, verified Inventory ');
+  expect(human.text).toContain('✔ COMP-KERNEL pass, verified Floor ');
+  expect(human.text).toContain(
+    'Profile package-v1, which does not run HOOK, RUNTIME, escalation, EXEC and PUBLICATION: a pass says nothing about them.',
+  );
+  // The kernel check is not-evaluated beside a verified pass, and says why.
+  expect(human.text).toContain(
+    `${ID('kernel-check')} COMP-KERNEL: bound, not-evaluated built-in COMP-KERNEL: 1 selected verdict, not-evaluated; checks bind from the report without verification, so Conformance above has the verified result`,
+  );
+  expect((await validate(root, env)).text).not.toContain('checks bind from the report without verification');
+});
+
+it('fails a verified COMP-KERNEL for a local floor one byte away, and still records what a plain validate records', async () => {
+  const embedded = await initialized(),
+    exact = await initialized(),
+    changed = await initialized();
+  localFloor(exact.root, false);
+  localFloor(changed.root, true);
+  put(changed.root, '.ia/src/checks.ia', KERNEL_CHECK);
+  const digest = (await verifying(embedded.root, embedded.env)).envelope.conformance.kernel.floorDigest;
+  // The embedded floor's exact bytes as a local floor verify, and to the same floor digest.
+  const local = await verifying(exact.root, exact.env);
+  expect(local.exitCode).toBe(0);
+  expect(local.envelope.conformance.verdicts).toEqual(verified('pass'));
+  expect(local.envelope.conformance.kernel.floorDigest).toBe(digest);
+  const plain = await json(changed.root, changed.env);
+  expect(plain.exitCode).toBe(0);
+  expect(plain.envelope.status).toBe('admitted');
+  const path = resolve(changed.root, plain.envelope.evidence.path),
+    bytes = readFileSync(path);
+  const { exitCode, envelope } = await verifying(changed.root, changed.env);
+  expect(exitCode).toBe(1);
+  expect(envelope).toMatchObject({ status: 'refused', reportOutcome: 'fail', revision: plain.envelope.revision });
+  expect(envelope.conformance.verdicts).toEqual(verified('fail'));
+  expect(envelope.conformance.kernel.floorDigest).not.toBe(digest);
+  expect(envelope.findings).toContainEqual(
+    expect.objectContaining({ code: 'IA-COMP-FIXTURE-MISMATCH', severity: 'error', path: '.ia/src/floor' }),
+  );
+  // A verified failure refuses the report, never the evidence: it is the plain validate's, unchanged.
+  expect(envelope.checks).toEqual(plain.envelope.checks);
+  expect(envelope.evidence).toEqual({ ...plain.envelope.evidence, written: false });
+  expect(readFileSync(path)).toEqual(bytes);
+  const human = await validate(changed.root, changed.env, '--verify-conformance');
+  expect(human.exitCode).toBe(1);
+  expect(human.text).toContain(
+    'COMP-KERNEL fail, verified Kernel verification: KERNEL_DIGEST differs from regeneration',
+  );
+  expect(human.text).toContain(`Recorded 1 observation in ${plain.envelope.evidence.path}, unchanged.`);
+  // A rerun without the flag would not verify, so the next action keeps it.
+  expect(human.text).toContain('Fix the errors above and run "ia validate --verify-conformance" again.');
+  // With nothing to record, it says why from the admission it records from, which verification did not refuse.
+  put(changed.root, '.ia/src/checks.ia', `#! ia 1.0\n\n${check('kernel-check', 'COMP-KERNEL', '*')}`);
+  const unrecorded = await validate(changed.root, changed.env, '--verify-conformance');
+  expect(unrecorded.exitCode).toBe(1);
+  expect(unrecorded.text).toContain('No evidence recorded: no bound check passed or failed.');
+});
+
+it('points a check verification did not evaluate to the Conformance section, not to an evaluator to supply', async () => {
+  const { root } = await initialized();
+  const caps = resolveCapabilities({ env: {}, isTTY: false }, {}),
+    flat = (text: string) => text.replace(/\s+/g, ' ');
+  // Without the flag, the two not-evaluated checks ask for their evaluator.
+  const plain = flat(renderValidation(collectValidation(root, null), DEFAULT_OPTIONS, caps));
+  expect(plain).toContain('A not-evaluated result is not a pass. Supply the named evaluator to obtain one.');
+  // A verifying view whose COMP-KERNEL verification could not evaluate, as a floor C31 cannot bind would leave it.
+  const view = collectValidation(root, null, undefined, true),
+    conformance = view.conformance!,
+    finding = {
+      code: 'IA-COMP-NOT-EVALUATED' as const,
+      severity: 'warning' as const,
+      path: '',
+      line: 1,
+      message: 'COMP-KERNEL: the floor sources are not all at floor placement',
+    };
+  const unverified = {
+    ...view,
+    outcome: 'not-evaluated' as const,
+    findings: [...view.findings, finding],
+    checks: checkNames([{ check: 'COMP-KERNEL', findings: [finding] }]),
+    conformance: {
+      profile: conformance.profile!,
+      toolchain: conformance.toolchain!,
+      fixtures: conformance.fixtures!,
+      verdicts: [conformance.verdicts[0]!, { check: 'COMP-KERNEL', outcome: 'not-evaluated' as const, basis: null }],
+    },
+  };
+  const rendered = flat(renderValidation(unverified, DEFAULT_OPTIONS, caps));
+  expect(rendered).toContain(
+    'Admission outcome: not-evaluated. Verification did not evaluate 1 checks, so this run is not a pass.',
+  );
+  expect(rendered).toContain(
+    'COMP-KERNEL not-evaluated, not verified the floor sources are not all at floor placement',
+  );
+  expect(rendered.split('the Conformance section says why verification did not evaluate it.')).toHaveLength(3);
+  expect(rendered).not.toContain('Supply the');
+});
+
+it('prints exactly what it printed before when --verify-conformance is absent', async () => {
+  const { root, env } = await initialized();
+  const { envelope } = await json(root, env);
+  expect(Object.keys(envelope)).toEqual([
+    'version',
+    'root',
+    'revision',
+    'authoredRevision',
+    'status',
+    'reportOutcome',
+    'counts',
+    'findings',
+    'truncated',
+    'bindings',
+    'checks',
+    'evidence',
+  ]);
+  const human = await run(['validate', '--root', root], { env });
+  expect(human.exitCode).toBe(0);
+  // Only the root, the revision and the record count, which the base distribution sets, differ between machines.
+  expect(
+    human.stdout
+      .replace(/^Workspace .*$/m, 'Workspace <root> <revision>')
+      .replace(/Admitted\. \d+ records/, 'Admitted. <n> records'),
+  ).toBe(
+    [
+      '',
+      'Workspace <root> <revision>',
+      '',
+      '  ✔  Admitted. <n> records, 0 errors, 2 warnings.',
+      '     Admission outcome: not-evaluated. No evaluator was supplied for 2 checks,',
+      '     so this run is not a pass.',
+      '',
+      'Warnings',
+      '  ▲  (whole workspace)  COMP-FIXTURES',
+      '     IA-COMP-NOT-EVALUATED  matching-revision verification evidence was not',
+      '     supplied',
+      '  ▲  (whole workspace)  COMP-KERNEL',
+      '     IA-COMP-NOT-EVALUATED  matching-revision verification evidence was not',
+      '     supplied',
+      '     →  Supply the evaluator each check above names, then run "ia validate"',
+      '        again.',
+      '',
+      '→  A not-evaluated result is not a pass. Supply the named evaluator to obtain',
+      '   one.',
+      '',
+    ].join('\n'),
+  );
+});
+
+it('refuses a missing root or an unreadable source with --verify-conformance exactly as without it', async () => {
+  const { root } = await initialized();
+  actualFs.writeFileSync(resolve(root, '.ia/src/undecodable.ia'), Buffer.from([0xff, 0xfe, 0x00, 0x41]));
+  for (const [path, code] of [
+    [resolve(scratch('no-workspace'), 'missing'), 'IA-DB-ROOT-INVALID'],
+    [root, 'IA-DB-SOURCE-UNAVAILABLE'],
+  ]) {
+    const plain = await run(['validate', '--root', path!, '--json']),
+      flagged = await run(['validate', '--root', path!, '--verify-conformance', '--json']);
+    expect(plain.exitCode).toBe(3);
+    expect(JSON.parse(plain.stdout)).toMatchObject({ ok: false, code });
+    expect(flagged.exitCode).toBe(plain.exitCode);
+    // The same refusal, whose next command keeps the flag where it respells the invocation.
+    const { next, ...refusal } = JSON.parse(flagged.stdout),
+      { next: plainNext, ...plainRefusal } = JSON.parse(plain.stdout);
+    expect(refusal).toEqual(plainRefusal);
+    expect(next.replace(' --verify-conformance', '')).toBe(plainNext);
+  }
+});
+
+it('refuses, recording nothing, when the sources change between the validation and its verification', async () => {
+  const { root, env } = await initialized();
+  put(root, '.ia/src/checks.ia', BUILT_IN);
+  const actual = await vi.importActual<typeof import('@inventarch/distribution/services')>(
+    '@inventarch/distribution/services',
+  );
+  vi.mocked(openWorkspaceSession).mockImplementation((options) => {
+    const session = actual.openWorkspaceSession(options);
+    return options.conformance === 'verify'
+      ? { ...session, validation: () => ({ ...session.validation(), revision: 'f'.repeat(64) }) }
+      : session;
+  });
+  try {
+    const { exitCode, envelope } = await verifying(root, env);
+    expect(exitCode).toBe(3);
+    expect(envelope).toMatchObject({
+      code: 'IA-DB-SOURCE-CHANGED',
+      where: { path: root },
+      next: expect.stringContaining('--verify-conformance'),
+    });
+    expect(existsSync(resolve(root, EVIDENCE))).toBe(false);
+  } finally {
+    vi.mocked(openWorkspaceSession).mockRestore();
+  }
+  // Unchanged sources record as before.
+  expect((await verifying(root, env)).envelope.evidence).toMatchObject({ written: true });
 });

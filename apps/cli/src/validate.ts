@@ -24,6 +24,12 @@
  * the same trust) and records the evidence of the bound ones that passed or failed through `recordValidation`, the one
  * writer of evidence, which `ia-distribution validate` calls too. A revoked check is an error; an unavailable or
  * not-evaluated one is never a pass. With no `@check` record the human report is unchanged.
+ *
+ * `--verify-conformance` verifies COMP-KERNEL and COMP-FIXTURES in-process (compliance C31) through a second session
+ * opened with db `conformance: 'verify'` (db D10a). The report is that session's: its findings, status, outcome and
+ * exit, and a Conformance section. Checks, evidence and bindings stay the first session's, bound from the report without
+ * verification, so the evidence recorded is what a validation without the flag records, and every reader admits it.
+ * Without the flag nothing new runs and the output is unchanged.
  */
 import { EVIDENCE_DIRECTORY } from '@inventarch/db';
 import type { EvidenceWrite } from '@inventarch/db';
@@ -57,7 +63,31 @@ import type { Session } from './session.js';
 
 type Admission = ReturnType<Session['admission']>;
 type Finding = Admission['findings'][number];
+type Report = Session['reader']['report'];
 export type Severity = 'error' | 'warning';
+
+/** The checks `--verify-conformance` verifies (compliance C31), in the order a report sorts them. */
+const CONFORMANCE_CHECKS: readonly string[] = ['COMP-FIXTURES', 'COMP-KERNEL'];
+/**
+ * What `--verify-conformance` verified: COMP-FIXTURES and COMP-KERNEL as the verifying report judged them, each with
+ * the basis the report gave it (`verified`, or null for a result it could not evaluate), and the report's own
+ * `conformance` object (profile, toolchain, the kernel's floor and the fixtures' inventory, observed codes and
+ * out-of-profile suites), present when at least one of them was verified.
+ */
+export interface ValidationConformance extends Partial<NonNullable<Report['conformance']>> {
+  readonly verdicts: readonly {
+    readonly check: string;
+    readonly outcome: Report['verdicts'][number]['outcome'];
+    readonly basis: NonNullable<Report['verdicts'][number]['basis']> | null;
+  }[];
+}
+const conformanceOf = (report: Report): ValidationConformance => ({
+  verdicts: report.verdicts
+    .filter((verdict) => CONFORMANCE_CHECKS.includes(verdict.check))
+    .map(({ check, outcome, basis }) => ({ check, outcome, basis: basis ?? null }))
+    .sort((a, b) => CONFORMANCE_CHECKS.indexOf(a.check) - CONFORMANCE_CHECKS.indexOf(b.check)),
+  ...report.conformance,
+});
 
 /** §2.5: `fail` on any error, else `not-evaluated` on an unresolved or unevaluated check, else `pass`. */
 export type ReportOutcome = 'pass' | 'fail' | 'not-evaluated';
@@ -78,6 +108,22 @@ const ACTIONS: Readonly<Record<string, string>> = {
     'Add an unconditional implementing case for the named requirement, or withdraw the requirement.',
   'IA-COMP-DISCRIMINATOR-FOREIGN':
     'Declare the owning system as a direct requirement, or move the record to a system that already requires it.',
+};
+
+/** The next action for a check verification did not evaluate: its evaluator is built in, so there is none to supply. */
+const UNVERIFIED =
+  'A not-evaluated result is not a pass; the Conformance section says why verification did not evaluate it.';
+/** A next action that reruns `ia validate` keeps `--verify-conformance` when this run verified, or a rerun would not. */
+const rerun = (view: ValidationView, action: string): string =>
+  view.conformance === undefined ? action : action.replaceAll('"ia validate', '"ia validate --verify-conformance');
+/** Under `--verify-conformance`, whether `findings` hold not-evaluated ones and each is COMP-KERNEL's or COMP-FIXTURES'. */
+const unverifiedOnly = (view: ValidationView, findings: readonly Finding[]): boolean => {
+  const unevaluated = findings.filter((finding) => NOT_EVALUATED.has(finding.code));
+  return (
+    view.conformance !== undefined &&
+    unevaluated.length > 0 &&
+    unevaluated.every((finding) => CONFORMANCE_CHECKS.includes(view.checks.get(findingKey(finding)) ?? ''))
+  );
 };
 
 export const locationOf = (finding: Finding): string | null =>
@@ -129,6 +175,13 @@ export interface ValidationView {
   readonly checkBindings: ValidationChecks;
   /** What this validate request recorded as evidence. */
   readonly evidence: EvidenceWrite;
+  /**
+   * The admission status the evidence was recorded from: `status` itself, except under `--verify-conformance`, whose
+   * verification can refuse a report it never records from.
+   */
+  readonly evidenceStatus: 'admitted' | 'refused';
+  /** Present only under `--verify-conformance`. */
+  readonly conformance?: ValidationConformance;
 }
 export interface ValidationOptions {
   readonly filters: readonly string[];
@@ -205,39 +258,63 @@ export function validationTrust(host: Pick<Host, 'env' | 'packageRoot'>): HostTr
 /**
  * Opens the workspace, reads its admission, binds its checks, records their evidence and closes it. The only part of this
  * verb that touches a workspace, and the evidence it records is the one write it makes. `gate`, when given, judges the
- * session before admission is read or any evidence is recorded, so a refused profile writes nothing.
+ * session before admission is read or any evidence is recorded, so a refused profile writes nothing. `verify` also
+ * opens the verifying session the report is read from; its revision must be the first session's, or nothing is recorded.
  */
-export function collectValidation(root: string, trust: HostTrust | null, gate?: SessionGate): ValidationView {
+export function collectValidation(
+  root: string,
+  trust: HostTrust | null,
+  gate?: SessionGate,
+  verify = false,
+): ValidationView {
   const session: Session = openSession(root, VALIDATING);
   try {
     gate?.(session);
-    // The distribution's one validation service, which `ia-distribution validate` reports as well: admission's findings
-    // and the warnings for db D02a/D02b declarations that declare nothing.
-    const admission = session.validation(),
-      checkBindings = session.checks(trust);
-    let evidence: EvidenceWrite;
+    const verifying = verify ? openSession(root, { ...VALIDATING, conformance: 'verify' }) : undefined;
     try {
-      evidence = recordValidation(session, checkBindings);
-    } catch (error) {
-      throw evidenceRefusal(error, root);
+      const reported = verifying ?? session;
+      // The distribution's one validation service, which `ia-distribution validate` reports as well: admission's
+      // findings and the warnings for db D02a/D02b declarations that declare nothing.
+      const admission = reported.validation(),
+        checkBindings = session.checks(trust);
+      if (admission.revision !== session.reader.revision) throw sourceChanged(root);
+      let evidence: EvidenceWrite;
+      try {
+        evidence = recordValidation(session, checkBindings);
+      } catch (error) {
+        throw evidenceRefusal(error, root);
+      }
+      return {
+        root,
+        revision: admission.revision,
+        authoredRevision: admission.authoredRevision,
+        status: admission.status,
+        outcome: reported.reader.report.outcome,
+        records: admission.records,
+        findings: admission.findings,
+        checks: checkNames(reported.reader.report.verdicts),
+        bindings: session.bindings(trust),
+        checkBindings,
+        evidence,
+        evidenceStatus: session.admission().status,
+        ...(verifying === undefined ? {} : { conformance: conformanceOf(verifying.reader.report) }),
+      };
+    } finally {
+      verifying?.close();
     }
-    return {
-      root,
-      revision: admission.revision,
-      authoredRevision: admission.authoredRevision,
-      status: admission.status,
-      outcome: session.reader.report.outcome,
-      records: admission.records,
-      findings: admission.findings,
-      checks: checkNames(session.reader.report.verdicts),
-      bindings: session.bindings(trust),
-      checkBindings,
-      evidence,
-    };
   } finally {
     session.close();
   }
 }
+/** The refusal for sources that changed between the two sessions of a verifying validation; nothing was recorded. */
+const sourceChanged = (root: string): Refusal =>
+  new Refusal(
+    'IA-DB-SOURCE-CHANGED',
+    'The workspace sources changed between the validation and its conformance verification',
+    3,
+    { path: root },
+    `Once nothing is writing the workspace's sources, run "ia validate --root ${quote(root)} --verify-conformance".`,
+  );
 
 interface Selection {
   readonly reported: readonly Finding[];
@@ -271,6 +348,7 @@ export function validationEnvelope(view: ValidationView, options: ValidationOpti
     bindings: view.bindings,
     checks: view.checkBindings,
     evidence: view.evidence,
+    ...(view.conformance === undefined ? {} : { conformance: view.conformance }),
   };
 }
 const CHECK_SYMBOL = (check: ValidationChecks['results'][number]): SymbolName =>
@@ -310,11 +388,15 @@ const checksSection = (view: ValidationView, caps: Capabilities): readonly strin
     symbol: CHECK_SYMBOL(check),
     identity: check.identity,
     result: `${check.runner ?? 'no evaluator'}: ${check.status}, ${check.outcome}`,
-    reason: check.reason,
+    // db D10a: a check is bound from the report without verification, which never evaluates these two runners.
+    reason:
+      view.conformance !== undefined && check.runner !== null && CONFORMANCE_CHECKS.includes(check.runner)
+        ? `${check.reason}; checks bind from the report without verification, so Conformance above has the verified result`
+        : check.reason,
   }));
   const evidence =
     recorded.path === null
-      ? view.status === 'refused'
+      ? view.evidenceStatus === 'refused'
         ? 'No evidence recorded: admission was refused, so nothing is recorded or pruned.'
         : 'No evidence recorded: no bound check passed or failed.'
       : `Recorded ${recorded.observations.length} ${recorded.observations.length === 1 ? 'observation' : 'observations'} in ${recorded.path}${recorded.written ? '' : ', unchanged'}.`;
@@ -323,6 +405,42 @@ const checksSection = (view: ValidationView, caps: Capabilities): readonly strin
     ...(catalog === null ? [] : entry([words(catalogLine(catalog, caps.ascii))], { depth: 1, symbol: 'info' }, caps)),
     ...resultRows(rows, caps),
     ...entry([words(evidence)], { depth: 1, symbol: 'info' }, caps),
+  ];
+};
+
+/**
+ * The Conformance section `--verify-conformance` adds: one entry per check with its outcome and basis, and what it was
+ * verified against, or why it is not a pass; then the profile and the suites it does not run.
+ */
+const conformanceSection = (view: ValidationView, conformance: ValidationConformance, caps: Capabilities) => {
+  const reasonOf = (check: string): string => {
+    const finding = view.findings.find((candidate) => view.checks.get(findingKey(candidate)) === check);
+    return finding === undefined ? '' : finding.message.replace(`${check}: `, '');
+  };
+  const rows: ResultRow[] = conformance.verdicts.map((verdict) => ({
+    symbol: verdict.outcome === 'pass' ? 'success' : verdict.outcome === 'fail' ? 'error' : 'unknown',
+    identity: verdict.check,
+    result: `${verdict.outcome}, ${verdict.basis === 'verified' ? 'verified' : 'not verified'}`,
+    reason:
+      verdict.outcome !== 'pass'
+        ? reasonOf(verdict.check)
+        : verdict.check === 'COMP-KERNEL' && conformance.kernel !== undefined
+          ? `Floor ${truncateDigest(conformance.kernel.floorDigest, caps.ascii)} regenerates the running kernel.`
+          : verdict.check === 'COMP-FIXTURES' && conformance.fixtures !== undefined
+            ? `Inventory ${truncateDigest(conformance.fixtures.inventoryDigest, caps.ascii)}, ${conformance.fixtures.observedCodes.length} codes observed.`
+            : '',
+  }));
+  const suites = conformance.fixtures?.outOfProfile.map((suite) => suite.suite) ?? [];
+  const profile =
+    conformance.profile === undefined
+      ? 'Nothing was verified; a not-evaluated check is not a pass.'
+      : suites.length === 0
+        ? `Profile ${conformance.profile}.`
+        : `Profile ${conformance.profile}, which does not run ${listed(suites)}: a pass says nothing about them.`;
+  return [
+    sectionLabel('Conformance', caps),
+    ...resultRows(rows, caps),
+    ...entry([words(profile)], { depth: 1, symbol: 'info' }, caps),
   ];
 };
 
@@ -410,16 +528,21 @@ const severitySection = (view: ValidationView, rows: readonly Finding[], caps: C
     caps.ascii,
   );
   const collapsed = collapseByRecord(rows);
-  const lines: string[] = [];
+  const lines: string[] = [],
+    /** The findings of the current run of one code, which its action closes. */
+    run: Finding[] = [];
   for (const [index, group] of collapsed.entries()) {
     const column = contentColumn(2, statusSymbol(group.head.severity, caps.ascii), width);
     lines.push(...errorBlock(element(view, group.head, width), { depth: 1 }, caps));
     if (group.rest.length > 0)
       lines.push(...entry([[atom(collapseTail(group.rest), 'dim', 0)]], { column, symbol: 'info' }, caps));
-    const action = ACTIONS[group.head.code];
+    run.push(group.head, ...group.rest);
     // The action closes the run, so a code that appears several times in a row carries one action, not one each.
-    if (action !== undefined && collapsed[index + 1]?.head.code !== group.head.code)
-      lines.push(...entry([words(action)], { column, symbol: 'step' }, caps));
+    if (collapsed[index + 1]?.head.code === group.head.code) continue;
+    const action =
+      group.head.code === 'IA-COMP-NOT-EVALUATED' && unverifiedOnly(view, run) ? UNVERIFIED : ACTIONS[group.head.code];
+    run.length = 0;
+    if (action !== undefined) lines.push(...entry([words(rerun(view, action))], { column, symbol: 'step' }, caps));
   }
   return lines;
 };
@@ -430,6 +553,9 @@ const severitySection = (view: ValidationView, rows: readonly Finding[], caps: C
  * replacing what the intact catalog revokes. A not-evaluated check is never a pass.
  */
 function closing(view: ValidationView, errors: number, revoked: number, notEvaluated: number): string {
+  return rerun(view, closingAction(view, errors, revoked, notEvaluated));
+}
+function closingAction(view: ValidationView, errors: number, revoked: number, notEvaluated: number): string {
   const damaged = [view.bindings.catalog, view.checkBindings.catalog].find((catalog) => catalog?.status === 'damaged'),
     structural = structurallyAdmitted(view.checkBindings),
     revokedChecks = view.checkBindings.results
@@ -447,7 +573,9 @@ function closing(view: ValidationView, errors: number, revoked: number, notEvalu
   if (revoked > 0)
     return 'Replace each implementation the installed catalog revokes above with one it does not, then run "ia validate" again.';
   if (view.outcome === 'not-evaluated')
-    return 'A not-evaluated result is not a pass. Supply the named evaluator to obtain one.';
+    return unverifiedOnly(view, view.findings)
+      ? UNVERIFIED
+      : 'A not-evaluated result is not a pass. Supply the named evaluator to obtain one.';
   if (notEvaluated > 0) return 'A not-evaluated check is not a pass; each check above says why it was not evaluated.';
   return 'Every declared structural obligation is satisfied at this revision.';
 }
@@ -506,7 +634,9 @@ export function renderValidation(view: ValidationView, options: ValidationOption
   if (view.outcome === 'not-evaluated')
     summary.push(
       words(
-        `Admission outcome: not-evaluated. No evaluator was supplied for ${total.notEvaluated} checks, so this run is not a pass.`,
+        unverifiedOnly(view, view.findings)
+          ? `Admission outcome: not-evaluated. Verification did not evaluate ${total.notEvaluated} checks, so this run is not a pass.`
+          : `Admission outcome: not-evaluated. No evaluator was supplied for ${total.notEvaluated} checks, so this run is not a pass.`,
       ),
     );
   const blocks: (readonly string[])[] = [
@@ -543,6 +673,7 @@ export function renderValidation(view: ValidationView, options: ValidationOption
         caps,
       ),
     );
+  if (view.conformance !== undefined) blocks.push(conformanceSection(view, view.conformance, caps));
   if (view.checkBindings.results.length > 0) blocks.push(checksSection(view, caps));
   if (view.bindings.results.length > 0) blocks.push(bindingsSection(view.bindings, caps));
   blocks.push(
@@ -569,7 +700,12 @@ export function runValidate(context: Context): Result {
   const root = requireRoot(context);
   // The validate mode (Verification) under the participant's mandate profile, judged on the validation's own session
   // before it reads anything or records evidence.
-  const view = collectValidation(root, validationTrust(context.host), sessionGate(context, 'validate'));
+  const view = collectValidation(
+    root,
+    validationTrust(context.host),
+    sessionGate(context, 'validate'),
+    args.flag('verify-conformance'),
+  );
   const options: ValidationOptions = {
     filters: args.positionals,
     severity: (args.value('severity') ?? 'warning') as Severity,

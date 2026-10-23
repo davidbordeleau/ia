@@ -4620,6 +4620,50 @@
       "reason": "Exact archive provenance is rechecked on every run; restored test evidence cannot replace this verification."
     },
     {
+      "id": "conformance:qualify",
+      "kind": "command",
+      "project": ".",
+      "command": "pnpm conformance:qualify",
+      "profile": "installed",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "mode": "emitted",
+      "inputProfile": "qualification-source",
+      "dependsOn": [
+        "agent-composition-system:build",
+        "agent-system:build",
+        "authoring-system:build",
+        "session-system:build",
+        "template-system:build",
+        "cli:build",
+        "distribution:build",
+        "mcp-door:build",
+        "steward-hook:build",
+        "vscode:build",
+        "compliance:build",
+        "db:build",
+        "graph:build",
+        "language:build",
+        "runtime:build",
+        "service-contracts:build",
+        "kb:build",
+        "packages:pack"
+      ],
+      "outputs": [
+        "artifacts/tests/conformance-qualify"
+      ],
+      "cache": false,
+      "workerLimit": 1,
+      "resourceClass": "subprocess",
+      "covers": [
+        "node tools/distribution/qualify-conformance.mjs"
+      ],
+      "reason": "Exact archive provenance is rechecked on every run; restored test evidence cannot replace this verification."
+    },
+    {
       "id": "tools:test-shared",
       "kind": "vitest",
       "project": ".",

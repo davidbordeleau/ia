@@ -218,7 +218,9 @@ export const COMMANDS: readonly CommandSpec[] = [
       refuses: 'no .ia/src directory at the root or in any parent',
       next: 'ia init',
     },
-    syntax: ['ia validate [<path>...] [--severity error|warning] [--max-findings <n>] [--actor <agent>] [--json]'],
+    syntax: [
+      'ia validate [<path>...] [--severity error|warning] [--max-findings <n>] [--verify-conformance] [--actor <agent>] [--json]',
+    ],
     grammar: grammar(
       [
         option({ name: 'severity', kind: 'value', values: ['error', 'warning'], summary: 'Lowest severity to report' }),
@@ -228,6 +230,11 @@ export const COMMANDS: readonly CommandSpec[] = [
           integer: { min: 1 },
           placeholder: '<n>',
           summary: 'Findings to render (default 50)',
+        }),
+        option({
+          name: 'verify-conformance',
+          kind: 'boolean',
+          summary: 'Verify COMP-KERNEL and COMP-FIXTURES in-process (package-v1 profile)',
         }),
         ACTOR,
       ],

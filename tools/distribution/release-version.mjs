@@ -370,7 +370,7 @@ ${prose}
 
 ### Review
 
-Check that the release prose matches the diff since the baseline. Edit the changeset prose on this branch if needed, then run \`pnpm release:collect\` and \`pnpm npm:inputs\`. Commit changes here only as new commits on top of the bot's \`Release ${result.version}\` commit, not as an amend or a rebase of it, or a merge, each with the message line \`${PREPARATION_MARKER}\`; any run of the Release pull request workflow before this pull request merges, from a push to main or started by hand, rebuilds this branch from main without them, so make a lasting prose change in the pending notes under \`releases/pending/\` through a pull request to main.
+Check that the release prose matches the diff since the baseline. Edit the changeset prose on this branch if needed, then run \`pnpm release:collect\` and \`pnpm npm:inputs\`. Commit changes here only as new commits on top of the bot's \`Release ${result.version}\` commit, not as an amend or a rebase of it, or a merge, each with the message line \`${PREPARATION_MARKER}\`; a run of the Release pull request workflow before this pull request merges, from a push to main or started by hand, can rebuild this branch from main without them, so make a lasting prose change in the pending notes under \`releases/pending/\` through a pull request to main.
 ${nativeReview}
 ### After merge
 

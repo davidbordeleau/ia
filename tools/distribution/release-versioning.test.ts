@@ -1585,9 +1585,9 @@ it.each([false, true])(
       // Here the Review line is the body's only statement of the commit rule release-branch.mjs enforces on release/next.
       expect(body).toContain(
         `Commit changes here only as new commits on top of the bot's \`Release ${result.version}\` commit, not as an ` +
-          'amend or a rebase of it, or a merge, each with the message line `IA-Release-Preparation: v1`; any run of the ' +
+          'amend or a rebase of it, or a merge, each with the message line `IA-Release-Preparation: v1`; a run of the ' +
           'Release pull request workflow before this pull request merges, from a push to main or started by hand, ' +
-          'rebuilds this branch from main without them, so make a lasting prose change in the pending notes under ' +
+          'can rebuild this branch from main without them, so make a lasting prose change in the pending notes under ' +
           '`releases/pending/` through a pull request to main.\n',
       );
     });

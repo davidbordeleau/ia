@@ -11,8 +11,8 @@
 | `current.json` | The coordinated npm version, its dist-tag, the published baseline (commit and version) it advances, and the reviewed groups of packages that form dependency cycles once packed | `pnpm release:version --write` |
 | `changesets/<version>.json` | The consumed changeset for one version: release prose, each package's impact and the SHA-256 of every file changed since the baseline | `pnpm release:version --write`; immutable once published |
 | `pending/<id>.json` | Release notes not yet part of a version; the folder exists only while notes are pending | `pnpm release:note`, committed with your pull request |
-| `native/current.json` | The native archive ledger: the published baseline tag and commit, the digest of the native notes, and each native archive's version, archive and manifest digests and dependencies | `pnpm native:version --write` |
-| `native/notes.json` | Native release notes: a bump and a summary for each changed native archive, against the latest published release tag | Edited by hand and reviewed with the release |
+| `native/current.json` | The native archive ledger: the published baseline tag and commit, the digest of the native notes, and each native archive's version, archive and manifest digests and dependencies | `pnpm native:version --write`; `pnpm release:version --write` moves its baseline when no native archive changed |
+| `native/notes.json` | Native release notes: a bump and a summary for each changed native archive, against the latest published release tag | Edited by hand and reviewed with the release; `pnpm release:version --write` resets it for the new baseline when no native archive changed |
 | `native/baselines/` | The native digests published with npm 2.0.0, the first baseline the native check pins | Never changed |
 
 Consumed means allocated to a release. Publication to the registry is separate, and the immutable `v<version>` tag records it.

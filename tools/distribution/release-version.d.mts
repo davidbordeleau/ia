@@ -12,11 +12,14 @@ export interface VersionResult {
   sha256?: string;
   files?: number;
   nativeRegenerationRequired?: boolean;
+  nativeLedgerCarried?: boolean;
   pending?: number;
   reason?: string;
 }
 export declare const EDITOR_MANIFEST: string;
 export declare const EDITOR_NOTICES: string;
+export declare const NATIVE_LEDGER: string;
+export declare const NATIVE_NOTES: string;
 export declare function versionRelease(
   root: string,
   projects: PublicPackage[],

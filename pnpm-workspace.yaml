@@ -20,3 +20,4 @@ overrides:
   "nx>axios": "1.20.0"
   "nx>brace-expansion": "5.0.12"
   "nx>smol-toml": "1.9.0"
+  "@azure/identity>@azure/msal-node": "7.1.0"

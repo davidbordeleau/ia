@@ -1011,7 +1011,7 @@ describe('prompt-scoped runtime and resource context through the context executa
   /** Patches one `node:fs` export for one synchronous run; the owners' named imports see the patch once it is synced. */
   type Hooked = (...args: unknown[]) => unknown;
   const mutableFs = createRequire(import.meta.url)('node:fs') as Record<
-    'openSync' | 'readSync' | 'readFileSync',
+    'openSync' | 'readSync',
     Hooked
   >;
   function patched(name: keyof typeof mutableFs, replace: (original: Hooked) => Hooked, run: () => unknown): void {
@@ -1082,28 +1082,6 @@ describe('prompt-scoped runtime and resource context through the context executa
         expect(armed, `read mutation must fire exactly once: ${suffix}`).toBe(false);
       }
     };
-  /** Runs `action` once, just before the first whole-file read of a path ending with `suffix`. */
-  const atReadFile =
-    (suffix: string, action: () => void) =>
-    (run: () => unknown): void => {
-      let armed = true;
-      try {
-        patched(
-          'readFileSync',
-          (readFile) =>
-            (path, ...rest) => {
-              if (armed && String(path).endsWith(suffix)) {
-                armed = false;
-                action();
-              }
-              return readFile(path, ...rest);
-            },
-          run,
-        );
-      } finally {
-        expect(armed, `whole-file mutation must fire exactly once: ${suffix}`).toBe(false);
-      }
-    };
   it('answers STALE whenever the re-check finds the source or resource selection changed', async () => {
     const copy = join(temporary, 'host-04-recheck-changed'),
       manifest = join(copy, '.ia/authoring.resources.json'),
@@ -1160,8 +1138,8 @@ describe('prompt-scoped runtime and resource context through the context executa
           { name: 'ResourceError', code: 'IA-RESOURCE-INVALID', message: 'Resource changed while capturing' },
         ],
         [
-          'a source removed as the native capture reads it',
-          atReadFile(join('agent-composition-system', 'records', 'composition.ia'), () => renameSync(record, aside)),
+          'a source removed as the native capture opens it',
+          atOpen(join('agent-composition-system', 'records', 'composition.ia'), () => renameSync(record, aside)),
           {
             name: 'DbError',
             code: 'IA-DB-SOURCE-CHANGED',

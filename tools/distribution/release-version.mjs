@@ -35,6 +35,9 @@ import { publicPackages } from './release-packages.mjs';
 /** Private files that follow the cohort version: the editor extension and the dependency attribution its build writes. */
 export const EDITOR_MANIFEST = 'apps/vscode/package.json';
 export const EDITOR_NOTICES = 'apps/vscode/THIRD_PARTY_NOTICES.txt';
+/** The native archive ledger and its notes. `pnpm native:version --write` owns them, apart from the carry below. */
+export const NATIVE_LEDGER = 'releases/native/current.json';
+export const NATIVE_NOTES = 'releases/native/notes.json';
 const json = (root, path) => JSON.parse(readFileSync(resolve(root, path), 'utf8'));
 const git = (root, ...args) => gitText(root, args);
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -118,6 +121,45 @@ function rollback(root, paths) {
     }
   }
 }
+/**
+ * The ledger and notes rebased onto the npm baseline's `v<version>` tag, when only their baseline is stale. A ledger
+ * equal to the one that tag carries means no native archive changed since it, because the native check refuses a
+ * changed archive without notes against the tag; the archives stand and only the baseline and notes digest move, as
+ * `pnpm native:version --write` would write them. Notes against an earlier tag can authorize nothing, so they reset to
+ * an empty set for this one. A new major, notes against this tag, or a ledger that moved since stay with the native
+ * writer, and `pnpm native:release:check` on the release head still verifies the carried ledger.
+ */
+function carriedNativeLedger(root, baseline, version) {
+  const writes = new Map();
+  if (!existsSync(resolve(root, NATIVE_LEDGER))) return writes;
+  const ledger = json(root, NATIVE_LEDGER),
+    source = { tag: releaseTag(baseline.version), commit: baseline.commit };
+  if (ledger.format !== 'ia.native-release.v1' || isDeepStrictEqual(ledger.baseline, source)) return writes;
+  if (nativeMajorAlignment(version, baseline.version) || nativeNotesPending(root, baseline.version, baseline.commit))
+    return writes;
+  let tagged;
+  try {
+    tagged = JSON.parse(git(root, 'show', `${baseline.commit}:${NATIVE_LEDGER}`));
+  } catch {
+    return writes;
+  }
+  if (!isDeepStrictEqual(ledger, tagged)) return writes;
+  let notes = existsSync(resolve(root, NATIVE_NOTES)) ? readFileSync(resolve(root, NATIVE_NOTES)) : null;
+  if (notes && !isDeepStrictEqual(JSON.parse(notes.toString('utf8')).baseline, source)) {
+    notes = Buffer.from(
+      JSON.stringify({ format: 'ia.native-release-notes.v1', baseline: source, changes: [] }, null, 2) + '\n',
+    );
+    writes.set(NATIVE_NOTES, notes);
+  }
+  const carried = {
+    format: ledger.format,
+    baseline: source,
+    notesSha256: notes ? sha256(notes) : null,
+    archives: ledger.archives,
+  };
+  writes.set(NATIVE_LEDGER, Buffer.from(JSON.stringify(carried, null, 2) + '\n'));
+  return writes;
+}
 async function registryHas(name, version) {
   const response = await fetch(`${REGISTRY}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(30_000) });
   if (response.status === 404) return false;
@@ -175,7 +217,10 @@ export async function versionRelease(root, projects, options = {}) {
         policy.version,
         releaseNativeVersions(root, policy.baseline.version, policy.version),
       );
-      if ([...selectors].every(([path, bytes]) => readFileSync(resolve(root, path), 'utf8') === bytes))
+      if (
+        [...selectors].every(([path, bytes]) => readFileSync(resolve(root, path), 'utf8') === bytes) &&
+        !carriedNativeLedger(root, policy.baseline, policy.version).size
+      )
         return none(`${policy.version} is prepared and current`);
     } catch {}
   }
@@ -193,7 +238,10 @@ export async function versionRelease(root, projects, options = {}) {
   const natives = releaseNativeVersions(root, baseline.version, version),
     selectors = prepareNativeSelection(root, version, natives),
     selectorWrites = [...selectors].filter(([path, bytes]) => readFileSync(resolve(root, path), 'utf8') !== bytes),
-    nativesMove = natives !== undefined && !isDeepStrictEqual(natives, selectedNativeVersions(root));
+    nativesMove = natives !== undefined && !isDeepStrictEqual(natives, selectedNativeVersions(root)),
+    nativeRegenerationRequired =
+      selectors.size > 0 && (nativesMove || nativeNotesPending(root, baseline.version, baseline.commit)),
+    ledgerWrites = nativeRegenerationRequired ? new Map() : carriedNativeLedger(root, baseline, version);
   const plan = {
     action,
     state,
@@ -202,8 +250,8 @@ export async function versionRelease(root, projects, options = {}) {
     bump,
     baseline,
     notes: notes.map(({ id }) => id),
-    nativeRegenerationRequired:
-      selectors.size > 0 && (nativesMove || nativeNotesPending(root, baseline.version, baseline.commit)),
+    nativeRegenerationRequired,
+    nativeLedgerCarried: ledgerWrites.size > 0,
   };
   if (!write) return plan;
 
@@ -244,7 +292,7 @@ export async function versionRelease(root, projects, options = {}) {
       [...orphaned].map(([name, paths]) => `  ${name}: ${paths.slice(0, 3).join(', ')}`).join('\n'),
   );
 
-  const touched = [RELEASE_POLICY, ...selectorWrites.map(([path]) => path)],
+  const touched = [RELEASE_POLICY, ...selectorWrites.map(([path]) => path), ...ledgerWrites.keys()],
     removed = notes.map(({ path }) => path),
     path = changesetPath(version);
   if (version !== policy.version) {
@@ -260,7 +308,7 @@ export async function versionRelease(root, projects, options = {}) {
       if (touched.includes(EDITOR_MANIFEST)) setManifestVersion(root, EDITOR_MANIFEST, policy.version, version);
       if (touched.includes(EDITOR_NOTICES)) setNoticeVersions(root, names, policy.version, version);
     }
-    for (const [path, bytes] of selectorWrites) writeFileSync(resolve(root, path), bytes);
+    for (const [path, bytes] of [...selectorWrites, ...ledgerWrites]) writeFileSync(resolve(root, path), bytes);
     if (removed.length) git(root, 'rm', '--quiet', '--', ...removed);
     writeFileSync(resolve(root, RELEASE_POLICY), JSON.stringify({ ...policy, version, baseline }, null, 2) + '\n');
     const rows = trackedChanges(root, { ...policy, version, baseline }),

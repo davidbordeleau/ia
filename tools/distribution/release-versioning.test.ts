@@ -21,6 +21,7 @@ import {
   releaseNotes,
   releaseStatus,
   renderChangelog,
+  sha256,
   validateChangesetStructure,
   validateChangeset,
   type Changeset,
@@ -845,7 +846,11 @@ const nativePaths = [
   'examples/public-language/versions.json',
 ];
 
-/** A published 3.0.0 with two independent native owners; the full twelve-archive inventory is tested by native packing. */
+/**
+ * A published 3.0.0 with two independent native owners; the full twelve-archive inventory is tested by native packing.
+ * With `ledger`, 3.0.0 carries a real native ledger and notes against the earlier baseline, as `pnpm native:version
+ * --write` leaves them at a release; otherwise its ledger is a placeholder the versioner must not read.
+ */
 async function withAlignedRelease(
   run: (repo: {
     root: string;
@@ -856,6 +861,7 @@ async function withAlignedRelease(
     /** Pending notes for the next release: a `bump` CLI fix, and with `narrowOwner` a `none` agent guide edit. */
     note: (narrowOwner?: boolean, bump?: 'patch' | 'major') => Promise<void>;
   }) => Promise<void>,
+  { ledger = false }: { ledger?: boolean } = {},
 ) {
   await inRepository(async (root) => {
     const write = (path: string, value: unknown) => {
@@ -947,6 +953,28 @@ async function withAlignedRelease(
       ],
       coverage: [],
     });
+    if (ledger) {
+      const source = { tag: 'v2.0.0', commit: baseline.commit };
+      write('releases/native/notes.json', {
+        format: 'ia.native-release-notes.v1',
+        baseline: source,
+        changes: [{ id: 'inventarch/agent-system', bump: 'major', summary: 'Aligned to 3.0.0.' }],
+      });
+      write('releases/native/current.json', {
+        format: 'ia.native-release.v1',
+        baseline: source,
+        notesSha256: sha256(readFileSync(resolve(root, 'releases/native/notes.json'))),
+        archives: ['inventarch/language', ...nativeSystems.map((system) => 'inventarch/' + system)].map(
+          (id, index) => ({
+            id,
+            version: '3.0.0',
+            archive: String(index).repeat(64),
+            manifest: String(index + 5).repeat(64),
+            dependencies: [],
+          }),
+        ),
+      });
+    }
     await fixtureGit(root, 'add', '-A');
     collectChanges(root, projects());
     await commit('Publish aligned 3.0.0');
@@ -1035,6 +1063,117 @@ it('asks for native regeneration on a patch only when native notes target this r
     // The versioner never selects a content-driven native version itself: `pnpm native:version --write` does.
     expect(read('examples/public-language/versions.json').language).toBe('3.0.0');
   });
+}, 120_000);
+
+it('carries a native ledger unchanged since the published tag onto it and resets the earlier notes', async () => {
+  await withAlignedRelease(
+    async ({ root, read, projects, note }) => {
+      await note();
+      const source = { tag: 'v3.0.0', commit: await fixtureGit(root, 'rev-parse', 'v3.0.0') },
+        tagged = read('releases/native/current.json');
+      // A dry run reports the carry and writes nothing.
+      expect(await versionRelease(root, projects(), { registry: null, sealInputs: false })).toMatchObject({
+        action: 'version',
+        version: '3.0.1',
+        nativeRegenerationRequired: false,
+        nativeLedgerCarried: true,
+      });
+      expect(await fixtureGit(root, 'status', '--porcelain')).toBe('');
+      const result = await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+      expect(result).toMatchObject({ action: 'version', version: '3.0.1', nativeLedgerCarried: true });
+      const notes = readFileSync(resolve(root, 'releases/native/notes.json'));
+      expect(JSON.parse(notes.toString('utf8'))).toEqual({
+        format: 'ia.native-release-notes.v1',
+        baseline: source,
+        changes: [],
+      });
+      // What the native writer writes for unchanged archives: only the baseline and the notes digest move.
+      expect(readFileSync(resolve(root, 'releases/native/current.json'), 'utf8')).toBe(
+        JSON.stringify({ ...tagged, baseline: source, notesSha256: sha256(notes) }, null, 2) + '\n',
+      );
+      expect((await fixtureGit(root, 'diff', '--cached', '--name-only')).split('\n')).toEqual(
+        expect.arrayContaining(['releases/native/current.json', 'releases/native/notes.json']),
+      );
+      const entry = read(result.changeset!) as Changeset;
+      for (const path of ['releases/native/current.json', 'releases/native/notes.json'])
+        expect(entry.coverage.find((row) => row.path === path)).toMatchObject({ change: 'repository-maintenance' });
+      expect(() => releaseChanges(root, projects())).not.toThrow();
+    },
+    { ledger: true },
+  );
+}, 120_000);
+
+it('leaves the native ledger to the native writer unless only its baseline is stale', async () => {
+  await withAlignedRelease(
+    async ({ root, write, read, commit, projects, note }) => {
+      const source = { tag: 'v3.0.0', commit: await fixtureGit(root, 'rev-parse', 'v3.0.0') },
+        tagged = read('releases/native/current.json'),
+        plan = () => versionRelease(root, projects(), { registry: null, sealInputs: false });
+      // Notes against the published tag ask for regeneration, which writes the ledger.
+      write('releases/native/notes.json', {
+        format: 'ia.native-release-notes.v1',
+        baseline: source,
+        changes: [{ id: 'inventarch/agent-system', bump: 'patch', summary: 'Reviewed native change.' }],
+      });
+      await note();
+      expect(await plan()).toMatchObject({ nativeRegenerationRequired: true, nativeLedgerCarried: false });
+      // A new major aligns every native archive, so none of the tagged archives stands.
+      await fixtureGit(root, 'checkout', 'v3.0.0', '--', 'releases/native/notes.json');
+      await note(false, 'major');
+      expect(await plan()).toMatchObject({ version: '4.0.0', nativeLedgerCarried: false });
+      // A ledger that moved since the tag, with or without its baseline, is the native writer's.
+      write('releases/native/current.json', {
+        ...tagged,
+        archives: tagged.archives.map((row: object, index: number) =>
+          index ? row : { ...row, archive: 'f'.repeat(64) },
+        ),
+      });
+      await note();
+      expect(await plan()).toMatchObject({ version: '3.0.1', nativeLedgerCarried: false });
+      write('releases/native/current.json', { ...tagged, baseline: source });
+      await commit('Select natives against the published tag');
+      const ledger = readFileSync(resolve(root, 'releases/native/current.json'));
+      expect(await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false })).toMatchObject({
+        version: '3.0.1',
+        nativeLedgerCarried: false,
+      });
+      expect(readFileSync(resolve(root, 'releases/native/current.json'))).toEqual(ledger);
+    },
+    { ledger: true },
+  );
+}, 120_000);
+
+it('refreshes a prepared release whose native ledger still names the earlier baseline', async () => {
+  await withAlignedRelease(
+    async ({ root, read, commit, projects, note }) => {
+      await note();
+      await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false });
+      // A release prepared before the versioner carried the ledger left both native files as the tag has them.
+      await fixtureGit(root, 'checkout', 'v3.0.0', '--', 'releases/native/');
+      await commit('Prepare 3.0.1 with a stale native ledger');
+      expect(await versionRelease(root, projects(), { write: true, registry: null, sealInputs: false })).toMatchObject({
+        action: 'none',
+        reason: '3.0.1 is prepared; pass --refresh to re-collect it',
+      });
+      const refreshed = await versionRelease(root, projects(), {
+        write: true,
+        registry: null,
+        refresh: true,
+        sealInputs: false,
+      });
+      expect(refreshed).toMatchObject({ action: 'refresh', version: '3.0.1', nativeLedgerCarried: true });
+      expect(read('releases/native/current.json').baseline).toEqual({
+        tag: 'v3.0.0',
+        commit: await fixtureGit(root, 'rev-parse', 'v3.0.0'),
+      });
+      expect(() => releaseChanges(root, projects())).not.toThrow();
+      await commit('Refresh 3.0.1');
+      expect(
+        await versionRelease(root, projects(), { write: true, registry: null, refresh: true, sealInputs: false }),
+      ).toMatchObject({ action: 'none', reason: '3.0.1 is prepared and current' });
+    },
+    { ledger: true },
+  );
 }, 120_000);
 
 it('aligns every native selector on an npm-only major and covers a narrowly documented owner exactly', async () => {

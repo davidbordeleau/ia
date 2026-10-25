@@ -2,6 +2,34 @@
 
 Generated from reviewed release changesets. Entries describe intended releases; publication is a separate action.
 
+## 3.4.0
+
+Coordinated 3.4.0 release of the 24 public npm packages: Describe the user host lock's busy-create waits as they run, and pin its day-old takeover at the ends of the owner range; Verify COMP-KERNEL and COMP-FIXTURES with `ia validate --verify-conformance`; Move zod to 4.6.6 for a memory exhaustion advisory.
+
+### Describe the user host lock's busy-create waits as they run, and pin its day-old takeover at the ends of the owner range
+
+Docs and tests only. The package's SPEC.md now describes how an exclusive create of the user host lock, `<IA home>/claude/.lock`, waits while a busy code refuses it: the waits start at 1 millisecond and double to at most 50, each begins less than 250 milliseconds after the create's first try began, and the create after each takeover attempt starts over. It said the create was retried for up to 250 milliseconds. New tests pin that a lock naming pid 1 or 2147483647, the ends of the owner range, whose pid is running is still busy 23 hours old and is taken over 25 hours old. The package's code, behavior and API are unchanged.
+
+Packages: `@inventarch/distribution`.
+
+### Verify COMP-KERNEL and COMP-FIXTURES with `ia validate --verify-conformance`
+
+`ia validate --verify-conformance` runs the `package-v1` conformance profile of `@inventarch/compliance` in-process and reports COMP-KERNEL and COMP-FIXTURES with `basis: 'verified'`, so a starter workspace validates to a pass instead of not-evaluated, and a floor whose content differs from the embedded one fails COMP-KERNEL and exits 1. `--json` adds `conformance`: each check's outcome and basis, the profile, the toolchain, the floor and inventory digests and the suites the profile does not run. The human report adds a Conformance section. The evidence it records is what `ia validate` records without the flag, so every reader admits it. `openWorkspaceSession` in `@inventarch/distribution` accepts `conformance: 'verify'` and passes it to the db reader. Without the flag nothing new runs and the output is unchanged.
+
+Packages: `@inventarch/cli`, `@inventarch/distribution`.
+
+### Move zod to 4.6.6 for a memory exhaustion advisory
+
+The exact zod dependency moves from 4.6.5 to 4.6.6, which fixes GHSA-mrhx-c7xc-m3w5: validating an oversized constrained collection could exhaust memory. The contract schemas and their exports are unchanged.
+
+Packages: `@inventarch/service-contracts`.
+
+### Coordinated version alignment
+
+Package version metadata follows the coordinated 3.4.0 release; each native artifact version follows its own archive content.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/compliance`, `@inventarch/compliance-system`, `@inventarch/db`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/kb`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/session-system`, `@inventarch/steward-hook`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
 ## 3.3.0
 
 Coordinated 3.3.0 release of the 24 public npm packages: Database readers can verify COMP-KERNEL and COMP-FIXTURES when asked; Keep a terminal at a name `@inventarch/db` reads from becoming the controlling terminal; Align the documentation with IA 3.3; Judge installed state, workspace manifests, package sources and publications on the opened file; Add reusable knowledge packages and local CLI/MCP readers; Complete native authoring and consumer contracts; Pin that publication inspection throws for a name gone after its read; Declare the platform-only steward-hook tests as skips; Harden tooling and shipped compliance fixtures; Cover the user host lock's stale-lock claim and busy-create wait in tests.

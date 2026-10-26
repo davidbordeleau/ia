@@ -15,6 +15,7 @@ import { distributionSnapshot } from '../src/snapshot.js';
 import { verifyArchive, verifySelectedArchiveClosure } from '../src/archive.js';
 import { planInstallationSnapshot } from '../src/installation-core.js';
 import { resolveReleases } from '../src/resolve.js';
+import { assessReleaseMinting, installedMintingFloor } from '../src/minting.js';
 import { repository } from './snapshot-fixture.js';
 
 let releases: ReturnType<typeof productStructure>;
@@ -276,3 +277,56 @@ it('refuses dangling, wrong-word and duplicate plan references', () => {
     }
   }
 });
+
+it('assesses the actual product kit and its complete native language dependency for release minting', () => {
+  const { product } = releases;
+  const language = verifyArchive(releases.language.bytes);
+  const selected = resolveReleases(
+    [{ id: product.manifest.id, range: product.manifest.version }],
+    [language, product].map((release) => ({ release, location: `sha256:${release.archiveDigest}`, withdrawn: false })),
+    DISTRIBUTION_ENGINE_VERSION,
+  );
+  const candidate = {
+    lock: selected.lock,
+    archives: new Map([
+      [language.archiveDigest, releases.language.bytes],
+      [product.archiveDigest, product.bytes],
+    ]),
+  };
+  const baseline = {
+    lock: resolveReleases(
+      [{ id: language.manifest.id, range: language.manifest.version }],
+      [{ release: language, location: `sha256:${language.archiveDigest}`, withdrawn: false }],
+      DISTRIBUTION_ENGINE_VERSION,
+    ).lock,
+    archives: new Map([[language.archiveDigest, releases.language.bytes]]),
+  };
+  expect(verifySelectedArchiveClosure(candidate.lock, candidate.archives).size).toBe(2);
+  // Existing language registrations without primary guides remain disclosed legacy gaps.
+  // A fresh selection must not promote those missing guides into minting readiness.
+  expect(
+    assessReleaseMinting({
+      floor: installedMintingFloor().sources,
+      baseline: null,
+      candidate,
+      policyRevision: 'a'.repeat(64),
+    }),
+  ).toMatchObject({ ready: false, semantic: 'not-evaluated' });
+  const assessment = assessReleaseMinting({
+    floor: installedMintingFloor().sources,
+    baseline,
+    candidate,
+    policyRevision: 'a'.repeat(64),
+  });
+  expect(assessment.ready).toBe(true);
+  expect(assessment.changed).toContainEqual({ key: 'product-system/product', change: 'added', status: 'resolved' });
+  expect(assessment.legacyMissing).toContain('agent-system/agent');
+  expect(
+    assessReleaseMinting({
+      floor: installedMintingFloor().sources,
+      baseline: candidate,
+      candidate,
+      policyRevision: 'b'.repeat(64),
+    }),
+  ).toMatchObject({ ready: true, changed: [] });
+}, 120_000);

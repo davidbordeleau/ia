@@ -1010,10 +1010,7 @@ describe('prompt-scoped runtime and resource context through the context executa
   };
   /** Patches one `node:fs` export for one synchronous run; the owners' named imports see the patch once it is synced. */
   type Hooked = (...args: unknown[]) => unknown;
-  const mutableFs = createRequire(import.meta.url)('node:fs') as Record<
-    'openSync' | 'readSync',
-    Hooked
-  >;
+  const mutableFs = createRequire(import.meta.url)('node:fs') as Record<'openSync' | 'readSync', Hooked>;
   function patched(name: keyof typeof mutableFs, replace: (original: Hooked) => Hooked, run: () => unknown): void {
     const original = mutableFs[name];
     mutableFs[name] = replace(original);

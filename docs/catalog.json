@@ -18,7 +18,7 @@
       "genre": "spec",
       "title": "Host plugin distribution",
       "status": "implemented",
-      "sourceDigest": "6f238eea66a7629f34e57e25992473fbcb844f91d50b419325fc50a390049987"
+      "sourceDigest": "0c689e888ff8462916485876e9f6dc77e188c9ff1a9d0ce874c9c96df303fafc"
     },
     {
       "id": "spec-host-registration",

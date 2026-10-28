@@ -106,7 +106,11 @@ it('the init skill hooks an existing workspace up too, and reconciles the reposi
   expect(init).toContain('Claude Code and Codex');
   expect(init).toContain('ia host codex --root "<repository root>"');
   expect(init).toContain('ia vocabulary hook --schema');
-  expect(init).toContain('never by editing `.ia/src` directly');
+  // ia author refuses an administrative @hook: the owner writes the previewed record, and nothing else, in source.
+  expect(init).toContain('`ia author` refuses `@hook`');
+  expect(init).toContain('write exactly the previewed record and run `ia validate`');
+  expect(init).toContain('the guard covers Claude Code only');
+  expect(init).toContain("move the user's file only as they chose in step 2");
   expect(init).toContain('fnm_multishells');
   // The repository's own files: IA's are never edited, the user's change only as the user says.
   expect(init).toContain('`# InventArch: machine-local host files`');

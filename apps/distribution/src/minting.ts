@@ -3,8 +3,10 @@ import {
   decodeDistributionJson,
   decodeDistributionLock,
   deriveGenerationInputs,
+  generationDigest,
+  generationSources,
+  installationWorkspace,
   DISTRIBUTION_ENGINE_VERSION,
-  DISTRIBUTION_LIMITS,
   satisfies,
   supportsDistributionLockEngine,
 } from '@inventarch/db/distribution';
@@ -15,9 +17,9 @@ import {
   AUTHORING_MANIFEST_PATH,
   captureAuthoringManifestBytes,
 } from '@inventarch/workspace-runtime/authoring-manifest';
-import { RESOURCE_LIMITS } from '@inventarch/workspace-runtime/resources';
+import { RESOURCE_LIMITS, resourceOccurrences, nativeResourcePath } from '@inventarch/workspace-runtime/resources';
 import { digest } from '@inventarch/graph';
-import { verifyArchive, type VerifiedArchive } from './archive.js';
+import { verifySelectedArchiveClosure } from './archive.js';
 import { distributionSnapshot } from './snapshot.js';
 import { fail, utf8 } from './files.js';
 import { KERNEL_SOURCES } from '@inventarch/language';
@@ -103,57 +105,54 @@ function releaseSet(input: unknown) {
   if (!supportsDistributionLockEngine(DISTRIBUTION_ENGINE_VERSION, lock.engine)) return refused();
   if (!(archives instanceof Map) || archives.size !== new Set(lock.packages.map((pkg) => pkg.archive)).size)
     return refused();
-  const releases = new Map<string, VerifiedArchive>();
-  let total = 0;
-  for (const pkg of lock.packages) {
-    const bytes: unknown = archives.get(pkg.archive);
-    if (!(bytes instanceof Uint8Array) || (total += bytes.length) > DISTRIBUTION_LIMITS.expanded) return refused();
-    const release = verifyArchive(bytes, pkg.archive);
-    if (release.manifestDigest !== pkg.manifest || !satisfies(DISTRIBUTION_ENGINE_VERSION, release.manifest.engine))
-      return refused();
-    releases.set(pkg.id, release);
+  const releases = verifySelectedArchiveClosure(lock, archives);
+  for (const release of releases.values()) {
+    if (!satisfies(DISTRIBUTION_ENGINE_VERSION, release.manifest.engine)) return refused();
   }
   return { lock, releases, inputs: deriveGenerationInputs(lock, releases) };
 }
 function selectedView(floor: Capture['sources'], input: MintingReleaseSet | null) {
-  const selected = input === null ? null : releaseSet(input),
-    sources: Capture['sources'][number][] = [...floor];
-  for (const system of selected?.inputs.systems ?? []) {
-    const release = selected!.releases.get(system.selected)!;
-    for (const path of system.files) {
-      if (sources.some((source) => source.path === path)) return refused();
-      sources.push({
-        path,
-        text: utf8(release.files.get(path)!),
-        location: { placement: { kind: 'authored', band: 100, reach: '' }, provenance: 'workspace' },
-      });
-    }
-  }
+  const selected = input === null ? null : releaseSet(input);
+  const activation =
+    selected === null
+      ? undefined
+      : {
+          formatVersion: 1 as const,
+          generation: generationDigest(
+            selected.lock,
+            selected.inputs,
+            installationWorkspace(selected.lock, selected.inputs, selected.releases),
+          ),
+          previous: null,
+          counter: 1,
+        };
+  const sources: Capture['sources'][number][] = [
+    ...floor,
+    ...(selected && activation ? generationSources(activation, selected.lock, selected.inputs, selected.releases) : []),
+  ];
   sources.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const body = {
     version: 1 as const,
     id: 'release-minting',
     floorOrigin: 'explicit' as const,
     folders: selected?.inputs.systems.map((system) => system.name) ?? [],
+    ...(activation ? { activation } : {}),
     sources,
   };
   const capture = verifyCapture({ ...body, revision: digest(body) });
   const reader = new EditorSnapshot({
     root: '.',
-    sources,
-    folders: body.folders,
-    floorOrigin: body.floorOrigin,
+    ...body,
     fingerprint: capture.revision,
   });
   try {
     const providers = [...(selected?.releases.values() ?? [])].filter((release) =>
       release.files.has(AUTHORING_MANIFEST_PATH),
     );
-    if (providers.length > 1) return refused();
-    const provider = providers[0],
-      bytes = provider?.files.get(AUTHORING_MANIFEST_PATH);
-    let request: Parameters<typeof captureAuthoringManifestBytes>[1] = { sources: [] };
-    if (provider && bytes) {
+    const native = resourceOccurrences(capture);
+    const manifestSources: Parameters<typeof captureAuthoringManifestBytes>[1]['sources'][number][] = [];
+    for (const provider of providers) {
+      const bytes = provider.files.get(AUTHORING_MANIFEST_PATH)!;
       if (bytes.length > RESOURCE_LIMITS.metadataBytes) return refused();
       const manifest = decodeDistributionJson(utf8(bytes));
       if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return refused();
@@ -167,19 +166,27 @@ function selectedView(floor: Capture['sources'], input: MintingReleaseSet | null
         if (!content) return refused();
         return { path, content: utf8(content) };
       });
-      request = {
-        sources: [
-          {
-            source: capture.id,
-            revision: capture.revision,
-            imports: [{ alias: 'floor', source: capture.id, revision: capture.revision }],
-            manifest,
-            files,
-          },
-        ],
-      };
+      const first = provider.manifest.files.find(
+        (file) =>
+          file.role === 'source' &&
+          sources.some((source) => source.path === `.ia/distributions/store/${provider.archiveDigest}/${file.path}`),
+      );
+      const binding =
+        first &&
+        native.sourceRevisions.find(
+          (source) =>
+            nativeResourcePath(capture, { ...source, path: first.path }) ===
+            `.ia/distributions/store/${provider.archiveDigest}/${first.path}`,
+        );
+      if (!binding) return refused();
+      manifestSources.push({
+        ...binding,
+        imports: [{ alias: 'floor', source: capture.id, revision: capture.revision }],
+        manifest,
+        files,
+      });
     }
-    const authoring = captureAuthoringManifestBytes(capture, request),
+    const authoring = captureAuthoringManifestBytes(capture, { sources: manifestSources }),
       registry = reader.inspect().graph.registry;
     const view = resolveAuthoring(capture, authoring.resources, authoring.index, {
       reader,

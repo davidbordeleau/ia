@@ -2,8 +2,8 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "fc0f5df48c95f37b9b9dbbe67d7bd4836c46a9b4",
-    "tree": "9003b4c13c2d4b39aeae1f2c41c69664e05d391a",
+    "commit": "a471e52e78644009ad3d9fbccb54ad4c235557d7",
+    "tree": "4462cca863cd06faa6bff140788fb4c41db71838",
     "dirty": true
   },
   "membership": {
@@ -1960,7 +1960,7 @@
     },
     {
       "path": "apps/distribution/src/host.ts",
-      "sha256": "d8e4adb68336476578571f5f6f79ab4d4e5dadeb15a5176a86eb1463ee09697c"
+      "sha256": "d7b35f89058b850578539b7e38d86b42f0236dbd5c15b8f9b24c308a8efbe6cc"
     },
     {
       "path": "apps/distribution/src/hosts.ts",
@@ -2116,7 +2116,7 @@
     },
     {
       "path": "apps/distribution/tests/guard-registration.test.ts",
-      "sha256": "065e51bb3f26a4d0bd9b503e68268acbb6276a8d42c3c4d2d587553099718c40"
+      "sha256": "ff0e1dff3c145c9964553d7ca7366ac2ccf644afd002cc5a81ae8af9daa5a1a1"
     },
     {
       "path": "apps/distribution/tests/host-home.test.ts",
@@ -2704,7 +2704,7 @@
     },
     {
       "path": "docs/catalog.json",
-      "sha256": "3f6bb7e832fca7408aa2e9f1f9b22b62e62b83c6606ad9cd5f3d96a488bd468a"
+      "sha256": "258c57ccf214d4b234833b15431c7cc0955229558129fc9438548a80cbc4be7b"
     },
     {
       "path": "docs/documentation.json",
@@ -2744,7 +2744,7 @@
     },
     {
       "path": "docs/specs/host-plugin-distribution/README.md",
-      "sha256": "f90e3a88159d76888c67f021132dfb78d3d6ff0e34556263e0f44bc50af8d3f8"
+      "sha256": "6f238eea66a7629f34e57e25992473fbcb844f91d50b419325fc50a390049987"
     },
     {
       "path": "docs/specs/host-registration/README.md",
@@ -5132,7 +5132,7 @@
     },
     {
       "path": "packages/compliance/src/host-plugin.ts",
-      "sha256": "6cba9e8fc94ced14e97fe96cc7037744778e4933b7c87eaba932e1a1a2e2949b"
+      "sha256": "b4b76bec8cfbdcd9f36cd9e0ebafaa66575d68de08eb258d28193bb647d1f50f"
     },
     {
       "path": "packages/compliance/src/index.ts",
@@ -5204,7 +5204,7 @@
     },
     {
       "path": "packages/compliance/tests/host-plugin.test.ts",
-      "sha256": "9a83dacf5b507173c4fc3300545ccfd86eb9cbf939c35883223a6f5accb063c0"
+      "sha256": "cd3563f5d396bcd8d1f97d426b8907f665978eea5943abea0535458e71bd3082"
     },
     {
       "path": "packages/compliance/tests/native.ts",
@@ -7051,6 +7051,10 @@
       "sha256": "a780c1576f23ecad3d6f9eff0537c9bc534dfdf045459b5923021ba1875d83c5"
     },
     {
+      "path": "releases/pending/guide-the-whole-hook-up-from-ia-init-and-record.json",
+      "sha256": "be3f34c69c0df1bb8f01baaeaab1ddffb77c39a1c6a83a2eb5f9aba00f181888"
+    },
+    {
       "path": "tools/compliance/SPEC.md",
       "sha256": "71e7a9766163f986048861fa7890cf757a8b479283bbe7e25885bd3da43d1d39"
     },
@@ -8139,5 +8143,5 @@
       "sha256": "b7a2070d0de01d78a2f8dbd4e8c646740a4b9f68810cfda96aafe69ffc7a47f4"
     }
   ],
-  "inputDigest": "7d7e86e5b1f7f36ea2e2e2c1011363053eb7c0afb17d9ce937b8f0061d37a1b9"
+  "inputDigest": "dd801df978c2c70548034da481183b338c53a26f0235bbf63783c7be5c6ef4c3"
 }

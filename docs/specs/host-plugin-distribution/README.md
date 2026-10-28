@@ -4,7 +4,7 @@ genre: spec
 title: Host plugin distribution
 status: implemented
 created: "2026-10-12"
-last-reviewed: "2026-10-18"
+last-reviewed: "2026-10-27"
 owners: [inventarch]
 ---
 
@@ -41,6 +41,8 @@ Doctor reports how this `ia` is installed: a source `checkout`, with its commit 
 ### 6.1 Rendering
 
 The renderer is a pure function: the same input always yields the same files. It writes a marketplace manifest, the `ia` plugin manifest, an `ia-author` agent, with `Read`, `Glob`, `Grep` and `Bash`, whose instructions are to review `.ia` records and propose changes without editing files, a `SessionStart` hook, and `init`, `doctor` and `authoring` skills. It also writes `plugins/ia/ia-plugin.json`, which records the CLI version, install channel, CLI entry and update instruction the hook reads. The hook is registered for `SessionStart` on `startup` and `clear`. The plugin has no MCP server; workspace registration stays with `ia host claude`. The CLI entry and the Node path are explicit renderer inputs.
+
+The `init` skill is the hook-up procedure, for a repository with no workspace and for an existing workspace that is not yet registered. It runs five steps in order. **Ground**: one CLI for every command, the repository's pinned `@inventarch/cli` when it is installed; `ia doctor --json --host claude`; and a read of `.ia/src`, `.gitignore`, `AGENTS.md`, `CLAUDE.md` and the host configuration files. **Plan**: one round of questions: whether to initialize (or decline today or forever, §7.2), which hosts (Claude Code alone, or with Codex), and, when doctor's source-protection row warns, whether to author a `@hook` over `.ia/src/**`. **Apply**: `ia init` or `ia host` per chosen host, each plan shown before its `--apply --yes`; the hook authored through `ia preview` and `ia author`; and a check that the recorded Node path outlives the shell. **Reconcile**: a proposed `.gitignore` block for the files the host plan calls machine-local and the receipt lists, and proposed edits to the user's own `AGENTS.md` and `CLAUDE.md`. Generated files are never edited, and a sentence that contradicts the new setup changes only as the user says. **Check**: `ia doctor` and `ia validate`, each non-ok row explained, and the MCP approval Claude Code asks for. Each write is shown first and made only after the user confirms it. The skill never commits or pushes.
 
 ### 6.2 Identity
 

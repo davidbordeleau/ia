@@ -2,9 +2,9 @@
   "format": "ia.public-package-inputs.v2",
   "source": {
     "repository": "https://github.com/inventarch/ia",
-    "commit": "a471e52e78644009ad3d9fbccb54ad4c235557d7",
-    "tree": "4462cca863cd06faa6bff140788fb4c41db71838",
-    "dirty": true
+    "commit": "1809ca3a0ca8ce4e94f7a060efb103d76f4f0bab",
+    "tree": "1463a650f3976138cd494e83d2e7dd384de65566",
+    "dirty": false
   },
   "membership": {
     "path": "tools/distribution/public-content-policy.json",
@@ -2704,7 +2704,7 @@
     },
     {
       "path": "docs/catalog.json",
-      "sha256": "258c57ccf214d4b234833b15431c7cc0955229558129fc9438548a80cbc4be7b"
+      "sha256": "7913e0d56ff815086e7c533a85a4fc7d116f55cf17c4b8559c4ad2348daafc2d"
     },
     {
       "path": "docs/documentation.json",
@@ -2744,7 +2744,7 @@
     },
     {
       "path": "docs/specs/host-plugin-distribution/README.md",
-      "sha256": "6f238eea66a7629f34e57e25992473fbcb844f91d50b419325fc50a390049987"
+      "sha256": "0c689e888ff8462916485876e9f6dc77e188c9ff1a9d0ce874c9c96df303fafc"
     },
     {
       "path": "docs/specs/host-registration/README.md",
@@ -5132,7 +5132,7 @@
     },
     {
       "path": "packages/compliance/src/host-plugin.ts",
-      "sha256": "b4b76bec8cfbdcd9f36cd9e0ebafaa66575d68de08eb258d28193bb647d1f50f"
+      "sha256": "a59a7cf83b8ebce41292b013ec763451d0783880a3638b2fc8e60205adf10043"
     },
     {
       "path": "packages/compliance/src/index.ts",
@@ -5204,7 +5204,7 @@
     },
     {
       "path": "packages/compliance/tests/host-plugin.test.ts",
-      "sha256": "cd3563f5d396bcd8d1f97d426b8907f665978eea5943abea0535458e71bd3082"
+      "sha256": "139e41e81d098ae4d21ac901f5d20cb709eac0a8f8112775b235fc98b1a65c37"
     },
     {
       "path": "packages/compliance/tests/native.ts",
@@ -8143,5 +8143,5 @@
       "sha256": "b7a2070d0de01d78a2f8dbd4e8c646740a4b9f68810cfda96aafe69ffc7a47f4"
     }
   ],
-  "inputDigest": "dd801df978c2c70548034da481183b338c53a26f0235bbf63783c7be5c6ef4c3"
+  "inputDigest": "fc7cbf24f841e875575692ab731e089b9df21857eaa89494f8f2b55a08b35b5c"
 }

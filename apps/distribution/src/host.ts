@@ -597,15 +597,34 @@ export function recoverHost(rootInput: string): { status: 'host-recovered' | 'cu
 /**
  * The Node executable a registration records: the running one, except that a Homebrew keg's versioned path
  * (`<prefix>/Cellar/<formula>/<version>/bin/node`), which `brew upgrade` and cleanup delete, is recorded as the formula's
- * stable `<prefix>/opt/<formula>/bin/node` link while that link reaches the same executable.
+ * stable `<prefix>/opt/<formula>/bin/node` link while that link reaches the same executable. An fnm shell's
+ * `fnm_multishells/<shell>/...` link, which fnm deletes once that shell is gone, is recorded as fnm's `aliases/default`
+ * link while that alias reaches the same executable, and otherwise as the installed version the shell's link reaches
+ * (`<fnm dir>/node-versions/<version>/installation/...`).
  */
 export function nodeCommand(execPath: string = process.execPath): string {
   const keg = /^(.+)[\\/]Cellar[\\/]([^\\/]+)[\\/][^\\/]+[\\/]bin[\\/](node(?:\.exe)?)$/.exec(execPath);
-  if (keg === null) return execPath;
-  const stable = join(keg[1]!, 'opt', keg[2]!, 'bin', keg[3]!);
+  if (keg !== null) {
+    const stable = join(keg[1]!, 'opt', keg[2]!, 'bin', keg[3]!);
+    try {
+      return realpathSync(stable) === realpathSync(execPath) ? stable : execPath;
+    } catch {
+      return execPath;
+    }
+  }
+  if (!/[\\/]fnm_multishells[\\/][^\\/]+[\\/]/.test(execPath)) return execPath;
+  let target: string;
   try {
-    return realpathSync(stable) === realpathSync(execPath) ? stable : execPath;
+    target = realpathSync(execPath);
   } catch {
     return execPath;
+  }
+  const installed = /^(.+)[\\/]node-versions[\\/][^\\/]+[\\/]installation[\\/](.+)$/.exec(target);
+  if (installed === null) return target;
+  const alias = join(installed[1]!, 'aliases', 'default', installed[2]!);
+  try {
+    return realpathSync(alias) === target ? alias : target;
+  } catch {
+    return target;
   }
 }

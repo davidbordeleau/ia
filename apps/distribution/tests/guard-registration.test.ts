@@ -1,4 +1,14 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -521,6 +531,33 @@ it("records a Homebrew keg's Node by its stable opt link while that link reaches
   writeFileSync(older, '');
   expect(nodeCommand(older)).toBe(older);
   expect(nodeCommand(join(prefix, 'bin', 'node'))).toBe(join(prefix, 'bin', 'node'));
+});
+it("records an fnm shell's Node by fnm's default alias, or else the installed version that shell's link reaches", () => {
+  const fnm = realpathSync(temp()),
+    link = (target: string, path: string): void => {
+      mkdirSync(dirname(path), { recursive: true });
+      symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir');
+    },
+    install = (version: string): string => {
+      const directory = join(fnm, 'node-versions', version, 'installation');
+      mkdirSync(join(directory, 'bin'), { recursive: true });
+      writeFileSync(join(directory, 'bin', 'node'), '');
+      return directory;
+    },
+    current = install('v22.23.4'),
+    shell = join(fnm, 'fnm_multishells', '30788_1793156102663', 'bin', 'node');
+  link(current, dirname(dirname(shell)));
+  // No default alias: the installed version, which outlives the shell.
+  expect(nodeCommand(shell)).toBe(join(current, 'bin', 'node'));
+  link(current, join(fnm, 'aliases', 'default'));
+  expect(nodeCommand(shell)).toBe(join(fnm, 'aliases', 'default', 'bin', 'node'));
+  // A default alias that reaches another version is not this Node.
+  rmSync(join(fnm, 'aliases', 'default'));
+  link(install('v24.1.0'), join(fnm, 'aliases', 'default'));
+  expect(nodeCommand(shell)).toBe(join(current, 'bin', 'node'));
+  // A shell link that is already gone keeps the path it was given.
+  const gone = join(fnm, 'fnm_multishells', '1_2', 'bin', 'node');
+  expect(nodeCommand(gone)).toBe(gone);
 });
 
 it('removes an exact recorded old-root guard after a workspace move, while registration remains strict', () => {

@@ -16,6 +16,7 @@ import {
 } from '../src/snapshot.js';
 import { planInstallationSnapshot } from '../src/installation-core.js';
 import { resolveReleases } from '../src/resolve.js';
+import { assessReleaseMinting, installedMintingFloor } from '../src/minting.js';
 import { repository } from './snapshot-fixture.js';
 
 const own = '.ia/src/systems/qualification-system';
@@ -270,3 +271,114 @@ it('cannot borrow undeclared dependencies or external asset-owner aliases from a
   const outside = rewritten(metadataPath, Buffer.from(metadata.replaceAll('"source":"self"', '"source":"dependency"')));
   expect(() => verifySelectedArchiveClosure(outside.lock, outside.archives)).toThrow(/authoring/i);
 });
+
+it('mints exact dependency-complete guides with separate archive provenance in baseline and candidate', () => {
+  const candidate = selected();
+  const request = {
+    floor: installedMintingFloor().sources,
+    baseline: { lock: dependency.lock, archives: new Map([[base.pin.archive, base.bytes]]) },
+    candidate,
+    policyRevision: 'a'.repeat(64),
+  };
+  const assessment = assessReleaseMinting(request);
+  expect(assessment).toMatchObject({ ready: true, semantic: 'not-evaluated' });
+  expect(assessment.changed).toContainEqual({
+    key: 'qualification-system/qualification-note',
+    change: 'added',
+    status: 'resolved',
+  });
+  const unchanged = assessReleaseMinting({ ...request, baseline: candidate });
+  expect(unchanged.ready).toBe(true);
+  expect(unchanged.changed).toEqual([]);
+  expect(unchanged.proof).not.toBe(assessment.proof);
+  expect(() => verifyArchive(packed.bytes)).toThrow(/authoring/i);
+}, 120_000);
+it('minting rejects incomplete, substituted and externally owned closure inputs on either side', () => {
+  const valid = selected();
+  const broken = [
+    { ...valid, archives: new Map([[packed.archiveDigest, packed.bytes]]) },
+    { ...valid, archives: new Map([...valid.archives, ['f'.repeat(64), base.bytes]]) },
+    {
+      ...valid,
+      archives: new Map(
+        [...valid.archives].map(([id, bytes]) => [id, id === base.pin.archive ? Buffer.from('substituted') : bytes]),
+      ),
+    },
+    rewritten('guide.md', Buffer.from('substituted')),
+    rewritten(
+      metadataPath,
+      Buffer.from(packed.files.get(metadataPath)!.toString().replaceAll('"source":"self"', '"source":"dependency"')),
+    ),
+  ];
+  const request = {
+    floor: installedMintingFloor().sources,
+    baseline: valid,
+    candidate: valid,
+    policyRevision: 'a'.repeat(64),
+  };
+  expect(assessReleaseMinting(request).ready).toBe(true);
+  for (const selection of broken)
+    for (const side of ['baseline', 'candidate'])
+      expect(() => assessReleaseMinting({ ...request, [side]: selection })).toThrow();
+  expect(assessReleaseMinting(request).ready).toBe(true);
+}, 120_000);
+
+it('keeps same-path guides owned by two selected archives distinct', () => {
+  const rename = (value: string) =>
+    value.replaceAll('qualification-', 'secondary-').replaceAll('qualified-structure', 'secondary-structure');
+  const secondSource = distributionSnapshot({
+    sources: source.sources.map((row) =>
+      row.path.startsWith(own) ? { ...row, path: rename(row.path), text: rename(row.text) } : row,
+    ),
+    folders: source.folders.map(rename),
+    floorOrigin: 'local',
+  });
+  const second = packSnapshotWithDependencies(
+    secondSource,
+    JSON.parse(rename(JSON.stringify(descriptor))),
+    new Map([...assets].map(([path, bytes]) => [path, Buffer.from(rename(bytes.toString()))])),
+    dependency.lock,
+    new Map([[base.pin.archive, base.bytes]]),
+  );
+  const language = verifyArchive(base.bytes);
+  const combined = resolveReleases(
+    [packed, second].map((release) => ({ id: release.manifest.id, range: release.manifest.version })),
+    [language, packed, second].map((release) => ({
+      release,
+      location: `sha256:${release.archiveDigest}`,
+      withdrawn: false,
+    })),
+    DISTRIBUTION_ENGINE_VERSION,
+  );
+  const assessment = assessReleaseMinting({
+    floor: installedMintingFloor().sources,
+    baseline: { lock: dependency.lock, archives: new Map([[base.pin.archive, base.bytes]]) },
+    candidate: {
+      lock: combined.lock,
+      archives: new Map([
+        [base.pin.archive, base.bytes],
+        [packed.archiveDigest, packed.bytes],
+        [second.archiveDigest, second.bytes],
+      ]),
+    },
+    policyRevision: 'a'.repeat(64),
+  });
+  expect(assessment.ready).toBe(true);
+  for (const key of ['qualification-system/qualification-note', 'secondary-system/secondary-note'])
+    expect(assessment.changed).toContainEqual({ key, change: 'added', status: 'resolved' });
+}, 120_000);
+
+it('refuses floor sources colliding with selected installed archive paths', () => {
+  const candidate = selected();
+  const floor = installedMintingFloor().sources;
+  const sourceFile = packed.manifest.files.find((file) => file.role === 'source')!;
+  const collision = { ...floor[0]!, path: `.ia/distributions/store/${packed.archiveDigest}/${sourceFile.path}` };
+  expect(() =>
+    assessReleaseMinting({
+      floor: [...floor, collision],
+      baseline: null,
+      candidate,
+      policyRevision: 'a'.repeat(64),
+    }),
+  ).toThrow();
+}, 120_000);

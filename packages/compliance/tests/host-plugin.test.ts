@@ -108,7 +108,10 @@ it('the init skill hooks an existing workspace up too, and reconciles the reposi
   expect(init).toContain('ia vocabulary hook --schema');
   // ia author refuses an administrative @hook: the owner writes the previewed record, and nothing else, in source.
   expect(init).toContain('`ia author` refuses `@hook`');
-  expect(init).toContain('write exactly the previewed record and run `ia validate`');
+  expect(init).toContain('write exactly the previewed record and run `ia validate --root "<repository root>"`');
+  // The preview takes bracketed lists and omits the pragma a new .ia file needs first.
+  expect(init).toContain('"hook.tools=[Write, Edit, MultiEdit]"');
+  expect(init).toContain('a new file starts with the same `#! ia <major>.<minor>` line');
   expect(init).toContain('the guard covers Claude Code only');
   expect(init).toContain("move the user's file only as they chose in step 2");
   expect(init).toContain('fnm_multishells');

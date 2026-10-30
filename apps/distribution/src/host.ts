@@ -619,9 +619,12 @@ export function nodeCommand(execPath: string = process.execPath): string {
   } catch {
     return execPath;
   }
-  const installed = /^(.+)[\\/]node-versions[\\/][^\\/]+[\\/]installation[\\/](.+)$/.exec(target);
-  if (installed === null) return target;
-  const alias = join(installed[1]!, 'aliases', 'default', installed[2]!);
+  // The last `/node-versions/<version>/installation` in the path, found by a scan that never backtracks over it.
+  const installed = [...target.matchAll(/[\\/]node-versions[\\/][^\\/]+[\\/]installation(?=[\\/])/g)].at(-1);
+  if (installed === undefined || installed.index === 0) return target;
+  const rest = target.slice(installed.index + installed[0].length + 1);
+  if (rest === '') return target;
+  const alias = join(target.slice(0, installed.index), 'aliases', 'default', rest);
   try {
     return realpathSync(alias) === target ? alias : target;
   } catch {

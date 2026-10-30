@@ -1,0 +1,544 @@
+{
+  "format": "ia.npm-changeset.v1",
+  "version": "3.4.1",
+  "state": "consumed",
+  "baseline": {
+    "commit": "2e58f778c85e34e2a5758e954559c047ad860523",
+    "version": "3.4.0"
+  },
+  "bump": "patch",
+  "summary": "Coordinated 3.4.1 release of the 24 public npm packages: Stop waiting on a FIFO, or following a link, put in place of a corpus source or capture file; Guide the whole hook-up from /ia:init, and record an fnm shell's Node by a lasting path; Remove a corpus source at its open in the context hook's re-check test; Validate minting against complete selected archive closures.",
+  "packages": {
+    "@inventarch/agent-composition-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/agent-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/authoring-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/cli": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/compliance": {
+      "previous": "3.4.0",
+      "kind": "changed",
+      "summary": "Guide the whole hook-up from /ia:init, and record an fnm shell's Node by a lasting path."
+    },
+    "@inventarch/compliance-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/db": {
+      "previous": "3.4.0",
+      "kind": "changed",
+      "summary": "Stop waiting on a FIFO, or following a link, put in place of a corpus source or capture file."
+    },
+    "@inventarch/distribution": {
+      "previous": "3.4.0",
+      "kind": "changed",
+      "summary": "Guide the whole hook-up from /ia:init, and record an fnm shell's Node by a lasting path. Validate minting against complete selected archive closures."
+    },
+    "@inventarch/governance-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/graph": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/hook-authoring-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/kb": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/language": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/learning-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/mcp-door": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/runner": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/runtime": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/service-contracts": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/session-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/steward-hook": {
+      "previous": "3.4.0",
+      "kind": "changed",
+      "summary": "Remove a corpus source at its open in the context hook's re-check test."
+    },
+    "@inventarch/template-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/work-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/workspace-runtime": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    },
+    "@inventarch/workspace-system": {
+      "previous": "3.4.0",
+      "kind": "cohort",
+      "summary": "Package version metadata aligned with the coordinated cohort; any native artifact version follows its own archive content."
+    }
+  },
+  "changes": [
+    {
+      "id": "db-corpus-and-capture-opened-reads",
+      "title": "Stop waiting on a FIFO, or following a link, put in place of a corpus source or capture file",
+      "summary": "`@inventarch/db` checks each `.ia` source it lists under `.ia/src`, and the capture files `.ia/work/snapshot/current.json` and `previous.json`, before it reads them. A FIFO put at one of those names after that check could make `readInputs`, `open`, `planCapture`, `writeCapture` or a handle reading its capture pair wait indefinitely for a writer; a terminal there could, on some POSIX systems, become the process's controlling terminal; and a symbolic link put there was followed. Now nothing waits. A source that is now a directory, FIFO, socket or device is refused as `IA-DB-SOURCE-UNAVAILABLE` (`Cannot read exact UTF-8 source <path>: not a regular file`), and one that is now a link as `IA-DB-PATH-UNSAFE` (`Source alias is not admitted: <path>`). A capture file that is now a directory, FIFO, socket, device or link is refused as `IA-DB-PATH-UNSAFE`, as one already was when the check found it, and a handle seeds nothing from it. On Windows, where the open cannot refuse a link, the link is refused once the file is read, and so is a name that passes to another file, or is removed, while it is read (`IA-DB-SOURCE-CHANGED` for a source, `IA-DB-PATH-UNSAFE` for a capture file). Regular files are read exactly as before, and every other result and refusal keeps its code and message.",
+      "packages": [
+        "@inventarch/db"
+      ],
+      "paths": [
+        "packages/db/"
+      ]
+    },
+    {
+      "id": "guide-the-whole-hook-up-from-ia-init-and-record",
+      "title": "Guide the whole hook-up from /ia:init, and record an fnm shell's Node by a lasting path",
+      "summary": "The Claude plugin's /ia:init skill is now the whole hook-up procedure, for a repository with no workspace and for an existing workspace not yet registered. It grounds with one CLI (the repository's pinned @inventarch/cli when it is installed) and ia doctor. It asks once whether to initialize, which hosts to register (Claude Code alone or with Codex) and, when doctor's source-protection row warns, whether to author a hook over .ia/src. It applies each host after its plan is confirmed. It then proposes a .gitignore block for the machine-local host files and edits to the user's own AGENTS.md and CLAUDE.md, and checks the result with ia doctor and ia validate. Every write is shown and confirmed first, and the skill never commits or pushes. Separately, a registration made under fnm no longer records the per-shell fnm_multishells Node, which fnm deletes once that shell is gone and which stopped the ia-workspace MCP server from starting: it records fnm's default alias when that alias reaches the same Node, and otherwise the installed version.",
+      "packages": [
+        "@inventarch/compliance",
+        "@inventarch/distribution"
+      ],
+      "paths": [
+        "apps/distribution/",
+        "docs/",
+        "packages/compliance/"
+      ]
+    },
+    {
+      "id": "remove-a-corpus-source-at-its-open-in-the-contex",
+      "title": "Remove a corpus source at its open in the context hook's re-check test",
+      "summary": "Tests only. The context hook's re-check test removed a corpus source just before the native capture read it by name. Now that `@inventarch/db` opens each corpus source before reading it through the descriptor, the test removes the source just before that open instead, and still expects `IA-DB-SOURCE-CHANGED` and the host's STALE answer. Nothing changes for consumers: the package's code, behavior and API are the same.",
+      "packages": [
+        "@inventarch/steward-hook"
+      ],
+      "paths": [
+        "apps/steward-hook/"
+      ]
+    },
+    {
+      "id": "validate-minting-against-complete-selected-archi",
+      "title": "Validate minting against complete selected archive closures",
+      "summary": "Release minting accepts dependency-complete kits with authoring guides from multiple selected archives, preserves archive resource ownership in baseline and candidate comparisons, and continues refusing incomplete or substituted closures. Structural readiness does not grant semantic or publication approval.",
+      "packages": [
+        "@inventarch/distribution"
+      ],
+      "paths": [
+        "apps/distribution/"
+      ]
+    },
+    {
+      "id": "cohort-alignment",
+      "title": "Coordinated version alignment",
+      "summary": "Package version metadata follows the coordinated 3.4.1 release; each native artifact version follows its own archive content.",
+      "packages": [
+        "@inventarch/agent-composition-system",
+        "@inventarch/agent-system",
+        "@inventarch/authoring-system",
+        "@inventarch/cli",
+        "@inventarch/compliance-system",
+        "@inventarch/governance-system",
+        "@inventarch/graph",
+        "@inventarch/hook-authoring-system",
+        "@inventarch/kb",
+        "@inventarch/language",
+        "@inventarch/learning-system",
+        "@inventarch/mcp-door",
+        "@inventarch/runner",
+        "@inventarch/runtime",
+        "@inventarch/service-contracts",
+        "@inventarch/session-system",
+        "@inventarch/template-system",
+        "@inventarch/work-system",
+        "@inventarch/workspace-runtime",
+        "@inventarch/workspace-system"
+      ],
+      "paths": [
+        ".ia/src/systems/agent-composition-system/package.json",
+        ".ia/src/systems/agent-system/package.json",
+        ".ia/src/systems/authoring-system/package.json",
+        ".ia/src/systems/compliance-system/package.json",
+        ".ia/src/systems/governance-system/package.json",
+        ".ia/src/systems/hook-authoring-system/package.json",
+        ".ia/src/systems/learning-system/package.json",
+        ".ia/src/systems/session-system/package.json",
+        ".ia/src/systems/template-system/package.json",
+        ".ia/src/systems/work-system/package.json",
+        ".ia/src/systems/workspace-system/package.json",
+        "apps/cli/package.json",
+        "apps/mcp-door/package.json",
+        "apps/runner/package.json",
+        "packages/graph/package.json",
+        "packages/kb/package.json",
+        "packages/language/package.json",
+        "packages/runtime/package.json",
+        "packages/service-contracts/package.json",
+        "packages/workspace-runtime/package.json"
+      ]
+    },
+    {
+      "id": "repository-maintenance",
+      "title": "Repository maintenance",
+      "summary": "Tooling, workflow, documentation and release bookkeeping outside the published package contents.",
+      "packages": [],
+      "internal": true,
+      "paths": [
+        "apps/vscode/THIRD_PARTY_NOTICES.txt",
+        "apps/vscode/package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "releases/",
+        "tools/"
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "path": ".ia/src/systems/agent-composition-system/package.json",
+      "sha256": "21b01c86de1ff67d267e2bde9785d4039a2e2025299e19e0bf39bf11404c5c6b",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/agent-system/package.json",
+      "sha256": "f888695f71da083f9354c29ff06079071a073530e44000f654f4ed9f467fb5c4",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/authoring-system/package.json",
+      "sha256": "dfc50bf67da6dbe244155d5fa33b586f78bcc694de16f3d8d62d0e9c9c547dca",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/compliance-system/package.json",
+      "sha256": "c977cb2caf790012a0e5b64b7f647df7a1b482808ac9579f305ba8f2ce89e229",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/governance-system/package.json",
+      "sha256": "cec349cbb78cae6d24eae79e3ad01a52170b162287f9e8dfa8fc2b011e7ad5d8",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/hook-authoring-system/package.json",
+      "sha256": "45af9dc5bed37bfab8d9d2c98cea9031d06791e8d4e3398718283496a0f6ff5c",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/learning-system/package.json",
+      "sha256": "897882889417a55db082787c234e518544866b03ec7f898cb280ef6ea84da07e",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/session-system/package.json",
+      "sha256": "87abbb024a3e586e746bccbc174b3444d7e04da357d77b3b14a81ab0fa4c8d7b",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/template-system/package.json",
+      "sha256": "3459ceb4b3e453231be796e47451021dd915d1bb5089e40b08744e2eae0d7911",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/work-system/package.json",
+      "sha256": "5a72b916f3cbe3c9040ef88c31a10b67835a1925b166497995dc1169436af39b",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": ".ia/src/systems/workspace-system/package.json",
+      "sha256": "9c0fa5a749a4aa038e63189a86e4896f624342f8ec698c14b90ee73097dbd395",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/cli/package.json",
+      "sha256": "b86733973986b06e4eba8a741c9c6c106572a18f3fdd85ddda5ebdd476f2f5ec",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/distribution/SPEC.md",
+      "sha256": "88f5a2e22b97b558edc4ecd177e2e1434b5e369de3f993e725a3d0d5b6aa1704",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "apps/distribution/package.json",
+      "sha256": "20d0f4d82f92a03daa06277dc542fd7cdd013fca99c8ccfa178d56dd3d215237",
+      "cohortOnly": true,
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "apps/distribution/src/host.ts",
+      "sha256": "d2c9985df9e9499ae9969a1e0195669395b7f48fa8e8356b2616e719b441960a",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "apps/distribution/src/minting.ts",
+      "sha256": "053ac74e6dfe8a715d3e0553a802260c6003b88a15caa575fb8b8f29e9a089d4",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "apps/distribution/tests/dependent-authoring.test.ts",
+      "sha256": "b5515b519dc1e8801fc13e7f3903cf4634f936f64692dcb5ded0b2f091f12f00",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "apps/distribution/tests/guard-registration.test.ts",
+      "sha256": "ff0e1dff3c145c9964553d7ca7366ac2ccf644afd002cc5a81ae8af9daa5a1a1",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "apps/distribution/tests/product-structure.test.ts",
+      "sha256": "f30e90df7f16fb14e1836b959b3fd9e53cdbf1a7b09eec3110d56d6ba082a42f",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "apps/mcp-door/package.json",
+      "sha256": "312d8cae2364a7d6a34fc42ff68d70c0c843790cbba8316f744e255b494d8da9",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/runner/package.json",
+      "sha256": "025f7124decfc588bf4ee96997e1fc2048de546b125593553da795e89a17cf0d",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "apps/steward-hook/package.json",
+      "sha256": "cc41de5532ccc6325250be7cfc0bb6c06eca8dd46d623290b9ea8481c62a5f89",
+      "cohortOnly": true,
+      "change": "remove-a-corpus-source-at-its-open-in-the-contex"
+    },
+    {
+      "path": "apps/steward-hook/tests/context.test.ts",
+      "sha256": "2393328c95e07557b067302f415d29ff763f7c3924bf4274e9e88cf0fb21a4d0",
+      "change": "remove-a-corpus-source-at-its-open-in-the-contex"
+    },
+    {
+      "path": "apps/vscode/THIRD_PARTY_NOTICES.txt",
+      "sha256": "de0f08fdc311f05709db45eac472060977beda1cdc741290af19a4b2f203f1b9",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "apps/vscode/package.json",
+      "sha256": "fff44e1c91e159bd5b556ac9f64b54c8ca522d4fdb426cafcd5c970e92179d1e",
+      "cohortOnly": true,
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "docs/catalog.json",
+      "sha256": "166b1ab3d22ad2154edf07ef1875d481542b8534fcb1b523747d0fc466ef84e7",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "docs/specs/host-plugin-distribution/README.md",
+      "sha256": "89b6bc876c38215c0b3c2963143908c8bfee760f814892dfd91880f469993e1e",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "packages/compliance/package.json",
+      "sha256": "1a5c48cb9bc005afb78e41d1f6c75b8fef35fb1d4b8a5f446dad27c26334c26a",
+      "cohortOnly": true,
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "packages/compliance/src/host-plugin.ts",
+      "sha256": "6ea55c5cf591faee4b945993e662d14ba19f19dd726ccdefc38b97bda14008e4",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "packages/compliance/tests/host-plugin.test.ts",
+      "sha256": "979f6df43eb00bdb61275d202da79ac897b48824c68b70eed214f628421c3bb6",
+      "change": "guide-the-whole-hook-up-from-ia-init-and-record"
+    },
+    {
+      "path": "packages/db/SPEC.md",
+      "sha256": "4aa0b9391c6ec68ca15f5328a5066d621fc30e791bc5a4a0bbc7990e47692e9e",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/package.json",
+      "sha256": "bf14917199d7b82caa7b60f01b5d33c6c5ba71f1ac1a8cae6610c8c6e38e3ceb",
+      "cohortOnly": true,
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/src/evidence.ts",
+      "sha256": "e68b0ee81db1a44c5245638c59e168766218d8d3f24682c6749cddb364bced5f",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/src/inputs.ts",
+      "sha256": "f3228771b7f81666a239d4408201a90239f04bea9f280753f814dc74d257bd7a",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/src/named.ts",
+      "sha256": "a0d388739e9b7fc104f21b400d6b7fb2b8deb6e9c6743e77f822ea6b384e6b26",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/src/retention.ts",
+      "sha256": "4498b599e78a9e56b5132a1a054b94d773853581fe4a9a9313df195dcb0e7db3",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/tests/check-evidence.test.ts",
+      "sha256": "f75ce62f6d9f72225cf963a56a5bbdb07c31aba50f13d98553886d3e14801ea0",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/tests/file-races.ts",
+      "sha256": "15c695af0524ad23d2d909b2850d756299bae0698b8be2bd551bda12c3326b16",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/tests/inputs.test.ts",
+      "sha256": "9280a62abb9dfb211bb555cac7261736162a9c5804d7a711733f186c38aba694",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/tests/open-follows-links.test.ts",
+      "sha256": "dcfae7a2ff762925be2eb1239a14af2814f65023c845e13d3354c2a53c0c5520",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/db/tests/retention.test.ts",
+      "sha256": "10d5e439bddd908a20d57cbbddfb987518e611fc8c092e7564e0190bbcfb494f",
+      "change": "db-corpus-and-capture-opened-reads"
+    },
+    {
+      "path": "packages/graph/package.json",
+      "sha256": "a61f7a6bda36b4a4f8272d50f9573b1fd8429915660bc6983c56eef86b744fa6",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/kb/package.json",
+      "sha256": "ffd7b6e244e7f987173cdaa147256a94574e553b7fcbd932cd4d2ae85930540d",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/language/package.json",
+      "sha256": "799aba141b9d9ad1c9af0bdd7686d5b6899d923a4329bf1bee0edd14c2e41dcd",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/runtime/package.json",
+      "sha256": "8a753f5cc7e9b19f0d182742e414ada758c713202cec5d762495bda2330fcbed",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/service-contracts/package.json",
+      "sha256": "d06507dd409d4898c6a5da23706bf79b91d826f0acfc137d455d1ded4f16afd8",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "packages/workspace-runtime/package.json",
+      "sha256": "d44bfd8af62042b2c4e66972deb55700eb8d63a5a9e1a02e19463083e46ea951",
+      "cohortOnly": true,
+      "change": "cohort-alignment"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "db2e50bdb1bf0dc73292a13833e756db076c7d1ec2786450eec7aa1041f310a2",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "sha256": "566330ebc4fd4fd062b07f5dd89a09a8dbdb929afe82347fdf3c5218d5ca8f85",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/current.json",
+      "sha256": "cfcb692e23433593baac800773e248f8b72423c47f741bff726984fa07d2dbc4",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/native/current.json",
+      "sha256": "b7602106a59da31b53868dfef48a1c83a2a4f8f834863e232e1f3a2ef53377ee",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "releases/native/notes.json",
+      "sha256": "09f3bfb89d8c4cab7ac8d1f827e81e60404dc6b5dbc8f139a2f1505e7d9bcc86",
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "tools/distribution/system-package-policy.json",
+      "sha256": "1548325e18d8844d28123b9b3ba0a974544376efa7e4f62cc024021d8728cbf4",
+      "cohortOnly": true,
+      "change": "repository-maintenance"
+    },
+    {
+      "path": "tools/testing/tasks.json",
+      "sha256": "e86b12ab989419eb1ddd64e3fdcee6ce09f5b3984a560129e4f217df17c5f920",
+      "change": "repository-maintenance"
+    }
+  ]
+}

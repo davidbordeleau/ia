@@ -2,6 +2,40 @@
 
 Generated from reviewed release changesets. Entries describe intended releases; publication is a separate action.
 
+## 3.4.1
+
+Coordinated 3.4.1 release of the 24 public npm packages: Stop waiting on a FIFO, or following a link, put in place of a corpus source or capture file; Guide the whole hook-up from /ia:init, and record an fnm shell's Node by a lasting path; Remove a corpus source at its open in the context hook's re-check test; Validate minting against complete selected archive closures.
+
+### Stop waiting on a FIFO, or following a link, put in place of a corpus source or capture file
+
+`@inventarch/db` checks each `.ia` source it lists under `.ia/src`, and the capture files `.ia/work/snapshot/current.json` and `previous.json`, before it reads them. A FIFO put at one of those names after that check could make `readInputs`, `open`, `planCapture`, `writeCapture` or a handle reading its capture pair wait indefinitely for a writer; a terminal there could, on some POSIX systems, become the process's controlling terminal; and a symbolic link put there was followed. Now nothing waits. A source that is now a directory, FIFO, socket or device is refused as `IA-DB-SOURCE-UNAVAILABLE` (`Cannot read exact UTF-8 source <path>: not a regular file`), and one that is now a link as `IA-DB-PATH-UNSAFE` (`Source alias is not admitted: <path>`). A capture file that is now a directory, FIFO, socket, device or link is refused as `IA-DB-PATH-UNSAFE`, as one already was when the check found it, and a handle seeds nothing from it. On Windows, where the open cannot refuse a link, the link is refused once the file is read, and so is a name that passes to another file, or is removed, while it is read (`IA-DB-SOURCE-CHANGED` for a source, `IA-DB-PATH-UNSAFE` for a capture file). Regular files are read exactly as before, and every other result and refusal keeps its code and message.
+
+Packages: `@inventarch/db`.
+
+### Guide the whole hook-up from /ia:init, and record an fnm shell's Node by a lasting path
+
+The Claude plugin's /ia:init skill is now the whole hook-up procedure, for a repository with no workspace and for an existing workspace not yet registered. It grounds with one CLI (the repository's pinned @inventarch/cli when it is installed) and ia doctor. It asks once whether to initialize, which hosts to register (Claude Code alone or with Codex) and, when doctor's source-protection row warns, whether to author a hook over .ia/src. It applies each host after its plan is confirmed. It then proposes a .gitignore block for the machine-local host files and edits to the user's own AGENTS.md and CLAUDE.md, and checks the result with ia doctor and ia validate. Every write is shown and confirmed first, and the skill never commits or pushes. Separately, a registration made under fnm no longer records the per-shell fnm_multishells Node, which fnm deletes once that shell is gone and which stopped the ia-workspace MCP server from starting: it records fnm's default alias when that alias reaches the same Node, and otherwise the installed version.
+
+Packages: `@inventarch/compliance`, `@inventarch/distribution`.
+
+### Remove a corpus source at its open in the context hook's re-check test
+
+Tests only. The context hook's re-check test removed a corpus source just before the native capture read it by name. Now that `@inventarch/db` opens each corpus source before reading it through the descriptor, the test removes the source just before that open instead, and still expects `IA-DB-SOURCE-CHANGED` and the host's STALE answer. Nothing changes for consumers: the package's code, behavior and API are the same.
+
+Packages: `@inventarch/steward-hook`.
+
+### Validate minting against complete selected archive closures
+
+Release minting accepts dependency-complete kits with authoring guides from multiple selected archives, preserves archive resource ownership in baseline and candidate comparisons, and continues refusing incomplete or substituted closures. Structural readiness does not grant semantic or publication approval.
+
+Packages: `@inventarch/distribution`.
+
+### Coordinated version alignment
+
+Package version metadata follows the coordinated 3.4.1 release; each native artifact version follows its own archive content.
+
+Packages: `@inventarch/agent-composition-system`, `@inventarch/agent-system`, `@inventarch/authoring-system`, `@inventarch/cli`, `@inventarch/compliance-system`, `@inventarch/governance-system`, `@inventarch/graph`, `@inventarch/hook-authoring-system`, `@inventarch/kb`, `@inventarch/language`, `@inventarch/learning-system`, `@inventarch/mcp-door`, `@inventarch/runner`, `@inventarch/runtime`, `@inventarch/service-contracts`, `@inventarch/session-system`, `@inventarch/template-system`, `@inventarch/work-system`, `@inventarch/workspace-runtime`, `@inventarch/workspace-system`.
+
 ## 3.4.0
 
 Coordinated 3.4.0 release of the 24 public npm packages: Describe the user host lock's busy-create waits as they run, and pin its day-old takeover at the ends of the owner range; Verify COMP-KERNEL and COMP-FIXTURES with `ia validate --verify-conformance`; Move zod to 4.6.6 for a memory exhaustion advisory.

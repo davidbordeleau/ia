@@ -79,7 +79,8 @@ it('never tells the agent to search for IA elsewhere, and records declines throu
   expect(init).toContain('ia init "<repository root>" --decline today --host claude');
   expect(init).toContain('ia init "<repository root>" --decline forever --host claude');
   expect(init).toContain('Never search');
-  expect(init).not.toMatch(/--apply(?! --yes --host claude)/);
+  // Every apply it names runs after the user confirmed the plan, so it is the non-interactive form.
+  expect(init).not.toMatch(/--apply(?! --yes)/);
 });
 // Review fix: the plan shown to the user and the command that later runs must name the same target, and it must
 // be an absolute repository root rather than the shell's `.`, so the offer is honest about what it will touch.
@@ -87,7 +88,42 @@ it('the init skill shows the same target it applies, and applies only after conf
   const init = renderClaudePlugin(input).find((file) => file.path.endsWith('skills/init/SKILL.md'))!.text;
   expect(init).toContain('ia init "<repository root>" --host claude');
   expect(init).toContain('ia init "<repository root>" --apply --yes --host claude');
+  expect(init).toContain('ia host claude --root "<repository root>" --apply --yes');
   expect(init).toContain('Only after the user confirms');
+  expect(init).toContain('Never commit or push.');
+});
+// The hook-up runs in order: ground, ask, apply, reconcile the repository's own files, check.
+it('the init skill hooks an existing workspace up too, and reconciles the repository before doctor checks it', () => {
+  const init = renderClaudePlugin(input).find((file) => file.path.endsWith('skills/init/SKILL.md'))!.text;
+  const steps = ['## 1. Ground', '## 2. Plan', '## 3. Apply', '## 4. Reconcile', '## 5. Check'].map((step) =>
+    init.indexOf(step),
+  );
+  expect(steps.every((at) => at > 0)).toBe(true);
+  expect([...steps].sort((a, b) => a - b)).toEqual(steps);
+  // One CLI throughout: the repository's pinned one when it is installed.
+  expect(init).toContain('npx --no-install ia');
+  expect(init).not.toContain('If this directory is already a workspace, say so and stop');
+  expect(init).toContain('Claude Code and Codex');
+  expect(init).toContain('ia host codex --root "<repository root>"');
+  expect(init).toContain('ia vocabulary hook --schema');
+  // ia author refuses an administrative @hook: the owner writes the previewed record, and nothing else, in source.
+  expect(init).toContain('`ia author` refuses `@hook`');
+  expect(init).toContain('write exactly the previewed record and run `ia validate --root "<repository root>"`');
+  // The preview takes bracketed lists and omits the pragma a new .ia file needs first.
+  expect(init).toContain('"hook.tools=[Write, Edit, MultiEdit]"');
+  expect(init).toContain('a new file starts with the same `#! ia <major>.<minor>` line');
+  expect(init).toContain('the guard covers Claude Code only');
+  expect(init).toContain("move the user's file only as they chose in step 2");
+  expect(init).toContain('fnm_multishells');
+  // The repository's own files: IA's are never edited, the user's change only as the user says.
+  expect(init).toContain('`# InventArch: machine-local host files`');
+  expect(init).toContain('leave `git rm --cached` to the user');
+  expect(init).toContain("never edit IA's files");
+  expect(init).toContain('`@AGENTS.md`');
+  expect(init).toContain('change it only to what they say');
+  expect(init).toContain('ia doctor --root "<repository root>"');
+  expect(init).toContain('ia validate --root "<repository root>"');
+  expect(init).toContain("approve the project's `ia-workspace` MCP server");
 });
 // Review fix: a prior decline (today or forever) must suppress the offer until the user explicitly asks again.
 it('the init skill respects a prior decline instead of re-offering', () => {
